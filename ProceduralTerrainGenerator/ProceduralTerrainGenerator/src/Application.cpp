@@ -2,66 +2,101 @@
 #include <GLFW/glfw3.h>
 
 #include <iostream>
+#include <fstream>
+#include <string>
+#include <sstream>
+
+#include "Renderer.h"
+#include "VertexBuffer.h"
+#include "IndexBuffer.h"
+#include "VertexArray.h"
+#include "Shader.h"
+#include "VertexBufferLayout.h"
+#include "Texture.h"
+
+#include "glm/glm.hpp"
+#include "glm/gtc/matrix_transform.hpp"
+
+#include "imgui/imgui.h"
+#include "imgui/imgui_impl_glfw_gl3.h"
+
+#include "tests/TestClearColor.h"
+#include "tests/TestTexture2D.h"
 
 int main(void)
 {
     GLFWwindow* window;
 
-    /* Initialize the library */
     if (!glfwInit())
         return -1;
 
-    
-    /* Create a windowed mode window and its OpenGL context */
-    window = glfwCreateWindow(640, 480, "Procedural terrain generator", NULL, NULL);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
+    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+
+    window = glfwCreateWindow(960, 540, "Procedural terrain generator", NULL, NULL);
     if (!window)
     {
         glfwTerminate();
         return -1;
     }
 
-    /* Make the window's context current */
     glfwMakeContextCurrent(window);
+
+    glfwSwapInterval(1);
 
     if (glewInit() != GLEW_OK) {
         std::cout << "error" << std::endl;
     }
-
-    float positions[6] = {
-        -0.5f, -0.5f,
-         0.0f,  0.5f,
-         0.5f, -0.5f
-    };
-
-
-    unsigned int buffer;
-    glGenBuffers(1, &buffer);
-    glBindBuffer(GL_ARRAY_BUFFER, buffer);
-    glBufferData(GL_ARRAY_BUFFER, 6 * sizeof(float), positions, GL_STATIC_DRAW);
-
-    glEnableVertexAttribArray(0);
-    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 2 * sizeof(float), 0);
-
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-
-
-    /* Loop until the user closes the window */
-    while (!glfwWindowShouldClose(window))
     {
-        /* Render here */
-        glClear(GL_COLOR_BUFFER_BIT);
+        GLCALL(glEnable(GL_BLEND));
+        GLCALL(glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA));
 
-        glDrawArrays(GL_TRIANGLES, 0, 3);
+        Renderer renderer;
 
+        ImGui::CreateContext();
+        ImGui_ImplGlfwGL3_Init(window, true);
+        ImGui::StyleColorsDark();
 
-        glfwSwapBuffers(window);
+        test::Test* currentTest = nullptr;
+        test::TestMenu* menu = new test::TestMenu(currentTest);
+        currentTest = menu;
 
-        /* Poll for and process events */
-        glfwPollEvents();
+        menu->RegisterTest <test::TestClearColor>("Clear Color");
+        menu->RegisterTest <test::TestTexture2D>("Texture 2D");
+
+        while (!glfwWindowShouldClose(window))
+        {
+            GLCALL(glClearColor(0.0f, 0.0f, 0.0f, 1.0f));
+            renderer.Clear();
+
+            ImGui_ImplGlfwGL3_NewFrame();
+            if(currentTest)
+			{
+				currentTest->OnUpdate(0.0f);
+				currentTest->OnRender();
+				ImGui::Begin("Test");
+				if(currentTest != menu && ImGui::Button("<-"))
+				{
+					delete currentTest;
+					currentTest = menu;
+				}
+				currentTest->OnImGuiRender();
+				ImGui::End();
+			}
+			else
+			{
+				menu->OnImGuiRender();
+			}
+            ImGui::Render();
+            ImGui_ImplGlfwGL3_RenderDrawData(ImGui::GetDrawData());
+
+            GLCALL(glfwSwapBuffers(window));
+            GLCALL(glfwPollEvents());
+        }
     }
-
+    ImGui_ImplGlfwGL3_Shutdown();
+    ImGui::DestroyContext();
     glfwTerminate();
     return 0;
 }
-
-//https://www.youtube.com/watch?v=H2E3yO0J7TM&list=PLlrATfBNZ98foTJPJ_Ev03o2oq3-GGOS2&index=3

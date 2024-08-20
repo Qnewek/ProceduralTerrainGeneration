@@ -1,2 +1,6 @@
-﻿  Application.cpp
+﻿  TestTexture2D.cpp
+Debug\glm.obj : warning LNK4042: object specified more than once; extras ignored
+LINK : warning LNK4098: defaultlib 'MSVCRT' conflicts with use of other libs; use /NODEFAULTLIB:library
+LINK : warning LNK4098: defaultlib 'LIBCMT' conflicts with use of other libs; use /NODEFAULTLIB:library
+glew32s.lib(glew.obj) : warning LNK4099: PDB '' was not found with 'glew32s.lib(glew.obj)' or at ''; linking object as if no debug info
   ProceduralTerrainGenerator.vcxproj -> C:\Users\Dawid\Documents\JakiesPopierdulki\Studia\ProceduralTerrainGeneration\ProceduralTerrainGenerator\Debug\ProceduralTerrainGenerator.exe
