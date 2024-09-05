@@ -76,7 +76,7 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>GLEW_STATIC;WIN32;_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>src;src\opengl;src\vendor;src\terrainGeneration;$(SolutionDir)Dependencies\GLFW\include;$(SolutionDir)Dependencies\GLEW\include</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>src;src\opengl;src\vendor;src\utility;src\terrainGeneration;$(SolutionDir)Dependencies\GLFW\include;$(SolutionDir)Dependencies\GLEW\include</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -93,7 +93,7 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>GLEW_STATIC;WIN32;NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>src;src\opengl;src\vendor;src\terrainGeneration;$(SolutionDir)Dependencies\GLFW\include;$(SolutionDir)Dependencies\GLEW\include</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>src;src\opengl;src\vendor;src\utility;src\terrainGeneration;$(SolutionDir)Dependencies\GLFW\include;$(SolutionDir)Dependencies\GLEW\include</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -143,6 +143,7 @@
     <ClCompile Include="src\tests\TestPerlinDraw.cpp" />
     <ClCompile Include="src\tests\TestTexture2D.cpp" />
     <ClCompile Include="src\opengl\Texture.cpp" />
+    <ClCompile Include="src\utility\image.cpp" />
     <ClCompile Include="src\vendor\glm\detail\glm.cpp" />
     <ClCompile Include="src\vendor\glm\glm.cppm" />
     <ClCompile Include="src\vendor\imgui\imgui.cpp" />
@@ -154,7 +155,8 @@
     <ClCompile Include="src\opengl\VertexBuffer.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <None Include="res\shaders\Basic.shader" />
+    <None Include="res\shaders\map_fragment.shader" />
+    <None Include="res\shaders\map_vertex.shader" />
     <None Include="src\vendor\glm\detail\func_common.inl" />
     <None Include="src\vendor\glm\detail\func_common_simd.inl" />
     <None Include="src\vendor\glm\detail\func_exponential.inl" />
@@ -304,6 +306,7 @@
     <ClInclude Include="src\tests\TestPerlinDraw.h" />
     <ClInclude Include="src\tests\TestTexture2D.h" />
     <ClInclude Include="src\opengl\Texture.h" />
+    <ClInclude Include="src\utility\image.h" />
     <ClInclude Include="src\vendor\glm\common.hpp" />
     <ClInclude Include="src\vendor\glm\detail\compute_common.hpp" />
     <ClInclude Include="src\vendor\glm\detail\compute_vector_decl.hpp" />
