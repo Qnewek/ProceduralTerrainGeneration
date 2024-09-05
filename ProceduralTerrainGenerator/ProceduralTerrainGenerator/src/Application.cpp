@@ -38,6 +38,7 @@ int main(void)
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 
     window = glfwCreateWindow(1000, 1000, "Procedural terrain generator", NULL, NULL);
+
     if (!window)
     {
         glfwTerminate();
@@ -45,20 +46,20 @@ int main(void)
     }
 
     glfwMakeContextCurrent(window);
-
     glfwSwapInterval(1);
 
     if (glewInit() != GLEW_OK) {
         std::cout << "error" << std::endl;
     }
+
     {
         int height = 1000;
         int width = 1000;
 
 
-		//Noise Generation and converting to grayscale image
-		unsigned char* image = new unsigned char[height*width];
-		float* noiseMap = new float[height * width];
+        //Noise Generation and converting to grayscale image
+        unsigned char* image = new unsigned char[height * width];
+        float* noiseMap = new float[height * width];
 
         noise::getNoiseMap(noiseMap, height, width, 400, 8, 1.2f);
         ConvertToGrayscaleImage(noiseMap, image, height, width);
@@ -77,30 +78,30 @@ int main(void)
         };
         //
 
-		VertexArray va;
-		VertexBuffer vb(vertices, 4*4*sizeof(float));
-		IndexBuffer ib(indices, 6);
+        VertexArray va;
+        VertexBuffer vb(vertices, 4 * 4 * sizeof(float));
+        IndexBuffer ib(indices, 6);
 
-		VertexBufferLayout layout;
-		layout.Push<float>(2);
-		layout.Push<float>(2);
-		va.AddBuffer(vb, layout);
+        VertexBufferLayout layout;
+        layout.Push<float>(2);
+        layout.Push<float>(2);
+        va.AddBuffer(vb, layout);
 
         glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)0);
         glEnableVertexAttribArray(0);
         glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)(2 * sizeof(float)));
         glEnableVertexAttribArray(1);
 
-		Texture texture(height, width, image);
-		Shader mapShader("res/shaders/map_vertex.shader", "res/shaders/map_fragment.shader");
-		Renderer renderer;
+        Texture texture(height, width, image);
+        Shader mapShader("res/shaders/map_vertex.shader", "res/shaders/map_fragment.shader");
+        Renderer renderer;
 
         while (!glfwWindowShouldClose(window))
         {
-			renderer.Clear();
-            
-			texture.Bind();
-			renderer.Draw(va, ib, mapShader);
+            renderer.Clear();
+
+            texture.Bind();
+            renderer.Draw(va, ib, mapShader);
 
             glfwSwapBuffers(window);
             glfwPollEvents();
