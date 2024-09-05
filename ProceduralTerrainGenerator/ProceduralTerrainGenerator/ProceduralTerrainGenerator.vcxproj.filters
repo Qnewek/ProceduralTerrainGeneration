@@ -72,9 +72,11 @@
     <ClCompile Include="src\tests\TestPerlinDraw.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="src\utility\image.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <None Include="res\shaders\Basic.shader" />
     <None Include="src\vendor\glm\detail\func_common.inl">
       <Filter>Header Files</Filter>
     </None>
@@ -489,6 +491,8 @@
     <None Include="src\vendor\glm\gtx\wrap.inl">
       <Filter>Header Files</Filter>
     </None>
+    <None Include="res\shaders\map_vertex.shader" />
+    <None Include="res\shaders\map_fragment.shader" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\opengl\Renderer.h">
@@ -1413,6 +1417,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="src\tests\TestPerlinDraw.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\utility\image.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

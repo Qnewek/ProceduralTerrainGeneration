@@ -1,39 +1,99 @@
 #include "Noise.h"
 #include "glm/glm.hpp"
-#include "glm/gtc/noise.hpp"
+#include "math.h"
+
+#define PI 3.14159265
+
 namespace noise
 {
-	float* GetNoiseMap(int mapWidth, int mapHeigth, float scale, int octaves, float persistance, float lacunarity, float offsetX, float offsetY)
+	void getNoiseMap(float* noiseMap, int mapWidth, int mapHeigth, float scale, int octaves, float constrast)
 	{
-		float* noiseMap = new float[mapWidth * mapHeigth];
-
-		if (scale <= 0) {
-			scale = 0.0001f;
-		}
-
 		for (int y = 0; y < mapHeigth; y++)
 		{
 			for (int x = 0; x < mapWidth; x++)
 			{
-				//float amplitude = 1;
-				//float frequency = 1;
-				//float noiseHeight = 0;
+				float amplitude = 1.0f;
+				float frequency = 1.0f;
+				float noiseHeight = 0.0f;
 
-				//for (int i = 0; i < octaves; i++)
-				//{
-					float sampleX = x / scale;
-					float sampleY = y / scale;
+				for (int i = 0; i < octaves; i++)
+				{
+					noiseHeight += perlin(x / scale * frequency, y / scale * frequency) * amplitude;
 
-					float perlinValue = glm::perlin(glm::vec2(sampleX, sampleY));
+					amplitude *= 0.5f;
+					frequency *= 2.0f;
+				}
 
-					//noiseHeight += perlinValue * amplitude;
+				noiseHeight *= constrast;
 
-					//amplitude *= persistance;
-					//frequency *= lacunarity;
-				//}
+				if (noiseHeight < 0.0f)
+				{
+					noiseHeight = -noiseHeight;
+				}
+				if (noiseHeight > 1.0f)
+				{
+					noiseHeight = 1.0f;
+				}
 
-				noiseMap[y * mapWidth + x] = perlinValue;
+				noiseMap[y * mapWidth + x] = noiseHeight;
 			}
 		}
 	}
+
+	vec2 randomGradient(int ix, int iy) {
+		const unsigned w = 8 * sizeof(unsigned);
+		const unsigned s = w >> 1;
+		unsigned a = ix, b = iy;
+
+		a *= 3284157443;
+		b ^= a << s | a >> w - s;
+		b *= 1911520717;
+
+		a ^= b << s | b >> w - s;
+		a *= 2048419325;
+		float random = a * (PI / ~(~0u >> 1));
+
+		vec2 v;
+		v.x = sin(random);
+		v.y = cos(random);
+
+		return v;
+	}
+
+	float dotGridGradient(int ix, int iy, float x, float y) {
+		vec2 gradient = randomGradient(ix, iy);
+
+		float dx = x - (float)ix;
+		float dy = y - (float)iy;
+
+		return (dx * gradient.x + dy * gradient.y);
+	}
+
+	float interpolate(float a0, float a1, float w)
+	{
+		return (a1 - a0) * (3.0 - w * 2.0) * w * w + a0;
+	}
+
+	float perlin(float x, float y) {
+		int x0 = (int)x;
+		int y0 = (int)y;
+		int x1 = x0 + 1;
+		int y1 = y0 + 1;
+
+		float sx = x - (float)x0;
+		float sy = y - (float)y0;
+
+		float n0 = dotGridGradient(x0, y0, x, y);
+		float n1 = dotGridGradient(x1, y0, x, y);
+		float ix0 = interpolate(n0, n1, sx);
+
+		n0 = dotGridGradient(x0, y1, x, y);
+		n1 = dotGridGradient(x1, y1, x, y);
+		float ix1 = interpolate(n0, n1, sx);
+
+		float value = interpolate(ix0, ix1, sy);
+
+		return value;
+	}
+
 }
