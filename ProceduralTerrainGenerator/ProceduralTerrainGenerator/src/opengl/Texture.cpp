@@ -43,6 +43,14 @@ Texture::~Texture()
 	glDeleteTextures(1, &m_RendererID);
 }
 
+void Texture::SetNewImage(unsigned char* image)
+{
+	m_LocalBuffer = image;
+	glBindTexture(GL_TEXTURE_2D, m_RendererID);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RED, m_Height, m_Width, 0, GL_RED, GL_UNSIGNED_BYTE, m_LocalBuffer);
+	glBindTexture(GL_TEXTURE_2D, 0);
+}
+
 void Texture::Bind(unsigned int slot) const
 {
 	glActiveTexture(GL_TEXTURE0 + slot);
