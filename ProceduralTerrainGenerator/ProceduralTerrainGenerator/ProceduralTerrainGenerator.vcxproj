@@ -143,7 +143,7 @@
     <ClCompile Include="src\tests\TestPerlinDraw.cpp" />
     <ClCompile Include="src\tests\TestTexture2D.cpp" />
     <ClCompile Include="src\opengl\Texture.cpp" />
-    <ClCompile Include="src\utility\image.cpp" />
+    <ClCompile Include="src\utility\utilities.cpp" />
     <ClCompile Include="src\vendor\glm\detail\glm.cpp" />
     <ClCompile Include="src\vendor\glm\glm.cppm" />
     <ClCompile Include="src\vendor\imgui\imgui.cpp" />
@@ -306,7 +306,7 @@
     <ClInclude Include="src\tests\TestPerlinDraw.h" />
     <ClInclude Include="src\tests\TestTexture2D.h" />
     <ClInclude Include="src\opengl\Texture.h" />
-    <ClInclude Include="src\utility\image.h" />
+    <ClInclude Include="src\utility\utilities.h" />
     <ClInclude Include="src\vendor\glm\common.hpp" />
     <ClInclude Include="src\vendor\glm\detail\compute_common.hpp" />
     <ClInclude Include="src\vendor\glm\detail\compute_vector_decl.hpp" />

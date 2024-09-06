@@ -6,15 +6,18 @@
 
 namespace noise
 {
-	void getNoiseMap(float* noiseMap, int mapWidth, int mapHeigth, float scale, int octaves, float constrast)
+	void getNoiseMap(float* noiseMap, int mapWidth, int mapHeigth, float scale, int octaves, float constrast, Options option)
 	{
+		float amplitude;
+		float frequency;
+		float noiseHeight;
 		for (int y = 0; y < mapHeigth; y++)
 		{
 			for (int x = 0; x < mapWidth; x++)
 			{
-				float amplitude = 1.0f;
-				float frequency = 1.0f;
-				float noiseHeight = 0.0f;
+				amplitude = 1.0f;
+				frequency = 1.0f;
+				noiseHeight = 0.0f;
 
 				for (int i = 0; i < octaves; i++)
 				{
@@ -26,13 +29,29 @@ namespace noise
 
 				noiseHeight *= constrast;
 
-				if (noiseHeight < 0.0f)
-				{
-					noiseHeight = -noiseHeight;
-				}
 				if (noiseHeight > 1.0f)
 				{
 					noiseHeight = 1.0f;
+				}
+				else if (noiseHeight < -1.0f)
+				{
+					noiseHeight = -1.0f;
+				}
+
+				if (option == Options::REFIT_BASIC)
+				{
+					noiseHeight = (noiseHeight + 1.0f) / 2.0f;
+				}
+				else if (noiseHeight < 0.0f)
+				{
+					if (option == Options::FLATTEN_NEGATIVES)
+					{
+						noiseHeight = 0.0f;
+					}
+					else if (option == Options::REVERT_NEGATIVES)
+					{
+						noiseHeight = -noiseHeight;
+					}
 				}
 
 				noiseMap[y * mapWidth + x] = noiseHeight;
@@ -68,7 +87,6 @@ namespace noise
 
 		return (dx * gradient.x + dy * gradient.y);
 	}
-
 	float interpolate(float a0, float a1, float w)
 	{
 		return (a1 - a0) * (3.0 - w * 2.0) * w * w + a0;

@@ -5,6 +5,7 @@
 #include <fstream>
 #include <string>
 #include <sstream>
+#include <chrono>
 
 #include "Renderer.h"
 #include "VertexBuffer.h"
@@ -22,9 +23,10 @@
 
 #include "tests/TestClearColor.h"
 #include "tests/TestTexture2D.h"
+#include "tests/TestPerlinDraw.h"
 
 #include "Noise.h"
-#include "image.h"
+#include "utilities.h"
 
 int main(void)
 {
@@ -37,7 +39,7 @@ int main(void)
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 
-    window = glfwCreateWindow(1000, 1000, "Procedural terrain generator", NULL, NULL);
+    window = glfwCreateWindow(500, 500, "Procedural terrain generator", NULL, NULL);
 
     if (!window)
     {
@@ -53,17 +55,12 @@ int main(void)
     }
 
     {
-        int height = 1000;
-        int width = 1000;
-
-
         //Noise Generation and converting to grayscale image
-        unsigned char* image = new unsigned char[height * width];
+        /*unsigned char* image = new unsigned char[height * width];
         float* noiseMap = new float[height * width];
 
-        noise::getNoiseMap(noiseMap, height, width, 400, 8, 1.2f);
-        ConvertToGrayscaleImage(noiseMap, image, height, width);
-        //
+		utilities::benchmark_void(noise::getNoiseMap, "getNoiseMap", noiseMap, height, width, 400, 8, 1.2f, noise::Options::REVERT_NEGATIVES);
+		utilities::benchmark_void(utilities::ConvertToGrayscaleImage,"ConvertToGreyScale", noiseMap, image, height, width);
 
         //Temporary vertices in order to show 2d greyscale image od Perlin Noise
         float vertices[] = {
@@ -93,22 +90,47 @@ int main(void)
         glEnableVertexAttribArray(1);
 
         Texture texture(height, width, image);
-        Shader mapShader("res/shaders/map_vertex.shader", "res/shaders/map_fragment.shader");
+        Shader mapShader("res/shaders/map_vertex.shader", "res/shaders/map_fragment.shader");*/
         Renderer renderer;
+
+		ImGui::CreateContext();
+		ImGui_ImplGlfwGL3_Init(window, true);
+		ImGui::StyleColorsDark();
+
+		test::Test* currentTest = nullptr;
+		test::TestMenu* testMenu = new test::TestMenu(currentTest);
+		currentTest = testMenu;
+
+		testMenu->RegisterTest<test::TestClearColor>("Clear Color");
+		testMenu->RegisterTest<test::TestPerlinDraw>("Perlin Noise");
 
         while (!glfwWindowShouldClose(window))
         {
-            renderer.Clear();
+			GLCALL(glClearColor(0.0f, 0.0f, 0.0f, 1.0f));
+			renderer.Clear();
 
-            texture.Bind();
-            renderer.Draw(va, ib, mapShader);
+			ImGui_ImplGlfwGL3_NewFrame();
+
+            if (currentTest)
+            {
+				currentTest->OnUpdate(0.0f);
+				currentTest->OnRender();
+				ImGui::Begin("Test");
+                if (currentTest != testMenu && ImGui::Button("<-"))
+                {
+                    delete currentTest;
+                    currentTest = testMenu;
+                }
+				currentTest->OnImGuiRender();
+                ImGui::End();
+            }
+ 
+			ImGui::Render();
+			ImGui_ImplGlfwGL3_RenderDrawData(ImGui::GetDrawData());
 
             glfwSwapBuffers(window);
             glfwPollEvents();
         }
-
-        delete[] noiseMap;
-        delete[] image;
     }
     ImGui_ImplGlfwGL3_Shutdown();
     ImGui::DestroyContext();

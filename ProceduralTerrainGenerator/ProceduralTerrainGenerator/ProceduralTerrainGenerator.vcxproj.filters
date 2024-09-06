@@ -72,7 +72,7 @@
     <ClCompile Include="src\tests\TestPerlinDraw.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="src\utility\image.cpp">
+    <ClCompile Include="src\utility\utilities.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
@@ -1419,7 +1419,7 @@
     <ClInclude Include="src\tests\TestPerlinDraw.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="src\utility\image.h">
+    <ClInclude Include="src\utility\utilities.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
