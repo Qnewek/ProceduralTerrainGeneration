@@ -75,6 +75,9 @@
     <ClCompile Include="src\utility\utilities.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="src\tests\TestNoiseMesh.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <None Include="src\vendor\glm\detail\func_common.inl">
@@ -493,6 +496,8 @@
     </None>
     <None Include="res\shaders\map_vertex.shader" />
     <None Include="res\shaders\map_fragment.shader" />
+    <None Include="res\shaders\mesh_vertex.shader" />
+    <None Include="res\shaders\mesh_fragment.shader" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\opengl\Renderer.h">
@@ -1420,6 +1425,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="src\utility\utilities.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\tests\TestNoiseMesh.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

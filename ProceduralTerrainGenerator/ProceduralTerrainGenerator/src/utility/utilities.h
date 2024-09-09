@@ -7,6 +7,7 @@
 namespace utilities
 {
 	void ConvertToGrayscaleImage(float* data, unsigned char* image, int width, int height);
+	void SimpleMeshIndicies(unsigned int* indices, int width, int height);
 
     template <typename Func, typename... Args>
     void benchmark_void(Func func, std::string funcName, Args&&... args) {

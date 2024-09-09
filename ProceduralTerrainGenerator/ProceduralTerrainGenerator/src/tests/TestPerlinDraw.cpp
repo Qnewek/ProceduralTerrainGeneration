@@ -19,12 +19,11 @@ namespace test
 		utilities::benchmark_void(noise::getNoiseMap, "getNoiseMap", noise, height, width, scale, octaves, constrast, noise::Options::REVERT_NEGATIVES);
 		utilities::benchmark_void(utilities::ConvertToGrayscaleImage, "ConvertToGreyScale", noise, image, height, width);
 
-
 		float vertices[] = {
-			-1.0f,  1.0f,  0.0f, 1.0f,
-			-1.0f, -1.0f,  0.0f, 0.0f,
-			 1.0f, -1.0f,  1.0f, 0.0f,
-			 1.0f,  1.0f,  1.0f, 1.0f
+			-0.75f,  0.75f,  0.0f, 1.0f,
+			-0.75f, -0.75f,  0.0f, 0.0f,
+			 0.75f, -0.75f,  1.0f, 0.0f,
+			 0.75f,  0.75f,  1.0f, 1.0f
 		};
 		unsigned int indices[] = {
 			0, 1, 2,
@@ -61,8 +60,8 @@ namespace test
 
 	void TestPerlinDraw::OnRender()
 	{
-		GLCALL(glClearColor(0.0f, 0.0f, 0.0f, 1.0f));
-		GLCALL(glClear(GL_COLOR_BUFFER_BIT));
+		GLCALL(glClearColor(0.37f, 0.77f, 1.0f, 1.0f));
+		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
 		Renderer renderer;
 
