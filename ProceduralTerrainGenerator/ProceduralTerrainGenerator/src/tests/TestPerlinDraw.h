@@ -20,8 +20,6 @@ namespace test
 		void OnRender() override;
 		void OnImGuiRender() override;
 
-		void ShowComboBox();
-
 	private:
 		float* noise;
 		unsigned char* image;

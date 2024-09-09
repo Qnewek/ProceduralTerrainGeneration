@@ -140,6 +140,7 @@
     <ClCompile Include="src\terrainGeneration\Noise.cpp" />
     <ClCompile Include="src\tests\Test.cpp" />
     <ClCompile Include="src\tests\TestClearColor.cpp" />
+    <ClCompile Include="src\tests\TestNoiseMesh.cpp" />
     <ClCompile Include="src\tests\TestPerlinDraw.cpp" />
     <ClCompile Include="src\tests\TestTexture2D.cpp" />
     <ClCompile Include="src\opengl\Texture.cpp" />
@@ -157,6 +158,8 @@
   <ItemGroup>
     <None Include="res\shaders\map_fragment.shader" />
     <None Include="res\shaders\map_vertex.shader" />
+    <None Include="res\shaders\mesh_fragment.shader" />
+    <None Include="res\shaders\mesh_vertex.shader" />
     <None Include="src\vendor\glm\detail\func_common.inl" />
     <None Include="src\vendor\glm\detail\func_common_simd.inl" />
     <None Include="src\vendor\glm\detail\func_exponential.inl" />
@@ -303,6 +306,7 @@
     <ClInclude Include="src\terrainGeneration\Noise.h" />
     <ClInclude Include="src\tests\Test.h" />
     <ClInclude Include="src\tests\TestClearColor.h" />
+    <ClInclude Include="src\tests\TestNoiseMesh.h" />
     <ClInclude Include="src\tests\TestPerlinDraw.h" />
     <ClInclude Include="src\tests\TestTexture2D.h" />
     <ClInclude Include="src\opengl\Texture.h" />
