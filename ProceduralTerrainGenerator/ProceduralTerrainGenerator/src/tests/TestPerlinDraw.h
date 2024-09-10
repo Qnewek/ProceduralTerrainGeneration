@@ -17,7 +17,7 @@ namespace test
 		~TestPerlinDraw();
 
 		void OnUpdate(float deltaTime) override;
-		void OnRender() override;
+		void OnRender(GLFWwindow& window, Renderer& renderer) override;
 		void OnImGuiRender() override;
 
 	private:

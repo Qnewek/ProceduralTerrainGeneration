@@ -139,11 +139,10 @@
     <ClCompile Include="src\opengl\Shader.cpp" />
     <ClCompile Include="src\terrainGeneration\Noise.cpp" />
     <ClCompile Include="src\tests\Test.cpp" />
-    <ClCompile Include="src\tests\TestClearColor.cpp" />
     <ClCompile Include="src\tests\TestNoiseMesh.cpp" />
     <ClCompile Include="src\tests\TestPerlinDraw.cpp" />
-    <ClCompile Include="src\tests\TestTexture2D.cpp" />
     <ClCompile Include="src\opengl\Texture.cpp" />
+    <ClCompile Include="src\utility\Camera.cpp" />
     <ClCompile Include="src\utility\utilities.cpp" />
     <ClCompile Include="src\vendor\glm\detail\glm.cpp" />
     <ClCompile Include="src\vendor\glm\glm.cppm" />
@@ -305,11 +304,10 @@
     <ClInclude Include="src\opengl\Shader.h" />
     <ClInclude Include="src\terrainGeneration\Noise.h" />
     <ClInclude Include="src\tests\Test.h" />
-    <ClInclude Include="src\tests\TestClearColor.h" />
     <ClInclude Include="src\tests\TestNoiseMesh.h" />
     <ClInclude Include="src\tests\TestPerlinDraw.h" />
-    <ClInclude Include="src\tests\TestTexture2D.h" />
     <ClInclude Include="src\opengl\Texture.h" />
+    <ClInclude Include="src\utility\Camera.h" />
     <ClInclude Include="src\utility\utilities.h" />
     <ClInclude Include="src\vendor\glm\common.hpp" />
     <ClInclude Include="src\vendor\glm\detail\compute_common.hpp" />
