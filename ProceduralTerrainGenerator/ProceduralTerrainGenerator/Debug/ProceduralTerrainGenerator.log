@@ -1,6 +1,2 @@
-﻿  Noise.cpp
-C:\Users\Dawid\Documents\JakiesPopierdulki\Studia\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\terrainGeneration\Noise.cpp(121,19): warning C4554: '>>': check operator precedence for possible error; use parentheses to clarify precedence
-C:\Users\Dawid\Documents\JakiesPopierdulki\Studia\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\terrainGeneration\Noise.cpp(124,19): warning C4554: '>>': check operator precedence for possible error; use parentheses to clarify precedence
-C:\Users\Dawid\Documents\JakiesPopierdulki\Studia\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\terrainGeneration\Noise.cpp(126,16): warning C4244: 'initializing': conversion from 'double' to 'float', possible loss of data
-C:\Users\Dawid\Documents\JakiesPopierdulki\Studia\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\terrainGeneration\Noise.cpp(145,46): warning C4244: 'return': conversion from 'double' to 'float', possible loss of data
+﻿  TestNoiseMesh.cpp
   ProceduralTerrainGenerator.vcxproj -> C:\Users\Dawid\Documents\JakiesPopierdulki\Studia\ProceduralTerrainGeneration\ProceduralTerrainGenerator\Debug\ProceduralTerrainGenerator.exe

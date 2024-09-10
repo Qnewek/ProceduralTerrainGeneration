@@ -21,8 +21,6 @@
 #include "imgui/imgui.h"
 #include "imgui/imgui_impl_glfw_gl3.h"
 
-#include "tests/TestClearColor.h"
-#include "tests/TestTexture2D.h"
 #include "tests/TestPerlinDraw.h"
 #include "tests/TestNoiseMesh.h"
 
@@ -69,7 +67,6 @@ int main(void)
 		test::TestMenu* testMenu = new test::TestMenu(currentTest);
 		currentTest = testMenu;
 
-		testMenu->RegisterTest<test::TestClearColor>("Clear Color");
 		testMenu->RegisterTest<test::TestPerlinDraw>("Perlin Noise");
 		testMenu->RegisterTest<test::TestNoiseMesh>("Noise Mesh");
 
@@ -83,7 +80,7 @@ int main(void)
             if (currentTest)
             {
 				currentTest->OnUpdate(0.0f);
-				currentTest->OnRender();
+				currentTest->OnRender(*window, renderer);
 				ImGui::Begin("Test");
                 if (currentTest != testMenu && ImGui::Button("<-"))
                 {

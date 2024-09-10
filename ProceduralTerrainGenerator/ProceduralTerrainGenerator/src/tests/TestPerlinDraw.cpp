@@ -58,12 +58,9 @@ namespace test
 	{
 	}
 
-	void TestPerlinDraw::OnRender()
+	void TestPerlinDraw::OnRender(GLFWwindow& window, Renderer& renderer)
 	{
-		GLCALL(glClearColor(0.37f, 0.77f, 1.0f, 1.0f));
-		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
-		Renderer renderer;
+		renderer.Clear();
 
 		if (prevOpt != option || checkSum - ((float)octaves+scale+constrast) != 0)
 		{

@@ -5,6 +5,9 @@
 #include "VertexBufferLayout.h"
 #include "Texture.h"
 #include "Noise.h"
+#include "Camera.h"
+
+#include "glm/glm.hpp"
 
 #include <memory>
 
@@ -17,15 +20,22 @@ namespace test
 		~TestNoiseMesh();
 
 		void OnUpdate(float deltaTime) override;
-		void OnRender() override;
+		void OnRender(GLFWwindow& window, Renderer& renderer) override;
 		void OnImGuiRender() override;
 
 	private:
+		//Perlin Noise generation parameters
 		float* mesh;
 		unsigned int* meshIndices;
 		int width, height, octaves;
 		float scale, constrast, checkSum = 0;
 		noise::Options option, prevOpt;
+
+		float deltaTime;
+		float lastFrame;
+		Camera camera;
+
+		//OpenGL stuff
 		std::unique_ptr<VertexArray> m_VAO;
 		std::unique_ptr < IndexBuffer> m_IndexBuffer;
 		std::unique_ptr < Shader> m_Shader;
