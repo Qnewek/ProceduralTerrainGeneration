@@ -6,10 +6,13 @@
 Camera::Camera(const unsigned int ScreenWidth, const unsigned int ScreenHeight) :
 	m_ScreenWidth(ScreenWidth), m_ScreenHeight(ScreenHeight),
 	m_Position(glm::vec3(0.0f, 0.0f, 3.0f)), m_Front(glm::vec3(0.0f, 0.0f, -1.0f)),
-	m_Up(glm::vec3(0.0f, 1.0f, 0.0f)), m_Yaw(-90.0f), m_Pitch(0.0f),
-	m_Speed(0.0f), m_Sensitivity(0.1f), m_Fov(45.0f), firstMouse(true)
+	m_Up(glm::vec3(0.0f, 1.0f, 0.0f)), m_Right(), m_Yaw(-90.0f), m_Pitch(0.0f),
+	m_Speed(2.5f), m_Sensitivity(0.1f), m_Fov(45.0f), mouseControl(false),
+	view(glm::mat4(1.0f)), projection(glm::mat4(1.0f)), 
+	ypos(ScreenHeight / 2.0), xpos(ScreenWidth / 2.0)
 {
-
+	m_Right = glm::normalize(glm::cross(m_Front, m_Up));
+	m_Up = glm::normalize(glm::cross(m_Right, m_Front));
 }
 Camera::~Camera() {
 
@@ -36,8 +39,12 @@ void Camera::UpdateCameraVectors(CameraMovement movement) {
 }
 void Camera::SteerCamera(GLFWwindow* window, float deltaTime) {
 
-	if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
-		glfwSetWindowShouldClose(window, true);
+	if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS) {
+		DisableMouseControl(window);
+	}
+	if (glfwGetKey(window, GLFW_KEY_M) == GLFW_PRESS) {
+		EnableMouseControl(window);
+	}
 
 	m_Speed = static_cast<float>(2.5 * deltaTime);
 	if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
@@ -52,51 +59,49 @@ void Camera::SteerCamera(GLFWwindow* window, float deltaTime) {
 		UpdateCameraVectors(CameraMovement::UP);
 	if (glfwGetKey(window, GLFW_KEY_LEFT_CONTROL) == GLFW_PRESS)
 		UpdateCameraVectors(CameraMovement::DOWN);
+	if (mouseControl)
+		RotateCamera(window);
 }
 
-void Camera::GetViewMatrix(glm::mat4& view) {
-	view = glm::lookAt(m_Position, m_Position + m_Front, m_Up);
+void Camera::RotateCamera(GLFWwindow* window) {
+	double newxpos, newypos;
+	glfwGetCursorPos(window, &newxpos, &newypos);
+
+	float xoffset = static_cast<float>(newxpos) - xpos;
+	float yoffset = ypos - static_cast<float>(newypos);
+	xpos = static_cast<float>(newxpos);
+	ypos = static_cast<float>(newypos);
+
+	xoffset *= m_Sensitivity;
+	yoffset *= m_Sensitivity;
+
+	m_Yaw += xoffset;
+	m_Pitch += yoffset;
+
+	if (m_Pitch > 89.0f)
+		m_Pitch = 89.0f;
+	if (m_Pitch < -89.0f)
+		m_Pitch = -89.0f;
+
+	UpdateCameraVectors(CameraMovement::ROTATE);
 }
-void Camera::GetProjectionMatrix(glm::mat4& projection) {
+
+glm::mat4* Camera::GetViewMatrix() {
+	view = glm::mat4(1.0f);
+	view = glm::lookAt(m_Position, m_Position + m_Front, m_Up);
+	return &view;
+}
+glm::mat4* Camera::GetProjectionMatrix() {
+	projection = glm::mat4(1.0f);
 	projection = glm::perspective(glm::radians(m_Fov), (float)m_ScreenWidth / (float)m_ScreenHeight, 0.1f, 100.0f);
+	return &projection;
 }
 void Camera::EnableMouseControl(GLFWwindow* window) {
-	//glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
-	//glfwSetCursorPosCallback(window, mouse_callback);
+	glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+	glfwSetCursorPos(window, xpos, ypos);
+	mouseControl = true;
 }
-/*void mouse_callback(GLFWwindow* window, double xposIn, double yposIn)
-{
-	float xpos = static_cast<float>(xposIn);
-	float ypos = static_cast<float>(yposIn);
-
-	if ()
-	{
-		lastX = xpos;
-		lastY = ypos;
-		firstMouse = false;
-	}
-
-	float xoffset = xpos - lastX;
-	float yoffset = lastY - ypos; // reversed since y-coordinates go from bottom to top
-	lastX = xpos;
-	lastY = ypos;
-
-	float sensitivity = 0.1f; // change this value to your liking
-	xoffset *= sensitivity;
-	yoffset *= sensitivity;
-
-	yaw += xoffset;
-	pitch += yoffset;
-
-	// make sure that when pitch is out of bounds, screen doesn't get flipped
-	if (pitch > 89.0f)
-		pitch = 89.0f;
-	if (pitch < -89.0f)
-		pitch = -89.0f;
-
-	glm::vec3 front;
-	front.x = cos(glm::radians(yaw)) * cos(glm::radians(pitch));
-	front.y = sin(glm::radians(pitch));
-	front.z = sin(glm::radians(yaw)) * cos(glm::radians(pitch));
-	cameraFront = glm::normalize(front);
-}*/
+void Camera::DisableMouseControl(GLFWwindow* window) {
+	glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
+	mouseControl = false;
+}

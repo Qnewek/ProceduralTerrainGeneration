@@ -1,2 +1,4 @@
-﻿  TestNoiseMesh.cpp
+﻿  Camera.cpp
+C:\Users\Dawid\Documents\JakiesPopierdulki\Studia\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\utility\Camera.cpp(12,32): warning C4244: 'initializing': conversion from 'double' to 'float', possible loss of data
+C:\Users\Dawid\Documents\JakiesPopierdulki\Studia\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\utility\Camera.cpp(12,6): warning C4244: 'initializing': conversion from 'double' to 'float', possible loss of data
   ProceduralTerrainGenerator.vcxproj -> C:\Users\Dawid\Documents\JakiesPopierdulki\Studia\ProceduralTerrainGeneration\ProceduralTerrainGenerator\Debug\ProceduralTerrainGenerator.exe
