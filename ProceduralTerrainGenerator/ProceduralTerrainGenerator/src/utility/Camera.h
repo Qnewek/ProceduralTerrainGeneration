@@ -22,18 +22,18 @@ public:
 	~Camera();
 
 	void SteerCamera(GLFWwindow* window, float deltaTime);
+	void RotateCamera(GLFWwindow* window);
 
-	void GetViewMatrix(glm::mat4& view);
-	void GetProjectionMatrix(glm::mat4& view);
+	glm::mat4* GetViewMatrix();
+	glm::mat4* GetProjectionMatrix();
 	void EnableMouseControl(GLFWwindow* window);
+	void DisableMouseControl(GLFWwindow* window);
 
-	void setFirstMouse(bool value) { firstMouse = value; }
 	void setYaw(float value) { m_Yaw = value; }
 	void setPitch(float value) { m_Pitch = value; }
 
-	bool getFirstMouse() { return firstMouse; }
-	float getYaw() { return m_Yaw; }
-	float getPitch() { return m_Pitch; }
+	float getYaw() const{ return m_Yaw; }
+	float getPitch() const{ return m_Pitch; }
 
 private:
 	//Screen
@@ -43,14 +43,21 @@ private:
 	glm::vec3 m_Position;
 	glm::vec3 m_Front;
 	glm::vec3 m_Up;
+	glm::vec3 m_Right;
 	//Camera rotation parameters
 	float m_Yaw;
 	float m_Pitch;
+	float xpos;
+	float ypos;
 	//Camera options
 	float m_Speed;
 	float m_Sensitivity;
 	float m_Fov;
-	bool firstMouse;
+	bool mouseControl;
+
+	//Matrices
+	glm::mat4 view;
+	glm::mat4 projection;
 
 	void UpdateCameraVectors(CameraMovement movement);
 };

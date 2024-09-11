@@ -4,7 +4,7 @@
 
 VertexArray::VertexArray()
 {
-	glGenVertexArrays(1, &m_RendererID);
+	GLCALL(glGenVertexArrays(1, &m_RendererID));
 }
 
 VertexArray::~VertexArray()

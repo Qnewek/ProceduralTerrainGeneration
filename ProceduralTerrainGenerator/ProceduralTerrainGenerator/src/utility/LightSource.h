@@ -2,6 +2,7 @@
 
 #include "VertexBuffer.h"
 #include "VertexBufferLayout.h"
+#include "Renderer.h"
 
 #include "glm/glm.hpp"
 
@@ -11,6 +12,7 @@ public:
 	LightSource();
 	~LightSource();
 
+	void Draw(Renderer& renderer, glm::mat4& view, glm::mat4& projection);
 private:
 	glm::vec3 lightPos;
 	float* vertices;

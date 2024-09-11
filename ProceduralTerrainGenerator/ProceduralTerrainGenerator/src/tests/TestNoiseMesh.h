@@ -6,6 +6,7 @@
 #include "Texture.h"
 #include "Noise.h"
 #include "Camera.h"
+#include "LightSource.h"
 
 #include "glm/glm.hpp"
 
@@ -34,6 +35,7 @@ namespace test
 		float deltaTime;
 		float lastFrame;
 		Camera camera;
+		LightSource lightSource;
 
 		//OpenGL stuff
 		std::unique_ptr<VertexArray> m_VAO;

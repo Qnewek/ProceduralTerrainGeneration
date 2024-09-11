@@ -143,6 +143,7 @@
     <ClCompile Include="src\tests\TestPerlinDraw.cpp" />
     <ClCompile Include="src\opengl\Texture.cpp" />
     <ClCompile Include="src\utility\Camera.cpp" />
+    <ClCompile Include="src\utility\LightSource.cpp" />
     <ClCompile Include="src\utility\utilities.cpp" />
     <ClCompile Include="src\vendor\glm\detail\glm.cpp" />
     <ClCompile Include="src\vendor\glm\glm.cppm" />
@@ -155,6 +156,8 @@
     <ClCompile Include="src\opengl\VertexBuffer.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <None Include="res\shaders\light_source_fragment.shader" />
+    <None Include="res\shaders\light_source_vertex.shader" />
     <None Include="res\shaders\map_fragment.shader" />
     <None Include="res\shaders\map_vertex.shader" />
     <None Include="res\shaders\mesh_fragment.shader" />
@@ -308,6 +311,7 @@
     <ClInclude Include="src\tests\TestPerlinDraw.h" />
     <ClInclude Include="src\opengl\Texture.h" />
     <ClInclude Include="src\utility\Camera.h" />
+    <ClInclude Include="src\utility\LightSource.h" />
     <ClInclude Include="src\utility\utilities.h" />
     <ClInclude Include="src\vendor\glm\common.hpp" />
     <ClInclude Include="src\vendor\glm\detail\compute_common.hpp" />

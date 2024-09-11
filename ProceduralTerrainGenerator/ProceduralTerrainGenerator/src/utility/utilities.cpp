@@ -2,6 +2,8 @@
 
 #include "math.h"
 
+#include <iostream>
+
 namespace utilities
 {
 	void ConvertToGrayscaleImage(float* data, unsigned char* image, int width, int height) {
@@ -10,46 +12,42 @@ namespace utilities
 		}
 	}
 	void GenCubeLayout(float* vertices, unsigned int* indices) {
-
-		vertices = new float[24];
-		indices = new unsigned int[36];
-
-        float cubeVertices[] = {
-            // Front row
-            -1.0f, -1.0f,  1.0f,
-             1.0f, -1.0f,  1.0f,
-             1.0f,  1.0f,  1.0f,
-            -1.0f,  1.0f,  1.0f,
-            // Back row
-            -1.0f, -1.0f, -1.0f,
-             1.0f, -1.0f, -1.0f,
-             1.0f,  1.0f, -1.0f,
-            -1.0f,  1.0f, -1.0f
-        };
+		float cubeVertices[] = {
+			// Front row
+			-1.0f, -1.0f,  1.0f,
+			 1.0f, -1.0f,  1.0f,
+			 1.0f,  1.0f,  1.0f,
+			-1.0f,  1.0f,  1.0f,
+			// Back row
+			-1.0f, -1.0f, -1.0f,
+			 1.0f, -1.0f, -1.0f,
+			 1.0f,  1.0f, -1.0f,
+			-1.0f,  1.0f, -1.0f
+		};
 
 		//Cube indices
-        unsigned int cubeIndices[] = {
-            // Front 
-            0, 1, 2, 2, 3, 0,
-            // Back
-            4, 5, 6, 6, 7, 4,
-            // Left
-            4, 0, 3, 3, 7, 4,
-            // Right
-            1, 5, 6, 6, 2, 1,
-            // Top
-            3, 2, 6, 6, 7, 3,
-            // Bottom
-            4, 5, 1, 1, 0, 4
-        };
+		unsigned int cubeIndices[] = {
+			// Front 
+			0, 1, 2, 2, 3, 0,
+			// Back
+			4, 5, 6, 6, 7, 4,
+			// Left
+			4, 0, 3, 3, 7, 4,
+			// Right
+			1, 5, 6, 6, 2, 1,
+			// Top
+			3, 2, 6, 6, 7, 3,
+			// Bottom
+			4, 5, 1, 1, 0, 4
+		};
 
-        for (int i = 0; i < 24; ++i) {
-            vertices[i] = cubeVertices[i];
-        }
+		for (int i = 0; i < 24; ++i) {
+			vertices[i] = cubeVertices[i];
+		}
 
-        for (int i = 0; i < 36; ++i) {
-            indices[i] = cubeIndices[i];
-        }
+		for (int i = 0; i < 36; ++i) {
+			indices[i] = cubeIndices[i];
+		}
 	}
 
 	void SimpleMeshIndicies(unsigned int* indices, int width, int height) {

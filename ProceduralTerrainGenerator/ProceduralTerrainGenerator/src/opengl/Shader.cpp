@@ -37,7 +37,7 @@ unsigned int Shader::CompileShader(unsigned int type, const std::string& source)
     if (result == GL_FALSE) {
         int length;
         glGetShaderiv(id, GL_INFO_LOG_LENGTH, &length);
-        char* message = (char*)alloca(length * sizeof(char));
+        char* message = (char*)malloc(length * sizeof(char));
         glGetShaderInfoLog(id, length, &length, message);
         std::cout << "Failed to compile " << (type == GL_VERTEX_SHADER ? "vertex" : "fragment") << " shader!" << std::endl;
         std::cout << message << std::endl;
@@ -77,7 +77,7 @@ unsigned int Shader::CreateShader(const std::string& vertexShader, const std::st
 
 void Shader::Bind() const
 {
-	glUseProgram(m_RendererID);
+	GLCALL(glUseProgram(m_RendererID));
 }
 
 void Shader::Unbind() const
@@ -102,7 +102,7 @@ void Shader::SetUniformMat4f(const std::string& name, const glm::mat4& matrix)
 
 void Shader::SetUniform4f(const std::string& name, float v0, float v1, float v2, float v3)
 {
-	glUniform4f(GetUniformLocation(name), v0, v1, v2, v3);
+	GLCALL(glUniform4f(GetUniformLocation(name), v0, v1, v2, v3));
 }
 
 int Shader::GetUniformLocation(const std::string& name)
