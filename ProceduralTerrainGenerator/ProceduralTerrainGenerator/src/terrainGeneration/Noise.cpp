@@ -7,7 +7,7 @@
 
 namespace noise
 {
-	void getNoiseMesh(float* mesh, int mapWidth, int mapHeigth, float scale, int octaves, float constrast, Options option) {
+	void getNoiseMesh(float* mesh, int mapWidth, int mapHeigth, float scale, int octaves, float constrast, Options option, bool normals) {
 		float amplitude;
 		float frequency;
 		float noiseHeight;
@@ -53,9 +53,20 @@ namespace noise
 						noiseHeight = -noiseHeight;
 					}
 				}
-				mesh[((y * mapWidth) + x)*3] = x/(float)mapWidth;
-				mesh[((y * mapWidth) + x)*3+1] = noiseHeight;
-				mesh[((y * mapWidth) + x)*3+2] = y/(float)mapHeigth;
+				if (normals) {
+					mesh[((y * mapWidth) + x) * 6] = x / (float)mapWidth;
+					mesh[((y * mapWidth) + x) * 6 + 1] = noiseHeight;
+					mesh[((y * mapWidth) + x) * 6 + 2] = y / (float)mapHeigth;
+					//Normal vector initialization with {0,0,0}
+					mesh[((y * mapWidth) + x) * 6 + 3] = 0.0f;
+					mesh[((y * mapWidth) + x) * 6 + 4] = 0.0f;
+					mesh[((y * mapWidth) + x) * 6 + 5] = 0.0f;
+				}
+				else {
+					mesh[((y * mapWidth) + x) * 3] = x / (float)mapWidth;
+					mesh[((y * mapWidth) + x) * 3 + 1] = noiseHeight;
+					mesh[((y * mapWidth) + x) * 3 + 2] = y / (float)mapHeigth;
+				}	
 			}
 		}
 	}

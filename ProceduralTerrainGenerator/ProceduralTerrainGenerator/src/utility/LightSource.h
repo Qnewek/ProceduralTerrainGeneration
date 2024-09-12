@@ -13,6 +13,10 @@ public:
 	~LightSource();
 
 	void Draw(Renderer& renderer, glm::mat4& view, glm::mat4& projection);
+
+	void SetPosition(glm::vec3 position) { lightPos = position; }
+	glm::vec3 GetPosition() { return lightPos; }
+
 private:
 	glm::vec3 lightPos;
 	float* vertices;
