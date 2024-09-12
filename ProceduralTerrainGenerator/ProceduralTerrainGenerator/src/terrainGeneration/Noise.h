@@ -12,7 +12,7 @@ namespace noise
 	} vec2;
 
 	void getNoiseMap(float* noiseMap, int mapWidth, int mapHeigth, float scale, int octaves, float constrast, Options option);
-	void getNoiseMesh(float* mesh, int mapWidth, int mapHeigth, float scale, int octaves, float constrast, Options option);
+	void getNoiseMesh(float* mesh, int mapWidth, int mapHeigth, float scale, int octaves, float constrast, Options option, bool normals);
 	vec2 randomGradient(int ix, int iy);
 	float dotGridGradient(int ix, int iy, float x, float y);
 	float perlin(float x, float y);
