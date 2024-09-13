@@ -69,6 +69,7 @@ namespace noise
 				}	
 			}
 		}
+		std::cout << "Noise mesh generated" << std::endl;
 	}
 	void getNoiseMap(float* noiseMap, int mapWidth, int mapHeigth, float scale, int octaves, float constrast, Options option)
 	{
