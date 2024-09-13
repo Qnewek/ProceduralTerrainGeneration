@@ -2,9 +2,10 @@
 namespace noise
 {
 	enum class Options {
+		NOTHING,
 		FLATTEN_NEGATIVES,
 		REVERT_NEGATIVES,
-		REFIT_BASIC,
+		REFIT_BASIC
 	};
 	typedef struct {
 		float x;

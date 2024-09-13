@@ -55,10 +55,10 @@ namespace utilities
 	void CreateTerrainMesh(float* mesh, unsigned int* indices, int mapWidth, int mapHeigth, float scale, int octaves, float constrast, noise::Options opt, bool normals, bool first) {
 		noise::getNoiseMesh(mesh, mapWidth, mapHeigth, scale, octaves, constrast, opt, normals);
 		if(first)
-			utilities::SimpleMeshIndicies(indices, mapWidth, mapHeigth);
+			SimpleMeshIndicies(indices, mapWidth, mapHeigth);
 		if (normals) {
-			utilities::CalculateNormals(mesh, indices, 6, 3, (mapWidth - 1) * (mapHeigth - 1) * 6);
-			utilities::NormalizeVector3f(mesh, 6, 3, mapWidth * mapHeigth);
+			CalculateNormals(mesh, indices, 6, 3, (mapWidth - 1) * (mapHeigth - 1) * 6);
+			NormalizeVector3f(mesh, 6, 3, mapWidth * mapHeigth);
 		}
 	}
 
@@ -66,13 +66,13 @@ namespace utilities
 		int index = 0;
 		for (int y = 0; y < height - 1; y++) {
 			for (int x = 0; x < width - 1; x++) {
-				indices[index++] = x + y * width;
-				indices[index++] = x + (y + 1) * width;
-				indices[index++] = x + 1 + y * width;
+				indices[index++] = x + (y * width);
+				indices[index++] = x + ((y + 1) * width);
+				indices[index++] = x + 1 + (y * width);
 
-				indices[index++] = x + 1 + y * width;
-				indices[index++] = x + (y + 1) * width;
-				indices[index++] = x + 1 + (y + 1) * width;
+				indices[index++] = x + 1 + (y * width);
+				indices[index++] = x + ((y + 1) * width);
+				indices[index++] = x + 1 + ((y + 1) * width);
 			}
 		}
 	}
