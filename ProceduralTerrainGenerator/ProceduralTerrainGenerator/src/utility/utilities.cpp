@@ -52,13 +52,27 @@ namespace utilities
 		}
 	}
 
-	void CreateTerrainMesh(float* mesh, unsigned int* indices, int mapWidth, int mapHeigth, float scale, int octaves, float constrast, noise::Options opt, bool normals, bool first) {
-		noise::getNoiseMesh(mesh, mapWidth, mapHeigth, scale, octaves, constrast, opt, normals);
+	void CreateTerrainMesh(float* vertices, float* map, unsigned int* indices, unsigned int mapWidth, unsigned int mapHeight, unsigned int stride, float scale, int octaves, float constrast, float redistribution, noise::Options opt, bool normals, bool first) {
+		noise::getNoiseMap(map, mapWidth, mapHeight, scale, octaves, constrast, redistribution, opt);
+		parseNoiseIntoVertices(vertices, map, mapWidth, mapHeight, stride, 0);
 		if(first)
-			SimpleMeshIndicies(indices, mapWidth, mapHeigth);
+			SimpleMeshIndicies(indices, mapWidth, mapHeight);
 		if (normals) {
-			CalculateNormals(mesh, indices, 6, 3, (mapWidth - 1) * (mapHeigth - 1) * 6);
-			NormalizeVector3f(mesh, 6, 3, mapWidth * mapHeigth);
+			InitializeNormals(vertices, stride, 3, mapHeight * mapWidth);
+			CalculateNormals(vertices, indices, stride, 3, (mapWidth - 1) * (mapHeight - 1) * 6);
+			NormalizeVector3f(vertices, stride, 3, mapWidth * mapHeight);
+		}
+	}
+
+	void parseNoiseIntoVertices(float* vertices, float* map, unsigned int mapWidth, unsigned int mapHeigth, unsigned int stride, unsigned int offset) {
+		for (int y = 0; y < mapHeigth; y++)
+		{
+			for (int x = 0; x < mapWidth; x++)
+			{
+				vertices[((y * mapWidth) + x) * stride + offset] = x / (float)mapWidth;
+				vertices[((y * mapWidth) + x) * stride + offset + 1] = map[y * mapWidth + x];;
+				vertices[((y * mapWidth) + x) * stride + offset + 2] = y / (float)mapHeigth;
+			}
 		}
 	}
 
@@ -74,6 +88,24 @@ namespace utilities
 				indices[index++] = x + ((y + 1) * width);
 				indices[index++] = x + 1 + ((y + 1) * width);
 			}
+		}
+	}
+
+	void PaintBiome(float* vertices, float* map, float* seed, unsigned int mapWidth, unsigned int mapHeight, unsigned int stride, unsigned int offset) {
+		for (int y = 0; y < mapHeight; y++) {
+			for (int x = 0; x < mapWidth; x++)
+			{
+				vertices[((y * mapWidth) + x) * stride + offset] = seed[y * mapWidth + x] > 0.0f ? seed[y * mapWidth + x] : 0.0f;
+				vertices[((y * mapWidth) + x) * stride + offset + 1] = map[y*mapWidth + x] > 0.0f ? map[y * mapWidth + x] : 0.0f;
+			}
+		}
+	}
+
+	void InitializeNormals(float* vertices, unsigned int stride, unsigned int offSet, unsigned int verticesCount) {
+		for (int i = 0; i < verticesCount; i++) {
+			vertices[i * stride + offSet] = 0.0f;
+			vertices[i * stride + offSet + 1] = 0.0f;
+			vertices[i * stride + offSet + 2] = 0.0f;
 		}
 	}
 
@@ -102,7 +134,7 @@ namespace utilities
 			AddVector3f(vertices, indices[i + 2] * stride + offSet, tmp);
 		}
 	}
-	//Requires floats in vertices representing a normal vector to be initialized with some value
+	//Requires floats in vertices representing a normal vector to be initialized with some value (Func initializeNomals {0.0f, 0.0f, 0.0f)
 	void AddVector3f(float* vertices, unsigned int index, glm::vec3 vector3f) {
 		vertices[index] += vector3f.x;
 		vertices[index + 1] += vector3f.y;

@@ -16,7 +16,7 @@ namespace test
 		noise = new float[width * height];
 		image = new unsigned char[height * width];
 
-		utilities::benchmark_void(noise::getNoiseMap, "getNoiseMap", noise, height, width, scale, octaves, constrast, noise::Options::REVERT_NEGATIVES);
+		utilities::benchmark_void(noise::getNoiseMap, "getNoiseMap", noise, width, height, scale, octaves, constrast, 1.0f, noise::Options::REVERT_NEGATIVES);
 		utilities::benchmark_void(utilities::ConvertToGrayscaleImage, "ConvertToGreyScale", noise, image, height, width);
 
 		float vertices[] = {
@@ -66,7 +66,7 @@ namespace test
 		{
 			checkSum = (float)octaves + scale + constrast;
 			prevOpt = option;
-			utilities::benchmark_void(noise::getNoiseMap, "getNoiseMap", noise, height, width, scale, octaves, constrast, noise::Options::REVERT_NEGATIVES);
+			utilities::benchmark_void(noise::getNoiseMap, "getNoiseMap", noise, width, height, scale, octaves, constrast, 1.0f, noise::Options::REVERT_NEGATIVES);
 			utilities::benchmark_void(utilities::ConvertToGrayscaleImage, "ConvertToGreyScale", noise, image, height, width);
 			m_Texture->SetNewImage(image);
 		}

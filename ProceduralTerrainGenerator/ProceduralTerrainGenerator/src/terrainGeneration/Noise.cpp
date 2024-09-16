@@ -7,72 +7,9 @@
 
 namespace noise
 {
-	void getNoiseMesh(float* mesh, int mapWidth, int mapHeigth, float scale, int octaves, float constrast, Options option, bool normals) {
-		float amplitude;
-		float frequency;
-		float noiseHeight;
-		for (int y = 0; y < mapHeigth; y++)
-		{
-			for (int x = 0; x < mapWidth; x++)
-			{
-				amplitude = 1.0f;
-				frequency = 1.0f;
-				noiseHeight = 0.0f;
-
-				for (int i = 0; i < octaves; i++)
-				{
-					noiseHeight += perlin(x / scale * frequency, y / scale * frequency) * amplitude;
-
-					amplitude *= 0.5f;
-					frequency *= 2.0f;
-				}
-
-				noiseHeight *= constrast;
-
-				if (noiseHeight > 1.0f)
-				{
-					noiseHeight = 1.0f;
-				}
-				else if (noiseHeight < -1.0f)
-				{
-					noiseHeight = -1.0f;
-				}
-
-				if (option == Options::REFIT_BASIC)
-				{
-					noiseHeight = (noiseHeight + 1.0f) / 2.0f;
-				}
-				else if (noiseHeight < 0.0f)
-				{
-					if (option == Options::FLATTEN_NEGATIVES)
-					{
-						noiseHeight = 0.0f;
-					}
-					else if (option == Options::REVERT_NEGATIVES)
-					{
-						noiseHeight = -noiseHeight;
-					}
-				}
-				if (normals) {
-					mesh[((y * mapWidth) + x) * 6] = x / (float)mapWidth;
-					mesh[((y * mapWidth) + x) * 6 + 1] = noiseHeight;
-					mesh[((y * mapWidth) + x) * 6 + 2] = y / (float)mapHeigth;
-					//Normal vector initialization with {0,0,0}
-					mesh[((y * mapWidth) + x) * 6 + 3] = 0.0f;
-					mesh[((y * mapWidth) + x) * 6 + 4] = 0.0f;
-					mesh[((y * mapWidth) + x) * 6 + 5] = 0.0f;
-				}
-				else {
-					mesh[((y * mapWidth) + x) * 3] = x / (float)mapWidth;
-					mesh[((y * mapWidth) + x) * 3 + 1] = noiseHeight;
-					mesh[((y * mapWidth) + x) * 3 + 2] = y / (float)mapHeigth;
-				}	
-			}
-		}
-		std::cout << "Noise mesh generated" << std::endl;
-	}
-	void getNoiseMap(float* noiseMap, int mapWidth, int mapHeigth, float scale, int octaves, float constrast, Options option)
+	void getNoiseMap(float* noiseMap, unsigned int mapWidth, unsigned int mapHeigth, float scale, int octaves, float constrast, float redistribution, Options option)
 	{
+		float max = -1.0f;
 		float amplitude;
 		float frequency;
 		float noiseHeight;
@@ -102,7 +39,6 @@ namespace noise
 				{
 					noiseHeight = -1.0f;
 				}
-
 				if (option == Options::REFIT_BASIC)
 				{
 					noiseHeight = (noiseHeight + 1.0f) / 2.0f;
@@ -118,10 +54,16 @@ namespace noise
 						noiseHeight = -noiseHeight;
 					}
 				}
+				if (option != Options::NOTHING)
+					noiseHeight = std::pow(noiseHeight, redistribution);
+
+				if (noiseHeight > max)
+					max = noiseHeight;
 
 				noiseMap[y * mapWidth + x] = noiseHeight;
 			}
 		}
+		std::cout << "Noise successfully generated max: " << max <<std::endl;
 	}
 
 	vec2 randomGradient(int ix, int iy) {
