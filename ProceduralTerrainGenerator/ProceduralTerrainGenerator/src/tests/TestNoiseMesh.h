@@ -26,10 +26,11 @@ namespace test
 
 	private:
 		//Perlin Noise generation parameters
-		float* mesh;
+		float* mesh, *map, *textureSeed;
 		unsigned int* meshIndices;
 		int width, height, octaves;
 		float scale, constrast, checkSum = 0;
+		float redistribution;
 		noise::Options option, prevOpt;
 
 		float deltaTime;

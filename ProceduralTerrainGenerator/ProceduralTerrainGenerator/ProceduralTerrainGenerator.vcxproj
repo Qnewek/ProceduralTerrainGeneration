@@ -160,8 +160,8 @@
     <None Include="res\shaders\light_source_vertex.shader" />
     <None Include="res\shaders\map_fragment.shader" />
     <None Include="res\shaders\map_vertex.shader" />
-    <None Include="res\shaders\mesh_fragment.shader" />
-    <None Include="res\shaders\mesh_vertex.shader" />
+    <None Include="res\shaders\Lightning_fragment.shader" />
+    <None Include="res\shaders\Lightning_vertex.shader" />
     <None Include="src\vendor\glm\detail\func_common.inl" />
     <None Include="src\vendor\glm\detail\func_common_simd.inl" />
     <None Include="src\vendor\glm\detail\func_exponential.inl" />
@@ -614,8 +614,7 @@
     <ClInclude Include="src\opengl\VertexBuffer.h" />
   </ItemGroup>
   <ItemGroup>
-    <Image Include="res\textures\radziu.png" />
-    <Image Include="res\textures\TAK.png" />
+    <Image Include="res\textures\Basic_biome_texture_palette.png" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

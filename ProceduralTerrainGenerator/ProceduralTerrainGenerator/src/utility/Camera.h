@@ -26,6 +26,8 @@ public:
 
 	glm::mat4* GetViewMatrix();
 	glm::mat4* GetProjectionMatrix();
+	glm::vec3 GetPosition() const { return m_Position; }
+
 	void EnableMouseControl(GLFWwindow* window);
 	void DisableMouseControl(GLFWwindow* window);
 
