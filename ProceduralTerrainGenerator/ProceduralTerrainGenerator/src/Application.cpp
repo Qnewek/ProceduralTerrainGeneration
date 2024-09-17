@@ -23,6 +23,7 @@
 
 #include "tests/TestPerlinDraw.h"
 #include "tests/TestNoiseMesh.h"
+#include "tests/TestImage.h"
 
 #include "Noise.h"
 #include "utilities.h"
@@ -69,6 +70,7 @@ int main(void)
 
 		testMenu->RegisterTest<test::TestPerlinDraw>("Perlin Noise");
 		testMenu->RegisterTest<test::TestNoiseMesh>("Noise Mesh");
+		testMenu->RegisterTest<test::TestImage>("Test image");
 
         while (!glfwWindowShouldClose(window))
         {
