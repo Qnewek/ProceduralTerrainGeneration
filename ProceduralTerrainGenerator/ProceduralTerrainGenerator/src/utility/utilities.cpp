@@ -1,6 +1,6 @@
 #include "utilities.h"
 
-#include "math.h"
+#include <math.h>
 
 #include <iostream>
 #include "glm/glm.hpp"
@@ -55,7 +55,7 @@ namespace utilities
 	void CreateTerrainMesh(float* vertices, float* map, unsigned int* indices, unsigned int mapWidth, unsigned int mapHeight, unsigned int stride, float scale, int octaves, float constrast, float redistribution, noise::Options opt, bool normals, bool first) {
 		noise::getNoiseMap(map, mapWidth, mapHeight, scale, octaves, constrast, redistribution, opt);
 		parseNoiseIntoVertices(vertices, map, mapWidth, mapHeight, stride, 0);
-		if(first)
+		if (first)
 			SimpleMeshIndicies(indices, mapWidth, mapHeight);
 		if (normals) {
 			InitializeNormals(vertices, stride, 3, mapHeight * mapWidth);
@@ -96,7 +96,7 @@ namespace utilities
 			for (int x = 0; x < mapWidth; x++)
 			{
 				vertices[((y * mapWidth) + x) * stride + offset] = seed[y * mapWidth + x] > 0.0f ? seed[y * mapWidth + x] : 0.0f;
-				vertices[((y * mapWidth) + x) * stride + offset + 1] = map[y*mapWidth + x] > 0.0f ? map[y * mapWidth + x] : 0.0f;
+				vertices[((y * mapWidth) + x) * stride + offset + 1] = map[y * mapWidth + x] > 0.0f ? map[y * mapWidth + x] : 0.0f;
 			}
 		}
 	}

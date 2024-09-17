@@ -78,6 +78,9 @@
     <ClCompile Include="src\utility\LightSource.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="src\tests\TestImage.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <None Include="src\vendor\glm\detail\func_common.inl">
@@ -500,6 +503,8 @@
     <None Include="res\shaders\Lightning_fragment.shader" />
     <None Include="res\shaders\light_source_fragment.shader" />
     <None Include="res\shaders\light_source_vertex.shader" />
+    <None Include="res\shaders\test_vertex.shader" />
+    <None Include="res\shaders\test_frag.shader" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\opengl\Renderer.h">
@@ -1432,9 +1437,12 @@
     <ClInclude Include="src\utility\LightSource.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="src\tests\TestImage.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
-    <Image Include="res\textures\Basic_biome_texture_palette.png">
+    <Image Include="res\textures\Basic_biome_texture_palette.jpg">
       <Filter>Resource Files</Filter>
     </Image>
   </ItemGroup>

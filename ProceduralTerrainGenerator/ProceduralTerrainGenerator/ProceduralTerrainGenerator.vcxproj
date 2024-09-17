@@ -139,6 +139,7 @@
     <ClCompile Include="src\opengl\Shader.cpp" />
     <ClCompile Include="src\terrainGeneration\Noise.cpp" />
     <ClCompile Include="src\tests\Test.cpp" />
+    <ClCompile Include="src\tests\TestImage.cpp" />
     <ClCompile Include="src\tests\TestNoiseMesh.cpp" />
     <ClCompile Include="src\tests\TestPerlinDraw.cpp" />
     <ClCompile Include="src\opengl\Texture.cpp" />
@@ -162,6 +163,8 @@
     <None Include="res\shaders\map_vertex.shader" />
     <None Include="res\shaders\Lightning_fragment.shader" />
     <None Include="res\shaders\Lightning_vertex.shader" />
+    <None Include="res\shaders\test_frag.shader" />
+    <None Include="res\shaders\test_vertex.shader" />
     <None Include="src\vendor\glm\detail\func_common.inl" />
     <None Include="src\vendor\glm\detail\func_common_simd.inl" />
     <None Include="src\vendor\glm\detail\func_exponential.inl" />
@@ -307,6 +310,7 @@
     <ClInclude Include="src\opengl\Shader.h" />
     <ClInclude Include="src\terrainGeneration\Noise.h" />
     <ClInclude Include="src\tests\Test.h" />
+    <ClInclude Include="src\tests\TestImage.h" />
     <ClInclude Include="src\tests\TestNoiseMesh.h" />
     <ClInclude Include="src\tests\TestPerlinDraw.h" />
     <ClInclude Include="src\opengl\Texture.h" />
@@ -614,7 +618,7 @@
     <ClInclude Include="src\opengl\VertexBuffer.h" />
   </ItemGroup>
   <ItemGroup>
-    <Image Include="res\textures\Basic_biome_texture_palette.png" />
+    <Image Include="res\textures\Basic_biome_texture_palette.jpg" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

@@ -15,7 +15,7 @@
 
 namespace test
 {
-	TestNoiseMesh::TestNoiseMesh() :height(500), width(500),
+	TestNoiseMesh::TestNoiseMesh() :height(100), width(100),
 		mesh(nullptr), textureSeed(nullptr), map(nullptr), meshIndices(nullptr), octaves(8), prevOpt(noise::Options::REVERT_NEGATIVES),
 		scale(400), constrast(1.2f), redistribution(1.0f), option(noise::Options::REVERT_NEGATIVES),
 		deltaTime(0.0f), lastFrame(0.0f), camera(800, 600), lightSource()
@@ -41,7 +41,7 @@ namespace test
 		m_VertexBuffer = std::make_unique<VertexBuffer>(mesh, (height * width) * 8 * sizeof(float));
 		m_IndexBuffer = std::make_unique<IndexBuffer>(meshIndices, (width - 1) * (height - 1) * 6);
 		m_Shader = std::make_unique<Shader>("res/shaders/Lightning_vertex.shader", "res/shaders/Lightning_fragment.shader");
-		m_Texture = std::make_unique<Texture>("res/textures/Basic_biome_texture_palette.png");
+		m_Texture = std::make_unique<Texture>("res/textures/Basic_biome_texture_palette.jpg");
 
 		VertexBufferLayout layout;
 		layout.Push<float>(3);
@@ -82,10 +82,9 @@ namespace test
 		}
 
 		m_Shader->Bind();
-		m_Texture->Bind();
 
-		m_Shader->SetUniform3fv("material.ambient", glm::vec3(0.2f, 0.2f, 0.2f));
-		m_Shader->SetUniform3fv("material.ambient", glm::vec3(1.0f, 0.5f, 0.31f));
+		//m_Shader->SetUniform3fv("material.ambient", glm::vec3(0.2f, 0.2f, 0.2f));
+		//m_Shader->SetUniform3fv("material.diffuse", glm::vec3(1.0f, 0.5f, 0.31f));
 		m_Shader->SetUniform3fv("material.specular", glm::vec3(0.5f, 0.5f, 0.5f));
 		m_Shader->SetUniform1f("material.shininess", 16.0f);
 
@@ -96,8 +95,6 @@ namespace test
 		m_Shader->SetUniform3fv("light.position", lightSource.GetPosition());
 		m_Shader->SetUniform3fv("viewPos", camera.GetPosition());
 
-		m_Shader->SetUniform1i("u_Texture", 0);
-
 		glm::mat4 model = glm::mat4(1.0f);
 		model = glm::translate(model, glm::vec3(-0.5f, -0.25f, 0.0f));
 
@@ -107,6 +104,7 @@ namespace test
 
 		lightSource.Draw(renderer, *camera.GetViewMatrix(), *camera.GetProjectionMatrix());
 		
+		m_Texture->Bind();
 		renderer.Draw(*m_VAO, *m_IndexBuffer, *m_Shader);
 	}
 
