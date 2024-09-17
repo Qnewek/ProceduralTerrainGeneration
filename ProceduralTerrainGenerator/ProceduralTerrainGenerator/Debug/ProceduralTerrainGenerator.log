@@ -1,9 +1,8 @@
-﻿  utilities.cpp
-C:\Users\Dawid\Documents\JakiesPopierdulki\Studia\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\utility\utilities.cpp(68,21): warning C4018: '<': signed/unsigned mismatch
-C:\Users\Dawid\Documents\JakiesPopierdulki\Studia\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\utility\utilities.cpp(70,22): warning C4018: '<': signed/unsigned mismatch
-C:\Users\Dawid\Documents\JakiesPopierdulki\Studia\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\utility\utilities.cpp(95,21): warning C4018: '<': signed/unsigned mismatch
-C:\Users\Dawid\Documents\JakiesPopierdulki\Studia\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\utility\utilities.cpp(96,22): warning C4018: '<': signed/unsigned mismatch
-C:\Users\Dawid\Documents\JakiesPopierdulki\Studia\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\utility\utilities.cpp(105,21): warning C4018: '<': signed/unsigned mismatch
-C:\Users\Dawid\Documents\JakiesPopierdulki\Studia\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\utility\utilities.cpp(118,21): warning C4018: '<': signed/unsigned mismatch
-C:\Users\Dawid\Documents\JakiesPopierdulki\Studia\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\utility\utilities.cpp(146,21): warning C4018: '<': signed/unsigned mismatch
+﻿  Noise.cpp
+C:\Users\Dawid\Documents\JakiesPopierdulki\Studia\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\terrainGeneration\Noise.cpp(21,21): warning C4018: '<': signed/unsigned mismatch
+C:\Users\Dawid\Documents\JakiesPopierdulki\Studia\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\terrainGeneration\Noise.cpp(23,22): warning C4018: '<': signed/unsigned mismatch
+C:\Users\Dawid\Documents\JakiesPopierdulki\Studia\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\terrainGeneration\Noise.cpp(78,19): warning C4554: '>>': check operator precedence for possible error; use parentheses to clarify precedence
+C:\Users\Dawid\Documents\JakiesPopierdulki\Studia\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\terrainGeneration\Noise.cpp(81,19): warning C4554: '>>': check operator precedence for possible error; use parentheses to clarify precedence
+C:\Users\Dawid\Documents\JakiesPopierdulki\Studia\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\terrainGeneration\Noise.cpp(83,16): warning C4244: 'initializing': conversion from 'double' to 'float', possible loss of data
+C:\Users\Dawid\Documents\JakiesPopierdulki\Studia\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\terrainGeneration\Noise.cpp(102,46): warning C4244: 'return': conversion from 'double' to 'float', possible loss of data
   ProceduralTerrainGenerator.vcxproj -> C:\Users\Dawid\Documents\JakiesPopierdulki\Studia\ProceduralTerrainGeneration\ProceduralTerrainGenerator\Debug\ProceduralTerrainGenerator.exe

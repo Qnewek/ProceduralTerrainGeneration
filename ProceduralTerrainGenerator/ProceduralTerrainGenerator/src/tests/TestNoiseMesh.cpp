@@ -15,7 +15,7 @@
 
 namespace test
 {
-	TestNoiseMesh::TestNoiseMesh() :height(100), width(100),
+	TestNoiseMesh::TestNoiseMesh() :height(150), width(150),
 		mesh(nullptr), textureSeed(nullptr), map(nullptr), meshIndices(nullptr), octaves(8), prevOpt(noise::Options::REVERT_NEGATIVES),
 		scale(400), constrast(1.2f), redistribution(1.0f), option(noise::Options::REVERT_NEGATIVES),
 		deltaTime(0.0f), lastFrame(0.0f), camera(800, 600), lightSource()
@@ -83,8 +83,6 @@ namespace test
 
 		m_Shader->Bind();
 
-		//m_Shader->SetUniform3fv("material.ambient", glm::vec3(0.2f, 0.2f, 0.2f));
-		//m_Shader->SetUniform3fv("material.diffuse", glm::vec3(1.0f, 0.5f, 0.31f));
 		m_Shader->SetUniform3fv("material.specular", glm::vec3(0.5f, 0.5f, 0.5f));
 		m_Shader->SetUniform1f("material.shininess", 16.0f);
 

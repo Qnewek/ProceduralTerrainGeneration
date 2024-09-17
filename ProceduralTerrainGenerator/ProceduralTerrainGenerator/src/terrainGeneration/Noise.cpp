@@ -3,6 +3,10 @@
 #include "math.h"
 #include <iostream>
 
+#include <random>
+
+#include "Simplex/SimplexNoise.h"
+
 #define PI 3.14159265
 
 namespace noise
@@ -13,32 +17,31 @@ namespace noise
 		float amplitude;
 		float frequency;
 		float noiseHeight;
+		float divider;
 		for (int y = 0; y < mapHeigth; y++)
 		{
 			for (int x = 0; x < mapWidth; x++)
 			{
+				divider = 0.0f;
 				amplitude = 1.0f;
 				frequency = 1.0f;
 				noiseHeight = 0.0f;
 
 				for (int i = 0; i < octaves; i++)
 				{
-					noiseHeight += perlin(x / scale * frequency, y / scale * frequency) * amplitude;
+					noiseHeight += SimplexNoise::noise(x / scale * frequency, y / scale * frequency) * amplitude;
+					//Own implementation, generates rather small range of heights
+					//noiseHeight += perlin(x / scale * frequency, y / scale * frequency) * amplitude;
 
+
+					divider += amplitude;
 					amplitude *= 0.5f;
 					frequency *= 2.0f;
 				}
 
 				noiseHeight *= constrast;
+				noiseHeight /= divider;
 
-				if (noiseHeight > 1.0f)
-				{
-					noiseHeight = 1.0f;
-				}
-				else if (noiseHeight < -1.0f)
-				{
-					noiseHeight = -1.0f;
-				}
 				if (option == Options::REFIT_BASIC)
 				{
 					noiseHeight = (noiseHeight + 1.0f) / 2.0f;
