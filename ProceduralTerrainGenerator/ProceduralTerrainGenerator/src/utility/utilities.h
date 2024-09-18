@@ -20,9 +20,10 @@ namespace utilities
 	void AddVector3f(float* vertices, unsigned int index, glm::vec3 vector3f);
 	void NormalizeVector3f(float* vertices, unsigned int stride, unsigned int offSet, unsigned int verticesCount);
 	
-    void CreateTerrainMesh(float* vertices, float* map, unsigned int* indices, 
-                           unsigned int mapWidth, unsigned int mapHeigth, 
-                           unsigned int stride, float scale, int octaves, float constrast, float redistribution, 
+    void CreateTerrainMesh(noise::SimplexNoiseClass noise ,float* vertices, float* map, unsigned int* indices, 
+                           unsigned int mapWidth, unsigned int mapHeight, 
+                           unsigned int stride, float scale, int octaves, float constrast, float redistribution,
+                           float lacunarity, float persistance, float ridgeGain, float ridgeOffset,
                            noise::Options opt, bool normals, bool first);
 	void PaintBiome(float* vertices, float* map, float* seed, unsigned int mapWidth, unsigned int mapHeight, unsigned int stride, unsigned int offset);
 
