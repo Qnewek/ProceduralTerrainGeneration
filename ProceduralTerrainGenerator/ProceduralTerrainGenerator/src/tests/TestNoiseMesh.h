@@ -7,7 +7,7 @@
 #include "Noise.h"
 #include "Camera.h"
 #include "LightSource.h"
-
+#include "Noise.h"
 #include "glm/glm.hpp"
 
 #include <memory>
@@ -30,13 +30,14 @@ namespace test
 		unsigned int* meshIndices;
 		int width, height, octaves;
 		float scale, constrast, checkSum = 0;
-		float redistribution;
+		float redistribution, ridgeGain, ridgeOffset, lacunarity, persistance;
 		noise::Options option, prevOpt;
 
 		float deltaTime;
 		float lastFrame;
 		Camera camera;
 		LightSource lightSource;
+		noise::SimplexNoiseClass noise;
 
 		//OpenGL stuff
 		std::unique_ptr<VertexArray> m_VAO;

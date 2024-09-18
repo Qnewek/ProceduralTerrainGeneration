@@ -1,6 +1,6 @@
 #include "Noise.h"
 #include "glm/glm.hpp"
-#include "math.h"
+#include <cmath>
 #include <iostream>
 
 #include <random>
@@ -11,7 +11,16 @@
 
 namespace noise
 {
-	void getNoiseMap(float* noiseMap, unsigned int mapWidth, unsigned int mapHeigth, float scale, int octaves, float constrast, float redistribution, Options option)
+	SimplexNoiseClass::SimplexNoiseClass()
+	{
+	}
+	SimplexNoiseClass::~SimplexNoiseClass()
+	{
+	}
+	void SimplexNoiseClass::generateFractalNoise(float* noiseMap, unsigned int mapWidth, unsigned int mapHeigth,
+		float scale, int octaves, float constrast, float redistribution,
+		float lacunarity, float persistance, float ridgeGain, float ridgeOffset,
+		Options option)
 	{
 		float max = -1.0f;
 		float amplitude;
@@ -29,21 +38,25 @@ namespace noise
 
 				for (int i = 0; i < octaves; i++)
 				{
-					noiseHeight += SimplexNoise::noise(x / scale * frequency, y / scale * frequency) * amplitude;
+					noiseHeight += SimplexNoise::noise(x / (float)mapWidth * scale * frequency, y / (float)mapHeigth * scale * frequency) * amplitude;
 					//Own implementation, generates rather small range of heights
 					//noiseHeight += perlin(x / scale * frequency, y / scale * frequency) * amplitude;
-
-
 					divider += amplitude;
-					amplitude *= 0.5f;
-					frequency *= 2.0f;
+					amplitude *= persistance;
+					frequency *= lacunarity;
 				}
 
 				noiseHeight *= constrast;
 				noiseHeight /= divider;
 
-				if (option == Options::REFIT_BASIC)
-				{
+				if (noiseHeight < -1.0f) {
+					noiseHeight = -1.0f;
+				}
+				else if (noiseHeight > 1.0f) {
+					noiseHeight = 1.0f;
+				}
+
+				if (option == Options::REFIT_BASIC) {
 					noiseHeight = (noiseHeight + 1.0f) / 2.0f;
 				}
 				else if (noiseHeight < 0.0f)
@@ -57,8 +70,9 @@ namespace noise
 						noiseHeight = -noiseHeight;
 					}
 				}
-				if (option != Options::NOTHING)
-					noiseHeight = std::pow(noiseHeight, redistribution);
+				if (option == Options::RIDGE)
+					noiseHeight = ridge(noiseHeight, ridgeOffset, ridgeGain);
+				noiseHeight = std::pow(noiseHeight, redistribution);
 
 				if (noiseHeight > max)
 					max = noiseHeight;
@@ -66,10 +80,37 @@ namespace noise
 				noiseMap[y * mapWidth + x] = noiseHeight;
 			}
 		}
-		std::cout << "Noise successfully generated max: " << max <<std::endl;
+		std::cout << "Noise successfully generated max: " << max << std::endl;
 	}
 
-	vec2 randomGradient(int ix, int iy) {
+	float SimplexNoiseClass::ridge(float h, float offset, float gain)
+	{
+		h = offset - fabs(h);
+		h = h * h;
+		return h * gain;
+	}
+
+	void SimplexNoiseClass::makeIsland(float* noiseMap, unsigned int mapWidth, unsigned int mapHeigth, IslandType islandType) {
+		float max = -1.0f;
+		float distance = 0;
+		float halfWidth = mapWidth / 2.0f;
+		float halfHeight = mapHeigth / 2.0f;
+		float radius = halfWidth < halfHeight ? halfWidth : halfHeight;
+		float nx, ny;
+		radius *= 0.8f;
+		for (int y = 0; y < mapHeigth; y++)
+		{
+			for (int x = 0; x < mapWidth; x++)
+			{
+				nx = 2 * x / mapWidth - 1;
+				ny = 2 * y / mapHeigth - 1;
+				distance = 1 - (1 - (nx * nx)) * (1 - (ny * ny);
+				noiseMap[y * mapWidth + x] = std::lerp(noiseMap[y * mapWidth + x], 0.0f, distance / radius);
+			}
+		}
+	}
+
+	glm::vec2 SimplexNoiseClass::randomGradient(int ix, int iy) {
 		const unsigned w = 8 * sizeof(unsigned);
 		const unsigned s = w >> 1;
 		unsigned a = ix, b = iy;
@@ -82,41 +123,41 @@ namespace noise
 		a *= 2048419325;
 		float random = a * (PI / ~(~0u >> 1));
 
-		vec2 v;
+		glm::vec2 v;
 		v.x = sin(random);
 		v.y = cos(random);
 
 		return v;
 	}
 
-	float dotGridGradient(int ix, int iy, float x, float y) {
-		vec2 gradient = randomGradient(ix, iy);
+	float SimplexNoiseClass::dotGridGradient(int ix, int iy, float x, float y) {
+		glm::vec2 gradient = randomGradient(ix, iy);
 
 		float dx = x - (float)ix;
 		float dy = y - (float)iy;
 
 		return (dx * gradient.x + dy * gradient.y);
 	}
-	float interpolate(float a0, float a1, float w)
+	float SimplexNoiseClass::interpolate(float a0, float a1, float w)
 	{
 		return (a1 - a0) * (3.0 - w * 2.0) * w * w + a0;
 	}
 
-	float perlin(float x, float y) {
-		int x0 = (int)x;
-		int y0 = (int)y;
+	float SimplexNoiseClass::perlin(glm::vec2 v) {
+		int x0 = (int)v.x;
+		int y0 = (int)v.y;
 		int x1 = x0 + 1;
 		int y1 = y0 + 1;
 
-		float sx = x - (float)x0;
-		float sy = y - (float)y0;
+		float sx = v.x - (float)x0;
+		float sy = v.y - (float)y0;
 
-		float n0 = dotGridGradient(x0, y0, x, y);
-		float n1 = dotGridGradient(x1, y0, x, y);
+		float n0 = dotGridGradient(x0, y0, v.x, v.y);
+		float n1 = dotGridGradient(x1, y0, v.x, v.y);
 		float ix0 = interpolate(n0, n1, sx);
 
-		n0 = dotGridGradient(x0, y1, x, y);
-		n1 = dotGridGradient(x1, y1, x, y);
+		n0 = dotGridGradient(x0, y1, v.x, v.y);
+		n1 = dotGridGradient(x1, y1, v.x, v.y);
 		float ix1 = interpolate(n0, n1, sx);
 
 		float value = interpolate(ix0, ix1, sy);

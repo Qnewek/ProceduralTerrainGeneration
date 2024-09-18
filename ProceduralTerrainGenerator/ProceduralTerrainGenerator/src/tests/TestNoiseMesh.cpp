@@ -17,10 +17,11 @@ namespace test
 {
 	TestNoiseMesh::TestNoiseMesh() :height(150), width(150),
 		mesh(nullptr), textureSeed(nullptr), map(nullptr), meshIndices(nullptr), octaves(8), prevOpt(noise::Options::REVERT_NEGATIVES),
-		scale(400), constrast(1.2f), redistribution(1.0f), option(noise::Options::REVERT_NEGATIVES),
+		scale(1.0f), constrast(1.2f), redistribution(1.0f), ridgeGain(1.0f), ridgeOffset(0.5f), lacunarity(2.0f), persistance(0.5f),
+		option(noise::Options::REVERT_NEGATIVES), noise(),
 		deltaTime(0.0f), lastFrame(0.0f), camera(800, 600), lightSource()
 	{
-		checkSum = (float)(octaves + scale + constrast + redistribution);
+		checkSum = (float)(octaves + scale + constrast + redistribution + lacunarity + persistance + ridgeGain + ridgeOffset);
 		
 		map = new float[height * width];
 		textureSeed = new float[height * width];
@@ -29,8 +30,8 @@ namespace test
 		meshIndices = new unsigned int[(width - 1) * (height - 1) * 6];
 		mesh = new float[width * height * 8];
 
-		noise::getNoiseMap(textureSeed, width, height, scale, octaves, constrast, redistribution, noise::Options::REVERT_NEGATIVES);
-		utilities::benchmark_void(utilities::CreateTerrainMesh, "CreateTerrainMesh", mesh, map, meshIndices, width, height, 8, scale, octaves, constrast, redistribution, option, true, true);
+		noise.generateFractalNoise(textureSeed, width, height, scale, octaves, constrast, redistribution, lacunarity, persistance, ridgeGain, ridgeOffset, noise::Options::REVERT_NEGATIVES);
+		utilities::benchmark_void(utilities::CreateTerrainMesh, "CreateTerrainMesh", noise, mesh, map, meshIndices, width, height, 8, scale, octaves, constrast, redistribution, lacunarity, persistance, ridgeGain, ridgeOffset, option, true, true);
 		utilities::PaintBiome(mesh, map, textureSeed, width, height, 8, 6);
 
 		GLCALL(glEnable(GL_BLEND));
@@ -72,11 +73,11 @@ namespace test
 		lastFrame = currentFrame;
 		camera.SteerCamera(&window, deltaTime);
 
-		if (prevOpt != option || checkSum - ((float)octaves + scale + constrast + redistribution) != 0)
+		if (prevOpt != option || checkSum - (float)(octaves + scale + constrast + redistribution + lacunarity + persistance + ridgeGain + ridgeOffset) != 0)
 		{
-			checkSum = (float)octaves + scale + constrast + redistribution;
+			checkSum = (float)(octaves + scale + constrast + redistribution + lacunarity + persistance + ridgeGain + ridgeOffset);
 			prevOpt = option;
-			utilities::benchmark_void(utilities::CreateTerrainMesh, "CreateTerrainMesh", mesh, map, meshIndices, width, height, 8, scale, octaves, constrast, redistribution, option, true, false);
+			utilities::benchmark_void(utilities::CreateTerrainMesh, "CreateTerrainMesh", noise, mesh, map, meshIndices, width, height, 8, scale, octaves, constrast, redistribution, lacunarity, persistance, ridgeGain, ridgeOffset, option, true, false);
 			utilities::PaintBiome(mesh, map, textureSeed, width, height, 8, 6);
 			m_VertexBuffer->UpdateData(mesh, (height * width) * 8 * sizeof(float));
 		}
@@ -108,12 +109,14 @@ namespace test
 
 	void TestNoiseMesh::OnImGuiRender()
 	{
-		ImGui::SliderInt("Octaves", &octaves, 1, 10);
-		ImGui::SliderFloat("Scale", &scale, 100.0f, 1000.0f);
+		ImGui::SliderInt("Octaves", &octaves, 1, 8);
+		ImGui::SliderFloat("Scale", &scale, 0.01f, 3.0f);
 		ImGui::SliderFloat("Constrast", &constrast, 0.1f, 2.0f);
 		ImGui::SliderFloat("Redistribution", &redistribution, 0.1f, 10.0f);
+		ImGui::SliderFloat("Lacunarity", &lacunarity, 0.1f, 10.0f);
+		ImGui::SliderFloat("Persistance", &persistance, 0.1f, 1.0f);
 
-		static const char* options[] = { "NOTHING", "FLATTEN_NEGATIVES", "REVERT_NEGATIVES", "REFIT_BASIC"};
+		static const char* options[] = { "REFIT_BASIC", "FLATTEN_NEGATIVES", "REVERT_NEGATIVES", "RIDGE"};
 		static int current_option = static_cast<int>(option);
 
 		// Combo box
@@ -130,6 +133,11 @@ namespace test
 					ImGui::SetItemDefaultFocus();
 			}
 			ImGui::EndCombo();
+		}
+		if (option == noise::Options::RIDGE)
+		{
+			ImGui::SliderFloat("Ridge Gain", &ridgeGain, 0.1f, 10.0f);
+			ImGui::SliderFloat("Ridge Offset", &ridgeOffset, 0.1f, 10.0f);
 		}
 		ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);
 	}

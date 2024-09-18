@@ -52,8 +52,13 @@ namespace utilities
 		}
 	}
 
-	void CreateTerrainMesh(float* vertices, float* map, unsigned int* indices, unsigned int mapWidth, unsigned int mapHeight, unsigned int stride, float scale, int octaves, float constrast, float redistribution, noise::Options opt, bool normals, bool first) {
-		noise::getNoiseMap(map, mapWidth, mapHeight, scale, octaves, constrast, redistribution, opt);
+	void CreateTerrainMesh(noise::SimplexNoiseClass noise, float* vertices, float* map, unsigned int* indices,
+		unsigned int mapWidth, unsigned int mapHeight,
+		unsigned int stride, float scale, int octaves, float constrast, float redistribution,
+		float lacunarity, float persistance, float ridgeGain, float ridgeOffset,
+		noise::Options opt, bool normals, bool first)
+	{
+		noise.generateFractalNoise(map, mapWidth, mapHeight, scale, octaves, constrast, redistribution, lacunarity, persistance, ridgeGain, ridgeOffset, opt);
 		parseNoiseIntoVertices(vertices, map, mapWidth, mapHeight, stride, 0);
 		if (first)
 			SimpleMeshIndicies(indices, mapWidth, mapHeight);

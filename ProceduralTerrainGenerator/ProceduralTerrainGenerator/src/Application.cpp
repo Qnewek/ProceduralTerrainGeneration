@@ -21,7 +21,6 @@
 #include "imgui/imgui.h"
 #include "imgui/imgui_impl_glfw_gl3.h"
 
-#include "tests/TestPerlinDraw.h"
 #include "tests/TestNoiseMesh.h"
 #include "tests/TestImage.h"
 
@@ -68,7 +67,6 @@ int main(void)
 		test::TestMenu* testMenu = new test::TestMenu(currentTest);
 		currentTest = testMenu;
 
-		testMenu->RegisterTest<test::TestPerlinDraw>("Perlin Noise");
 		testMenu->RegisterTest<test::TestNoiseMesh>("Noise Mesh");
 		testMenu->RegisterTest<test::TestImage>("Test image");
 
