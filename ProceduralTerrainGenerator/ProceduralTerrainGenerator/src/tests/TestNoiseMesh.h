@@ -26,18 +26,16 @@ namespace test
 
 	private:
 		//Perlin Noise generation parameters
-		float* mesh, *map, *textureSeed;
+		float* meshVertices;
 		unsigned int* meshIndices;
-		int width, height, octaves;
-		float scale, constrast, checkSum = 0;
-		float redistribution, ridgeGain, ridgeOffset, lacunarity, persistance;
-		noise::Options option, prevOpt;
+		unsigned int width, height, stride;
 
 		float deltaTime;
 		float lastFrame;
 		Camera camera;
 		LightSource lightSource;
 		noise::SimplexNoiseClass noise;
+		noise::SimplexNoiseClass biomeNoise;
 
 		//OpenGL stuff
 		std::unique_ptr<VertexArray> m_VAO;
@@ -45,5 +43,16 @@ namespace test
 		std::unique_ptr < Shader> m_Shader;
 		std::unique_ptr < Texture> m_Texture;
 		std::unique_ptr < VertexBuffer> m_VertexBuffer;
+
+		struct prevCheckers {
+			noise::Options prevOpt;
+			noise::IslandType prevIslandType;
+			float prevCheckSum;
+			bool prevRidge;
+			bool prevIsland;
+
+			prevCheckers(noise::Options prevOpt = noise::Options::REVERT_NEGATIVES, noise::IslandType prevIslandType = noise::IslandType::CONE, float prevCheckSum = 0, bool prevRidge = false, bool prevIsland = false)
+				: prevOpt(prevOpt), prevCheckSum(prevCheckSum), prevRidge(prevRidge), prevIsland(prevIsland), prevIslandType(prevIslandType) {}
+		} prevCheck;
 	};
 }
