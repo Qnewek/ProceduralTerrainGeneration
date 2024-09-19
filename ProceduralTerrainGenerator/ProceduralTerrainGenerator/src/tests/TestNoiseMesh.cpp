@@ -1,45 +1,39 @@
 #include "TestNoiseMesh.h"
 
 #include "Renderer.h"
-#include "imgui/imgui.h"
 #include "Noise.h"
-#include "utilities.h"
 #include "Camera.h"
+#include "utilities.h"
 
+#include "imgui/imgui.h"
 #include "glm/glm.hpp"
 #include "glm/gtc/matrix_transform.hpp"
-#include "glm/gtc/type_ptr.hpp"
-
-#include <iostream>
-#include <memory>
 
 namespace test
 {
-	TestNoiseMesh::TestNoiseMesh() :height(150), width(150),
-		mesh(nullptr), textureSeed(nullptr), map(nullptr), meshIndices(nullptr), octaves(8), prevOpt(noise::Options::REVERT_NEGATIVES),
-		scale(1.0f), constrast(1.2f), redistribution(1.0f), ridgeGain(1.0f), ridgeOffset(0.5f), lacunarity(2.0f), persistance(0.5f),
-		option(noise::Options::REVERT_NEGATIVES), noise(),
+	TestNoiseMesh::TestNoiseMesh() :height(200), width(200), stride(8),
+		meshVertices(nullptr), meshIndices(nullptr),
+		noise(width,height), biomeNoise(width, height),
 		deltaTime(0.0f), lastFrame(0.0f), camera(800, 600), lightSource()
 	{
-		checkSum = (float)(octaves + scale + constrast + redistribution + lacunarity + persistance + ridgeGain + ridgeOffset);
-		
-		map = new float[height * width];
-		textureSeed = new float[height * width];
+		prevCheck.prevCheckSum	 = noise.getConfigRef().getCheckSum();
+		prevCheck.prevOpt		 = noise.getConfigRef().option;
+		prevCheck.prevRidge		 = noise.getConfigRef().ridge;
+		prevCheck.prevIsland	 = noise.getConfigRef().island;
+		prevCheck.prevIslandType = noise.getConfigRef().islandType;
 
 		// 6 indices per quad which is 2 triangles so there will be (width-1 * height-1 * 2) triangles
 		meshIndices = new unsigned int[(width - 1) * (height - 1) * 6];
-		mesh = new float[width * height * 8];
+		meshVertices = new float[width * height * stride];
 
-		noise.generateFractalNoise(textureSeed, width, height, scale, octaves, constrast, redistribution, lacunarity, persistance, ridgeGain, ridgeOffset, noise::Options::REVERT_NEGATIVES);
-		utilities::benchmark_void(utilities::CreateTerrainMesh, "CreateTerrainMesh", noise, mesh, map, meshIndices, width, height, 8, scale, octaves, constrast, redistribution, lacunarity, persistance, ridgeGain, ridgeOffset, option, true, true);
-		utilities::PaintBiome(mesh, map, textureSeed, width, height, 8, 6);
-
-		GLCALL(glEnable(GL_BLEND));
-		GLCALL(glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA));
+		//Initial noises setup
+		biomeNoise.generateFractalNoise();
+		utilities::benchmark_void(utilities::CreateTerrainMesh, "CreateTerrainMesh", noise, meshVertices, meshIndices, 8, true, true);
+		utilities::PaintBiome(meshVertices, noise, biomeNoise, stride, 6);
 
 		//Mesh setup
 		m_VAO = std::make_unique<VertexArray>();
-		m_VertexBuffer = std::make_unique<VertexBuffer>(mesh, (height * width) * 8 * sizeof(float));
+		m_VertexBuffer = std::make_unique<VertexBuffer>(meshVertices, (height * width) * stride * sizeof(float));
 		m_IndexBuffer = std::make_unique<IndexBuffer>(meshIndices, (width - 1) * (height - 1) * 6);
 		m_Shader = std::make_unique<Shader>("res/shaders/Lightning_vertex.shader", "res/shaders/Lightning_fragment.shader");
 		m_Texture = std::make_unique<Texture>("res/textures/Basic_biome_texture_palette.jpg");
@@ -54,10 +48,8 @@ namespace test
 
 	TestNoiseMesh::~TestNoiseMesh()
 	{
-		delete[] mesh;
+		delete[] meshVertices;
 		delete[] meshIndices;
-		delete[] map;
-		delete[] textureSeed;
 	}
 
 	void TestNoiseMesh::OnUpdate(float deltaTime)
@@ -73,13 +65,22 @@ namespace test
 		lastFrame = currentFrame;
 		camera.SteerCamera(&window, deltaTime);
 
-		if (prevOpt != option || checkSum - (float)(octaves + scale + constrast + redistribution + lacunarity + persistance + ridgeGain + ridgeOffset) != 0)
+		if (prevCheck.prevOpt		 != noise.getConfigRef().option			|| 
+			prevCheck.prevCheckSum	 != noise.getConfigRef().getCheckSum()	||
+			prevCheck.prevRidge		 != noise.getConfigRef().ridge			||
+			prevCheck.prevIsland	 != noise.getConfigRef().island			||
+			prevCheck.prevIslandType != noise.getConfigRef().islandType)
 		{
-			checkSum = (float)(octaves + scale + constrast + redistribution + lacunarity + persistance + ridgeGain + ridgeOffset);
-			prevOpt = option;
-			utilities::benchmark_void(utilities::CreateTerrainMesh, "CreateTerrainMesh", noise, mesh, map, meshIndices, width, height, 8, scale, octaves, constrast, redistribution, lacunarity, persistance, ridgeGain, ridgeOffset, option, true, false);
-			utilities::PaintBiome(mesh, map, textureSeed, width, height, 8, 6);
-			m_VertexBuffer->UpdateData(mesh, (height * width) * 8 * sizeof(float));
+			utilities::benchmark_void(utilities::CreateTerrainMesh, "CreateTerrainMesh", noise, meshVertices, meshIndices, 8, true, false);
+			utilities::PaintBiome(meshVertices, noise, biomeNoise, stride, 6);
+			
+			m_VertexBuffer->UpdateData(meshVertices, (height * width) * stride * sizeof(float));
+
+			prevCheck.prevCheckSum = (float)noise.getConfigRef().getCheckSum();
+			prevCheck.prevOpt = noise.getConfigRef().option;
+			prevCheck.prevRidge = noise.getConfigRef().ridge;
+			prevCheck.prevIsland = noise.getConfigRef().island;
+			prevCheck.prevIslandType = noise.getConfigRef().islandType;
 		}
 
 		m_Shader->Bind();
@@ -109,36 +110,74 @@ namespace test
 
 	void TestNoiseMesh::OnImGuiRender()
 	{
-		ImGui::SliderInt("Octaves", &octaves, 1, 8);
-		ImGui::SliderFloat("Scale", &scale, 0.01f, 3.0f);
-		ImGui::SliderFloat("Constrast", &constrast, 0.1f, 2.0f);
-		ImGui::SliderFloat("Redistribution", &redistribution, 0.1f, 10.0f);
-		ImGui::SliderFloat("Lacunarity", &lacunarity, 0.1f, 10.0f);
-		ImGui::SliderFloat("Persistance", &persistance, 0.1f, 1.0f);
+		//Basic noise settings
+		ImGui::SliderInt("Octaves", &noise.getConfigRef().octaves, 1, 8);
 
-		static const char* options[] = { "REFIT_BASIC", "FLATTEN_NEGATIVES", "REVERT_NEGATIVES", "RIDGE"};
-		static int current_option = static_cast<int>(option);
+		ImGui::SliderFloat("Offset x",		 &noise.getConfigRef().xoffset,			 0.0f, 5.0f);
+		ImGui::SliderFloat("Offset y",		 &noise.getConfigRef().yoffset,			 0.0f, 5.0f);
+		ImGui::SliderFloat("Scale",			 &noise.getConfigRef().scale,			 0.01f, 3.0f);
+		ImGui::SliderFloat("Scale Down",	 &noise.getConfigRef().scaleDown,		 0.1f, 1.0f);
+		ImGui::SliderFloat("Constrast",		 &noise.getConfigRef().constrast,		 0.1f, 2.0f);
+		ImGui::SliderFloat("Redistribution", &noise.getConfigRef().redistribution,	 0.1f, 10.0f);
+		ImGui::SliderFloat("Lacunarity",	 &noise.getConfigRef().lacunarity,		 0.1f, 10.0f);
+		ImGui::SliderFloat("Persistance",	 &noise.getConfigRef().persistance,		 0.1f, 1.0f);
 
-		// Combo box
-		if (ImGui::BeginCombo("Noise Options", options[current_option]))
+		//Dealing with negatives settings
+		static const char* options[] = { "REFIT_ALL", "FLATTEN_NEGATIVES", "REVERT_NEGATIVES"};
+		static int current_option = static_cast<int>(noise.getConfigRef().option);
+
+		if (ImGui::BeginCombo("Negatives: ", options[current_option]))
 		{
 			for (int n = 0; n < IM_ARRAYSIZE(options); n++)
 			{
 				bool is_selected = (current_option == n);
 				if (ImGui::Selectable(options[n], is_selected)) {
 					current_option = n;
-					option = static_cast<noise::Options>(n);
+					noise.getConfigRef().option = static_cast<noise::Options>(n);
 				}
 				if (is_selected)
 					ImGui::SetItemDefaultFocus();
 			}
 			ImGui::EndCombo();
 		}
-		if (option == noise::Options::RIDGE)
+		if (noise.getConfigRef().option == noise::Options::REVERT_NEGATIVES)
+			ImGui::SliderFloat("Revert Gain", &noise.getConfigRef().revertGain, 0.1f, 1.0f);
+
+		//Ridged noise settings
+		ImGui::Checkbox("Ridge", &noise.getConfigRef().ridge);
+		if (noise.getConfigRef().ridge)
 		{
-			ImGui::SliderFloat("Ridge Gain", &ridgeGain, 0.1f, 10.0f);
-			ImGui::SliderFloat("Ridge Offset", &ridgeOffset, 0.1f, 10.0f);
+			ImGui::SliderFloat("Ridge Gain",   &noise.getConfigRef().ridgeGain,	  0.1f, 10.0f);
+			ImGui::SliderFloat("Ridge Offset", &noise.getConfigRef().ridgeOffset, 0.1f, 10.0f);
 		}
+
+		//Island settings
+		ImGui::Checkbox("Island", &noise.getConfigRef().island);
+		if (noise.getConfigRef().island)
+		{
+			static const char* islandTypes[] = { "CONE", "DIAGONAL", "EUKLIDEAN_SQUARED", 
+												 "SQUARE_BUMP","HYPERBOLOID", "SQUIRCLE",
+												 "TRIG" };
+			static int current_island = static_cast<int>(noise.getConfigRef().islandType);
+
+			if (ImGui::BeginCombo("Island type: ", islandTypes[current_island]))
+			{
+				for (int n = 0; n < IM_ARRAYSIZE(islandTypes); n++)
+				{
+					bool is_selected = (current_island == n);
+					if (ImGui::Selectable(islandTypes[n], is_selected)) {
+						current_island = n;
+						noise.getConfigRef().islandType = static_cast<noise::IslandType>(n);
+					}
+					if (is_selected)
+						ImGui::SetItemDefaultFocus();
+				}
+				ImGui::EndCombo();
+			}
+			ImGui::SliderFloat("Mix Power", &noise.getConfigRef().mixPower, 0.0f, 1.0f);
+		}
+
+		//FPS
 		ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);
 	}
 }

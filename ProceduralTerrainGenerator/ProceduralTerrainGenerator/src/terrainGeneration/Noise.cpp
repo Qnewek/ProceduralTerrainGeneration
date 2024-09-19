@@ -11,76 +11,88 @@
 
 namespace noise
 {
-	SimplexNoiseClass::SimplexNoiseClass()
+	SimplexNoiseClass::SimplexNoiseClass(unsigned int width, unsigned int height)
+		: config(NoiseConfigParameters()), width(width), height(height)
 	{
+		heightMap = new float[width * height];
 	}
 	SimplexNoiseClass::~SimplexNoiseClass()
 	{
+		delete[] heightMap;
 	}
-	void SimplexNoiseClass::generateFractalNoise(float* noiseMap, unsigned int mapWidth, unsigned int mapHeigth,
-		float scale, int octaves, float constrast, float redistribution,
-		float lacunarity, float persistance, float ridgeGain, float ridgeOffset,
-		Options option)
+	void SimplexNoiseClass::generateFractalNoise()
 	{
-		float max = -1.0f;
 		float amplitude;
 		float frequency;
-		float noiseHeight;
+		float elevation;
 		float divider;
-		for (int y = 0; y < mapHeigth; y++)
+		glm::vec2 vec = glm::vec2(0.0f, 0.0f);
+
+		for (int y = 0; y < height; y++)
 		{
-			for (int x = 0; x < mapWidth; x++)
+			for (int x = 0; x < width; x++)
 			{
 				divider = 0.0f;
 				amplitude = 1.0f;
 				frequency = 1.0f;
-				noiseHeight = 0.0f;
+				elevation = 0.0f;
 
-				for (int i = 0; i < octaves; i++)
+				for (int i = 0; i < config.octaves; i++)
 				{
-					noiseHeight += SimplexNoise::noise(x / (float)mapWidth * scale * frequency, y / (float)mapHeigth * scale * frequency) * amplitude;
+					vec.x = (x / (float)width * config.scale * frequency) + config.xoffset;
+					vec.y = (y / (float)height * config.scale * frequency) + config.yoffset;
+
+					elevation += SimplexNoise::noise(vec.x, vec.y) * amplitude;
 					//Own implementation, generates rather small range of heights
-					//noiseHeight += perlin(x / scale * frequency, y / scale * frequency) * amplitude;
+					//elevation += perlin(vec) * amplitude;
+
 					divider += amplitude;
-					amplitude *= persistance;
-					frequency *= lacunarity;
+					amplitude *= config.persistance;
+					frequency *= config.lacunarity;
 				}
 
-				noiseHeight *= constrast;
-				noiseHeight /= divider;
+				elevation *= config.constrast;
+				elevation /= divider;
 
-				if (noiseHeight < -1.0f) {
-					noiseHeight = -1.0f;
+				//Clipping values to be in range -1.0f and 1.0f
+				if (elevation < -1.0f) {
+					elevation = -1.0f;
 				}
-				else if (noiseHeight > 1.0f) {
-					noiseHeight = 1.0f;
+				else if (elevation > 1.0f) {
+					elevation = 1.0f;
 				}
 
-				if (option == Options::REFIT_BASIC) {
-					noiseHeight = (noiseHeight + 1.0f) / 2.0f;
+				//Dealing with negatives
+				if (config.option == Options::REFIT_ALL) {
+					elevation = (elevation + 1.0f) / 2.0f;
 				}
-				else if (noiseHeight < 0.0f)
+				else if (elevation < 0.0f)
 				{
-					if (option == Options::FLATTEN_NEGATIVES)
+					if (config.option == Options::FLATTEN_NEGATIVES)
 					{
-						noiseHeight = 0.0f;
+						elevation = 0.0f;
 					}
-					else if (option == Options::REVERT_NEGATIVES)
+					else if (config.option == Options::REVERT_NEGATIVES)
 					{
-						noiseHeight = -noiseHeight;
+						elevation = -(elevation * config.revertGain);
 					}
 				}
-				if (option == Options::RIDGE)
-					noiseHeight = ridge(noiseHeight, ridgeOffset, ridgeGain);
-				noiseHeight = std::pow(noiseHeight, redistribution);
+				//Make ridge noise
+				if (config.ridge)
+					elevation = ridge(elevation, config.ridgeOffset, config.ridgeGain);
 
-				if (noiseHeight > max)
-					max = noiseHeight;
+				//Redistribute the noise
+				elevation = std::pow(elevation, config.redistribution);
+				elevation *= config.scaleDown;
 
-				noiseMap[y * mapWidth + x] = noiseHeight;
+				if (config.island) {
+					elevation = makeIsland(elevation,x,y);
+				}
+
+				heightMap[y * width + x] = elevation;
 			}
 		}
-		std::cout << "Noise successfully generated max: " << max << std::endl;
+		std::cout << "Noise successfully generated" << std::endl;
 	}
 
 	float SimplexNoiseClass::ridge(float h, float offset, float gain)
@@ -90,24 +102,30 @@ namespace noise
 		return h * gain;
 	}
 
-	void SimplexNoiseClass::makeIsland(float* noiseMap, unsigned int mapWidth, unsigned int mapHeigth, IslandType islandType) {
-		float max = -1.0f;
+	float SimplexNoiseClass::makeIsland(float e, int x, int y) {
+		float nx = x * 2 / (float)width  -1;
+		float ny = y * 2 / (float)height -1;
 		float distance = 0;
-		float halfWidth = mapWidth / 2.0f;
-		float halfHeight = mapHeigth / 2.0f;
-		float radius = halfWidth < halfHeight ? halfWidth : halfHeight;
-		float nx, ny;
-		radius *= 0.8f;
-		for (int y = 0; y < mapHeigth; y++)
-		{
-			for (int x = 0; x < mapWidth; x++)
-			{
-				nx = 2 * x / mapWidth - 1;
-				ny = 2 * y / mapHeigth - 1;
-				distance = 1 - (1 - (nx * nx)) * (1 - (ny * ny);
-				noiseMap[y * mapWidth + x] = std::lerp(noiseMap[y * mapWidth + x], 0.0f, distance / radius);
-			}
+		if (config.islandType == IslandType::CONE)
+			distance = sqrt((nx * nx) + (ny * ny));
+		else if (config.islandType == IslandType::DIAGONAL)
+			distance = std::max(fabs(nx), fabs(ny));
+		else if (config.islandType == IslandType::EUCLIDEAN_SQUARED){
+			distance = std::min(1.0f, ((nx * nx) + (ny * ny)) / std::sqrtf(2.0f));
 		}
+		else if (config.islandType == IslandType::SQUARE_BUMP) {
+			distance = 1 - ((1-(nx * nx))*(1-(ny * ny)));
+		}
+		else if (config.islandType == IslandType::HYPERBOLOID) {
+			distance = sqrt((nx * nx) + (ny * ny) + (0.5 * 0.5));
+		}
+		else if (config.islandType == IslandType::SQUIRCLE) {
+			distance = sqrt(std::powf(nx,4) + std::powf(ny,4));
+		}
+		else if (config.islandType == IslandType::TRIG) {
+			distance = 1 - (cos(nx * (std::_Pi_val / 2)) * cos(ny * (std::_Pi_val / 2)));
+		}
+		return std::lerp(e, 1 - distance, config.mixPower);
 	}
 
 	glm::vec2 SimplexNoiseClass::randomGradient(int ix, int iy) {

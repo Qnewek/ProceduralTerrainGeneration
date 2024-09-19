@@ -52,31 +52,27 @@ namespace utilities
 		}
 	}
 
-	void CreateTerrainMesh(noise::SimplexNoiseClass noise, float* vertices, float* map, unsigned int* indices,
-		unsigned int mapWidth, unsigned int mapHeight,
-		unsigned int stride, float scale, int octaves, float constrast, float redistribution,
-		float lacunarity, float persistance, float ridgeGain, float ridgeOffset,
-		noise::Options opt, bool normals, bool first)
+	void CreateTerrainMesh(noise::SimplexNoiseClass &noise, float* vertices, unsigned int* indices, unsigned int stride, bool normals, bool first)
 	{
-		noise.generateFractalNoise(map, mapWidth, mapHeight, scale, octaves, constrast, redistribution, lacunarity, persistance, ridgeGain, ridgeOffset, opt);
-		parseNoiseIntoVertices(vertices, map, mapWidth, mapHeight, stride, 0);
+		noise.generateFractalNoise();
+		parseNoiseIntoVertices(vertices, noise, stride, 0);
 		if (first)
-			SimpleMeshIndicies(indices, mapWidth, mapHeight);
+			SimpleMeshIndicies(indices, noise.getWidth(), noise.getHeight());
 		if (normals) {
-			InitializeNormals(vertices, stride, 3, mapHeight * mapWidth);
-			CalculateNormals(vertices, indices, stride, 3, (mapWidth - 1) * (mapHeight - 1) * 6);
-			NormalizeVector3f(vertices, stride, 3, mapWidth * mapHeight);
+			InitializeNormals(vertices, stride, 3, noise.getHeight() * noise.getWidth());
+			CalculateNormals (vertices, indices, stride, 3, (noise.getWidth() - 1) * (noise.getHeight() - 1) * 6);
+			NormalizeVector3f(vertices, stride, 3, noise.getWidth() * noise.getHeight());
 		}
 	}
 
-	void parseNoiseIntoVertices(float* vertices, float* map, unsigned int mapWidth, unsigned int mapHeigth, unsigned int stride, unsigned int offset) {
-		for (int y = 0; y < mapHeigth; y++)
+	void parseNoiseIntoVertices(float* vertices, noise::SimplexNoiseClass &noise, unsigned int stride, unsigned int offset) {
+		for (int y = 0; y < noise.getHeight(); y++)
 		{
-			for (int x = 0; x < mapWidth; x++)
+			for (int x = 0; x < noise.getWidth(); x++)
 			{
-				vertices[((y * mapWidth) + x) * stride + offset] = x / (float)mapWidth;
-				vertices[((y * mapWidth) + x) * stride + offset + 1] = map[y * mapWidth + x];;
-				vertices[((y * mapWidth) + x) * stride + offset + 2] = y / (float)mapHeigth;
+				vertices[((y * noise.getWidth()) + x) * stride + offset    ] = x / (float)noise.getWidth();
+				vertices[((y * noise.getWidth()) + x) * stride + offset + 1] = noise.getMap()[y * noise.getWidth() + x];
+				vertices[((y * noise.getWidth()) + x) * stride + offset + 2] = y / (float)noise.getHeight();
 			}
 		}
 	}
@@ -96,12 +92,12 @@ namespace utilities
 		}
 	}
 
-	void PaintBiome(float* vertices, float* map, float* seed, unsigned int mapWidth, unsigned int mapHeight, unsigned int stride, unsigned int offset) {
-		for (int y = 0; y < mapHeight; y++) {
-			for (int x = 0; x < mapWidth; x++)
+	void PaintBiome(float* vertices, noise::SimplexNoiseClass &noiseHeights, noise::SimplexNoiseClass &noiseBiome, unsigned int stride, unsigned int offset) {
+		for (int y = 0; y < noiseHeights.getHeight(); y++) {
+			for (int x = 0; x < noiseHeights.getWidth(); x++)
 			{
-				vertices[((y * mapWidth) + x) * stride + offset] = seed[y * mapWidth + x] > 0.0f ? seed[y * mapWidth + x] : 0.0f;
-				vertices[((y * mapWidth) + x) * stride + offset + 1] = map[y * mapWidth + x] > 0.0f ? map[y * mapWidth + x] : 0.0f;
+				vertices[((y * noiseHeights.getWidth()) + x) * stride + offset]		= noiseBiome.getMap()	[y * noiseHeights.getWidth() + x] > 0.0f ? noiseBiome.getMap()	[y * noiseHeights.getWidth() + x] : 0.0f;
+				vertices[((y * noiseHeights.getWidth()) + x) * stride + offset + 1] = noiseHeights.getMap()	[y * noiseHeights.getWidth() + x] > 0.0f ? noiseHeights.getMap()[y * noiseHeights.getWidth() + x] : 0.0f;
 			}
 		}
 	}
