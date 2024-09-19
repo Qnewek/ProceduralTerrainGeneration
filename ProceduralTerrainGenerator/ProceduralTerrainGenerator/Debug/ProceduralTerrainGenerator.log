@@ -1,11 +1,3 @@
 ﻿  Scanning sources for module dependencies...
-  Noise.cpp
-C:\Users\Dawid\Documents\JakiesPopierdulki\Studia\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\terrainGeneration\Noise.cpp(31,21): warning C4018: '<': signed/unsigned mismatch
-C:\Users\Dawid\Documents\JakiesPopierdulki\Studia\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\terrainGeneration\Noise.cpp(33,22): warning C4018: '<': signed/unsigned mismatch
-C:\Users\Dawid\Documents\JakiesPopierdulki\Studia\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\terrainGeneration\Noise.cpp(120,19): warning C4244: '=': conversion from 'double' to 'float', possible loss of data
-C:\Users\Dawid\Documents\JakiesPopierdulki\Studia\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\terrainGeneration\Noise.cpp(126,17): warning C4244: '=': conversion from 'long double' to 'float', possible loss of data
-C:\Users\Dawid\Documents\JakiesPopierdulki\Studia\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\terrainGeneration\Noise.cpp(137,19): warning C4554: '>>': check operator precedence for possible error; use parentheses to clarify precedence
-C:\Users\Dawid\Documents\JakiesPopierdulki\Studia\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\terrainGeneration\Noise.cpp(140,19): warning C4554: '>>': check operator precedence for possible error; use parentheses to clarify precedence
-C:\Users\Dawid\Documents\JakiesPopierdulki\Studia\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\terrainGeneration\Noise.cpp(142,16): warning C4244: 'initializing': conversion from 'double' to 'float', possible loss of data
-C:\Users\Dawid\Documents\JakiesPopierdulki\Studia\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\terrainGeneration\Noise.cpp(161,46): warning C4244: 'return': conversion from 'double' to 'float', possible loss of data
+  SimplexNoise.cpp
   ProceduralTerrainGenerator.vcxproj -> C:\Users\Dawid\Documents\JakiesPopierdulki\Studia\ProceduralTerrainGeneration\ProceduralTerrainGenerator\Debug\ProceduralTerrainGenerator.exe
