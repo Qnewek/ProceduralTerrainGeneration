@@ -3,6 +3,7 @@
 #include <cmath>
 #include <iostream>
 
+#include <algorithm>
 #include <random>
 
 #include "Simplex/SimplexNoise.h"
@@ -43,7 +44,6 @@ namespace noise
 					vec.y = (y / (float)height * config.scale * frequency) + config.yoffset;
 
 					elevation += SimplexNoise::noise(vec.x, vec.y) * amplitude;
-					//Own implementation, generates rather small range of heights
 					//elevation += perlin(vec) * amplitude;
 
 					divider += amplitude;
@@ -52,7 +52,7 @@ namespace noise
 				}
 
 				elevation *= config.constrast;
-				elevation /= divider;
+				//elevation /= divider;
 
 				//Clipping values to be in range -1.0f and 1.0f
 				if (elevation < -1.0f) {
@@ -83,7 +83,6 @@ namespace noise
 
 				//Redistribute the noise
 				elevation = std::pow(elevation, config.redistribution);
-				elevation *= config.scaleDown;
 
 				if (config.island) {
 					elevation = makeIsland(elevation,x,y);
@@ -128,6 +127,8 @@ namespace noise
 		return std::lerp(e, 1 - distance, config.mixPower);
 	}
 
+
+	//Implementation based on pseudocode and definition from https://en.wikipedia.org/wiki/Perlin_noise
 	glm::vec2 SimplexNoiseClass::randomGradient(int ix, int iy) {
 		const unsigned w = 8 * sizeof(unsigned);
 		const unsigned s = w >> 1;
@@ -182,5 +183,4 @@ namespace noise
 
 		return value;
 	}
-
 }
