@@ -2,12 +2,15 @@
 
 #include "glm/glm.hpp"
 
+#include <cstdint>
+#include <vector>
+
 namespace noise
 {
 	enum class Options {
 		REFIT_ALL,
 		FLATTEN_NEGATIVES,
-		REVERT_NEGATIVES		
+		REVERT_NEGATIVES
 	};
 
 	enum class IslandType {
@@ -20,10 +23,11 @@ namespace noise
 		TRIG
 	};
 
-	struct NoiseConfigParameters{
+	struct NoiseConfigParameters {
 		//Point offset
 		float xoffset;
 		float yoffset;
+		int seed;
 
 		//Fractal noise generation
 		float scale;
@@ -32,7 +36,6 @@ namespace noise
 		float redistribution;
 		float lacunarity;
 		float persistance;
-		float scaleDown;
 		Options option;
 		float revertGain;
 
@@ -40,24 +43,24 @@ namespace noise
 		bool ridge;
 		float ridgeGain;
 		float ridgeOffset;
-		
+
 		//Island
 		bool island;
 		float mixPower;
 		IslandType islandType;
-		
-		NoiseConfigParameters(float xoffset = 0.0f, float yoffset = 0.0f, float scale = 1.0f, int octaves = 8,
+
+		NoiseConfigParameters(int seed = 0, float xoffset = 0.0f, float yoffset = 0.0f, float scale = 1.0f, int octaves = 8,
 			float constrast = 1.0f, float redistribution = 1.0f, float lacunarity = 2.0f,
 			float persistance = 0.5f, float scaleDown = 1.0f, Options option = Options::REVERT_NEGATIVES, float revertGain = 0.5f, bool ridge = false,
 			float ridgeGain = 1.0f, float ridgeOffset = 0.5f, bool island = false, float mixPower = 0.5f,
 			IslandType islandType = IslandType::CONE)
-			: xoffset(xoffset), yoffset(yoffset), scale(scale), octaves(octaves), constrast(constrast),
-			redistribution(redistribution), lacunarity(lacunarity), persistance(persistance), scaleDown(scaleDown), option(option), revertGain(revertGain),
+			:seed(seed), xoffset(xoffset), yoffset(yoffset), scale(scale), octaves(octaves), constrast(constrast),
+			redistribution(redistribution), lacunarity(lacunarity), persistance(persistance), option(option), revertGain(revertGain),
 			ridge(ridge), ridgeGain(ridgeGain), ridgeOffset(ridgeOffset), island(island), islandType(islandType), mixPower(mixPower) {}
 
 		float getCheckSum() const {
-			return xoffset + yoffset + scale + octaves + constrast + redistribution + lacunarity + 
-				persistance + ridgeGain + ridgeOffset + revertGain + scaleDown + mixPower;
+			return xoffset + yoffset + scale + octaves + constrast + redistribution + lacunarity +
+				persistance + ridgeGain + ridgeOffset + revertGain + mixPower;
 		}
 	};
 
@@ -72,9 +75,10 @@ namespace noise
 		float makeIsland(float e, int x, int y);
 
 		float* getMap() const { return heightMap; }
-		unsigned int getWidth()  const { return width;  }
+		unsigned int getWidth()  const { return width; }
 		unsigned int getHeight() const { return height; }
 		NoiseConfigParameters& getConfigRef() { return config; }
+
 	private:
 		NoiseConfigParameters config;
 		float* heightMap;

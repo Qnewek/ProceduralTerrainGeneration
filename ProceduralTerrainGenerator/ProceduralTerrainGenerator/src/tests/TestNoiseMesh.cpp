@@ -116,7 +116,6 @@ namespace test
 		ImGui::SliderFloat("Offset x",		 &noise.getConfigRef().xoffset,			 0.0f, 5.0f);
 		ImGui::SliderFloat("Offset y",		 &noise.getConfigRef().yoffset,			 0.0f, 5.0f);
 		ImGui::SliderFloat("Scale",			 &noise.getConfigRef().scale,			 0.01f, 3.0f);
-		ImGui::SliderFloat("Scale Down",	 &noise.getConfigRef().scaleDown,		 0.1f, 1.0f);
 		ImGui::SliderFloat("Constrast",		 &noise.getConfigRef().constrast,		 0.1f, 2.0f);
 		ImGui::SliderFloat("Redistribution", &noise.getConfigRef().redistribution,	 0.1f, 10.0f);
 		ImGui::SliderFloat("Lacunarity",	 &noise.getConfigRef().lacunarity,		 0.1f, 10.0f);
