@@ -27,6 +27,9 @@
 #include "SimplexNoise.h"
 
 #include <cstdint>  // int32_t/uint8_t
+#include <algorithm>
+#include <random>
+#include <iterator>
 
 /**
  * Computes the largest integer value not greater than the float one
@@ -68,7 +71,7 @@ static inline int32_t fastfloor(float fp) {
  * A vector-valued noise over 3D accesses it 96 times, and a
  * float-valued 4D noise 64 times. We want this to fit in the cache!
  */
-static const uint8_t perm[256] = {
+static uint8_t perm[256] = {
     160, 151, 91, 137, 15, 90, 13, 131, 95, 201, 53, 96, 233, 194, 225, 7, 36, 140, 30, 103, 142, 69, 99, 8, 240, 37, 10, 21, 6,
     190, 148, 247, 234, 120, 0, 75, 26, 197, 252, 62, 203, 219, 35, 117, 32, 11, 57, 33, 177, 237, 88, 56, 149, 174, 87, 125, 20,
     171, 136, 68, 168, 74, 175, 71, 165, 139, 134, 27, 48, 77, 166, 158, 146, 83, 231, 229, 111, 60, 122, 133, 211, 220, 230, 92,
@@ -79,6 +82,11 @@ static const uint8_t perm[256] = {
     210, 238, 12, 144, 179, 191, 241, 162, 51, 81, 235, 145, 14, 249, 107, 192, 49, 31, 214, 199, 157, 106, 84, 184, 176, 204, 121,
     115, 45, 50, 4, 127, 254, 150, 236, 93, 205, 114, 222, 29, 67, 72, 24, 141, 243, 195, 128, 66, 78, 61, 215, 180, 156
 };
+
+void SimplexNoise::reseed(int seed) {
+    std::mt19937 generator(seed);
+    std::shuffle(std::begin(perm), std::end(perm), generator);
+}
 
 /**
  * Helper function to hash an integer using the above permutation table

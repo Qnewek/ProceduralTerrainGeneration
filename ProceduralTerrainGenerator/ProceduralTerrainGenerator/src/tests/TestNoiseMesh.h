@@ -29,6 +29,7 @@ namespace test
 		float* meshVertices;
 		unsigned int* meshIndices;
 		unsigned int width, height, stride;
+		int seed;
 
 		float deltaTime;
 		float lastFrame;
@@ -50,9 +51,10 @@ namespace test
 			float prevCheckSum;
 			bool prevRidge;
 			bool prevIsland;
+			int seed = 0;
 
-			prevCheckers(noise::Options prevOpt = noise::Options::REVERT_NEGATIVES, noise::IslandType prevIslandType = noise::IslandType::CONE, float prevCheckSum = 0, bool prevRidge = false, bool prevIsland = false)
-				: prevOpt(prevOpt), prevCheckSum(prevCheckSum), prevRidge(prevRidge), prevIsland(prevIsland), prevIslandType(prevIslandType) {}
+			prevCheckers(noise::Options prevOpt = noise::Options::REVERT_NEGATIVES, noise::IslandType prevIslandType = noise::IslandType::CONE, float prevCheckSum = 0, bool prevRidge = false, bool prevIsland = false, int seed = 0)
+				: prevOpt(prevOpt), prevCheckSum(prevCheckSum), prevRidge(prevRidge), prevIsland(prevIsland), prevIslandType(prevIslandType), seed(seed) {}
 		} prevCheck;
 	};
 }

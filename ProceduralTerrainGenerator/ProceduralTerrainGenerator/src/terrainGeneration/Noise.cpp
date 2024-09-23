@@ -21,6 +21,12 @@ namespace noise
 	{
 		delete[] heightMap;
 	}
+	void SimplexNoiseClass::setSeed(int seed) {
+		if (seed != 0 && seed != this->config.seed) {
+			this->config.seed = seed;
+			SimplexNoise::reseed(seed);
+		}
+	}
 	void SimplexNoiseClass::generateFractalNoise()
 	{
 		float amplitude;
@@ -52,7 +58,7 @@ namespace noise
 				}
 
 				elevation *= config.constrast;
-				//elevation /= divider;
+				elevation /= divider;
 
 				//Clipping values to be in range -1.0f and 1.0f
 				if (elevation < -1.0f) {
