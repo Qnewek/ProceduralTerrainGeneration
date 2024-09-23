@@ -46,12 +46,23 @@ namespace noise
 
 				for (int i = 0; i < config.octaves; i++)
 				{
-					vec.x = (x / (float)width * config.scale * frequency) + config.xoffset;
-					vec.y = (y / (float)height * config.scale * frequency) + config.yoffset;
+					if (this->config.symmetrical) {
+						float TAU = 2 * std::_Pi_val;
+						float anglex = TAU * (x / (float)width);
+						float angley = TAU * (y / (float)height);
 
-					elevation += SimplexNoise::noise(vec.x, vec.y) * amplitude;
-					//elevation += perlin(vec) * amplitude;
+						elevation += SimplexNoise::noise(std::cosf(anglex) / TAU * config.scale * frequency + config.xoffset, 
+														 std::sinf(anglex) / TAU * config.scale * frequency + config.xoffset,
+														 std::cosf(angley) / TAU * config.scale * frequency + config.yoffset,
+														 std::sinf(angley) / TAU * config.scale * frequency + config.yoffset)  * amplitude;
+					}
+					else {
+						vec.x = (x / (float)width  * config.scale * frequency) + config.xoffset;
+						vec.y = (y / (float)height * config.scale * frequency) + config.yoffset;
 
+						elevation += SimplexNoise::noise(vec.x, vec.y) * amplitude;
+						//elevation += perlin(vec) * amplitude;
+					}
 					divider += amplitude;
 					amplitude *= config.persistance;
 					frequency *= config.lacunarity;
@@ -86,13 +97,14 @@ namespace noise
 				//Make ridge noise
 				if (config.ridge)
 					elevation = ridge(elevation, config.ridgeOffset, config.ridgeGain);
+				
+				//Make island
+				if (config.island) {
+					elevation = std::fabsf(makeIsland(elevation, x, y));
+				}
 
 				//Redistribute the noise
 				elevation = std::pow(elevation, config.redistribution);
-
-				if (config.island) {
-					elevation = makeIsland(elevation,x,y);
-				}
 
 				heightMap[y * width + x] = elevation;
 			}

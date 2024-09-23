@@ -49,14 +49,18 @@ namespace noise
 		float mixPower;
 		IslandType islandType;
 
+		//Symetric or sth
+		bool symmetrical;
+
 		NoiseConfigParameters(int seed = 0, float xoffset = 0.0f, float yoffset = 0.0f, float scale = 1.0f, int octaves = 8,
 			float constrast = 1.0f, float redistribution = 1.0f, float lacunarity = 2.0f,
 			float persistance = 0.5f, float scaleDown = 1.0f, Options option = Options::REVERT_NEGATIVES, float revertGain = 0.5f, bool ridge = false,
 			float ridgeGain = 1.0f, float ridgeOffset = 0.5f, bool island = false, float mixPower = 0.5f,
-			IslandType islandType = IslandType::CONE)
+			IslandType islandType = IslandType::CONE, bool symmetrical = false)
 			:seed(seed), xoffset(xoffset), yoffset(yoffset), scale(scale), octaves(octaves), constrast(constrast),
 			redistribution(redistribution), lacunarity(lacunarity), persistance(persistance), option(option), revertGain(revertGain),
-			ridge(ridge), ridgeGain(ridgeGain), ridgeOffset(ridgeOffset), island(island), islandType(islandType), mixPower(mixPower) {}
+			ridge(ridge), ridgeGain(ridgeGain), ridgeOffset(ridgeOffset), island(island), islandType(islandType), mixPower(mixPower), 
+			symmetrical(symmetrical){}
 
 		float getCheckSum() const {
 			return xoffset + yoffset + scale + octaves + constrast + redistribution + lacunarity +
