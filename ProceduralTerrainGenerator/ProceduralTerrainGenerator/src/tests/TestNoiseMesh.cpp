@@ -21,6 +21,8 @@ namespace test
 		prevCheck.prevRidge		 = noise.getConfigRef().ridge;
 		prevCheck.prevIsland	 = noise.getConfigRef().island;
 		prevCheck.prevIslandType = noise.getConfigRef().islandType;
+		prevCheck.symmetrical	 = noise.getConfigRef().symmetrical;
+		prevCheck.seed           = seed;
 
 		// 6 indices per quad which is 2 triangles so there will be (width-1 * height-1 * 2) triangles
 		meshIndices = new unsigned int[(width - 1) * (height - 1) * 6];
@@ -70,6 +72,7 @@ namespace test
 			prevCheck.prevRidge		 != noise.getConfigRef().ridge			||
 			prevCheck.prevIsland	 != noise.getConfigRef().island			||
 			prevCheck.prevIslandType != noise.getConfigRef().islandType		||
+			prevCheck.symmetrical    != noise.getConfigRef().symmetrical	||
 			prevCheck.seed			 != seed)	
 		{
 			noise.setSeed(seed);
@@ -78,11 +81,12 @@ namespace test
 			
 			m_VertexBuffer->UpdateData(meshVertices, (height * width) * stride * sizeof(float));
 
-			prevCheck.prevCheckSum = (float)noise.getConfigRef().getCheckSum();
-			prevCheck.prevOpt = noise.getConfigRef().option;
-			prevCheck.prevRidge = noise.getConfigRef().ridge;
-			prevCheck.prevIsland = noise.getConfigRef().island;
+			prevCheck.prevCheckSum	 = noise.getConfigRef().getCheckSum();
+			prevCheck.prevOpt		 = noise.getConfigRef().option;
+			prevCheck.prevRidge		 = noise.getConfigRef().ridge;
+			prevCheck.prevIsland	 = noise.getConfigRef().island;
 			prevCheck.prevIslandType = noise.getConfigRef().islandType;
+			prevCheck.symmetrical    = noise.getConfigRef().symmetrical;
 			prevCheck.seed = seed;
 		}
 
@@ -109,10 +113,28 @@ namespace test
 		
 		m_Texture->Bind();
 		renderer.Draw(*m_VAO, *m_IndexBuffer, *m_Shader);
+
+		if (testSymmetrical)
+		{
+			m_Shader->SetUniformMat4f("model", glm::translate(model, glm::vec3(-1.0f, 0.0f, 0.0f)));
+			renderer.Draw(*m_VAO, *m_IndexBuffer, *m_Shader);
+			m_Shader->SetUniformMat4f("model", glm::translate(model, glm::vec3(1.0f, 0.0f, 0.0f)));
+			renderer.Draw(*m_VAO, *m_IndexBuffer, *m_Shader);
+			m_Shader->SetUniformMat4f("model", glm::translate(model, glm::vec3(0.0f, 0.0f, 1.0f)));
+			renderer.Draw(*m_VAO, *m_IndexBuffer, *m_Shader);
+			m_Shader->SetUniformMat4f("model", glm::translate(model, glm::vec3(0.0f, 0.0f, -1.0f)));
+			renderer.Draw(*m_VAO, *m_IndexBuffer, *m_Shader);
+		}
 	}
 
 	void TestNoiseMesh::OnImGuiRender()
 	{
+		ImVec2 minSize = ImVec2(200, 200);
+		ImVec2 maxSize = ImVec2(800, 800);
+
+		ImGui::SetNextWindowSizeConstraints(minSize, maxSize);
+		ImGui::Begin("Noise Settings");
+
 		//Seed
 		ImGui::InputInt("Seed", &seed);
 
@@ -181,8 +203,13 @@ namespace test
 			}
 			ImGui::SliderFloat("Mix Power", &noise.getConfigRef().mixPower, 0.0f, 1.0f);
 		}
+		ImGui::Checkbox("Symmetrical", &noise.getConfigRef().symmetrical);
+		if (noise.getConfigRef().symmetrical) {
+			ImGui::Checkbox("Test Symmetrical", &testSymmetrical);
+		}
 
 		//FPS
 		ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);
+		ImGui::End();
 	}
 }
