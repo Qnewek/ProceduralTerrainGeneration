@@ -60,7 +60,7 @@ namespace noise
 
 		float getCheckSum() const {
 			return xoffset + yoffset + scale + octaves + constrast + redistribution + lacunarity +
-				persistance + ridgeGain + ridgeOffset + revertGain + mixPower;
+				persistance + ridgeGain + ridgeOffset + revertGain + mixPower + seed;
 		}
 	};
 
@@ -73,6 +73,7 @@ namespace noise
 		static float perlin(glm::vec2 v);
 		void generateFractalNoise();
 		float makeIsland(float e, int x, int y);
+		void setSeed(int seed);
 
 		float* getMap() const { return heightMap; }
 		unsigned int getWidth()  const { return width; }

@@ -28,6 +28,8 @@ public:
     float fractal(size_t octaves, float x, float y) const;
     float fractal(size_t octaves, float x, float y, float z) const;
 
+	static void reseed(int seed);
+
     /**
      * Constructor of to initialize a fractal noise summation
      *

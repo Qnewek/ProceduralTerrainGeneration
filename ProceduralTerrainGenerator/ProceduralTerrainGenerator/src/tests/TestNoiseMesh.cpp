@@ -14,7 +14,7 @@ namespace test
 	TestNoiseMesh::TestNoiseMesh() :height(200), width(200), stride(8),
 		meshVertices(nullptr), meshIndices(nullptr),
 		noise(width,height), biomeNoise(width, height),
-		deltaTime(0.0f), lastFrame(0.0f), camera(800, 600), lightSource()
+		deltaTime(0.0f), lastFrame(0.0f), camera(800, 600), lightSource(), seed(0)
 	{
 		prevCheck.prevCheckSum	 = noise.getConfigRef().getCheckSum();
 		prevCheck.prevOpt		 = noise.getConfigRef().option;
@@ -69,8 +69,10 @@ namespace test
 			prevCheck.prevCheckSum	 != noise.getConfigRef().getCheckSum()	||
 			prevCheck.prevRidge		 != noise.getConfigRef().ridge			||
 			prevCheck.prevIsland	 != noise.getConfigRef().island			||
-			prevCheck.prevIslandType != noise.getConfigRef().islandType)
+			prevCheck.prevIslandType != noise.getConfigRef().islandType		||
+			prevCheck.seed			 != seed)	
 		{
+			noise.setSeed(seed);
 			utilities::benchmark_void(utilities::CreateTerrainMesh, "CreateTerrainMesh", noise, meshVertices, meshIndices, 8, true, false);
 			utilities::PaintBiome(meshVertices, noise, biomeNoise, stride, 6);
 			
@@ -81,6 +83,7 @@ namespace test
 			prevCheck.prevRidge = noise.getConfigRef().ridge;
 			prevCheck.prevIsland = noise.getConfigRef().island;
 			prevCheck.prevIslandType = noise.getConfigRef().islandType;
+			prevCheck.seed = seed;
 		}
 
 		m_Shader->Bind();
@@ -110,6 +113,9 @@ namespace test
 
 	void TestNoiseMesh::OnImGuiRender()
 	{
+		//Seed
+		ImGui::InputInt("Seed", &seed);
+
 		//Basic noise settings
 		ImGui::SliderInt("Octaves", &noise.getConfigRef().octaves, 1, 8);
 
