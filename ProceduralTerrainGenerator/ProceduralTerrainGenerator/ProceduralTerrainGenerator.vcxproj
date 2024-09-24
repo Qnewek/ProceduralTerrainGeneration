@@ -139,6 +139,7 @@
     <ClCompile Include="src\opengl\IndexBuffer.cpp" />
     <ClCompile Include="src\opengl\Renderer.cpp" />
     <ClCompile Include="src\opengl\Shader.cpp" />
+    <ClCompile Include="src\terrainGeneration\Erosion.cpp" />
     <ClCompile Include="src\terrainGeneration\Noise.cpp" />
     <ClCompile Include="src\tests\Test.cpp" />
     <ClCompile Include="src\tests\TestImage.cpp" />
@@ -310,6 +311,7 @@
     <ClInclude Include="src\opengl\IndexBuffer.h" />
     <ClInclude Include="src\opengl\Renderer.h" />
     <ClInclude Include="src\opengl\Shader.h" />
+    <ClInclude Include="src\terrainGeneration\Erosion.h" />
     <ClInclude Include="src\terrainGeneration\Noise.h" />
     <ClInclude Include="src\tests\Test.h" />
     <ClInclude Include="src\tests\TestImage.h" />
