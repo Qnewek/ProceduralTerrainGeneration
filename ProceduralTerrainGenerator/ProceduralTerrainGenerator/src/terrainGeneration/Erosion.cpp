@@ -83,7 +83,7 @@ namespace erosion {
 	}
 
 	//Droplet class functions
-	Droplet::Droplet(vec2 position, float velocity, float water, float sediment, float capacity) : position(position), velocity(velocity), water(water), sediment(sediment), capacity(capacity)
+	Droplet::Droplet(vec2 position, float velocity, float water, float capacity) : position(position), velocity(velocity), water(water), capacity(capacity), direction({ 0, 0 }), dropletLifetime(0), sediment(0.0f)
 	{
 	}
 
@@ -100,8 +100,8 @@ namespace erosion {
 		//Inertia being close to 1 means the droplet will move in the same direction as before
 		//Inertia being close to 0 means the droplet will move in the direction of the gradient
 
-		float dx = direction.x * inertia + gradient.x * (1 - inertia);
-		float dy = direction.y * inertia + gradient.y * (1 - inertia);
+		float dx = this->direction.x * inertia + gradient.x * (1 - inertia);
+		float dy = this->direction.y * inertia + gradient.y * (1 - inertia);
 
 		//If the direction is zero which means droplet wouldnt move, generate a random direction
 		if (dx == 0 && dy == 0)
@@ -119,8 +119,8 @@ namespace erosion {
 
 		if (length > 0)
 		{
-			direction.x = dx / length;
-			direction.y = dy / length;
+			this->direction.x = dx / length;
+			this->direction.y = dy / length;
 		}
 		this->adjustPosition();
 	}
@@ -131,7 +131,68 @@ namespace erosion {
 		//posion(new) = position(old) + direction(new)
 		//Formula does not take into account the velocity of the droplet in order not to "jump" over the cells
 		//This function performs one step which is not representing the real movement of the droplet in a time frame
-		position.x += direction.x;
-		position.y += direction.y;
+		this->position.x += this->direction.x;
+		this->position.y += this->direction.y;
+	}
+
+	void Droplet::adjustVelocity(float elevationDifference, float gravity) {
+		//Update the velocity of the droplet as geometric mean using the formula
+		//velocity(new) = sqrt(velocity(old)^2 + elevationDifference * gravity)
+		//Velocity(old) is squared to give old speed more weight in calculations
+		//than the slope of the terrain. elevationDifference is multiplied by gravity to 
+		//take gravity into cosideration when calculating the new velocity
+		this->velocity = sqrtf((this->velocity * this->velocity) + elevationDifference * gravity);
+	}
+
+	void Droplet::evaporate(float evaporationRate) {
+		//Update the amount of water the droplet carries by evaporating a percentage of it
+		//Formula used: water(new) = water(old) * (1 - evaporationRate)
+		this->water *= (1 - evaporationRate);
+	}
+
+	float Droplet::adjustCapacity(float minSlope, float erosionRate, float depositionRate, float elevationDifference)
+	{
+		//Droplet adjusts its capacity based on parameters: water, velocity, minSlope and elevationDifference
+		this->capacity = std::max(elevationDifference, minSlope) * this->velocity * this->water * this->capacity;
+
+		//If current sediment is greater than the capacity, the droplet will drop percentage of its surplus sediment
+		//based on deposition rate if not it will gather sediment from the map on the previous location
+		if (this->sediment > this->capacity) {
+			return this->dropSurplusSediment(depositionRate);
+		}
+		else {
+			return -this->gatherSediment(erosionRate, elevationDifference);
+		}
+	}
+
+	float Droplet::gatherSediment(float erosionRate, float elevationDifference)
+	{
+		//If the droplet is moving downhill and it carries less sediment than its capacity,
+		//it will gather percentage of its remaining capacity adjusted by erosion rate from old position on th map
+		//Droplet will add gathered sediment to amount it already carries and return floating point value for 
+		//function in erosion class to update the map
+		float sedimentTaken = std::min((this->capacity - this->sediment) * erosionRate, elevationDifference);
+		this->sediment += sedimentTaken;
+		
+		return sedimentTaken;
+	}
+
+	float Droplet::dropSediment(float elevationDifference)
+	{
+		//Calculate and drop the right amount of sediment carried by current droplet 
+		//in case when the droplet moved uphill thus it passed a gap which needs to be filled
+		//If droplet carries enough sediment to fill the gap, it will drop amount of elevationDifference 
+		// otherwise it will drop all the sediment it carries
+		float dropAmount = std::min(elevationDifference, this->sediment);
+		this->sediment -= dropAmount;
+		return dropAmount;
+	}
+
+	float Droplet::dropSurplusSediment(float depositionRate) {
+		//Calculate surplus droplet has to drop and update the amount of sediment it carries
+		//taking into account the deposition rate
+		float surplusToDrop = (this->sediment - this->capacity) * depositionRate;
+		this->sediment -= surplusToDrop;
+		return surplusToDrop;
 	}
 }

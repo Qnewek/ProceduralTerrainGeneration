@@ -13,13 +13,11 @@ namespace erosion {
 		float inertia = 0.1;
 		float depositionRate = 0.1;
 		float evaporationRate = 0.01;
+		int dropletLifetime = 30;
 		//Initial values
 		float initialWater = 1.0;
-		float initialSediment = 0.0;
 		float initialVelocity = 0.0;
 		float initialCapacity = 0.01;
-		float initialSlope = 0.01;
-		float initialInertia = 0.1;
 	};
 
 	struct vec2 {
@@ -54,7 +52,7 @@ namespace erosion {
 	class Droplet
 	{
 	public:
-		Droplet(vec2 position, float velocity, float water = 0, float sediment = 0, float capacity);
+		Droplet(vec2 position, float velocity, float water = 1.0f, float capacity);
 		~Droplet();
 
 		vec2 getPosition() { return position; }
@@ -66,11 +64,15 @@ namespace erosion {
 
 		void setPosition(vec2 position) { this->position = position; }
 		void setDirection(vec2 direction) { this->direction = direction; }
-		void evaporate(float evaporationRate) { water *= (1 - evaporationRate); }
 		void adjustDirection(vec2 gradient, float inertia);
 		void adjustPosition();
-		bool isOnMap(int width, int height);
-		bool gatherSediment();
+		void adjustVelocity(float elevationDifference, float gravity);
+		void evaporate(float evaporationRate) { water *= (1 - evaporationRate); }
+		float adjustCapacity(float minSlope, float erosionRate, float depositionRate, float elevationDifference);
+		float gatherSediment(float erosionRate, float elevationDifference);
+		float dropSediment(float elevationDifference);
+		float dropSurplusSediment(float depositionRate);
+
 
 	private:
 		vec2 position;
@@ -79,5 +81,6 @@ namespace erosion {
 		float water;
 		float sediment;
 		float capacity;
+		int dropletLifetime;
 	};
 }
