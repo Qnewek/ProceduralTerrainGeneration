@@ -13,8 +13,8 @@ namespace test
 {
 	TestNoiseMesh::TestNoiseMesh() :height(200), width(200), stride(8),
 		meshVertices(nullptr), meshIndices(nullptr),
-		noise(width,height), biomeNoise(width, height),
-		deltaTime(0.0f), lastFrame(0.0f), camera(800, 600), lightSource(), seed(0)
+		noise(width, height), biomeNoise(width, height), erosionWindow(false), erosionPerform(false),
+		deltaTime(0.0f), lastFrame(0.0f), camera(800, 600), lightSource(), seed(0), erosion(width, height)
 	{
 		prevCheck.prevCheckSum	 = noise.getConfigRef().getCheckSum();
 		prevCheck.prevOpt		 = noise.getConfigRef().option;
@@ -78,7 +78,7 @@ namespace test
 			noise.setSeed(seed);
 			utilities::benchmark_void(utilities::CreateTerrainMesh, "CreateTerrainMesh", noise, meshVertices, meshIndices, 8, true, false);
 			utilities::PaintBiome(meshVertices, noise, biomeNoise, stride, 6);
-			
+
 			m_VertexBuffer->UpdateData(meshVertices, (height * width) * stride * sizeof(float));
 
 			prevCheck.prevCheckSum	 = noise.getConfigRef().getCheckSum();
@@ -88,6 +88,11 @@ namespace test
 			prevCheck.prevIslandType = noise.getConfigRef().islandType;
 			prevCheck.symmetrical    = noise.getConfigRef().symmetrical;
 			prevCheck.seed = seed;
+		}
+		//TODO: Function that will write this new values from map to vertices for openGL
+		if (erosionPerform) {
+			erosion.Erode(noise.getMap());
+			erosionPerform = false;
 		}
 
 		m_Shader->Bind();
@@ -208,8 +213,44 @@ namespace test
 			ImGui::Checkbox("Test Symmetrical", &testSymmetrical);
 		}
 
+		if (ImGui::Button("Erosion")) {
+			erosionWindow = true;
+		}
+
 		//FPS
 		ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);
+		ImGui::End();
+
+		if (erosionWindow) {
+			ErosionWindowRender();
+		}
+	}
+
+	void TestNoiseMesh::ErosionWindowRender() {
+		ImVec2 minSize = ImVec2(200, 200);
+		ImVec2 maxSize = ImVec2(800, 800);
+
+		ImGui::SetNextWindowSizeConstraints(minSize, maxSize);
+		ImGui::Begin("Erosion Settings");
+		
+		ImGui::InputInt("Droplet count", &erosion.getDropletCountRef());
+		ImGui::InputInt("Droplet lifetime", &erosion.getConfigRef().dropletLifetime);
+		ImGui::InputFloat("Inertia", &erosion.getConfigRef().inertia);
+		ImGui::InputFloat("Droplet init capacity", &erosion.getConfigRef().initialCapacity, 0.01f, 1.0f);
+		ImGui::InputFloat("Droplet init velocity", &erosion.getConfigRef().initialVelocity, 0.0f, 1.0f);
+		ImGui::InputFloat("Droplet init water", &erosion.getConfigRef().initialWater, 0.0f, 1.0f);
+		ImGui::InputFloat("Erosion rate", &erosion.getConfigRef().erosionRate, 0.0f, 1.0f);
+		ImGui::InputFloat("Deposition rate", &erosion.getConfigRef().depositionRate, 0.0f, 1.0f);
+		ImGui::InputFloat("Evaporation rate", &erosion.getConfigRef().evaporationRate, 0.0f, 1.0f);
+		ImGui::InputFloat("Gravity", &erosion.getConfigRef().gravity, 0.0f, 10.0f);
+		ImGui::InputFloat("Min slope", &erosion.getConfigRef().minSlope, 0.0f, 1.0f);
+		ImGui::InputInt("Erosion radius", &erosion.getConfigRef().erosionRadius);
+		ImGui::InputFloat("Blur", &erosion.getConfigRef().blur, 0.0f, 1.0f);
+
+		if (ImGui::Button("Erode map")) {
+			erosionPerform = true;
+		}
+
 		ImGui::End();
 	}
 }
