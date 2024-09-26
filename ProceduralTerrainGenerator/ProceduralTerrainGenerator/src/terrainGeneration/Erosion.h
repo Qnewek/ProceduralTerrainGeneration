@@ -6,22 +6,29 @@ namespace erosion {
 
 	struct ErosionConfig {
 		//Erosion parameters
-		float erosionRate = 0.1;
-		float sedimentCapacity = 0.01;
-		float minSlope = 0.01;
-		float gravity = 4.0;
-		float inertia = 0.1;
-		float depositionRate = 0.1;
-		float evaporationRate = 0.01;
+		float erosionRate = 0.1f;
+		float minSlope = 0.01f;
+		float gravity = 4.0f;
+		float inertia = 0.1f;
+		float depositionRate = 0.1f;
+		float evaporationRate = 0.01f;
 		int dropletLifetime = 30;
+		int erosionRadius = 3;
+		float blur = 0.0f;
 		//Initial values
-		float initialWater = 1.0;
-		float initialVelocity = 0.0;
-		float initialCapacity = 0.01;
+		float initialWater = 1.0f;
+		float initialVelocity = 1.0f;
+		float initialCapacity = 0.01f;
 	};
 
 	struct vec2 {
 		float x, y;
+	};
+
+	struct vec2i_f
+	{
+		int index;
+		float value;
 	};
 
 	class Erosion
@@ -33,26 +40,27 @@ namespace erosion {
 		void Erode(float* map);
 		vec2 getGradient(float* map, vec2 pos);
 		float getElevationDifference(float* map, vec2 posOld, vec2 posNew);
+		float getInterpolatedGridHeight(float* map, vec2 pos);
+		void distributeSediment(float* map, vec2 pos, float sedimentDropped);
+		float erodeRadius(float* map, vec2 pos, float ammountEroded);
+		bool isOnMap(vec2 pos);
 
 		void SetConfig(ErosionConfig config);
 		void Resize(int width, int height);
 
-		void SetIterations(int iterations);
-
-
-		int* getIterationsRef();
-		ErosionConfig* getConfigRef();
+		ErosionConfig& getConfigRef();
+		int& getDropletCountRef() { return dropletCount; }
 
 	private:
 		int width, height;
-		int iterations = 1000;
+		int dropletCount = 1000;
 		ErosionConfig config;
 	};
 
 	class Droplet
 	{
 	public:
-		Droplet(vec2 position, float velocity, float water = 1.0f, float capacity);
+		Droplet(vec2 position = {0.0f, 0.0f}, float velocity = 1.0f, float water = 1.0f, float capacity = 1.0f);
 		~Droplet();
 
 		vec2 getPosition() { return position; }
@@ -67,9 +75,10 @@ namespace erosion {
 		void adjustDirection(vec2 gradient, float inertia);
 		void adjustPosition();
 		void adjustVelocity(float elevationDifference, float gravity);
-		void evaporate(float evaporationRate) { water *= (1 - evaporationRate); }
+		void adjustSediment(float sedimentCollected);
+		void evaporate(float evaporationRate);
 		float adjustCapacity(float minSlope, float erosionRate, float depositionRate, float elevationDifference);
-		float gatherSediment(float erosionRate, float elevationDifference);
+		float sedimentToGather(float erosionRate, float elevationDifference);
 		float dropSediment(float elevationDifference);
 		float dropSurplusSediment(float depositionRate);
 
@@ -81,6 +90,5 @@ namespace erosion {
 		float water;
 		float sediment;
 		float capacity;
-		int dropletLifetime;
 	};
 }

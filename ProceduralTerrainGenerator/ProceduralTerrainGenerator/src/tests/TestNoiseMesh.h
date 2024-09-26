@@ -9,6 +9,7 @@
 #include "LightSource.h"
 #include "Noise.h"
 #include "glm/glm.hpp"
+#include "Erosion.h"
 
 #include <memory>
 
@@ -23,6 +24,7 @@ namespace test
 		void OnUpdate(float deltaTime) override;
 		void OnRender(GLFWwindow& window, Renderer& renderer) override;
 		void OnImGuiRender() override;
+		void ErosionWindowRender();
 
 	private:
 		//Perlin Noise generation parameters
@@ -33,11 +35,14 @@ namespace test
 
 		float deltaTime;
 		float lastFrame;
+		bool erosionWindow;
 		bool testSymmetrical = false;
+		bool erosionPerform;
 		Camera camera;
 		LightSource lightSource;
 		noise::SimplexNoiseClass noise;
 		noise::SimplexNoiseClass biomeNoise;
+		erosion::Erosion erosion;
 
 		//OpenGL stuff
 		std::unique_ptr<VertexArray> m_VAO;
