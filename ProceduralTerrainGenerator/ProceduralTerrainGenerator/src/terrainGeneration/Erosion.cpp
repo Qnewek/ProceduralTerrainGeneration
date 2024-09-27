@@ -3,28 +3,35 @@
 #include <math.h>
 #include <random>
 #include <queue>
+#include <iostream>
 
 namespace erosion {
 	//Primitive listNode to use and test erosion
 	struct ListNode
 	{
-		Droplet d;
+		Droplet* d;
 		ListNode* next;
 
-		ListNode(vec2 position, float velocity, float water, float capacity) : d({position,velocity,water,capacity}), next(nullptr) {}
+		ListNode(vec2 position, float velocity, float water, float capacity) :next(nullptr) {
+			d = new Droplet(position, velocity, water, capacity);
+		}
 		ListNode* deleteNode(ListNode* prev) {
 			ListNode* next = this->next;
 			if (prev != nullptr) {
 				prev->next = next;
 			}
+			delete this->d;
 			delete this;
 			return next;
 		}
 		void deleteAll() {
-			if (next != nullptr) {
-				next->deleteAll();
+			ListNode* current = this;
+			while (current != nullptr) {
+				ListNode* nextNode = current->next;
+				delete current->d;
+				delete current;
+				current = nextNode;
 			}
-			delete this;
 		}
 	};
 
@@ -64,31 +71,44 @@ namespace erosion {
 		std::mt19937 gen(rd());
 		std::uniform_real_distribution<float> dist(0.0f, 1.0f);
 
-		dropletsHead = new ListNode({ dist(gen) * width, dist(gen) * height }, config.initialVelocity, config.initialWater, config.initialCapacity);
-		dropletPrev = dropletsHead;
-		for (int i = 1; i < dropletCount; i++) {
+		//Placeholder node
+		dropletsHead = new ListNode({0.0f, 0.0f}, 0.0f, 0.0f, 0.0f);
+		dropletCurrent = dropletsHead;
+		for (int i = 0; i < dropletCount; i++) {
 			//Create a new droplet on random cell on the map
 			//Initialise the droplet with initial values cofigured by the user
-			vec2 position = { dist(gen) * width, dist(gen) * height };
 
-			dropletPrev->next = new ListNode(position, config.initialVelocity, config.initialWater, config.initialCapacity);
+			dropletCurrent->next = new ListNode({ dist(gen) * width, dist(gen) * height }, config.initialVelocity, config.initialWater, config.initialCapacity);
+			dropletCurrent = dropletCurrent->next;
 		}
-		dropletCurrent = dropletsHead;
+
+		dropletCurrent = dropletsHead->next;
+		dropletPrev = dropletsHead;
+
+		vec2 gradient;
+		vec2 oldPosition;
+		int fellOff = 0;
+
 		for (int i = 0; i < config.dropletLifetime; i++) {
-			if (dropletsHead == nullptr) {
+			if (!dropletsHead->next) {
 				break;
 			}
-			dropletCurrent = dropletsHead;
+
+			dropletCurrent = dropletsHead->next;
+			dropletPrev = dropletsHead;
+
 			while (dropletCurrent) {
-				if (isOnMap(dropletCurrent->d.getPosition())) {
-					vec2 gradient = getGradient(map, dropletCurrent->d.getPosition());
-					vec2 oldPosition = dropletCurrent->d.getPosition();
-					dropletCurrent->d.adjustDirection(gradient, config.inertia);
-					
-					float deltaElevation = getElevationDifference(map, oldPosition, dropletCurrent->d.getPosition());
+				//Calculate the gradient of current cell and adjust the direction of the droplet and its position
+				//than check if its still on the map. If it is, calculate the difference in elevation between the old and new position
+				gradient = getGradient(map, dropletCurrent->d->getPosition());
+				oldPosition = dropletCurrent->d->getPosition();
+				dropletCurrent->d->adjustDirection(gradient, config.inertia);
+
+				if (isOnMap(dropletCurrent->d->getPosition())) {
+					float deltaElevation = getElevationDifference(map, oldPosition, dropletCurrent->d->getPosition());
 
 					if (deltaElevation >= 0) {
-						distributeSediment(map, oldPosition, dropletCurrent->d.dropSediment(deltaElevation));
+						distributeSediment(map, oldPosition, dropletCurrent->d->dropSediment(deltaElevation));
 					}
 					else {
 						//Calculate new capacity of the current droplet, if its carried sediment surpasses the new capacity
@@ -98,38 +118,33 @@ namespace erosion {
 						//Function eroding the map in radius takes positive number so after checking a sign of returned value we need
 						//to get its absolute. Of course other functions also takes positive number if it comes to deltaElevation
 						//so we need to get its absolute value as well.
-						float sedimentToCollect = dropletCurrent->d.adjustCapacity(config.minSlope, config.erosionRate, config.depositionRate, deltaElevation);
 						deltaElevation = -deltaElevation;
+						float sedimentToCollect = dropletCurrent->d->adjustCapacity(config.minSlope, config.erosionRate, config.depositionRate, deltaElevation);
 
 						if (sedimentToCollect > 0.0f) {
-							distributeSediment(map, oldPosition, dropletCurrent->d.sedimentToGather(config.erosionRate, deltaElevation));
+							distributeSediment(map, oldPosition, sedimentToCollect);
 						}
 						else {
 							sedimentToCollect = -sedimentToCollect;
-							dropletCurrent->d.adjustSediment(erodeRadius(map, oldPosition, sedimentToCollect));
+							dropletCurrent->d->adjustSediment(erodeRadius(map, oldPosition, sedimentToCollect));
 						}
 
 					}
-					dropletCurrent->d.adjustVelocity(deltaElevation, config.gravity);
-					dropletCurrent->d.evaporate(config.evaporationRate);
+					dropletCurrent->d->adjustVelocity(deltaElevation, config.gravity);
+					dropletCurrent->d->evaporate(config.evaporationRate);
 					dropletPrev = dropletCurrent;
 					dropletCurrent = dropletCurrent->next;
 				}
 				else {
-					if (i == 0) {
-						dropletsHead = dropletsHead->deleteNode(nullptr);
-					}
-					else {
-						dropletCurrent = dropletCurrent->deleteNode(dropletPrev);
-					}
+					dropletCurrent =  dropletCurrent->deleteNode(dropletPrev);
+					fellOff++;
 				}
 			}
 		}
+		std::cout << "[LOG]Droplets out of the bounds: " << fellOff << std::endl;
 
-		if (dropletsHead) {
+		if(dropletsHead)
 			dropletsHead->deleteAll();
-		}
-
 	}
 
 	vec2 Erosion::getGradient(float* map, vec2 pos)
