@@ -11,7 +11,7 @@
 
 namespace test
 {
-	TestNoiseMesh::TestNoiseMesh() :height(200), width(200), stride(8),
+	TestNoiseMesh::TestNoiseMesh() :height(500), width(500), stride(8),
 		meshVertices(nullptr), meshIndices(nullptr),
 		noise(width, height), biomeNoise(width, height), erosionWindow(false), erosionPerform(false),
 		deltaTime(0.0f), lastFrame(0.0f), camera(800, 600), lightSource(), seed(0), erosion(width, height)
@@ -89,9 +89,9 @@ namespace test
 			prevCheck.symmetrical    = noise.getConfigRef().symmetrical;
 			prevCheck.seed = seed;
 		}
-		//TODO: Function that will write this new values from map to vertices for openGL
 		if (erosionPerform) {
-			erosion.Erode(noise.getMap());
+			utilities::benchmark_void(utilities::PerformErosion, "PerformErosion", meshVertices, stride, 1, noise.getMap(), erosion);
+			m_VertexBuffer->UpdateData(meshVertices, (height * width) * stride * sizeof(float));
 			erosionPerform = false;
 		}
 
@@ -227,7 +227,7 @@ namespace test
 	}
 
 	void TestNoiseMesh::ErosionWindowRender() {
-		ImVec2 minSize = ImVec2(200, 200);
+		ImVec2 minSize = ImVec2(300, 300);
 		ImVec2 maxSize = ImVec2(800, 800);
 
 		ImGui::SetNextWindowSizeConstraints(minSize, maxSize);

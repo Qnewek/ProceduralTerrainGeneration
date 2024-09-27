@@ -6,19 +6,19 @@ namespace erosion {
 
 	struct ErosionConfig {
 		//Erosion parameters
-		float erosionRate = 0.1f;
+		float erosionRate = 0.7f;
 		float minSlope = 0.01f;
-		float gravity = 4.0f;
-		float inertia = 0.1f;
-		float depositionRate = 0.1f;
+		float gravity = 10.0f;
+		float inertia = 0.3f;
+		float depositionRate = 0.2f;
 		float evaporationRate = 0.01f;
-		int dropletLifetime = 30;
-		int erosionRadius = 3;
+		int dropletLifetime = 64;
+		int erosionRadius = 4;
 		float blur = 0.0f;
 		//Initial values
 		float initialWater = 1.0f;
-		float initialVelocity = 1.0f;
-		float initialCapacity = 0.01f;
+		float initialVelocity = 0.0f;
+		float initialCapacity = 8.0f;
 	};
 
 	struct vec2 {
@@ -50,17 +50,19 @@ namespace erosion {
 
 		ErosionConfig& getConfigRef();
 		int& getDropletCountRef() { return dropletCount; }
+		int getWidth() { return width; }
+		int getHeight() { return height; }
 
 	private:
 		int width, height;
-		int dropletCount = 1000;
+		int dropletCount = 10000;
 		ErosionConfig config;
 	};
 
 	class Droplet
 	{
 	public:
-		Droplet(vec2 position = {0.0f, 0.0f}, float velocity = 1.0f, float water = 1.0f, float capacity = 1.0f);
+		Droplet(vec2 position, float velocity, float water, float capacity);
 		~Droplet();
 
 		vec2 getPosition() { return position; }

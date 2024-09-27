@@ -7,6 +7,7 @@
 #include "glm/glm.hpp"
 
 #include "Noise.h"
+#include "Erosion.h"
 
 namespace utilities
 {
@@ -22,6 +23,7 @@ namespace utilities
 	
     void CreateTerrainMesh(noise::SimplexNoiseClass& noise, float* vertices, unsigned int* indices, unsigned int stride, bool normals, bool first);
 	void PaintBiome(float* vertices, noise::SimplexNoiseClass& noiseHeights, noise::SimplexNoiseClass& noiseBiome, unsigned int stride, unsigned int offset);
+    void PerformErosion(float* vertices, int stride, int offset, float* map, erosion::Erosion& erosion);
 
     template <typename Func, typename... Args>
     void benchmark_void(Func func, std::string funcName, Args&&... args) {
@@ -32,6 +34,6 @@ namespace utilities
         auto end = std::chrono::high_resolution_clock::now();
 
         std::chrono::duration<double, std::milli> duration = end - start;
-        std::cout << "Function '"<<funcName<<"' took: " << duration.count() << " ms" << std::endl;
+        std::cout << "[LOG] Function '"<<funcName<<"' took: " << duration.count() << " ms" << std::endl;
     }
 }

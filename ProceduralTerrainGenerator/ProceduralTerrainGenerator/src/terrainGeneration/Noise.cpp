@@ -109,7 +109,7 @@ namespace noise
 				heightMap[y * width + x] = elevation;
 			}
 		}
-		std::cout << "Noise successfully generated" << std::endl;
+		std::cout << "[LOG] Noise successfully generated" << std::endl;
 	}
 
 	float SimplexNoiseClass::ridge(float h, float offset, float gain)
