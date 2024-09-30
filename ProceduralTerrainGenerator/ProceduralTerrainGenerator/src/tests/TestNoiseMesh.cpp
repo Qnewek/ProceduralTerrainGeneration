@@ -11,18 +11,18 @@
 
 namespace test
 {
-	TestNoiseMesh::TestNoiseMesh() :height(500), width(500), stride(8),
+	TestNoiseMesh::TestNoiseMesh() :height(200), width(200), stride(8),
 		meshVertices(nullptr), meshIndices(nullptr),
 		noise(width, height), biomeNoise(width, height), erosionWindow(false), erosionPerform(false),
 		deltaTime(0.0f), lastFrame(0.0f), camera(800, 600), lightSource(), seed(0), erosion(width, height)
 	{
-		prevCheck.prevCheckSum	 = noise.getConfigRef().getCheckSum();
-		prevCheck.prevOpt		 = noise.getConfigRef().option;
-		prevCheck.prevRidge		 = noise.getConfigRef().ridge;
-		prevCheck.prevIsland	 = noise.getConfigRef().island;
+		prevCheck.prevCheckSum = noise.getConfigRef().getCheckSum();
+		prevCheck.prevOpt = noise.getConfigRef().option;
+		prevCheck.prevRidge = noise.getConfigRef().ridge;
+		prevCheck.prevIsland = noise.getConfigRef().island;
 		prevCheck.prevIslandType = noise.getConfigRef().islandType;
-		prevCheck.symmetrical	 = noise.getConfigRef().symmetrical;
-		prevCheck.seed           = seed;
+		prevCheck.symmetrical = noise.getConfigRef().symmetrical;
+		prevCheck.seed = seed;
 
 		// 6 indices per quad which is 2 triangles so there will be (width-1 * height-1 * 2) triangles
 		meshIndices = new unsigned int[(width - 1) * (height - 1) * 6];
@@ -46,12 +46,33 @@ namespace test
 		layout.Push<float>(2);
 
 		m_VAO->AddBuffer(*m_VertexBuffer, layout);
+
+
+		//TMP buffer for erosion droplets tracking
+		traceVertices = new float[(erosion.getConfigRef().dropletLifetime + 1) * erosion.getDropletCountRef() * 3];
+
+		for (int i = 0; i < (erosion.getConfigRef().dropletLifetime + 1) *erosion.getDropletCountRef() * 3; i++){
+			traceVertices[i] = 0.0f;
+		}
+
+		m_ErosionVAO = std::make_unique<VertexArray>();
+		m_ErosionVertexBuffer = std::make_unique<VertexBuffer>(traceVertices, erosion.getConfigRef().dropletLifetime * erosion.getDropletCountRef() * 3 * sizeof(float));
+		m_ErosionShader = std::make_unique<Shader>("res/shaders/Trace_vertex.shader", "res/shaders/Trace_fragment.shader");
+
+		VertexBufferLayout erosionLayout;
+		erosionLayout.Push<float>(3);
+
+		m_ErosionVAO->AddBuffer(*m_ErosionVertexBuffer, erosionLayout);
+		//
+		//
+		//
 	}
 
 	TestNoiseMesh::~TestNoiseMesh()
 	{
 		delete[] meshVertices;
 		delete[] meshIndices;
+		delete[] traceVertices;
 	}
 
 	void TestNoiseMesh::OnUpdate(float deltaTime)
@@ -67,13 +88,13 @@ namespace test
 		lastFrame = currentFrame;
 		camera.SteerCamera(&window, deltaTime);
 
-		if (prevCheck.prevOpt		 != noise.getConfigRef().option			|| 
-			prevCheck.prevCheckSum	 != noise.getConfigRef().getCheckSum()	||
-			prevCheck.prevRidge		 != noise.getConfigRef().ridge			||
-			prevCheck.prevIsland	 != noise.getConfigRef().island			||
-			prevCheck.prevIslandType != noise.getConfigRef().islandType		||
-			prevCheck.symmetrical    != noise.getConfigRef().symmetrical	||
-			prevCheck.seed			 != seed)	
+		if (prevCheck.prevOpt != noise.getConfigRef().option ||
+			prevCheck.prevCheckSum != noise.getConfigRef().getCheckSum() ||
+			prevCheck.prevRidge != noise.getConfigRef().ridge ||
+			prevCheck.prevIsland != noise.getConfigRef().island ||
+			prevCheck.prevIslandType != noise.getConfigRef().islandType ||
+			prevCheck.symmetrical != noise.getConfigRef().symmetrical ||
+			prevCheck.seed != seed)
 		{
 			noise.setSeed(seed);
 			utilities::benchmark_void(utilities::CreateTerrainMesh, "CreateTerrainMesh", noise, meshVertices, meshIndices, 8, true, false);
@@ -81,18 +102,18 @@ namespace test
 
 			m_VertexBuffer->UpdateData(meshVertices, (height * width) * stride * sizeof(float));
 
-			prevCheck.prevCheckSum	 = noise.getConfigRef().getCheckSum();
-			prevCheck.prevOpt		 = noise.getConfigRef().option;
-			prevCheck.prevRidge		 = noise.getConfigRef().ridge;
-			prevCheck.prevIsland	 = noise.getConfigRef().island;
+			prevCheck.prevCheckSum = noise.getConfigRef().getCheckSum();
+			prevCheck.prevOpt = noise.getConfigRef().option;
+			prevCheck.prevRidge = noise.getConfigRef().ridge;
+			prevCheck.prevIsland = noise.getConfigRef().island;
 			prevCheck.prevIslandType = noise.getConfigRef().islandType;
-			prevCheck.symmetrical    = noise.getConfigRef().symmetrical;
+			prevCheck.symmetrical = noise.getConfigRef().symmetrical;
 			prevCheck.seed = seed;
 		}
 		if (erosionPerform) {
-			utilities::benchmark_void(utilities::PerformErosion, "PerformErosion", meshVertices, stride, 1, noise.getMap(), erosion);
+			//utilities::benchmark_void(utilities::PerformErosion, "PerformErosion", meshVertices, stride, 1, noise.getMap(), erosion);
+			utilities::PerformErosionWIthTrack(meshVertices, traceVertices, stride, 1, noise.getMap(), erosion);
 			m_VertexBuffer->UpdateData(meshVertices, (height * width) * stride * sizeof(float));
-			erosionPerform = false;
 		}
 
 		m_Shader->Bind();
@@ -100,8 +121,8 @@ namespace test
 		m_Shader->SetUniform3fv("material.specular", glm::vec3(0.5f, 0.5f, 0.5f));
 		m_Shader->SetUniform1f("material.shininess", 16.0f);
 
-		m_Shader->SetUniform3fv("light.ambient",  glm::vec3(0.2f, 0.2f, 0.2f));
-		m_Shader->SetUniform3fv("light.diffuse",  glm::vec3(0.5f, 0.5f, 0.5f));
+		m_Shader->SetUniform3fv("light.ambient", glm::vec3(0.2f, 0.2f, 0.2f));
+		m_Shader->SetUniform3fv("light.diffuse", glm::vec3(0.5f, 0.5f, 0.5f));
 		m_Shader->SetUniform3fv("light.specular", glm::vec3(1.0f, 1.0f, 1.0f));
 
 		m_Shader->SetUniform3fv("light.position", lightSource.GetPosition());
@@ -115,9 +136,33 @@ namespace test
 		m_Shader->SetUniformMat4f("projection", *camera.GetProjectionMatrix());
 
 		lightSource.Draw(renderer, *camera.GetViewMatrix(), *camera.GetProjectionMatrix());
-		
+
 		m_Texture->Bind();
 		renderer.Draw(*m_VAO, *m_IndexBuffer, *m_Shader);
+
+		if (erosionPerform) {
+			m_VAO->Unbind();
+			m_ErosionVAO->Bind();
+			m_ErosionVertexBuffer->UpdateData(traceVertices, (erosion.getConfigRef().dropletLifetime + 1) * erosion.getDropletCountRef() * 3 * sizeof(float));
+			m_ErosionShader->Bind();
+
+			m_ErosionShader->SetUniformMat4f("model", glm::mat4(1.0f));
+			m_ErosionShader->SetUniformMat4f("view", *camera.GetViewMatrix());
+			m_ErosionShader->SetUniformMat4f("projection", *camera.GetProjectionMatrix());
+
+
+			for (int i = 0; i < (erosion.getConfigRef().dropletLifetime + 1) * erosion.getDropletCountRef(); i++) {
+				std::cout << "x: " << traceVertices[i * 3] << " y: " << traceVertices[i * 3 + 1] << " z: " << traceVertices[i * 3 + 2] << std::endl;
+			}
+
+			std::cout << "[LOG] Printing points\n";
+			GLCALL(glPointSize(2.0f));
+			GLCALL(glDrawArrays(GL_POINTS, 0, (erosion.getConfigRef().dropletLifetime + 1) * erosion.getDropletCountRef()));
+			
+			erosionPerform = false;
+			m_ErosionVAO->Unbind();
+			m_VAO->Bind();
+		}
 
 		if (testSymmetrical)
 		{

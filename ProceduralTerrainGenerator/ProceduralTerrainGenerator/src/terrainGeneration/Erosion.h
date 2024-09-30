@@ -38,12 +38,14 @@ namespace erosion {
 		~Erosion();
 
 		void Erode(float* map);
+		void ErodeAndTrace(float* map, float* traceVertices);
 		vec2 getGradient(float* map, vec2 pos);
 		float getElevationDifference(float* map, vec2 posOld, vec2 posNew);
 		float getInterpolatedGridHeight(float* map, vec2 pos);
 		void distributeSediment(float* map, vec2 pos, float sedimentDropped);
 		float erodeRadius(float* map, vec2 pos, float ammountEroded);
 		bool isOnMap(vec2 pos);
+		void trackDroplets(float* vertices, float* map, vec2 pos, int step);
 
 		void SetConfig(ErosionConfig config);
 		void Resize(int width, int height);
@@ -55,7 +57,7 @@ namespace erosion {
 
 	private:
 		int width, height;
-		int dropletCount = 10000;
+		int dropletCount = 10;
 		ErosionConfig config;
 	};
 
