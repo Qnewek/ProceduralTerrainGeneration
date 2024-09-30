@@ -86,6 +86,15 @@ namespace utilities
 		}
 	}
 
+	void PerformErosionWIthTrack(float* vertices, float* traceVertices, int stride, int offset, float* map, erosion::Erosion& erosion) {
+		erosion.ErodeAndTrace(map, traceVertices);
+		for (int y = 0; y < erosion.getHeight(); y++) {
+			for (int x = 0; x < erosion.getWidth(); x++) {
+				vertices[((y * erosion.getWidth()) + x) * stride + offset] = map[y * erosion.getWidth() + x];
+			}
+		}
+	}
+
 	void SimpleMeshIndicies(unsigned int* indices, int width, int height) {
 		int index = 0;
 		for (int y = 0; y < height - 1; y++) {

@@ -168,6 +168,8 @@
     <None Include="res\shaders\Lightning_vertex.shader" />
     <None Include="res\shaders\test_frag.shader" />
     <None Include="res\shaders\test_vertex.shader" />
+    <None Include="res\shaders\Trace_fragment.shader" />
+    <None Include="res\shaders\Trace_vertex.shader" />
     <None Include="src\vendor\glm\detail\func_common.inl" />
     <None Include="src\vendor\glm\detail\func_common_simd.inl" />
     <None Include="src\vendor\glm\detail\func_exponential.inl" />

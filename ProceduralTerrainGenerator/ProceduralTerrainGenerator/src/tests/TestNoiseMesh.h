@@ -33,6 +33,8 @@ namespace test
 		unsigned int width, height, stride;
 		int seed;
 
+		float* traceVertices;
+
 		float deltaTime;
 		float lastFrame;
 		bool erosionWindow;
@@ -50,6 +52,10 @@ namespace test
 		std::unique_ptr < Shader> m_Shader;
 		std::unique_ptr < Texture> m_Texture;
 		std::unique_ptr < VertexBuffer> m_VertexBuffer;
+
+		std::unique_ptr < VertexBuffer> m_ErosionVertexBuffer;
+		std::unique_ptr < Shader> m_ErosionShader;
+		std::unique_ptr < VertexArray> m_ErosionVAO;
 
 		struct prevCheckers {
 			noise::Options prevOpt;
