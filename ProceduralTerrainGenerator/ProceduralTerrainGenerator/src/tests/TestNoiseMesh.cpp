@@ -55,14 +55,12 @@ namespace test
 			traceVertices[i] = 0.0f;
 		}
 
-		m_ErosionVAO = std::make_unique<VertexArray>();
 		m_ErosionVertexBuffer = std::make_unique<VertexBuffer>(traceVertices, erosion.getConfigRef().dropletLifetime * erosion.getDropletCountRef() * 3 * sizeof(float));
 		m_ErosionShader = std::make_unique<Shader>("res/shaders/Trace_vertex.shader", "res/shaders/Trace_fragment.shader");
 
 		VertexBufferLayout erosionLayout;
 		erosionLayout.Push<float>(3);
 
-		m_ErosionVAO->AddBuffer(*m_ErosionVertexBuffer, erosionLayout);
 		//
 		//
 		//
@@ -141,12 +139,11 @@ namespace test
 		renderer.Draw(*m_VAO, *m_IndexBuffer, *m_Shader);
 
 		if (erosionPerform) {
-			m_VAO->Unbind();
-			m_ErosionVAO->Bind();
+			m_ErosionVertexBuffer->Bind();
 			m_ErosionVertexBuffer->UpdateData(traceVertices, (erosion.getConfigRef().dropletLifetime + 1) * erosion.getDropletCountRef() * 3 * sizeof(float));
 			m_ErosionShader->Bind();
 
-			m_ErosionShader->SetUniformMat4f("model", glm::mat4(1.0f));
+			m_ErosionShader->SetUniformMat4f("model", model);
 			m_ErosionShader->SetUniformMat4f("view", *camera.GetViewMatrix());
 			m_ErosionShader->SetUniformMat4f("projection", *camera.GetProjectionMatrix());
 
@@ -156,12 +153,10 @@ namespace test
 			}
 
 			std::cout << "[LOG] Printing points\n";
-			GLCALL(glPointSize(2.0f));
+			GLCALL(glPointSize(1.0f));
 			GLCALL(glDrawArrays(GL_POINTS, 0, (erosion.getConfigRef().dropletLifetime + 1) * erosion.getDropletCountRef()));
 			
 			erosionPerform = false;
-			m_ErosionVAO->Unbind();
-			m_VAO->Bind();
 		}
 
 		if (testSymmetrical)
