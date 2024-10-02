@@ -64,6 +64,7 @@ namespace test
 
 		std::unique_ptr < VertexBuffer> m_TrackBuffer;
 		std::unique_ptr < Shader> m_TrackShader;
+		std::unique_ptr < VertexArray> m_TrackVAO;
 
 		struct prevCheckers {
 			noise::Options prevOpt;

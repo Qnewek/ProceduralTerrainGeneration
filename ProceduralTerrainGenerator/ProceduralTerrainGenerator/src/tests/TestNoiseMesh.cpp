@@ -59,9 +59,14 @@ namespace test
 			traceVertices[i] = 0.0f;
 		}
 
-		m_TrackBuffer = std::make_unique<VertexBuffer>(traceVertices, erosion.getConfigRef().dropletLifetime * erosion.getDropletCountRef() * 3 * sizeof(float));
+		m_TrackBuffer = std::make_unique<VertexBuffer>(traceVertices, (erosion.getConfigRef().dropletLifetime + 1) * erosion.getDropletCountRef() * 3 * sizeof(float));
 		m_TrackShader = std::make_unique<Shader>("res/shaders/Trace_vertex.shader", "res/shaders/Trace_fragment.shader");
+		m_TrackVAO = std::make_unique<VertexArray>();
 
+		VertexBufferLayout trackLayout;
+		layout.Push<float>(3);
+
+		//m_TrackVAO->AddBuffer(*m_TrackBuffer, trackLayout);
 		//
 		//
 		//
@@ -299,8 +304,15 @@ namespace test
 
 	void TestNoiseMesh::PrintTrack(glm::mat4& model) {
 		if (trackDraw) {
+		    m_TrackVAO->Bind();
 			m_TrackBuffer->UpdateData(traceVertices, (erosion.getConfigRef().dropletLifetime + 1) * erosion.getDropletCountRef() * 3 * sizeof(float));
 			m_TrackShader->SetMVP(model, *camera.GetViewMatrix(), *camera.GetProjectionMatrix());
+
+			m_TrackShader->Bind();
+			m_TrackBuffer->Bind();
+
+			GLCALL(glEnableVertexAttribArray(0));
+			GLCALL(glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0));
 
 			GLCALL(glPointSize(2.0f));
 			GLCALL(glDrawArrays(GL_POINTS, 0, (erosion.getConfigRef().dropletLifetime + 1) * erosion.getDropletCountRef()));
