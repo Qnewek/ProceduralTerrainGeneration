@@ -12,23 +12,25 @@ namespace erosion {
 		Droplet* d;
 		ListNode* next;
 
-		ListNode(vec2 position, float velocity, float water, float capacity) :next(nullptr) {
-			d = new Droplet(position, velocity, water, capacity);
+		ListNode(vec2 position, float velocity, float water, float capacity) : d(new Droplet(position, velocity, water, capacity)), next(nullptr) {}
+
+		~ListNode() {
+			delete d;
 		}
+
 		ListNode* deleteNode(ListNode* prev) {
 			ListNode* next = this->next;
 			if (prev != nullptr) {
 				prev->next = next;
 			}
-			delete this->d;
 			delete this;
 			return next;
 		}
+
 		void deleteAll() {
 			ListNode* current = this;
 			while (current != nullptr) {
 				ListNode* nextNode = current->next;
-				delete current->d;
 				delete current;
 				current = nextNode;
 			}
