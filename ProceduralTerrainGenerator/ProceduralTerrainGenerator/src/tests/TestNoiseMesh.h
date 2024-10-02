@@ -26,6 +26,12 @@ namespace test
 		void OnImGuiRender() override;
 		void ErosionWindowRender();
 
+		void DrawAdjacent(Renderer& renderer, glm::mat4& model);
+		void CheckChange();
+		void PerformErosion();
+		void UpdatePrevCheckers();
+		void PrintTrack(glm::mat4& model);
+
 	private:
 		//Perlin Noise generation parameters
 		float* meshVertices;
@@ -37,9 +43,12 @@ namespace test
 
 		float deltaTime;
 		float lastFrame;
+
 		bool erosionWindow;
-		bool testSymmetrical = false;
+		bool testSymmetrical;
 		bool erosionPerform;
+		bool trackDraw;
+
 		Camera camera;
 		LightSource lightSource;
 		noise::SimplexNoiseClass noise;
@@ -53,9 +62,8 @@ namespace test
 		std::unique_ptr < Texture> m_Texture;
 		std::unique_ptr < VertexBuffer> m_VertexBuffer;
 
-		std::unique_ptr < VertexBuffer> m_ErosionVertexBuffer;
-		std::unique_ptr < Shader> m_ErosionShader;
-		std::unique_ptr < VertexArray> m_ErosionVAO;
+		std::unique_ptr < VertexBuffer> m_TrackBuffer;
+		std::unique_ptr < Shader> m_TrackShader;
 
 		struct prevCheckers {
 			noise::Options prevOpt;

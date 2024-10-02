@@ -22,6 +22,14 @@ void Renderer::Draw(const VertexArray& va, const IndexBuffer& ib, const Shader& 
 
 	GLCALL(glDrawElements(GL_TRIANGLES, ib.GetCount(), GL_UNSIGNED_INT, nullptr));
 }
+void Renderer::DrawWithTexture(const VertexArray& va, const IndexBuffer& ib, const Shader& shader) const {
+    shader.Bind();
+    va.Bind();
+    ib.Bind();
+
+    GLCALL(glDrawElements(GL_TRIANGLES, ib.GetCount(), GL_UNSIGNED_INT, nullptr));
+}
+
 
 void Renderer::Clear() const {
     GLCALL(glClearColor(0.37f, 0.77f, 1.0f, 1.0f));

@@ -24,6 +24,13 @@ public:
 	void SetUniform1i(const std::string& name, int value);
 	void SetUniform3fv(const std::string& name, glm::vec3 v);
 	void SetUniformMat4f(const std::string& name, const glm::mat4& matrix);
+
+	void SetLightUniforms(glm::vec3 lightPos, glm::vec3 ambient, glm::vec3 diffuse, glm::vec3 specular);
+	void SetMaterialUniforms(glm::vec3 ambient, glm::vec3 diffuse, glm::vec3 specular, float shininess);
+	void SetMVP(const glm::mat4& model, const glm::mat4& view, const glm::mat4& projection);
+	void SetViewPos(const glm::vec3& viewPos);
+	void SetModel(const glm::mat4& model);
+
 	unsigned int GetRendererID() const { return m_RendererID; }
 private:
 	std::string ParseShader(const std::string& filepath);

@@ -57,7 +57,7 @@ namespace erosion {
 
 	private:
 		int width, height;
-		int dropletCount = 10;
+		int dropletCount = 100;
 		ErosionConfig config;
 	};
 

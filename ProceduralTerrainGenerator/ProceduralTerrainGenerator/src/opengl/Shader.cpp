@@ -108,6 +108,40 @@ void Shader::SetUniform3fv(const std::string& name, glm::vec3 v) {
     GLCALL(glUniform3fv(GetUniformLocation(name), 1, &v[0]));
 }
 
+void Shader::SetLightUniforms(glm::vec3 lightPos, glm::vec3 ambient, glm::vec3 diffuse, glm::vec3 specular) {
+    this->Bind();
+    this->SetUniform3fv("light.ambient", ambient);
+    this->SetUniform3fv("light.diffuse", diffuse);
+    this->SetUniform3fv("light.specular", specular);
+    this->SetUniform3fv("light.position", lightPos);
+}
+
+void Shader::SetMaterialUniforms(glm::vec3 ambient, glm::vec3 diffuse, glm::vec3 specular, float shininess) {
+	this->Bind();
+	this->SetUniform3fv("material.ambient", ambient);
+	this->SetUniform3fv("material.diffuse", diffuse);
+	this->SetUniform3fv("material.specular", specular);
+	this->SetUniform1f("material.shininess", shininess);
+
+}
+
+void Shader::SetMVP(const glm::mat4& model, const glm::mat4& view, const glm::mat4& projection) {
+	this->Bind();
+	this->SetUniformMat4f("model", model);
+	this->SetUniformMat4f("view", view);
+	this->SetUniformMat4f("projection", projection);
+}
+
+void Shader::SetViewPos(const glm::vec3& viewPos) {
+	this->Bind();
+	this->SetUniform3fv("viewPos", viewPos);
+}
+
+void Shader::SetModel(const glm::mat4& model) {
+	this->Bind();
+	this->SetUniformMat4f("model", model);
+}
+
 int Shader::GetUniformLocation(const std::string& name)
 {
 	if(m_UniformLocationCache.find(name) != m_UniformLocationCache.end())

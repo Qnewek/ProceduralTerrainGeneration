@@ -12,34 +12,38 @@
 namespace test
 {
 	TestNoiseMesh::TestNoiseMesh() :height(200), width(200), stride(8),
-		meshVertices(nullptr), meshIndices(nullptr),
-		noise(width, height), biomeNoise(width, height), erosionWindow(false), erosionPerform(false),
-		deltaTime(0.0f), lastFrame(0.0f), camera(800, 600), lightSource(), seed(0), erosion(width, height)
+		meshVertices(nullptr), meshIndices(nullptr), traceVertices(nullptr),
+		noise(width, height), biomeNoise(width, height), 
+		erosionWindow(false), erosionPerform(false), testSymmetrical(false), trackDraw(false),
+		lightSource(), seed(0), erosion(width, height),
+		deltaTime(0.0f), lastFrame(0.0f), camera(800, 600)
 	{
-		prevCheck.prevCheckSum = noise.getConfigRef().getCheckSum();
-		prevCheck.prevOpt = noise.getConfigRef().option;
-		prevCheck.prevRidge = noise.getConfigRef().ridge;
-		prevCheck.prevIsland = noise.getConfigRef().island;
-		prevCheck.prevIslandType = noise.getConfigRef().islandType;
-		prevCheck.symmetrical = noise.getConfigRef().symmetrical;
-		prevCheck.seed = seed;
+		//Update variable for checking the change in noise settings
+		UpdatePrevCheckers();
 
 		// 6 indices per quad which is 2 triangles so there will be (width-1 * height-1 * 2) triangles
 		meshIndices = new unsigned int[(width - 1) * (height - 1) * 6];
 		meshVertices = new float[width * height * stride];
 
-		//Initial noises setup
-		biomeNoise.generateFractalNoise();
+		//Initial fractal noise generation in order to draw something on the start of the test
 		utilities::benchmark_void(utilities::CreateTerrainMesh, "CreateTerrainMesh", noise, meshVertices, meshIndices, 8, true, true);
+		
+		//Simple biome based on fractal noise and sampling from texture
+		biomeNoise.generateFractalNoise();
 		utilities::PaintBiome(meshVertices, noise, biomeNoise, stride, 6);
 
-		//Mesh setup
+		//OpenGl setup for drawing the terrain
 		m_VAO = std::make_unique<VertexArray>();
 		m_VertexBuffer = std::make_unique<VertexBuffer>(meshVertices, (height * width) * stride * sizeof(float));
 		m_IndexBuffer = std::make_unique<IndexBuffer>(meshIndices, (width - 1) * (height - 1) * 6);
 		m_Shader = std::make_unique<Shader>("res/shaders/Lightning_vertex.shader", "res/shaders/Lightning_fragment.shader");
 		m_Texture = std::make_unique<Texture>("res/textures/Basic_biome_texture_palette.jpg");
 
+		//Layout of the vertex buffer
+		//Succesively: 
+		// 3 floats for position [x,y,z], 
+		// 3 floats for normal vector indicating direction the vertex faces
+		// 2 floats for texture coordinates based on height
 		VertexBufferLayout layout;
 		layout.Push<float>(3);
 		layout.Push<float>(3);
@@ -55,11 +59,8 @@ namespace test
 			traceVertices[i] = 0.0f;
 		}
 
-		m_ErosionVertexBuffer = std::make_unique<VertexBuffer>(traceVertices, erosion.getConfigRef().dropletLifetime * erosion.getDropletCountRef() * 3 * sizeof(float));
-		m_ErosionShader = std::make_unique<Shader>("res/shaders/Trace_vertex.shader", "res/shaders/Trace_fragment.shader");
-
-		VertexBufferLayout erosionLayout;
-		erosionLayout.Push<float>(3);
+		m_TrackBuffer = std::make_unique<VertexBuffer>(traceVertices, erosion.getConfigRef().dropletLifetime * erosion.getDropletCountRef() * 3 * sizeof(float));
+		m_TrackShader = std::make_unique<Shader>("res/shaders/Trace_vertex.shader", "res/shaders/Trace_fragment.shader");
 
 		//
 		//
@@ -84,92 +85,33 @@ namespace test
 		float currentFrame = static_cast<float>(glfwGetTime());
 		deltaTime = currentFrame - lastFrame;
 		lastFrame = currentFrame;
+
 		camera.SteerCamera(&window, deltaTime);
 
-		if (prevCheck.prevOpt != noise.getConfigRef().option ||
-			prevCheck.prevCheckSum != noise.getConfigRef().getCheckSum() ||
-			prevCheck.prevRidge != noise.getConfigRef().ridge ||
-			prevCheck.prevIsland != noise.getConfigRef().island ||
-			prevCheck.prevIslandType != noise.getConfigRef().islandType ||
-			prevCheck.symmetrical != noise.getConfigRef().symmetrical ||
-			prevCheck.seed != seed)
-		{
-			noise.setSeed(seed);
-			utilities::benchmark_void(utilities::CreateTerrainMesh, "CreateTerrainMesh", noise, meshVertices, meshIndices, 8, true, false);
-			utilities::PaintBiome(meshVertices, noise, biomeNoise, stride, 6);
+		CheckChange();
+		PerformErosion();
 
-			m_VertexBuffer->UpdateData(meshVertices, (height * width) * stride * sizeof(float));
-
-			prevCheck.prevCheckSum = noise.getConfigRef().getCheckSum();
-			prevCheck.prevOpt = noise.getConfigRef().option;
-			prevCheck.prevRidge = noise.getConfigRef().ridge;
-			prevCheck.prevIsland = noise.getConfigRef().island;
-			prevCheck.prevIslandType = noise.getConfigRef().islandType;
-			prevCheck.symmetrical = noise.getConfigRef().symmetrical;
-			prevCheck.seed = seed;
-		}
-		if (erosionPerform) {
-			//utilities::benchmark_void(utilities::PerformErosion, "PerformErosion", meshVertices, stride, 1, noise.getMap(), erosion);
-			utilities::PerformErosionWIthTrack(meshVertices, traceVertices, stride, 1, noise.getMap(), erosion);
-			m_VertexBuffer->UpdateData(meshVertices, (height * width) * stride * sizeof(float));
-		}
-
-		m_Shader->Bind();
-
-		m_Shader->SetUniform3fv("material.specular", glm::vec3(0.5f, 0.5f, 0.5f));
-		m_Shader->SetUniform1f("material.shininess", 16.0f);
-
-		m_Shader->SetUniform3fv("light.ambient", glm::vec3(0.2f, 0.2f, 0.2f));
-		m_Shader->SetUniform3fv("light.diffuse", glm::vec3(0.5f, 0.5f, 0.5f));
-		m_Shader->SetUniform3fv("light.specular", glm::vec3(1.0f, 1.0f, 1.0f));
-
-		m_Shader->SetUniform3fv("light.position", lightSource.GetPosition());
-		m_Shader->SetUniform3fv("viewPos", camera.GetPosition());
-
+		//Translate model to be in the center of the screen at the time of first render
 		glm::mat4 model = glm::mat4(1.0f);
 		model = glm::translate(model, glm::vec3(-0.5f, -0.25f, 0.0f));
+		
+		//Since we are using texture sampling we dont need to set ambient and diffuse color 
+		//but there is no function that takes only some parameters
+		m_Shader->SetMaterialUniforms(glm::vec3(0.5f, 0.5f, 0.5f), glm::vec3(0.5f, 0.5f, 0.5f), glm::vec3(0.5f, 0.5f, 0.5f), 16.0f);
+		m_Shader->SetLightUniforms(lightSource.GetPosition(), glm::vec3(0.2f, 0.2f, 0.2f), glm::vec3(0.5f, 0.5f, 0.5f), glm::vec3(1.0f, 1.0f, 1.0f));
+		m_Shader->SetViewPos(camera.GetPosition());
+		m_Shader->SetMVP(model, *camera.GetViewMatrix(), *camera.GetProjectionMatrix());
 
-		m_Shader->SetUniformMat4f("model", model);
-		m_Shader->SetUniformMat4f("view", *camera.GetViewMatrix());
-		m_Shader->SetUniformMat4f("projection", *camera.GetProjectionMatrix());
-
+		//Render lightning source cube
 		lightSource.Draw(renderer, *camera.GetViewMatrix(), *camera.GetProjectionMatrix());
-
+		//Render terrain
 		m_Texture->Bind();
-		renderer.Draw(*m_VAO, *m_IndexBuffer, *m_Shader);
+		renderer.DrawWithTexture(*m_VAO, *m_IndexBuffer, *m_Shader);
 
-		if (erosionPerform) {
-			m_ErosionVertexBuffer->Bind();
-			m_ErosionVertexBuffer->UpdateData(traceVertices, (erosion.getConfigRef().dropletLifetime + 1) * erosion.getDropletCountRef() * 3 * sizeof(float));
-			m_ErosionShader->Bind();
-
-			m_ErosionShader->SetUniformMat4f("model", model);
-			m_ErosionShader->SetUniformMat4f("view", *camera.GetViewMatrix());
-			m_ErosionShader->SetUniformMat4f("projection", *camera.GetProjectionMatrix());
-
-
-			for (int i = 0; i < (erosion.getConfigRef().dropletLifetime + 1) * erosion.getDropletCountRef(); i++) {
-				std::cout << "x: " << traceVertices[i * 3] << " y: " << traceVertices[i * 3 + 1] << " z: " << traceVertices[i * 3 + 2] << std::endl;
-			}
-
-			std::cout << "[LOG] Printing points\n";
-			GLCALL(glPointSize(1.0f));
-			GLCALL(glDrawArrays(GL_POINTS, 0, (erosion.getConfigRef().dropletLifetime + 1) * erosion.getDropletCountRef()));
-			
-			erosionPerform = false;
-		}
+		PrintTrack(model);
 
 		if (testSymmetrical)
-		{
-			m_Shader->SetUniformMat4f("model", glm::translate(model, glm::vec3(-1.0f, 0.0f, 0.0f)));
-			renderer.Draw(*m_VAO, *m_IndexBuffer, *m_Shader);
-			m_Shader->SetUniformMat4f("model", glm::translate(model, glm::vec3(1.0f, 0.0f, 0.0f)));
-			renderer.Draw(*m_VAO, *m_IndexBuffer, *m_Shader);
-			m_Shader->SetUniformMat4f("model", glm::translate(model, glm::vec3(0.0f, 0.0f, 1.0f)));
-			renderer.Draw(*m_VAO, *m_IndexBuffer, *m_Shader);
-			m_Shader->SetUniformMat4f("model", glm::translate(model, glm::vec3(0.0f, 0.0f, -1.0f)));
-			renderer.Draw(*m_VAO, *m_IndexBuffer, *m_Shader);
-		}
+			DrawAdjacent(renderer, model);
 	}
 
 	void TestNoiseMesh::OnImGuiRender()
@@ -248,6 +190,7 @@ namespace test
 			}
 			ImGui::SliderFloat("Mix Power", &noise.getConfigRef().mixPower, 0.0f, 1.0f);
 		}
+		//Generating "symmetrical" noise and checkbox for miroring it on the four sides
 		ImGui::Checkbox("Symmetrical", &noise.getConfigRef().symmetrical);
 		if (noise.getConfigRef().symmetrical) {
 			ImGui::Checkbox("Test Symmetrical", &testSymmetrical);
@@ -292,5 +235,75 @@ namespace test
 		}
 
 		ImGui::End();
+	}
+
+	void TestNoiseMesh::CheckChange() {
+		if (prevCheck.prevOpt != noise.getConfigRef().option ||
+			prevCheck.prevCheckSum != noise.getConfigRef().getCheckSum() ||
+			prevCheck.prevRidge != noise.getConfigRef().ridge ||
+			prevCheck.prevIsland != noise.getConfigRef().island ||
+			prevCheck.prevIslandType != noise.getConfigRef().islandType ||
+			prevCheck.symmetrical != noise.getConfigRef().symmetrical ||
+			prevCheck.seed != seed)
+		{
+			noise.setSeed(seed);
+			utilities::benchmark_void(utilities::CreateTerrainMesh, "CreateTerrainMesh", noise, meshVertices, meshIndices, 8, true, false);
+			
+			//Function only changes [y] value of texture sampling
+			//it doesnt generate new biome noise
+			utilities::PaintBiome(meshVertices, noise, biomeNoise, stride, 6);
+
+			m_VertexBuffer->UpdateData(meshVertices, (height * width) * stride * sizeof(float));
+
+			UpdatePrevCheckers();
+			//Despite if the track is drawn or not we deactivate it
+			trackDraw = false;
+		}
+	}
+
+
+	void TestNoiseMesh::DrawAdjacent(Renderer& renderer, glm::mat4& model) {
+		//West
+		m_Shader->SetModel(glm::translate(model, glm::vec3(-1.0f, 0.0f, 0.0f)));
+		renderer.Draw(*m_VAO, *m_IndexBuffer, *m_Shader);
+		//East
+		m_Shader->SetModel(glm::translate(model, glm::vec3(1.0f, 0.0f, 0.0f)));
+		renderer.Draw(*m_VAO, *m_IndexBuffer, *m_Shader);
+		//North
+		m_Shader->SetModel(glm::translate(model, glm::vec3(0.0f, 0.0f, 1.0f)));
+		renderer.Draw(*m_VAO, *m_IndexBuffer, *m_Shader);
+		//South
+		m_Shader->SetModel(glm::translate(model, glm::vec3(0.0f, 0.0f, -1.0f)));
+		renderer.Draw(*m_VAO, *m_IndexBuffer, *m_Shader);
+	}
+
+	void TestNoiseMesh::PerformErosion() {
+		if (erosionPerform) {
+			//utilities::benchmark_void(utilities::PerformErosion, "PerformErosion", meshVertices, stride, 1, noise.getMap(), erosion);
+			utilities::PerformErosionWIthTrack(meshVertices, traceVertices, stride, 1, noise.getMap(), erosion);
+			m_VertexBuffer->UpdateData(meshVertices, (height * width) * stride * sizeof(float));
+			erosionPerform = false;
+			trackDraw = true;
+		}
+	}
+
+	void TestNoiseMesh::UpdatePrevCheckers() {
+		prevCheck.prevCheckSum = noise.getConfigRef().getCheckSum();
+		prevCheck.prevOpt = noise.getConfigRef().option;
+		prevCheck.prevRidge = noise.getConfigRef().ridge;
+		prevCheck.prevIsland = noise.getConfigRef().island;
+		prevCheck.prevIslandType = noise.getConfigRef().islandType;
+		prevCheck.symmetrical = noise.getConfigRef().symmetrical;
+		prevCheck.seed = seed;
+	}
+
+	void TestNoiseMesh::PrintTrack(glm::mat4& model) {
+		if (trackDraw) {
+			m_TrackBuffer->UpdateData(traceVertices, (erosion.getConfigRef().dropletLifetime + 1) * erosion.getDropletCountRef() * 3 * sizeof(float));
+			m_TrackShader->SetMVP(model, *camera.GetViewMatrix(), *camera.GetProjectionMatrix());
+
+			GLCALL(glPointSize(2.0f));
+			GLCALL(glDrawArrays(GL_POINTS, 0, (erosion.getConfigRef().dropletLifetime + 1) * erosion.getDropletCountRef()));
+		}
 	}
 }
