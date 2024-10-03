@@ -69,7 +69,7 @@ namespace erosion {
 	}
 
 	//Terraforming functions
-	void Erosion::Erode(float* map)
+	void Erosion::Erode(float* map, std::optional<float*> Track)
 	{
 		ListNode* dropletsHead = nullptr;
 		ListNode* dropletPrev = nullptr;
@@ -78,113 +78,31 @@ namespace erosion {
 		std::random_device rd;
 		std::mt19937 gen(rd());
 		std::uniform_real_distribution<float> dist(0.0f, 1.0f);
-
-		//Placeholder node
-		dropletsHead = new ListNode({0.0f, 0.0f}, 0.0f, 0.0f, 0.0f);
-		dropletCurrent = dropletsHead;
-		for (int i = 0; i < dropletCount; i++) {
-			//Create a new droplet on random cell on the map
-			//Initialise the droplet with initial values cofigured by the user
-
-			dropletCurrent->next = new ListNode({ dist(gen) * width, dist(gen) * height }, config.initialVelocity, config.initialWater, config.initialCapacity);
-			dropletCurrent = dropletCurrent->next;
-		}
-
-		dropletCurrent = dropletsHead->next;
-		dropletPrev = dropletsHead;
-
+				
 		vec2 gradient;
 		vec2 oldPosition;
+
 		int fellOff = 0;
-
-		for (int i = 0; i < config.dropletLifetime; i++) {
-			if (!dropletsHead->next) {
-				break;
-			}
-
-			dropletCurrent = dropletsHead->next;
-			dropletPrev = dropletsHead;
-
-			while (dropletCurrent) {
-				//Calculate the gradient of current cell and adjust the direction of the droplet and its position
-				//than check if its still on the map. If it is, calculate the difference in elevation between the old and new position
-				gradient = getGradient(map, dropletCurrent->d->getPosition());
-				oldPosition = dropletCurrent->d->getPosition();
-				dropletCurrent->d->adjustDirection(gradient, config.inertia);
-
-				if (isOnMap(dropletCurrent->d->getPosition())) {
-					float deltaElevation = getElevationDifference(map, oldPosition, dropletCurrent->d->getPosition());
-
-					if (deltaElevation >= 0) {
-						distributeSediment(map, oldPosition, dropletCurrent->d->dropSediment(deltaElevation));
-					}
-					else {
-						//Calculate new capacity of the current droplet, if its carried sediment surpasses the new capacity
-						//Function will return positive number which means that we need to drop some sediment on the old position
-						//based on the deposition rate. If the function returns negative number, it means we can erode points in the range
-						//of erosion radius and gather possible to collect sediment ammount and add it to the droplet.
-						//Function eroding the map in radius takes positive number so after checking a sign of returned value we need
-						//to get its absolute. Of course other functions also takes positive number if it comes to deltaElevation
-						//so we need to get its absolute value as well.
-						deltaElevation = -deltaElevation;
-						float sedimentToCollect = dropletCurrent->d->adjustCapacity(config.minSlope, config.erosionRate, config.depositionRate, deltaElevation);
-
-						if (sedimentToCollect > 0.0f) {
-							distributeSediment(map, oldPosition, sedimentToCollect);
-						}
-						else {
-							sedimentToCollect = -sedimentToCollect;
-							dropletCurrent->d->adjustSediment(erodeRadius(map, oldPosition, sedimentToCollect));
-						}
-
-					}
-					dropletCurrent->d->adjustVelocity(deltaElevation, config.gravity);
-					dropletCurrent->d->evaporate(config.evaporationRate);
-					dropletPrev = dropletCurrent;
-					dropletCurrent = dropletCurrent->next;
-				}
-				else {
-					dropletCurrent =  dropletCurrent->deleteNode(dropletPrev);
-					fellOff++;
-				}
-			}
-		}
-		std::cout << "[LOG] Droplets out of the bounds: " << fellOff << std::endl;
-
-		if(dropletsHead)
-			dropletsHead->deleteAll();
-	}
-
-	void Erosion::ErodeAndTrace(float* map, float* traceVertices)
-	{
-		ListNode* dropletsHead = nullptr;
-		ListNode* dropletPrev = nullptr;
-		ListNode* dropletCurrent = nullptr;
-
 		int step = 0;
-
-		std::random_device rd;
-		std::mt19937 gen(rd());
-		std::uniform_real_distribution<float> dist(0.0f, 1.0f);
 
 		//Placeholder node
 		dropletsHead = new ListNode({ 0.0f, 0.0f }, 0.0f, 0.0f, 0.0f);
 		dropletCurrent = dropletsHead;
+
 		for (int i = 0; i < dropletCount; i++) {
 			//Create a new droplet on random cell on the map
 			//Initialise the droplet with initial values cofigured by the user
 
 			dropletCurrent->next = new ListNode({ dist(gen) * width, dist(gen) * height }, config.initialVelocity, config.initialWater, config.initialCapacity);
 			dropletCurrent = dropletCurrent->next;
-			trackDroplets(traceVertices, map, dropletCurrent->d->getPosition(), step++);
+
+			//If tracking enabled, save the droplets path
+			if(Track.has_value() && Track.value())
+				trackDroplets(Track.value(), map, dropletCurrent->d->getPosition(), step++);
 		}
 
 		dropletCurrent = dropletsHead->next;
 		dropletPrev = dropletsHead;
-
-		vec2 gradient;
-		vec2 oldPosition;
-		int fellOff = 0;
 
 		for (int i = 0; i < config.dropletLifetime; i++) {
 			if (!dropletsHead->next) {
@@ -200,17 +118,23 @@ namespace erosion {
 				gradient = getGradient(map, dropletCurrent->d->getPosition());
 				oldPosition = dropletCurrent->d->getPosition();
 				dropletCurrent->d->adjustDirection(gradient, config.inertia);
-				trackDroplets(traceVertices, map, dropletCurrent->d->getPosition(), step++);
+				
 
+				//If tracking enabled, save the droplets path
+				if (Track.has_value() && Track.value())
+					trackDroplets(Track.value(), map, dropletCurrent->d->getPosition(), step++);
+
+				//Check if the droplet is still on the map
 				if (isOnMap(dropletCurrent->d->getPosition())) {
 					float deltaElevation = getElevationDifference(map, oldPosition, dropletCurrent->d->getPosition());
 
+					//If the droplet is moving uphill, it will drop some sediment on the current cell
 					if (deltaElevation >= 0) {
 						distributeSediment(map, oldPosition, dropletCurrent->d->dropSediment(deltaElevation));
 					}
 					else {
 						//Calculate new capacity of the current droplet, if its carried sediment surpasses the new capacity
-						//Function will return positive number which means that we need to drop some sediment on the old position
+						//function will return positive number which means that we need to drop some sediment on the old position
 						//based on the deposition rate. If the function returns negative number, it means we can erode points in the range
 						//of erosion radius and gather possible to collect sediment ammount and add it to the droplet.
 						//Function eroding the map in radius takes positive number so after checking a sign of returned value we need
@@ -218,7 +142,7 @@ namespace erosion {
 						//so we need to get its absolute value as well.
 						deltaElevation = -deltaElevation;
 						float sedimentToCollect = dropletCurrent->d->adjustCapacity(config.minSlope, config.erosionRate, config.depositionRate, deltaElevation);
-
+						
 						if (sedimentToCollect > 0.0f) {
 							distributeSediment(map, oldPosition, sedimentToCollect);
 						}
@@ -239,7 +163,7 @@ namespace erosion {
 				}
 			}
 		}
-		std::cout << "[LOG] Droplets out of the bounds: " << fellOff << std::endl;
+		std::cout << "[LOG] Droplets out of the map: " << fellOff << std::endl;
 
 		if (dropletsHead)
 			dropletsHead->deleteAll();
@@ -276,10 +200,10 @@ namespace erosion {
 		//Interpolate the height of the grid using bilinear interpolation
 		//Formula used: H(pos) = P(x, y) * (1 - v) * (1 - u) + P(x+1, y) * v * (1 - u) + P(x, y+1) * (1 - v) * u + P(x+1, y+1) * v * u
 		//It is assumed that the erode function checks if the drop fell outside the map
-		return (map[y * width + x] * (1 - v) * (1 - u)) + //P(x, y) * (1 - v) * (1 - u) northWest point of the cell
-			   (map[y * width + x + 1] * v * (1 - u))   + //P(x+1, y) * v * (1 - u) northEast point of the cell
-			   (map[(y + 1) * width + x] * (1 - v) * u) + //P(x, y+1) * (1 - v) * u southWest point of the cell
-			   (map[(y + 1) * width + x + 1] * v * u);    //P(x+1, y+1) * v * u southEast point of the cell
+		return ((map[y * width + x] * (1 - v) * (1 - u)) + //P(x, y) * (1 - v) * (1 - u) northWest point of the cell
+				(map[y * width + x + 1] * v * (1 - u))   + //P(x+1, y) * v * (1 - u) northEast point of the cell
+				(map[(y + 1) * width + x] * (1 - v) * u) + //P(x, y+1) * (1 - v) * u southWest point of the cell
+				(map[(y + 1) * width + x + 1] * v * u));   //P(x+1, y+1) * v * u southEast point of the cell
 	}
 
 	float Erosion::getElevationDifference(float* map, vec2 posOld, vec2 posNew)
@@ -312,6 +236,7 @@ namespace erosion {
 	float Erosion::erodeRadius(float* map, vec2 pos, float ammountEroded) {
 		//Erode the terrain in a circular radius around the droplet
 		//Its done due to the fact that no thermal erosion or sediment sliding is simulated in this project
+		//In order to perform mentioned above action we need to calculate weights of each point within the radius
 		
 		float deltax;
 		float deltay;
