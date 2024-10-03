@@ -3,6 +3,7 @@
 #include <iostream>
 #include <chrono>
 #include <type_traits>
+#include <optional>
 
 #include "glm/glm.hpp"
 
@@ -23,8 +24,7 @@ namespace utilities
 	
     void CreateTerrainMesh(noise::SimplexNoiseClass& noise, float* vertices, unsigned int* indices, unsigned int stride, bool normals, bool first);
 	void PaintBiome(float* vertices, noise::SimplexNoiseClass& noiseHeights, noise::SimplexNoiseClass& noiseBiome, unsigned int stride, unsigned int offset);
-    void PerformErosion(float* vertices, int stride, int offset, float* map, erosion::Erosion& erosion);
-    void PerformErosionWIthTrack(float* vertices, float* traceVertices, int stride, int offset, float* map, erosion::Erosion& erosion);
+    void PerformErosion(float* vertices, std::optional<float*> Track, int stride, int offset, float* map, erosion::Erosion& erosion);
 
     template <typename Func, typename... Args>
     void benchmark_void(Func func, std::string funcName, Args&&... args) {

@@ -1,5 +1,7 @@
 #pragma once
 
+#include <optional>
+
 //http://www.firespark.de/resources/downloads/implementation%20of%20a%20methode%20for%20hydraulic%20erosion.pdf
 
 namespace erosion {
@@ -7,7 +9,7 @@ namespace erosion {
 	struct ErosionConfig {
 		//Erosion parameters
 		float erosionRate = 0.7f;
-		float minSlope = 0.01f;
+		float minSlope = 0.0001f;
 		float gravity = 10.0f;
 		float inertia = 0.3f;
 		float depositionRate = 0.2f;
@@ -17,7 +19,7 @@ namespace erosion {
 		float blur = 0.0f;
 		//Initial values
 		float initialWater = 1.0f;
-		float initialVelocity = 0.0f;
+		float initialVelocity = 1.0f;
 		float initialCapacity = 8.0f;
 	};
 
@@ -37,8 +39,7 @@ namespace erosion {
 		Erosion(int width, int height);
 		~Erosion();
 
-		void Erode(float* map);
-		void ErodeAndTrace(float* map, float* traceVertices);
+		void Erode(float* map, std::optional<float*> Track);
 		vec2 getGradient(float* map, vec2 pos);
 		float getElevationDifference(float* map, vec2 posOld, vec2 posNew);
 		float getInterpolatedGridHeight(float* map, vec2 pos);
@@ -57,7 +58,7 @@ namespace erosion {
 
 	private:
 		int width, height;
-		int dropletCount = 100;
+		int dropletCount = 10;
 		ErosionConfig config;
 	};
 

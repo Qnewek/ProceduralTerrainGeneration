@@ -51,25 +51,8 @@ namespace test
 
 		m_VAO->AddBuffer(*m_VertexBuffer, layout);
 
-
-		//TMP buffer for erosion droplets tracking
-		traceVertices = new float[(erosion.getConfigRef().dropletLifetime + 1) * erosion.getDropletCountRef() * 3];
-
-		for (int i = 0; i < (erosion.getConfigRef().dropletLifetime + 1) *erosion.getDropletCountRef() * 3; i++){
-			traceVertices[i] = 0.0f;
-		}
-
-		m_TrackBuffer = std::make_unique<VertexBuffer>(traceVertices, (erosion.getConfigRef().dropletLifetime + 1) * erosion.getDropletCountRef() * 3 * sizeof(float));
 		m_TrackShader = std::make_unique<Shader>("res/shaders/Trace_vertex.shader", "res/shaders/Trace_fragment.shader");
 		m_TrackVAO = std::make_unique<VertexArray>();
-
-		VertexBufferLayout trackLayout;
-		layout.Push<float>(3);
-
-		//m_TrackVAO->AddBuffer(*m_TrackBuffer, trackLayout);
-		//
-		//
-		//
 	}
 
 	TestNoiseMesh::~TestNoiseMesh()
@@ -235,6 +218,8 @@ namespace test
 		ImGui::InputInt("Erosion radius", &erosion.getConfigRef().erosionRadius);
 		ImGui::InputFloat("Blur", &erosion.getConfigRef().blur, 0.0f, 1.0f);
 
+		ImGui::Checkbox("Show traces of droplets", &trackDraw);
+
 		if (ImGui::Button("Erode map")) {
 			erosionPerform = true;
 		}
@@ -262,6 +247,11 @@ namespace test
 
 			UpdatePrevCheckers();
 			//Despite if the track is drawn or not we deactivate it
+			if(traceVertices)
+			{
+				delete[] traceVertices;
+				traceVertices = nullptr;
+			}
 			trackDraw = false;
 		}
 	}
@@ -284,11 +274,21 @@ namespace test
 
 	void TestNoiseMesh::PerformErosion() {
 		if (erosionPerform) {
-			//utilities::benchmark_void(utilities::PerformErosion, "PerformErosion", meshVertices, stride, 1, noise.getMap(), erosion);
-			utilities::PerformErosionWIthTrack(meshVertices, traceVertices, stride, 1, noise.getMap(), erosion);
+			if(trackDraw)
+			{
+				delete[] traceVertices;
+				traceVertices = new float[(erosion.getConfigRef().dropletLifetime + 1) * erosion.getDropletCountRef() * 3];
+				
+				for (int i = 0; i < (erosion.getConfigRef().dropletLifetime + 1) * erosion.getDropletCountRef() * 3; i++) {
+					traceVertices[i] = 0.0f;
+				}
+			}
+
+			m_TrackBuffer = std::make_unique<VertexBuffer>(traceVertices, (erosion.getConfigRef().dropletLifetime + 1) * erosion.getDropletCountRef() * 3 * sizeof(float));
+
+			utilities::PerformErosion(meshVertices, trackDraw ? std::optional<float*>(traceVertices) : std::nullopt, stride, 1, noise.getMap(), erosion);
 			m_VertexBuffer->UpdateData(meshVertices, (height * width) * stride * sizeof(float));
 			erosionPerform = false;
-			trackDraw = true;
 		}
 	}
 
@@ -303,7 +303,7 @@ namespace test
 	}
 
 	void TestNoiseMesh::PrintTrack(glm::mat4& model) {
-		if (trackDraw) {
+		if (trackDraw && traceVertices) {
 		    m_TrackVAO->Bind();
 			m_TrackBuffer->UpdateData(traceVertices, (erosion.getConfigRef().dropletLifetime + 1) * erosion.getDropletCountRef() * 3 * sizeof(float));
 			m_TrackShader->SetMVP(model, *camera.GetViewMatrix(), *camera.GetProjectionMatrix());
