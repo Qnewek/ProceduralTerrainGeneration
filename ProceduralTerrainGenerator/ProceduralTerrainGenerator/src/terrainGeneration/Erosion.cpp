@@ -69,6 +69,7 @@ namespace erosion {
 	}
 
 	//Terraforming functions
+	//Pass std::nullopt if you dont want to track droplets
 	void Erosion::Erode(float* map, std::optional<float*> Track)
 	{
 		ListNode* dropletsHead = nullptr;
