@@ -4,15 +4,18 @@
 
 //http://www.firespark.de/resources/downloads/implementation%20of%20a%20methode%20for%20hydraulic%20erosion.pdf
 
+
+
 namespace erosion {
+	static const bool log = false;
 
 	struct ErosionConfig {
 		//Erosion parameters
-		float erosionRate = 0.7f;
+		float erosionRate = 0.1f;
 		float minSlope = 0.0001f;
 		float gravity = 10.0f;
-		float inertia = 0.3f;
-		float depositionRate = 0.2f;
+		float inertia = 0.1f;
+		float depositionRate = 0.5f;
 		float evaporationRate = 0.01f;
 		int dropletLifetime = 64;
 		int erosionRadius = 4;
@@ -20,7 +23,7 @@ namespace erosion {
 		//Initial values
 		float initialWater = 1.0f;
 		float initialVelocity = 1.0f;
-		float initialCapacity = 8.0f;
+		float initialCapacity = 1.0f;
 	};
 
 	struct vec2 {
@@ -58,7 +61,7 @@ namespace erosion {
 
 	private:
 		int width, height;
-		int dropletCount = 10;
+		int dropletCount = 1;
 		ErosionConfig config;
 	};
 
