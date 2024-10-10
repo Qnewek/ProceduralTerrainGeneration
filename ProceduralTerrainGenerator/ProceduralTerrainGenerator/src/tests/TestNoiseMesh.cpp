@@ -11,7 +11,7 @@
 
 namespace test
 {
-	TestNoiseMesh::TestNoiseMesh() :height(200), width(200), stride(8),
+	TestNoiseMesh::TestNoiseMesh() :height(500), width(500), stride(8),
 		meshVertices(nullptr), meshIndices(nullptr), traceVertices(nullptr),
 		noise(width, height), biomeNoise(width, height), 
 		erosionWindow(false), erosionPerform(false), testSymmetrical(false), trackDraw(false),
@@ -286,7 +286,7 @@ namespace test
 
 			m_TrackBuffer = std::make_unique<VertexBuffer>(traceVertices, (erosion.getConfigRef().dropletLifetime + 1) * erosion.getDropletCountRef() * 3 * sizeof(float));
 
-			utilities::PerformErosion(meshVertices, trackDraw ? std::optional<float*>(traceVertices) : std::nullopt, stride, 1, noise.getMap(), erosion);
+			utilities::PerformErosion(meshVertices, meshIndices, trackDraw ? std::optional<float*>(traceVertices) : std::nullopt, stride, 1, noise.getMap(), erosion);
 			m_VertexBuffer->UpdateData(meshVertices, (height * width) * stride * sizeof(float));
 			erosionPerform = false;
 		}

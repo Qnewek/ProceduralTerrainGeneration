@@ -12,14 +12,17 @@ namespace erosion {
 	struct ErosionConfig {
 		//Erosion parameters
 		float erosionRate = 0.1f;
-		float minSlope = 0.0001f;
-		float gravity = 10.0f;
-		float inertia = 0.1f;
 		float depositionRate = 0.5f;
 		float evaporationRate = 0.01f;
-		int dropletLifetime = 64;
-		int erosionRadius = 4;
+		
+		float gravity = 0.1f;
+		float inertia = 0.1f;
+		
+		float minSlope = 0.0f;
+		int erosionRadius = 3;
 		float blur = 0.0f;
+		
+		int dropletLifetime = 64;
 		//Initial values
 		float initialWater = 1.0f;
 		float initialVelocity = 1.0f;
@@ -47,7 +50,7 @@ namespace erosion {
 		float getElevationDifference(float* map, vec2 posOld, vec2 posNew);
 		float getInterpolatedGridHeight(float* map, vec2 pos);
 		void distributeSediment(float* map, vec2 pos, float sedimentDropped);
-		float erodeRadius(float* map, vec2 pos, float ammountEroded);
+		float erodeRadius(float* map, vec2 oldPos, vec2 newPos, float ammountEroded);
 		bool isOnMap(vec2 pos);
 		void trackDroplets(float* vertices, float* map, vec2 pos, int step);
 

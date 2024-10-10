@@ -157,7 +157,7 @@ namespace erosion {
 						}
 						else {
 							sedimentToCollect = -sedimentToCollect;
-							dropletCurrent->d->adjustSediment(erodeRadius(map, oldPosition, sedimentToCollect));
+							dropletCurrent->d->adjustSediment(erodeRadius(map, oldPosition, dropletCurrent->d->getPosition(), sedimentToCollect));
 						}
 
 					}
@@ -253,7 +253,7 @@ namespace erosion {
 		map[(y + 1) * width + x + 1] += v * u * sedimentDropped;   //P(x+1, y+1) * v * u southEast point of the cell
 	}
 
-	float Erosion::erodeRadius(float* map, vec2 pos, float ammountEroded) {
+	float Erosion::erodeRadius(float* map, vec2 oldPos, vec2 newPos, float ammountEroded) {
 		//Erode the terrain in a circular radius around the droplet
 		//Its done due to the fact that no thermal erosion or sediment sliding is simulated in this project
 		//In order to perform mentioned above action we need to calculate weights of each point within the radius
@@ -264,21 +264,26 @@ namespace erosion {
 		float weight;
 		std::queue<vec2i_f> weights;
 
-		for (int y = static_cast<int>(pos.y) - config.erosionRadius; y < static_cast<int>(pos.y) + config.erosionRadius; y++) {
-			for (int x = static_cast<int>(pos.x) - config.erosionRadius; x < static_cast<int>(pos.x) + config.erosionRadius; x++) {
+		for (int y = static_cast<int>(oldPos.y) - config.erosionRadius; y < static_cast<int>(oldPos.y) + config.erosionRadius; y++) {
+			for (int x = static_cast<int>(oldPos.x) - config.erosionRadius; x < static_cast<int>(oldPos.x) + config.erosionRadius; x++) {
 				if (x >= 0 && y >= 0 && x < width && y < height) {
 					//Calculate the distance from the droplet to the current point on the map
-					deltax = x - pos.x;
-					deltay = y - pos.y;
+					deltax = x - oldPos.x;
+					deltay = y - oldPos.y;
 					float distance = sqrtf(deltax * deltax + deltay * deltay);
-					//Check if the distance is within the erosion radius and if the point has enough material to erode
-					if (distance < config.erosionRadius && map[y * width + x] > 0.0f) {
+					//Check if the distance is within the erosion radius and if the point is higher than new position
+					if (distance < config.erosionRadius && map[y * width + x] > map[static_cast<int>(newPos.y) * width + static_cast<int>(newPos.x)]) {
 						weight = 1.0f - (distance / config.erosionRadius);
 						weightSum += weight;
 						weights.push({ y * width + x, weight });
 					}
 				}
 			}
+		}
+
+		if (log) {
+			std::cout << "---------------Eroding-Radius---------------\n"
+						 "Number of points in the radius: " << weights.size() << std::endl;
 		}
 
 		float totalErosion = 0.0f;
@@ -293,6 +298,14 @@ namespace erosion {
 			map[weights.front().index] += (1-config.blur) * newMapValue;
 			totalErosion += (1-config.blur) * possibleErosion;
 			weights.pop();
+
+			if (log) {
+				std::cout << "[LOG] Eroded: " << possibleErosion << std::endl;
+			}
+		}
+
+		if (log) {
+			std::cout << "--------------------------------------------\n";
 		}
 		return totalErosion;
 	}
@@ -371,14 +384,14 @@ namespace erosion {
 		//Formula used: water(new) = water(old) * (1 - evaporationRate)
 		this->water *= (1 - evaporationRate);
 		if (log) {
-			std::cout << "[LOG] Evaporated: " << this->water << std::endl;
+			std::cout << "[LOG] Water: " << this->water << std::endl;
 		}
 	}
 
 	float Droplet::adjustCapacity(float minSlope, float erosionRate, float depositionRate, float elevationDifference)
 	{
 		//Droplet adjusts its capacity based on parameters: water, velocity, minSlope and elevationDifference
-		this->capacity = std::max(-elevationDifference * this->velocity * this->water * this->capacity, minSlope) ;
+		this->capacity = std::max(-elevationDifference, minSlope) * this->velocity * this->water;
 
 		if (log) {
 			std::cout << "[LOG] Capacity: " << this->capacity << std::endl;
