@@ -77,13 +77,16 @@ namespace utilities
 		}
 	}
 
-	void PerformErosion(float* vertices, std::optional<float*> Track, int stride, int offset, float* map, erosion::Erosion& erosion) {
+	void PerformErosion(float* vertices, unsigned int* indices, std::optional<float*> Track, int stride, int offset, float* map, erosion::Erosion& erosion) {
 		erosion.Erode(map, Track);
 		for (int y = 0; y < erosion.getHeight(); y++) {
 			for (int x = 0; x < erosion.getWidth(); x++) {
 				vertices[((y * erosion.getWidth()) + x) * stride + offset] = map[y * erosion.getWidth() + x];
 			}
 		}
+		InitializeNormals(vertices, stride, 3, erosion.getHeight() * erosion.getWidth());
+		CalculateNormals(vertices, indices, stride, 3, (erosion.getWidth() - 1) * (erosion.getHeight() - 1) * 6);
+		NormalizeVector3f(vertices, stride, 3, erosion.getWidth() * erosion.getHeight());
 	}
 
 	void SimpleMeshIndicies(unsigned int* indices, int width, int height) {
