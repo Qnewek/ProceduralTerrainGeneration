@@ -62,6 +62,8 @@ namespace test
 		std::unique_ptr < Texture> m_Texture;
 		std::unique_ptr < VertexBuffer> m_VertexBuffer;
 
+		std::unique_ptr<VertexBuffer> erosionBuffer;
+
 		std::unique_ptr < VertexBuffer> m_TrackBuffer;
 		std::unique_ptr < Shader> m_TrackShader;
 		std::unique_ptr < VertexArray> m_TrackVAO;
