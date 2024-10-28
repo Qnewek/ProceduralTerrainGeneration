@@ -15,7 +15,7 @@ namespace utilities
 	void ConvertToGrayscaleImage(float* data, unsigned char* image, int width, int height);
 	void SimpleMeshIndicies(unsigned int* indices, int width, int height);
 	void GenCubeLayout(float* vertices, unsigned int* indices);
-    void parseNoiseIntoVertices(float* vertices, noise::SimplexNoiseClass& noise, unsigned int stride, unsigned int offset);
+    void parseNoiseIntoVertices(float* vertices, int width, int height, float* map, unsigned int stride, unsigned int offset);
 
     void InitializeNormals(float* vertices, unsigned int stride, unsigned int offSet, unsigned int verticesCount);
     void CalculateNormals(float* vertices, unsigned int* indices, unsigned int stride, unsigned int offSet, unsigned int indexSize);
