@@ -55,7 +55,7 @@ namespace utilities
 	void CreateTerrainMesh(noise::SimplexNoiseClass &noise, float* vertices, unsigned int* indices, unsigned int stride, bool normals, bool first)
 	{
 		noise.generateFractalNoise();
-		parseNoiseIntoVertices(vertices, noise, stride, 0);
+		parseNoiseIntoVertices(vertices, noise.getWidth(), noise.getHeight(), noise.getMap(), stride, 0);
 		if (first)
 			SimpleMeshIndicies(indices, noise.getWidth(), noise.getHeight());
 		if (normals) {
@@ -65,25 +65,21 @@ namespace utilities
 		}
 	}
 
-	void parseNoiseIntoVertices(float* vertices, noise::SimplexNoiseClass &noise, unsigned int stride, unsigned int offset) {
-		for (int y = 0; y < noise.getHeight(); y++)
+	void parseNoiseIntoVertices(float* vertices, int width, int height, float* map, unsigned int stride, unsigned int offset) {
+		for (int y = 0; y < height; y++)
 		{
-			for (int x = 0; x < noise.getWidth(); x++)
+			for (int x = 0; x < width; x++)
 			{
-				vertices[((y * noise.getWidth()) + x) * stride + offset    ] = x / (float)noise.getWidth();
-				vertices[((y * noise.getWidth()) + x) * stride + offset + 1] = noise.getMap()[y * noise.getWidth() + x];
-				vertices[((y * noise.getWidth()) + x) * stride + offset + 2] = y / (float)noise.getHeight();
+				vertices[((y * width) + x) * stride + offset    ] = x / (float)width;
+				vertices[((y * width) + x) * stride + offset + 1] = map[y * width + x];
+				vertices[((y * width) + x) * stride + offset + 2] = y / (float)height;
 			}
 		}
 	}
 
 	void PerformErosion(float* vertices, unsigned int* indices, std::optional<float*> Track, int stride, int offset, float* map, erosion::Erosion& erosion) {
 		erosion.Erode(map, Track);
-		for (int y = 0; y < erosion.getHeight(); y++) {
-			for (int x = 0; x < erosion.getWidth(); x++) {
-				vertices[((y * erosion.getWidth()) + x) * stride + offset] = map[y * erosion.getWidth() + x];
-			}
-		}
+		parseNoiseIntoVertices(vertices, erosion.getWidth(), erosion.getHeight(), map, stride, 0);
 		InitializeNormals(vertices, stride, 3, erosion.getHeight() * erosion.getWidth());
 		CalculateNormals(vertices, indices, stride, 3, (erosion.getWidth() - 1) * (erosion.getHeight() - 1) * 6);
 		NormalizeVector3f(vertices, stride, 3, erosion.getWidth() * erosion.getHeight());

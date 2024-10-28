@@ -12,9 +12,9 @@
 namespace test
 {
 	TestNoiseMesh::TestNoiseMesh() :height(500), width(500), stride(8),
-		meshVertices(nullptr), meshIndices(nullptr), traceVertices(nullptr),
+		meshVertices(nullptr), meshIndices(nullptr), traceVertices(nullptr), erosionVertices(nullptr),
 		noise(width, height), biomeNoise(width, height), 
-		erosionWindow(false), erosionPerform(false), testSymmetrical(false), trackDraw(false),
+		erosionWindow(false), erosionPerform(false), testSymmetrical(false), trackDraw(false), erosionDraw(false),
 		lightSource(), seed(0), erosion(width, height),
 		deltaTime(0.0f), lastFrame(0.0f), camera(800, 600)
 	{
@@ -39,12 +39,13 @@ namespace test
 		m_Shader = std::make_unique<Shader>("res/shaders/Lightning_vertex.shader", "res/shaders/Lightning_fragment.shader");
 		m_Texture = std::make_unique<Texture>("res/textures/Basic_biome_texture_palette.jpg");
 
+		erosionBuffer = std::make_unique<VertexBuffer>(erosionVertices, (height * width) * stride * sizeof(float));
+
 		//Layout of the vertex buffer
 		//Succesively: 
 		// 3 floats for position [x,y,z], 
 		// 3 floats for normal vector indicating direction the vertex faces
 		// 2 floats for texture coordinates based on height
-		VertexBufferLayout layout;
 		layout.Push<float>(3);
 		layout.Push<float>(3);
 		layout.Push<float>(2);
@@ -60,6 +61,7 @@ namespace test
 		delete[] meshVertices;
 		delete[] meshIndices;
 		delete[] traceVertices;
+		delete[] erosionVertices;
 	}
 
 	void TestNoiseMesh::OnUpdate(float deltaTime)
@@ -94,9 +96,20 @@ namespace test
 		lightSource.Draw(renderer, *camera.GetViewMatrix(), *camera.GetProjectionMatrix());
 		//Render terrain
 		m_Texture->Bind();
+		m_VertexBuffer->Bind();
+		m_VAO->AddBuffer(*m_VertexBuffer, layout);
 		renderer.DrawWithTexture(*m_VAO, *m_IndexBuffer, *m_Shader);
 
-		PrintTrack(model);
+		if (erosionDraw) {
+			model = glm::translate(model, glm::vec3(1.2f, 0.0f, 0.0f));
+			erosionBuffer->Bind();
+			m_Shader->SetMVP(model, *camera.GetViewMatrix(), *camera.GetProjectionMatrix());
+			
+			m_VAO->AddBuffer(*erosionBuffer, layout);
+			renderer.Draw(*m_VAO, *m_IndexBuffer, *m_Shader);
+			PrintTrack(model);
+			erosionBuffer->Unbind();
+		}
 
 		if (testSymmetrical)
 			DrawAdjacent(renderer, model);
@@ -253,6 +266,7 @@ namespace test
 				traceVertices = nullptr;
 			}
 			trackDraw = false;
+			erosionDraw = false;
 		}
 	}
 
@@ -284,11 +298,19 @@ namespace test
 				}
 			}
 
+			if (!erosionVertices) {
+				erosionVertices = new float[width * height * stride];
+			}
+
 			m_TrackBuffer = std::make_unique<VertexBuffer>(traceVertices, (erosion.getConfigRef().dropletLifetime + 1) * erosion.getDropletCountRef() * 3 * sizeof(float));
 
-			utilities::PerformErosion(meshVertices, meshIndices, trackDraw ? std::optional<float*>(traceVertices) : std::nullopt, stride, 1, noise.getMap(), erosion);
-			m_VertexBuffer->UpdateData(meshVertices, (height * width) * stride * sizeof(float));
+			utilities::benchmark_void(utilities::PerformErosion, "PerformErosion", erosionVertices, meshIndices, trackDraw ? std::optional<float*>(traceVertices) : std::nullopt, stride, 1, noise.getMap(), erosion);
+			utilities::PaintBiome(erosionVertices, noise, biomeNoise, stride, 6);
+			erosionBuffer->UpdateData(erosionVertices, (height * width) * stride * sizeof(float));
+			std::cout << erosionVertices[0]<< " " << erosionVertices[1] << " " << erosionVertices[2] << std::endl;
+			std::cout << erosionVertices[3] << " " << erosionVertices[4] << " " << erosionVertices[5] << std::endl;
 			erosionPerform = false;
+			erosionDraw = true;
 		}
 	}
 

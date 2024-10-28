@@ -34,7 +34,7 @@ namespace test
 
 	private:
 		//Perlin Noise generation parameters
-		float* meshVertices;
+		float* meshVertices, *erosionVertices;
 		unsigned int* meshIndices;
 		unsigned int width, height, stride;
 		int seed;
@@ -48,12 +48,14 @@ namespace test
 		bool testSymmetrical;
 		bool erosionPerform;
 		bool trackDraw;
+		bool erosionDraw;
 
 		Camera camera;
 		LightSource lightSource;
 		noise::SimplexNoiseClass noise;
 		noise::SimplexNoiseClass biomeNoise;
 		erosion::Erosion erosion;
+		VertexBufferLayout layout;
 
 		//OpenGL stuff
 		std::unique_ptr<VertexArray> m_VAO;
