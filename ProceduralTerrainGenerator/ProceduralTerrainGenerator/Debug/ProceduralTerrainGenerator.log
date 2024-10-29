@@ -1,8 +1,6 @@
 ﻿  Scanning sources for module dependencies...
-  utilities.cpp
-C:\Users\Dawid\Documents\JakiesPopierdulki\Studia\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\utility\utilities.cpp(104,21): warning C4018: '<': signed/unsigned mismatch
-C:\Users\Dawid\Documents\JakiesPopierdulki\Studia\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\utility\utilities.cpp(105,22): warning C4018: '<': signed/unsigned mismatch
-C:\Users\Dawid\Documents\JakiesPopierdulki\Studia\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\utility\utilities.cpp(114,21): warning C4018: '<': signed/unsigned mismatch
-C:\Users\Dawid\Documents\JakiesPopierdulki\Studia\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\utility\utilities.cpp(127,21): warning C4018: '<': signed/unsigned mismatch
-C:\Users\Dawid\Documents\JakiesPopierdulki\Studia\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\utility\utilities.cpp(155,21): warning C4018: '<': signed/unsigned mismatch
+  Application.cpp
+  TestNoiseMesh.cpp
+  LightSource.cpp
+  Generating Code...
   ProceduralTerrainGenerator.vcxproj -> C:\Users\Dawid\Documents\JakiesPopierdulki\Studia\ProceduralTerrainGeneration\ProceduralTerrainGenerator\Debug\ProceduralTerrainGenerator.exe

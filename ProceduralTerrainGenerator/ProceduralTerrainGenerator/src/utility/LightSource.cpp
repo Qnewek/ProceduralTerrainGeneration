@@ -8,8 +8,8 @@
 #include <memory>
 #include <iostream>
 
-LightSource::LightSource() :vertices(new float[24]), indices(new unsigned int[36]),
-	lightPos(glm::vec3(1.2f, 1.0f, 2.0f))
+LightSource::LightSource(glm::vec3 lightPos) :vertices(new float[24]), indices(new unsigned int[36]),
+	lightPos(lightPos)
 {
 	utilities::GenCubeLayout(vertices, indices);
 
