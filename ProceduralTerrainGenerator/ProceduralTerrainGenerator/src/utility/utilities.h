@@ -24,6 +24,7 @@ namespace utilities
 	
     void CreateTerrainMesh(noise::SimplexNoiseClass& noise, float* vertices, unsigned int* indices, unsigned int stride, bool normals, bool first);
 	void PaintBiome(float* vertices, noise::SimplexNoiseClass& noiseHeights, noise::SimplexNoiseClass& noiseBiome, unsigned int stride, unsigned int offset);
+    void PaintGrey(float* vertices, int width, int height, unsigned int stride, unsigned int offset);
     void PerformErosion(float* vertices, unsigned int* indices, std::optional<float*> Track, int stride, int offset, float* map, erosion::Erosion& erosion);
 
     template <typename Func, typename... Args>

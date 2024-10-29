@@ -27,15 +27,24 @@ uniform sampler2D u_Texture;
 
 void main()
 {
-    // ambient
-    vec3 ambient = light.ambient * texture(u_Texture, TexCoords).rgb;
-  	
-    // diffuse 
+    vec3 ambient;
+    vec3 diffuse;
     vec3 norm = normalize(Normal);
     vec3 lightDir = normalize(light.position - FragPos);
-    float diff = max(dot(norm, lightDir), 0.0);
-    vec3 diffuse = light.diffuse * diff * texture(u_Texture, TexCoords).rgb;
-    
+
+    if (TexCoords.x < 0.0 && TexCoords.y < 0.0)
+    {
+        ambient = light.ambient * vec3(0.6, 0.6, 0.6);
+        float diff = max(dot(norm, lightDir), 0.0);
+        diffuse = light.diffuse * diff * vec3(0.6, 0.6, 0.6);
+    }
+    else
+    {
+        ambient = light.ambient * texture(u_Texture, TexCoords).rgb;
+        float diff = max(dot(norm, lightDir), 0.0);
+        diffuse = light.diffuse * diff * texture(u_Texture, TexCoords).rgb;
+    }
+
     // specular
     vec3 viewDir = normalize(viewPos - FragPos);
     vec3 reflectDir = reflect(-lightDir, norm);  

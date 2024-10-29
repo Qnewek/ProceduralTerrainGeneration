@@ -109,6 +109,15 @@ namespace utilities
 			}
 		}
 	}
+	void PaintGrey(float* vertices, int width, int height, unsigned int stride, unsigned int offset) {
+		for (int y = 0; y < height; y++) {
+			for (int x = 0; x < width; x++)
+			{
+				vertices[((y * width) + x) * stride + offset] = -1.0f;
+				vertices[((y * width) + x) * stride + offset + 1] = -1.0f;
+			}
+		}
+	}
 
 	void InitializeNormals(float* vertices, unsigned int stride, unsigned int offSet, unsigned int verticesCount) {
 		for (int i = 0; i < verticesCount; i++) {

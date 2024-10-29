@@ -82,5 +82,10 @@ namespace test
 			prevCheckers(noise::Options prevOpt = noise::Options::REVERT_NEGATIVES, noise::IslandType prevIslandType = noise::IslandType::CONE, float prevCheckSum = 0, bool prevRidge = false, bool prevIsland = false, bool symmetrical = false, int seed = 0)
 				: prevOpt(prevOpt), prevCheckSum(prevCheckSum), prevRidge(prevRidge), prevIsland(prevIsland), prevIslandType(prevIslandType), seed(seed), symmetrical(symmetrical){}
 		} prevCheck;
+
+		enum color {
+			MONO,
+			PSEUDO_BIOME
+		} meshColor;
 	};
 }

@@ -15,7 +15,7 @@ namespace test
 		meshVertices(nullptr), meshIndices(nullptr), traceVertices(nullptr), erosionVertices(nullptr),
 		noise(width, height), biomeNoise(width, height), 
 		erosionWindow(false), erosionPerform(false), testSymmetrical(false), trackDraw(false), erosionDraw(false),
-		lightSource(), seed(0), erosion(width, height),
+		lightSource(glm::vec3(2.0f, 1.0f, 2.0f)), seed(0), erosion(width, height), meshColor(MONO),
 		deltaTime(0.0f), lastFrame(0.0f), camera(800, 600)
 	{
 		//Update variable for checking the change in noise settings
@@ -30,8 +30,11 @@ namespace test
 		
 		//Simple biome based on fractal noise and sampling from texture
 		biomeNoise.generateFractalNoise();
-		utilities::PaintBiome(meshVertices, noise, biomeNoise, stride, 6);
-
+		if (meshColor == MONO)
+			utilities::PaintGrey(meshVertices, width, height, stride, 6);
+		else if (meshColor == PSEUDO_BIOME) {
+			utilities::PaintBiome(meshVertices, noise, biomeNoise, stride, 6);
+		}
 		//OpenGl setup for drawing the terrain
 		m_VAO = std::make_unique<VertexArray>();
 		m_VertexBuffer = std::make_unique<VertexBuffer>(meshVertices, (height * width) * stride * sizeof(float));
@@ -305,10 +308,13 @@ namespace test
 			m_TrackBuffer = std::make_unique<VertexBuffer>(traceVertices, (erosion.getConfigRef().dropletLifetime + 1) * erosion.getDropletCountRef() * 3 * sizeof(float));
 
 			utilities::benchmark_void(utilities::PerformErosion, "PerformErosion", erosionVertices, meshIndices, trackDraw ? std::optional<float*>(traceVertices) : std::nullopt, stride, 1, noise.getMap(), erosion);
-			utilities::PaintBiome(erosionVertices, noise, biomeNoise, stride, 6);
+			if (meshColor == MONO)
+				utilities::PaintGrey(erosionVertices, width, height, stride, 6);
+			else if (meshColor == PSEUDO_BIOME) {
+				utilities::PaintBiome(erosionVertices, noise, biomeNoise, stride, 6);
+			}
+
 			erosionBuffer->UpdateData(erosionVertices, (height * width) * stride * sizeof(float));
-			std::cout << erosionVertices[0]<< " " << erosionVertices[1] << " " << erosionVertices[2] << std::endl;
-			std::cout << erosionVertices[3] << " " << erosionVertices[4] << " " << erosionVertices[5] << std::endl;
 			erosionPerform = false;
 			erosionDraw = true;
 		}

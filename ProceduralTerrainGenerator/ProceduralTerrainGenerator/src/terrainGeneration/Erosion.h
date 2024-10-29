@@ -11,11 +11,11 @@ namespace erosion {
 
 	struct ErosionConfig {
 		//Erosion parameters
-		float erosionRate = 0.1f;
+		float erosionRate = 0.2f;
 		float depositionRate = 0.5f;
 		float evaporationRate = 0.01f;
 		
-		float gravity = 0.1f;
+		float gravity = 1.0f;
 		float inertia = 0.1f;
 		
 		float minSlope = 0.0f;
