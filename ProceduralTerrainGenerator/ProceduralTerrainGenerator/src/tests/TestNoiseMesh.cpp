@@ -11,20 +11,16 @@
 
 namespace test
 {
-	TestNoiseMesh::TestNoiseMesh() :height(300), width(300), stride(8),
-		meshVertices(nullptr), meshIndices(nullptr), traceVertices(nullptr), erosionVertices(nullptr),
-		noise(width, height), 
-		erosionWindow(false), erosionPerform(false), testSymmetrical(false), trackDraw(false), erosionDraw(false),
-		lightSource(glm::vec3(2.0f, 1.0f, 2.0f)), seed(0), erosion(width, height), meshColor(MONO),
-		deltaTime(0.0f), lastFrame(0.0f), camera(800, 600)
+	TestNoiseMesh::TestNoiseMesh() :height(300), width(300), stride(8), seed(0), meshColor(MONO),
+		erosionWindow(false), testSymmetrical(false), trackDraw(false), erosionDraw(false),
+		meshVertices(nullptr), traceVertices(nullptr), erosionVertices(nullptr), meshIndices(nullptr), 
+		noise(width, height), lightSource(glm::vec3(2.0f, 1.0f, 2.0f)), erosion(width, height), camera(800, 600),
+		deltaTime(0.0f), lastFrame(0.0f)
 	{
-		//Update variable for checking the change in noise settings
-		UpdatePrevCheckers();
-
 		// 6 indices per quad which is 2 triangles so there will be (width-1 * height-1 * 2) triangles
 		meshIndices = new unsigned int[(width - 1) * (height - 1) * 6];
 		meshVertices = new float[width * height * stride];
-
+		
 		//Initial fractal noise generation in order to draw something on the start of the test
 		utilities::benchmark_void(utilities::CreateTerrainMesh, "CreateTerrainMesh", noise, meshVertices, meshIndices, 8, true, true);
 		PaintMesh(noise.getMap(), meshVertices);
@@ -36,7 +32,8 @@ namespace test
 		m_Shader = std::make_unique<Shader>("res/shaders/Lightning_vertex.shader", "res/shaders/Lightning_fragment.shader");
 		m_Texture = std::make_unique<Texture>("res/textures/Basic_biome_texture_palette.jpg");
 		m_TrackShader = std::make_unique<Shader>("res/shaders/Trace_vertex.shader", "res/shaders/Trace_fragment.shader");
-		erosionBuffer = std::make_unique<VertexBuffer>(erosionVertices, (height * width) * stride * sizeof(float));
+		m_erosionBuffer = std::make_unique<VertexBuffer>(erosionVertices, (height * width) * stride * sizeof(float));
+		m_TrackVAO = std::make_unique<VertexArray>();
 
 		//Layout of the vertex buffer
 		//Succesively: 
@@ -47,7 +44,9 @@ namespace test
 		layout.Push<float>(3);
 		layout.Push<float>(2);
 
-		m_TrackVAO = std::make_unique<VertexArray>();
+
+		//Update variable for checking the change in noise settings
+		UpdatePrevCheckers();
 	}
 
 	TestNoiseMesh::~TestNoiseMesh()
@@ -76,14 +75,13 @@ namespace test
 
 		camera.SteerCamera(&window, deltaTime);
 		CheckChange();
-		PerformErosion();
 
-		//Translate model to be somewhere in the center of the screen at the time of first render
+		//Translate model to be in the center of the screen at the time of first render
 		glm::mat4 model = glm::mat4(1.0f);
 		model = glm::translate(model, glm::vec3(-0.5f, -0.25f, 0.0f));
 		
 		//Since we are using texture sampling we dont need to set ambient and diffuse color 
-		//but there is no function that takes only some parameters
+		//but there is only one function that needs them as a parameter
 		m_Shader->SetMaterialUniforms(glm::vec3(0.5f, 0.5f, 0.5f), glm::vec3(0.5f, 0.5f, 0.5f), glm::vec3(0.5f, 0.5f, 0.5f), 16.0f);
 		m_Shader->SetLightUniforms(lightSource.GetPosition(), glm::vec3(0.2f, 0.2f, 0.2f), glm::vec3(0.5f, 0.5f, 0.5f), glm::vec3(1.0f, 1.0f, 1.0f));
 		m_Shader->SetViewPos(camera.GetPosition());
@@ -91,22 +89,25 @@ namespace test
 
 		//Render lightning source cube
 		lightSource.Draw(renderer, *camera.GetViewMatrix(), *camera.GetProjectionMatrix());
+
 		//Render terrain
 		m_Texture->Bind();
 		m_VAO->AddBuffer(*m_VertexBuffer, layout);
 		renderer.DrawWithTexture(*m_VAO, *m_IndexBuffer, *m_Shader);
 
+		//Render erosion if the simulation was performed
 		if (erosionDraw) {
-			m_VAO->AddBuffer(*erosionBuffer, layout);
-
 			model = glm::translate(model, glm::vec3(1.2f, 0.0f, 0.0f));
-			
+
+			m_VAO->AddBuffer(*m_erosionBuffer, layout);
 			m_Shader->SetMVP(model, *camera.GetViewMatrix(), *camera.GetProjectionMatrix());
+
 			renderer.Draw(*m_VAO, *m_IndexBuffer, *m_Shader);
 			PrintTrack(model);
 		}
 
-		if (testSymmetrical)
+		//Render symmetrical noise if the option was chosen and the erosion was not simulated
+		if (testSymmetrical && !erosionDraw)
 			DrawAdjacent(renderer, model);
 	}
 
@@ -196,6 +197,7 @@ namespace test
 			ImGui::Checkbox("Test Symmetrical", &testSymmetrical);
 		}
 
+		//Enabling erosion settings window
 		if (ImGui::Button("Erosion")) {
 			erosionWindow = true;
 		}
@@ -232,19 +234,7 @@ namespace test
 			m_VertexBuffer->UpdateData(meshVertices, (height * width) * stride * sizeof(float));
 
 			//Deactivate erosion if it was active
-			if(traceVertices)
-			{
-				delete[] traceVertices;
-				traceVertices = nullptr;
-			}
-			if (erosionVertices)
-			{
-				delete[] erosionVertices;
-				erosionVertices = nullptr;
-			}
-			trackDraw = false;
-			erosionDraw = false;
-			erosionWindow = false;
+			DeactivateErosion();
 		}
 	}
 
@@ -279,10 +269,26 @@ namespace test
 
 	void TestNoiseMesh::PaintMesh(float* map, float* vertices) {
 		if (meshColor == MONO)
-			utilities::PaintGrey(vertices, width, height, stride, 6);
+			utilities::PaintNotByTexture(vertices, width, height, stride, 6);
 		else if (meshColor == PSEUDO_BIOME) {
 			utilities::PaintBiome(vertices, map, width, height, stride, 6);
 		}
+	}
+
+	void TestNoiseMesh::DeactivateErosion() {
+		if (traceVertices)
+		{
+			delete[] traceVertices;
+			traceVertices = nullptr;
+		}
+		if (erosionVertices)
+		{
+			delete[] erosionVertices;
+			erosionVertices = nullptr;
+		}
+		trackDraw = false;
+		erosionDraw = false;
+		erosionWindow = false;
 	}
 
 	//-------------------------------------------------------------------------------------
@@ -314,7 +320,7 @@ namespace test
 		ImGui::Checkbox("Show traces of droplets", &trackDraw);
 
 		if (ImGui::Button("Erode map")) {
-			erosionPerform = true;
+			PerformErosion();
 		}
 		ImGui::SameLine();
 		if (ImGui::Button("Reset")) {
@@ -327,35 +333,32 @@ namespace test
 
 	//Function performing erosion on the terrain mesh
 	void TestNoiseMesh::PerformErosion() {
-		if (erosionPerform) {
-			//If tracks of droplets are drawn we need to allocate memory for the trace vertices
-			if(trackDraw)
-			{
-				delete[] traceVertices;
-				traceVertices = new float[(erosion.getConfigRef().dropletLifetime + 1) * erosion.getDropletCountRef() * 3];
-				
-				for (int i = 0; i < (erosion.getConfigRef().dropletLifetime + 1) * erosion.getDropletCountRef() * 3; i++) {
-					traceVertices[i] = 0.0f;
-				}
-				m_TrackBuffer = std::make_unique<VertexBuffer>(traceVertices, (erosion.getConfigRef().dropletLifetime + 1) * erosion.getDropletCountRef() * 3 * sizeof(float));
+		//If tracks of droplets are drawn we need to allocate memory for the trace vertices
+		if(trackDraw)
+		{
+			delete[] traceVertices;
+			traceVertices = new float[(erosion.getConfigRef().dropletLifetime + 1) * erosion.getDropletCountRef() * 3];
+			
+			for (int i = 0; i < (erosion.getConfigRef().dropletLifetime + 1) * erosion.getDropletCountRef() * 3; i++) {
+				traceVertices[i] = 0.0f;
 			}
-
-			//If erosion vertices are not allocated we need to allocate memory for them
-			if (!erosionVertices) {
-				erosionVertices = new float[width * height * stride];
-			}
-
-			erosion.SetMap(noise.getMap());
-			utilities::benchmark_void(utilities::PerformErosion, "PerformErosion", erosionVertices, meshIndices, trackDraw ? std::optional<float*>(traceVertices) : std::nullopt, stride, 1, erosion);	
-			PaintMesh(erosion.getMap(), erosionVertices);
-
-			erosionBuffer->UpdateData(erosionVertices, (height * width) * stride * sizeof(float));
-			erosionPerform = false;
-			erosionDraw = true;
+			m_TrackBuffer = std::make_unique<VertexBuffer>(traceVertices, (erosion.getConfigRef().dropletLifetime + 1) * erosion.getDropletCountRef() * 3 * sizeof(float));
 		}
+
+		//If erosion vertices are not allocated we need to allocate memory for them
+		if (!erosionVertices) {
+			erosionVertices = new float[width * height * stride];
+		}
+
+		erosion.SetMap(noise.getMap());
+		utilities::benchmark_void(utilities::PerformErosion, "PerformErosion", erosionVertices, meshIndices, trackDraw ? std::optional<float*>(traceVertices) : std::nullopt, stride, 0, 3, erosion);	
+		PaintMesh(erosion.getMap(), erosionVertices);
+
+		m_erosionBuffer->UpdateData(erosionVertices, (height * width) * stride * sizeof(float));
+		erosionDraw = true;
 	}
 
-
+	//Function drawing tracks of droplets on the eroded terrain mesh
 	void TestNoiseMesh::PrintTrack(glm::mat4& model) {
 		if (trackDraw && traceVertices) {
 		    m_TrackVAO->Bind();
