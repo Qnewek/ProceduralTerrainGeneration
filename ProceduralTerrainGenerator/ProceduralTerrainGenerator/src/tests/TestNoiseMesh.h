@@ -31,6 +31,7 @@ namespace test
 		void UpdatePrevCheckers();
 		void DrawAdjacent(Renderer& renderer, glm::mat4& model);
 		void PaintMesh(float* map, float* vertices);
+		void DeactivateErosion();
 
 		//Erosion functions
 		void ErosionWindowRender();
@@ -42,16 +43,18 @@ namespace test
 		float* meshVertices, *erosionVertices, *traceVertices;
 		unsigned int* meshIndices;
 		
+		//Mesh variables
 		unsigned int width, height, stride;
 		int seed;
 
+		//Time variables
 		float deltaTime, lastFrame;
 
+		//Settings booleans
 		bool testSymmetrical;
 
 		//Erosion booleans
-		bool erosionWindow, erosionPerform;
-		bool trackDraw, erosionDraw;
+		bool erosionWindow, trackDraw, erosionDraw;
 
 		//Entities
 		Camera camera;
@@ -62,14 +65,18 @@ namespace test
 
 		//OpenGL stuff
 		std::unique_ptr<VertexArray> m_VAO;
-		std::unique_ptr < IndexBuffer> m_IndexBuffer;
-		std::unique_ptr < Shader> m_Shader;
-		std::unique_ptr < Texture> m_Texture;
-		std::unique_ptr < VertexBuffer> m_VertexBuffer;
-		std::unique_ptr<VertexBuffer> erosionBuffer;
-		std::unique_ptr < VertexBuffer> m_TrackBuffer;
-		std::unique_ptr < Shader> m_TrackShader;
-		std::unique_ptr < VertexArray> m_TrackVAO;
+		std::unique_ptr<VertexArray> m_TrackVAO;
+
+		std::unique_ptr<VertexBuffer> m_VertexBuffer;
+		std::unique_ptr<VertexBuffer> m_erosionBuffer;
+		std::unique_ptr<VertexBuffer> m_TrackBuffer;
+
+		std::unique_ptr<IndexBuffer> m_IndexBuffer;
+
+		std::unique_ptr<Shader> m_Shader;
+		std::unique_ptr<Shader> m_TrackShader;
+
+		std::unique_ptr<Texture> m_Texture;
 
 		struct prevCheckers {
 			noise::Options prevOpt;

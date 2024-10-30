@@ -12,21 +12,25 @@
 
 namespace utilities
 {
+	//Different utility functions
 	void ConvertToGrayscaleImage(float* data, unsigned char* image, int width, int height);
 	void SimpleMeshIndicies(unsigned int* indices, int width, int height);
 	void GenCubeLayout(float* vertices, unsigned int* indices);
     void parseNoiseIntoVertices(float* vertices, int width, int height, float* map, unsigned int stride, unsigned int offset);
 
+	//Functions for dealing with 3D vectors
     void InitializeNormals(float* vertices, unsigned int stride, unsigned int offSet, unsigned int verticesCount);
     void CalculateNormals(float* vertices, unsigned int* indices, unsigned int stride, unsigned int offSet, unsigned int indexSize);
 	void AddVector3f(float* vertices, unsigned int index, glm::vec3 vector3f);
 	void NormalizeVector3f(float* vertices, unsigned int stride, unsigned int offSet, unsigned int verticesCount);
 	
+	//Terrain generation functions
     void CreateTerrainMesh(noise::SimplexNoiseClass& noise, float* vertices, unsigned int* indices, unsigned int stride, bool normals, bool first);
+    void PerformErosion(float* vertices, unsigned int* indices, std::optional<float*> Track, int stride, int positionsOffset, int normalsOffset, erosion::Erosion& erosion);
     void PaintBiome(float* vertices, float* map, int width, int height, unsigned int stride, unsigned int offset);
-    void PaintGrey(float* vertices, int width, int height, unsigned int stride, unsigned int offset);
-    void PerformErosion(float* vertices, unsigned int* indices, std::optional<float*> Track, int stride, int offset, erosion::Erosion& erosion);
+    void PaintNotByTexture(float* vertices, int width, int height, unsigned int stride, unsigned int offset);
 
+	//Benchmarking function
     template <typename Func, typename... Args>
     void benchmark_void(Func func, std::string funcName, Args&&... args) {
         auto start = std::chrono::high_resolution_clock::now();
