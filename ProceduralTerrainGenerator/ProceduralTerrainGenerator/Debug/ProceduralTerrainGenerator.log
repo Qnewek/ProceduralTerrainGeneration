@@ -2,5 +2,9 @@
   Application.cpp
   TestNoiseMesh.cpp
   LightSource.cpp
+  utilities.cpp
+C:\Users\Dawid\Documents\JakiesPopierdulki\Studia\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\utility\utilities.cpp(125,21): warning C4018: '<': signed/unsigned mismatch
+C:\Users\Dawid\Documents\JakiesPopierdulki\Studia\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\utility\utilities.cpp(138,21): warning C4018: '<': signed/unsigned mismatch
+C:\Users\Dawid\Documents\JakiesPopierdulki\Studia\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\utility\utilities.cpp(166,21): warning C4018: '<': signed/unsigned mismatch
   Generating Code...
   ProceduralTerrainGenerator.vcxproj -> C:\Users\Dawid\Documents\JakiesPopierdulki\Studia\ProceduralTerrainGeneration\ProceduralTerrainGenerator\Debug\ProceduralTerrainGenerator.exe

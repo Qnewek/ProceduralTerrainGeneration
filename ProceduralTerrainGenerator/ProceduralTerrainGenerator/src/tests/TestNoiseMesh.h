@@ -21,39 +21,42 @@ namespace test
 		TestNoiseMesh();
 		~TestNoiseMesh();
 
+		//Main functions
 		void OnUpdate(float deltaTime) override;
 		void OnRender(GLFWwindow& window, Renderer& renderer) override;
 		void OnImGuiRender() override;
-		void ErosionWindowRender();
 
-		void DrawAdjacent(Renderer& renderer, glm::mat4& model);
+		//Auxiliary functions
 		void CheckChange();
-		void PerformErosion();
 		void UpdatePrevCheckers();
+		void DrawAdjacent(Renderer& renderer, glm::mat4& model);
+		void PaintMesh(float* map, float* vertices);
+
+		//Erosion functions
+		void ErosionWindowRender();
+		void PerformErosion();
 		void PrintTrack(glm::mat4& model);
 
 	private:
-		//Perlin Noise generation parameters
-		float* meshVertices, *erosionVertices;
+		//Vertices and indices arrays
+		float* meshVertices, *erosionVertices, *traceVertices;
 		unsigned int* meshIndices;
+		
 		unsigned int width, height, stride;
 		int seed;
 
-		float* traceVertices;
+		float deltaTime, lastFrame;
 
-		float deltaTime;
-		float lastFrame;
-
-		bool erosionWindow;
 		bool testSymmetrical;
-		bool erosionPerform;
-		bool trackDraw;
-		bool erosionDraw;
 
+		//Erosion booleans
+		bool erosionWindow, erosionPerform;
+		bool trackDraw, erosionDraw;
+
+		//Entities
 		Camera camera;
 		LightSource lightSource;
 		noise::SimplexNoiseClass noise;
-		noise::SimplexNoiseClass biomeNoise;
 		erosion::Erosion erosion;
 		VertexBufferLayout layout;
 
@@ -63,9 +66,7 @@ namespace test
 		std::unique_ptr < Shader> m_Shader;
 		std::unique_ptr < Texture> m_Texture;
 		std::unique_ptr < VertexBuffer> m_VertexBuffer;
-
 		std::unique_ptr<VertexBuffer> erosionBuffer;
-
 		std::unique_ptr < VertexBuffer> m_TrackBuffer;
 		std::unique_ptr < Shader> m_TrackShader;
 		std::unique_ptr < VertexArray> m_TrackVAO;

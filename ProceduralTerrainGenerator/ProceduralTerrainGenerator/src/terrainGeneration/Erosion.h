@@ -45,26 +45,31 @@ namespace erosion {
 		Erosion(int width, int height);
 		~Erosion();
 
-		void Erode(float* map, std::optional<float*> Track);
-		vec2 getGradient(float* map, vec2 pos);
-		float getElevationDifference(float* map, vec2 posOld, vec2 posNew);
-		float getInterpolatedGridHeight(float* map, vec2 pos);
-		void distributeSediment(float* map, vec2 pos, float sedimentDropped);
-		float erodeRadius(float* map, vec2 oldPos, vec2 newPos, float ammountEroded);
+		void Erode(std::optional<float*> Track);
+		vec2 getGradient(vec2 pos);
+		float getElevationDifference(vec2 posOld, vec2 posNew);
+		float getInterpolatedGridHeight(vec2 pos);
+		void distributeSediment(vec2 pos, float sedimentDropped);
+		float erodeRadius(vec2 oldPos, vec2 newPos, float ammountEroded);
 		bool isOnMap(vec2 pos);
-		void trackDroplets(float* vertices, float* map, vec2 pos, int step);
+		void trackDroplets(float* vertices, vec2 pos, int step);
 
 		void SetConfig(ErosionConfig config);
 		void Resize(int width, int height);
+		void SetMap(float* map);
 
 		ErosionConfig& getConfigRef();
 		int& getDropletCountRef() { return dropletCount; }
 		int getWidth() { return width; }
 		int getHeight() { return height; }
+		float* getMap() { return map; }
 
 	private:
+		float* map;
+
 		int width, height;
 		int dropletCount = 1;
+
 		ErosionConfig config;
 	};
 
