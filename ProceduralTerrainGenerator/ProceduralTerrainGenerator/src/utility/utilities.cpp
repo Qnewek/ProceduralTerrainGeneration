@@ -77,9 +77,9 @@ namespace utilities
 		}
 	}
 
-	void PerformErosion(float* vertices, unsigned int* indices, std::optional<float*> Track, int stride, int offset, float* map, erosion::Erosion& erosion) {
-		erosion.Erode(map, Track);
-		parseNoiseIntoVertices(vertices, erosion.getWidth(), erosion.getHeight(), map, stride, 0);
+	void PerformErosion(float* vertices, unsigned int* indices, std::optional<float*> Track, int stride, int offset, erosion::Erosion& erosion) {
+		erosion.Erode(Track);
+		parseNoiseIntoVertices(vertices, erosion.getWidth(), erosion.getHeight(), erosion.getMap(), stride, 0);
 		InitializeNormals(vertices, stride, 3, erosion.getHeight() * erosion.getWidth());
 		CalculateNormals(vertices, indices, stride, 3, (erosion.getWidth() - 1) * (erosion.getHeight() - 1) * 6);
 		NormalizeVector3f(vertices, stride, 3, erosion.getWidth() * erosion.getHeight());
@@ -100,12 +100,14 @@ namespace utilities
 		}
 	}
 
-	void PaintBiome(float* vertices, noise::SimplexNoiseClass &noiseHeights, noise::SimplexNoiseClass &noiseBiome, unsigned int stride, unsigned int offset) {
-		for (int y = 0; y < noiseHeights.getHeight(); y++) {
-			for (int x = 0; x < noiseHeights.getWidth(); x++)
+	void PaintBiome(float* vertices, float* map, int width, int height, unsigned int stride, unsigned int offset) {
+		noise::SimplexNoiseClass noiseBiome(width, height);
+		noiseBiome.generateFractalNoise();
+		for (int y = 0; y < height; y++) {
+			for (int x = 0; x < width; x++)
 			{
-				vertices[((y * noiseHeights.getWidth()) + x) * stride + offset]		= noiseBiome.getMap()	[y * noiseHeights.getWidth() + x] > 0.0f ? noiseBiome.getMap()	[y * noiseHeights.getWidth() + x] : 0.0f;
-				vertices[((y * noiseHeights.getWidth()) + x) * stride + offset + 1] = noiseHeights.getMap()	[y * noiseHeights.getWidth() + x] > 0.0f ? noiseHeights.getMap()[y * noiseHeights.getWidth() + x] : 0.0f;
+				vertices[((y * width) + x) * stride + offset]		= noiseBiome.getMap()	[y * width + x] > 0.0f ? noiseBiome.getMap()	[y * width + x] : 0.0f;
+				vertices[((y * width) + x) * stride + offset + 1] = map	[y * width + x] > 0.0f ? map[y * width + x] : 0.0f;
 			}
 		}
 	}

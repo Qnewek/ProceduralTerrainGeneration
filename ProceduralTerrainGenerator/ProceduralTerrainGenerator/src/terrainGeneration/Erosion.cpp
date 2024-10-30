@@ -37,7 +37,7 @@ namespace erosion {
 		}
 	};
 
-	Erosion::Erosion(int width, int height) : width(width), height(height)
+	Erosion::Erosion(int width, int height) : width(width), height(height), map(nullptr)
 	{
 	}
 
@@ -57,20 +57,28 @@ namespace erosion {
 		this->height = height;
 	}
 
+	void Erosion::SetMap(float* _map)
+	{
+		delete[] map;
+		this->map = new float[width * height];
+
+		std::copy(_map, _map + (width * height), this->map);
+	}
+
 	ErosionConfig& Erosion::getConfigRef()
 	{
 		return config;
 	}
 
-	void Erosion::trackDroplets(float* vertices, float* map, vec2 pos, int step) {
+	void Erosion::trackDroplets(float* vertices, vec2 pos, int step) {
 		vertices[step * 3] = pos.x / width;
-		vertices[step * 3 + 1] = getInterpolatedGridHeight(map, pos);
+		vertices[step * 3 + 1] = getInterpolatedGridHeight(pos);
 		vertices[step * 3 + 2] = pos.y / height;
 	}
 
 	//Terraforming functions
 	//Pass std::nullopt if you dont want to track droplets
-	void Erosion::Erode(float* map, std::optional<float*> Track)
+	void Erosion::Erode(std::optional<float*> Track)
 	{
 		ListNode* dropletsHead = nullptr;
 		ListNode* dropletPrev = nullptr;
@@ -99,7 +107,7 @@ namespace erosion {
 
 			//If tracking enabled, save the droplets path
 			if(Track.has_value() && Track.value())
-				trackDroplets(Track.value(), map, dropletCurrent->d->getPosition(), step++);
+				trackDroplets(Track.value(), dropletCurrent->d->getPosition(), step++);
 		}
 
 		dropletCurrent = dropletsHead->next;
@@ -119,18 +127,18 @@ namespace erosion {
 				if (log) {
 					std::cout << "------------------------------------\n";
 				}
-				gradient = getGradient(map, dropletCurrent->d->getPosition());
+				gradient = getGradient(dropletCurrent->d->getPosition());
 				oldPosition = dropletCurrent->d->getPosition();
 				dropletCurrent->d->adjustDirection(gradient, config.inertia);
 				
 
 				//If tracking enabled, save the droplets path
 				if (Track.has_value() && Track.value())
-					trackDroplets(Track.value(), map, dropletCurrent->d->getPosition(), step++);
+					trackDroplets(Track.value(), dropletCurrent->d->getPosition(), step++);
 
 				//Check if the droplet is still on the map
 				if (isOnMap(dropletCurrent->d->getPosition())) {
-					float deltaElevation = getElevationDifference(map, oldPosition, dropletCurrent->d->getPosition());
+					float deltaElevation = getElevationDifference(oldPosition, dropletCurrent->d->getPosition());
 					
 					if (log) {
 						std::cout << "[LOG] Elevation difference: " << deltaElevation << std::endl;
@@ -140,7 +148,7 @@ namespace erosion {
 						if(log){
 							std::cout << "[LOG] Droplet is moving uphill\n";
 						}
-						distributeSediment(map, oldPosition, dropletCurrent->d->dropSediment(deltaElevation));
+						distributeSediment(oldPosition, dropletCurrent->d->dropSediment(deltaElevation));
 					}
 					else {
 						if (log){
@@ -153,11 +161,11 @@ namespace erosion {
 						float sedimentToCollect = dropletCurrent->d->adjustCapacity(config.minSlope, config.erosionRate, config.depositionRate, deltaElevation);
 						
 						if (sedimentToCollect > 0.0f) {
-							distributeSediment(map, oldPosition, sedimentToCollect);
+							distributeSediment(oldPosition, sedimentToCollect);
 						}
 						else {
 							sedimentToCollect = -sedimentToCollect;
-							dropletCurrent->d->adjustSediment(erodeRadius(map, oldPosition, dropletCurrent->d->getPosition(), sedimentToCollect));
+							dropletCurrent->d->adjustSediment(erodeRadius(oldPosition, dropletCurrent->d->getPosition(), sedimentToCollect));
 						}
 
 					}
@@ -178,7 +186,7 @@ namespace erosion {
 			dropletsHead->deleteAll();
 	}
 
-	vec2 Erosion::getGradient(float* map, vec2 pos)
+	vec2 Erosion::getGradient(vec2 pos)
 	{
 		vec2 gradient = { 0, 0 };
 		//Get the integer part of the position ( x and y coordinates)
@@ -202,7 +210,7 @@ namespace erosion {
 		return gradient;
 	}
 
-	float Erosion::getInterpolatedGridHeight(float* map, vec2 pos) {
+	float Erosion::getInterpolatedGridHeight(vec2 pos) {
 		int x = static_cast<int>(pos.x);
 		int y = static_cast<int>(pos.y);
 		//These are offsets of the droplet position on the (x,y) cell
@@ -219,7 +227,7 @@ namespace erosion {
 		return diff;
 	}
 
-	float Erosion::getElevationDifference(float* map, vec2 posOld, vec2 posNew)
+	float Erosion::getElevationDifference(vec2 posOld, vec2 posNew)
 	{
 		//Calculate the difference in elevation between the old and new position of the droplet
 		//Formula used: elevationDifference = elevation(posNew) - elevation(posOld)
@@ -227,8 +235,8 @@ namespace erosion {
 		//If the difference is positive, the droplet is moving uphill
 		//If the difference is negative, the droplet is moving downhill
 
-		float old = getInterpolatedGridHeight(map, posOld);
-		float newP = getInterpolatedGridHeight(map, posNew);
+		float old = getInterpolatedGridHeight(posOld);
+		float newP = getInterpolatedGridHeight(posNew);
 
 		if (log) {
 			std::cout << "[LOG] Old: " << old << " New: " << newP << std::endl;
@@ -237,7 +245,7 @@ namespace erosion {
 		return newP - old;
 	}
 
-	void Erosion::distributeSediment(float* map, vec2 pos, float sedimentDropped) {
+	void Erosion::distributeSediment(vec2 pos, float sedimentDropped) {
 		int x = static_cast<int>(pos.x);
 		int y = static_cast<int>(pos.y);
 		//These are offsets of the droplet position on the (x,y) cell
@@ -253,7 +261,7 @@ namespace erosion {
 		map[(y + 1) * width + x + 1] += v * u * sedimentDropped;   //P(x+1, y+1) * v * u southEast point of the cell
 	}
 
-	float Erosion::erodeRadius(float* map, vec2 oldPos, vec2 newPos, float ammountEroded) {
+	float Erosion::erodeRadius(vec2 oldPos, vec2 newPos, float ammountEroded) {
 		//Erode the terrain in a circular radius around the droplet
 		//Its done due to the fact that no thermal erosion or sediment sliding is simulated in this project
 		//In order to perform mentioned above action we need to calculate weights of each point within the radius

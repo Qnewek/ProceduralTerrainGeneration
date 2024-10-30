@@ -23,9 +23,9 @@ namespace utilities
 	void NormalizeVector3f(float* vertices, unsigned int stride, unsigned int offSet, unsigned int verticesCount);
 	
     void CreateTerrainMesh(noise::SimplexNoiseClass& noise, float* vertices, unsigned int* indices, unsigned int stride, bool normals, bool first);
-	void PaintBiome(float* vertices, noise::SimplexNoiseClass& noiseHeights, noise::SimplexNoiseClass& noiseBiome, unsigned int stride, unsigned int offset);
+    void PaintBiome(float* vertices, float* map, int width, int height, unsigned int stride, unsigned int offset);
     void PaintGrey(float* vertices, int width, int height, unsigned int stride, unsigned int offset);
-    void PerformErosion(float* vertices, unsigned int* indices, std::optional<float*> Track, int stride, int offset, float* map, erosion::Erosion& erosion);
+    void PerformErosion(float* vertices, unsigned int* indices, std::optional<float*> Track, int stride, int offset, erosion::Erosion& erosion);
 
     template <typename Func, typename... Args>
     void benchmark_void(Func func, std::string funcName, Args&&... args) {
