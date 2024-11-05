@@ -17,6 +17,19 @@ Camera::Camera(const unsigned int ScreenWidth, const unsigned int ScreenHeight) 
 Camera::~Camera() {
 
 }
+void Camera::setCameraConfig(glm::vec3 position, glm::vec3 front, glm::vec3 up, float yaw, float pitch, float speed, float sensitivity, float fov)
+{
+	m_Position = position;
+	m_Front = front;
+	m_Up = up;
+	m_Yaw = yaw;
+	m_Pitch = pitch;
+	m_Speed = speed;
+	m_Sensitivity = sensitivity;
+	m_Fov = fov;
+	m_Right = glm::normalize(glm::cross(m_Front, m_Up));
+	m_Up = glm::normalize(glm::cross(m_Right, m_Front));
+}
 void Camera::UpdateCameraVectors(CameraMovement movement) {
 	if (movement == CameraMovement::FORWARD)
 		m_Position += m_Speed * m_Front;
@@ -105,3 +118,4 @@ void Camera::DisableMouseControl(GLFWwindow* window) {
 	glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
 	mouseControl = false;
 }
+

@@ -31,8 +31,14 @@ public:
 	void EnableMouseControl(GLFWwindow* window);
 	void DisableMouseControl(GLFWwindow* window);
 
+	void setCameraConfig(glm::vec3 position, glm::vec3 front, glm::vec3 up, float yaw, float pitch, float speed, float sensitivity, float fov);
 	void setYaw(float value) { m_Yaw = value; }
 	void setPitch(float value) { m_Pitch = value; }
+	void setPosition(glm::vec3 value) { m_Position = value; }
+	void setSpeed(float value) { m_Speed = value; }
+	void setSensitivity(float value) { m_Sensitivity = value; }
+	void setFov(float value) { m_Fov = value; }
+	void setScreenSize(unsigned int width, unsigned int height) { m_ScreenWidth = width; m_ScreenHeight = height; }
 
 	float getYaw() const{ return m_Yaw; }
 	float getPitch() const{ return m_Pitch; }
