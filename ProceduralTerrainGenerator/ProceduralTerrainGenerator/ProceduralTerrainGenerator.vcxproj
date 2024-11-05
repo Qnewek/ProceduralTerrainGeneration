@@ -147,6 +147,7 @@
     <ClCompile Include="src\opengl\Texture.cpp" />
     <ClCompile Include="src\utility\Camera.cpp" />
     <ClCompile Include="src\utility\LightSource.cpp" />
+    <ClCompile Include="src\utility\Player.cpp" />
     <ClCompile Include="src\utility\utilities.cpp" />
     <ClCompile Include="src\vendor\glm\detail\glm.cpp" />
     <ClCompile Include="src\vendor\glm\glm.cppm" />
@@ -321,6 +322,7 @@
     <ClInclude Include="src\opengl\Texture.h" />
     <ClInclude Include="src\utility\Camera.h" />
     <ClInclude Include="src\utility\LightSource.h" />
+    <ClInclude Include="src\utility\Player.h" />
     <ClInclude Include="src\utility\utilities.h" />
     <ClInclude Include="src\vendor\glm\common.hpp" />
     <ClInclude Include="src\vendor\glm\detail\compute_common.hpp" />
