@@ -11,10 +11,11 @@
 
 namespace test
 {
-	TestNoiseMesh::TestNoiseMesh() :height(300), width(300), stride(8), seed(0), meshColor(MONO),
+	TestNoiseMesh::TestNoiseMesh() :height(300), width(300), stride(8), seed(0), meshColor(PSEUDO_BIOME),
 		erosionWindow(false), testSymmetrical(false), trackDraw(false), erosionDraw(false),
 		meshVertices(nullptr), traceVertices(nullptr), erosionVertices(nullptr), meshIndices(nullptr), 
-		noise(width, height), lightSource(glm::vec3(2.0f, 1.0f, 2.0f)), erosion(width, height), camera(800, 600),
+		noise(width, height), lightSource(glm::vec3(0.0f, 7.0f, 0.0f)), erosion(width, height), camera(800, 600), 
+		player(800, 600, glm::vec3(0.0f, 0.0f, 0.0f), 0.01f, 0.01f, true, 300),
 		deltaTime(0.0f), lastFrame(0.0f)
 	{
 		// 6 indices per quad which is 2 triangles so there will be (width-1 * height-1 * 2) triangles
@@ -73,22 +74,24 @@ namespace test
 		deltaTime = currentFrame - lastFrame;
 		lastFrame = currentFrame;
 
-		camera.SteerCamera(&window, deltaTime);
+
+		//camera.SteerCamera(&window, deltaTime, true);
+		player.SteerPlayer(&window, meshVertices, stride, deltaTime);
 		CheckChange();
 
-		//Translate model to be in the center of the screen at the time of first render
+
 		glm::mat4 model = glm::mat4(1.0f);
-		model = glm::translate(model, glm::vec3(-0.5f, -0.25f, 0.0f));
 		
+		//TODO: Fix shaders to be able to use the material settings if BIOME opt isnt chosen
 		//Since we are using texture sampling we dont need to set ambient and diffuse color 
 		//but there is only one function that needs them as a parameter
-		m_Shader->SetMaterialUniforms(glm::vec3(0.5f, 0.5f, 0.5f), glm::vec3(0.5f, 0.5f, 0.5f), glm::vec3(0.5f, 0.5f, 0.5f), 16.0f);
+		m_Shader->SetMaterialUniforms(glm::vec3(0.5f, 0.5f, 0.5f), glm::vec3(0.5f, 0.5f, 0.5f), glm::vec3(0.1f, 0.1f, 0.1f), 16.0f);
 		m_Shader->SetLightUniforms(lightSource.GetPosition(), glm::vec3(0.2f, 0.2f, 0.2f), glm::vec3(0.5f, 0.5f, 0.5f), glm::vec3(1.0f, 1.0f, 1.0f));
-		m_Shader->SetViewPos(camera.GetPosition());
-		m_Shader->SetMVP(model, *camera.GetViewMatrix(), *camera.GetProjectionMatrix());
+		m_Shader->SetViewPos((*player.GetCameraRef()).GetPosition());
+		m_Shader->SetMVP(model, *(player.GetCameraRef()->GetViewMatrix()), *(player.GetCameraRef()->GetProjectionMatrix()));
 
 		//Render lightning source cube
-		lightSource.Draw(renderer, *camera.GetViewMatrix(), *camera.GetProjectionMatrix());
+		lightSource.Draw(renderer, *(player.GetCameraRef()->GetViewMatrix()), *(player.GetCameraRef()->GetProjectionMatrix()));
 
 		//Render terrain
 		m_Texture->Bind();

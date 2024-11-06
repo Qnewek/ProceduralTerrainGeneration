@@ -5,19 +5,23 @@
 
 class Player
 {
-	Player(glm::vec3 spawnPoint, float speed, bool gravity);
+public:
+	Player(const unsigned int ScreenWidth, const unsigned int ScreenHeight, glm::vec3 spawnPoint, float playerHeight, float speed, bool gravity, unsigned int renderDistance);
 	~Player();
 
 
-	void SetInitialPosition();
-	void SteerPlayer(GLFWwindow* window, float deltaTime);
+	void SetPosition(glm::vec3 pos);
+	void SteerPlayer(GLFWwindow* window, float* mesh, int stride, float deltaTime);
 	void Jump();
+
+	Camera* GetCameraRef() { return &m_Camera; };
 
 private:
 	glm::vec3 m_Position;
 	glm::vec3 m_SpawnPoint;
-	float m_Speed;
-	bool gravity;
+	unsigned int m_RenderDistance;
+	float m_Speed, m_PlayerHeight;
+	bool m_Gravity;
 
 	Camera m_Camera;
 };

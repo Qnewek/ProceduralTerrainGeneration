@@ -21,7 +21,7 @@ public:
 	Camera(const unsigned int ScreenWidth, const unsigned int ScreenHeight);
 	~Camera();
 
-	void SteerCamera(GLFWwindow* window, float deltaTime);
+	glm::vec3 SteerCamera(GLFWwindow* window, float deltaTime, bool yAxisMovement);
 	void RotateCamera(GLFWwindow* window);
 
 	glm::mat4* GetViewMatrix();
@@ -58,6 +58,7 @@ private:
 	float xpos;
 	float ypos;
 	//Camera options
+	float m_init_speed;
 	float m_Speed;
 	float m_Sensitivity;
 	float m_Fov;
