@@ -7,7 +7,7 @@ Camera::Camera(const unsigned int ScreenWidth, const unsigned int ScreenHeight) 
 	m_ScreenWidth(ScreenWidth), m_ScreenHeight(ScreenHeight),
 	m_Position(glm::vec3(0.0f, 0.0f, 3.0f)), m_Front(glm::vec3(0.0f, 0.0f, -1.0f)),
 	m_Up(glm::vec3(0.0f, 1.0f, 0.0f)), m_Right(), m_Yaw(-90.0f), m_Pitch(0.0f),
-	m_Speed(2.5f), m_Sensitivity(0.1f), m_Fov(45.0f), mouseControl(false),
+	m_Speed(2.5f), m_Sensitivity(0.1f), m_Fov(45.0f), mouseControl(false), m_init_speed(2.5f),
 	view(glm::mat4(1.0f)), projection(glm::mat4(1.0f)), 
 	ypos(ScreenHeight / 2.0), xpos(ScreenWidth / 2.0)
 {
@@ -24,7 +24,7 @@ void Camera::setCameraConfig(glm::vec3 position, glm::vec3 front, glm::vec3 up, 
 	m_Up = up;
 	m_Yaw = yaw;
 	m_Pitch = pitch;
-	m_Speed = speed;
+	m_init_speed = speed;
 	m_Sensitivity = sensitivity;
 	m_Fov = fov;
 	m_Right = glm::normalize(glm::cross(m_Front, m_Up));
@@ -50,7 +50,7 @@ void Camera::UpdateCameraVectors(CameraMovement movement) {
 		m_Front = glm::normalize(m_Front);
 	}
 }
-void Camera::SteerCamera(GLFWwindow* window, float deltaTime) {
+glm::vec3 Camera::SteerCamera(GLFWwindow* window, float deltaTime, bool yAxisMovement) {
 
 	if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS) {
 		DisableMouseControl(window);
@@ -59,7 +59,9 @@ void Camera::SteerCamera(GLFWwindow* window, float deltaTime) {
 		EnableMouseControl(window);
 	}
 
-	m_Speed = static_cast<float>(2.5 * deltaTime);
+	m_Speed = static_cast<float>(m_init_speed * deltaTime);
+	if (mouseControl)
+		RotateCamera(window);
 	if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
 		UpdateCameraVectors(CameraMovement::FORWARD);
 	if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
@@ -68,12 +70,14 @@ void Camera::SteerCamera(GLFWwindow* window, float deltaTime) {
 		UpdateCameraVectors(CameraMovement::LEFT);
 	if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
 		UpdateCameraVectors(CameraMovement::RIGHT);
-	if (glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS)
-		UpdateCameraVectors(CameraMovement::UP);
-	if (glfwGetKey(window, GLFW_KEY_LEFT_CONTROL) == GLFW_PRESS)
-		UpdateCameraVectors(CameraMovement::DOWN);
-	if (mouseControl)
-		RotateCamera(window);
+	if (yAxisMovement) {
+		if (glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS)
+			UpdateCameraVectors(CameraMovement::UP);
+		if (glfwGetKey(window, GLFW_KEY_LEFT_CONTROL) == GLFW_PRESS)
+			UpdateCameraVectors(CameraMovement::DOWN);
+	}
+
+	return m_Position;
 }
 
 void Camera::RotateCamera(GLFWwindow* window) {

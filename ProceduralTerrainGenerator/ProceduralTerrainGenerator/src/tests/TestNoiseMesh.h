@@ -10,6 +10,7 @@
 #include "Noise.h"
 #include "glm/glm.hpp"
 #include "Erosion.h"
+#include "Player.h"
 
 #include <memory>
 
@@ -58,6 +59,7 @@ namespace test
 
 		//Entities
 		Camera camera;
+		Player player;
 		LightSource lightSource;
 		noise::SimplexNoiseClass noise;
 		erosion::Erosion erosion;
