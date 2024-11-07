@@ -34,9 +34,9 @@ void main()
 
     if (TexCoords.x < 0.0 && TexCoords.y < 0.0)
     {
-        ambient = light.ambient * vec3(0.6, 0.6, 0.6);
+        ambient = light.ambient * material.ambient;
         float diff = max(dot(norm, lightDir), 0.0);
-        diffuse = light.diffuse * diff * vec3(0.6, 0.6, 0.6);
+        diffuse = light.diffuse * diff * material.diffuse;
     }
     else
     {

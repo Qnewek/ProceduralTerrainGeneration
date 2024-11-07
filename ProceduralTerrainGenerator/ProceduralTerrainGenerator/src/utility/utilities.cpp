@@ -22,18 +22,18 @@ namespace utilities
 	//Generates cube layout for openGL to draw
 	//@param vertices - array of vertices to be filled with data
 	//@param indices - array of indices to be filled with data
-	void GenCubeLayout(float* vertices, unsigned int* indices) {
+	void GenCubeLayout(float* vertices, unsigned int* indices, float scalingFactor) {
 		float cubeVertices[] = {
 			// Front row
-			-1.0f, -1.0f,  1.0f,
-			 1.0f, -1.0f,  1.0f,
-			 1.0f,  1.0f,  1.0f,
-			-1.0f,  1.0f,  1.0f,
+			-scalingFactor, -scalingFactor,  scalingFactor,
+			 scalingFactor, -scalingFactor,  scalingFactor,
+			 scalingFactor,  scalingFactor,  scalingFactor,
+			-scalingFactor,  scalingFactor,  scalingFactor,
 			// Back row
-			-1.0f, -1.0f, -1.0f,
-			 1.0f, -1.0f, -1.0f,
-			 1.0f,  1.0f, -1.0f,
-			-1.0f,  1.0f, -1.0f
+			-scalingFactor, -scalingFactor, -scalingFactor,
+			 scalingFactor, -scalingFactor, -scalingFactor,
+			 scalingFactor,  scalingFactor, -scalingFactor,
+			-scalingFactor,  scalingFactor, -scalingFactor
 		};
 
 		//Cube indices
@@ -70,14 +70,14 @@ namespace utilities
 	//@param stride - number of floats per vertex
 	//@param offset - offset in the vertex array to start with when filling the data
 
-	void parseNoiseIntoVertices(float* vertices, int width, int height, float* map, unsigned int stride, unsigned int offset) {
+	void parseNoiseIntoVertices(float* vertices, int width, int height, float* map, float scalingFactor, unsigned int stride, unsigned int offset) {
 		for (int y = 0; y < height; y++)
 		{
 			for (int x = 0; x < width; x++)
 			{
-				vertices[((y * width) + x) * stride + offset    ] = x / (float)width;
-				vertices[((y * width) + x) * stride + offset + 1] = map[y * width + x];
-				vertices[((y * width) + x) * stride + offset + 2] = y / (float)height;
+				vertices[((y * width) + x) * stride + offset    ] = x / (float)width * scalingFactor;
+				vertices[((y * width) + x) * stride + offset + 1] = map[y * width + x] * scalingFactor;
+				vertices[((y * width) + x) * stride + offset + 2] = y / (float)height * scalingFactor;
 			}
 		}
 	}
@@ -109,10 +109,10 @@ namespace utilities
 	//@param stride - number of floats per vertex
 	//@param normals - boolean value to determine if normals should be calculated
 	//@param first - boolean value to determine if indices should be generated
-	void CreateTerrainMesh(noise::SimplexNoiseClass &noise, float* vertices, unsigned int* indices, unsigned int stride, bool normals, bool first)
+	void CreateTerrainMesh(noise::SimplexNoiseClass &noise, float* vertices, unsigned int* indices, float scalingFactor, unsigned int stride, bool normals, bool first)
 	{
 		noise.generateFractalNoise();
-		parseNoiseIntoVertices(vertices, noise.getWidth(), noise.getHeight(), noise.getMap(), stride, 0);
+		parseNoiseIntoVertices(vertices, noise.getWidth(), noise.getHeight(), noise.getMap(), scalingFactor, stride, 0);
 		if (first)
 			SimpleMeshIndicies(indices, noise.getWidth(), noise.getHeight());
 		if (normals) {
@@ -130,9 +130,9 @@ namespace utilities
 	//@param positionsOffset - offset in the vertex array to start with when filling the data
 	//@param normalsOffset - offset in the vertex array to start with when filling the normals
 	//@param erosion - erosion object
-	void PerformErosion(float* vertices, unsigned int* indices, std::optional<float*> Track, int stride, int positionsOffset, int normalsOffset, erosion::Erosion& erosion) {
+	void PerformErosion(float* vertices, unsigned int* indices, float scalingFactor, std::optional<float*> Track, int stride, int positionsOffset, int normalsOffset, erosion::Erosion& erosion) {
 		erosion.Erode(Track);
-		parseNoiseIntoVertices(vertices, erosion.getWidth(), erosion.getHeight(), erosion.getMap(), stride, positionsOffset);
+		parseNoiseIntoVertices(vertices, erosion.getWidth(), erosion.getHeight(), erosion.getMap(), scalingFactor, stride, positionsOffset);
 		InitializeNormals(vertices, stride, normalsOffset, erosion.getHeight() * erosion.getWidth());
 		CalculateNormals(vertices, indices, stride, normalsOffset, (erosion.getWidth() - 1) * (erosion.getHeight() - 1) * 6);
 		NormalizeVector3f(vertices, stride, normalsOffset, erosion.getWidth() * erosion.getHeight());

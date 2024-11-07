@@ -32,6 +32,7 @@ public:
 	void DisableMouseControl(GLFWwindow* window);
 
 	void setCameraConfig(glm::vec3 position, glm::vec3 front, glm::vec3 up, float yaw, float pitch, float speed, float sensitivity, float fov);
+	void setViewDist(glm::vec2 value) { viewDist = value; }
 	void setYaw(float value) { m_Yaw = value; }
 	void setPitch(float value) { m_Pitch = value; }
 	void setPosition(glm::vec3 value) { m_Position = value; }
@@ -58,6 +59,7 @@ private:
 	float xpos;
 	float ypos;
 	//Camera options
+	glm::vec2 viewDist;
 	float m_init_speed;
 	float m_Speed;
 	float m_Sensitivity;

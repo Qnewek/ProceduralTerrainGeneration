@@ -8,7 +8,7 @@ Camera::Camera(const unsigned int ScreenWidth, const unsigned int ScreenHeight) 
 	m_Position(glm::vec3(0.0f, 0.0f, 3.0f)), m_Front(glm::vec3(0.0f, 0.0f, -1.0f)),
 	m_Up(glm::vec3(0.0f, 1.0f, 0.0f)), m_Right(), m_Yaw(-90.0f), m_Pitch(0.0f),
 	m_Speed(2.5f), m_Sensitivity(0.1f), m_Fov(45.0f), mouseControl(false), m_init_speed(2.5f),
-	view(glm::mat4(1.0f)), projection(glm::mat4(1.0f)), 
+	view(glm::mat4(1.0f)), projection(glm::mat4(1.0f)), viewDist(glm::vec2(0.1f, 100.0f)),
 	ypos(ScreenHeight / 2.0), xpos(ScreenWidth / 2.0)
 {
 	m_Right = glm::normalize(glm::cross(m_Front, m_Up));
@@ -110,7 +110,7 @@ glm::mat4* Camera::GetViewMatrix() {
 }
 glm::mat4* Camera::GetProjectionMatrix() {
 	projection = glm::mat4(1.0f);
-	projection = glm::perspective(glm::radians(m_Fov), (float)m_ScreenWidth / (float)m_ScreenHeight, 0.1f, 100.0f);
+	projection = glm::perspective(glm::radians(m_Fov), (float)m_ScreenWidth / (float)m_ScreenHeight, viewDist.x, viewDist.y);
 	return &projection;
 }
 void Camera::EnableMouseControl(GLFWwindow* window) {

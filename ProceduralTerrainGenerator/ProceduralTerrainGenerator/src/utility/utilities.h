@@ -15,8 +15,8 @@ namespace utilities
 	//Different utility functions
 	void ConvertToGrayscaleImage(float* data, unsigned char* image, int width, int height);
 	void SimpleMeshIndicies(unsigned int* indices, int width, int height);
-	void GenCubeLayout(float* vertices, unsigned int* indices);
-    void parseNoiseIntoVertices(float* vertices, int width, int height, float* map, unsigned int stride, unsigned int offset);
+	void GenCubeLayout(float* vertices, unsigned int* indices, float scalingFactor);
+    void parseNoiseIntoVertices(float* vertices, int width, int height, float* map, float scalingFactor, unsigned int stride, unsigned int offset);
 
 	//Functions for dealing with 3D vectors
     void InitializeNormals(float* vertices, unsigned int stride, unsigned int offSet, unsigned int verticesCount);
@@ -25,8 +25,8 @@ namespace utilities
 	void NormalizeVector3f(float* vertices, unsigned int stride, unsigned int offSet, unsigned int verticesCount);
 	
 	//Terrain generation functions
-    void CreateTerrainMesh(noise::SimplexNoiseClass& noise, float* vertices, unsigned int* indices, unsigned int stride, bool normals, bool first);
-    void PerformErosion(float* vertices, unsigned int* indices, std::optional<float*> Track, int stride, int positionsOffset, int normalsOffset, erosion::Erosion& erosion);
+    void CreateTerrainMesh(noise::SimplexNoiseClass& noise, float* vertices, unsigned int* indices, float scalingFactor, unsigned int stride, bool normals, bool first);
+    void PerformErosion(float* vertices, unsigned int* indices, float scalingFactor, std::optional<float*> Track, int stride, int positionsOffset, int normalsOffset, erosion::Erosion& erosion);
     void PaintBiome(float* vertices, float* map, int width, int height, unsigned int stride, unsigned int offset);
     void PaintNotByTexture(float* vertices, int width, int height, unsigned int stride, unsigned int offset);
 
