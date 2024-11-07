@@ -8,10 +8,10 @@
 #include <memory>
 #include <iostream>
 
-LightSource::LightSource(glm::vec3 lightPos) :vertices(new float[24]), indices(new unsigned int[36]),
-	lightPos(lightPos)
+LightSource::LightSource(glm::vec3 lightPos, float size) :vertices(new float[24]), indices(new unsigned int[36]),
+	lightPos(lightPos), m_Size(size)
 {
-	utilities::GenCubeLayout(vertices, indices);
+	utilities::GenCubeLayout(vertices, indices, m_Size);
 
 	m_VAO = std::make_unique<VertexArray>();
 	m_VertexBuffer = std::make_unique<VertexBuffer>(vertices, 24 * sizeof(float));

@@ -14,16 +14,16 @@ namespace test
 	TestNoiseMesh::TestNoiseMesh() :height(300), width(300), stride(8), seed(0), meshColor(PSEUDO_BIOME),
 		erosionWindow(false), testSymmetrical(false), trackDraw(false), erosionDraw(false),
 		meshVertices(nullptr), traceVertices(nullptr), erosionVertices(nullptr), meshIndices(nullptr), 
-		noise(width, height), lightSource(glm::vec3(0.0f, 7.0f, 0.0f)), erosion(width, height), camera(800, 600), 
-		player(800, 600, glm::vec3(0.0f, 0.0f, 0.0f), 0.01f, 0.01f, true, 300),
-		deltaTime(0.0f), lastFrame(0.0f)
+		noise(width, height), lightSource(glm::vec3(0.0f, 0.0f, 0.0f), 1.0f), erosion(width, height), camera(800, 600), 
+		player(800, 600, glm::vec3(0.0f, 0.0f, 0.0f), 0.0001f, 20.0f, false, height),
+		deltaTime(0.0f), lastFrame(0.0f), m_Scaling_Factor(5.0f)
 	{
 		// 6 indices per quad which is 2 triangles so there will be (width-1 * height-1 * 2) triangles
 		meshIndices = new unsigned int[(width - 1) * (height - 1) * 6];
 		meshVertices = new float[width * height * stride];
 		
 		//Initial fractal noise generation in order to draw something on the start of the test
-		utilities::benchmark_void(utilities::CreateTerrainMesh, "CreateTerrainMesh", noise, meshVertices, meshIndices, 8, true, true);
+		utilities::benchmark_void(utilities::CreateTerrainMesh, "CreateTerrainMesh", noise, meshVertices, meshIndices, m_Scaling_Factor, 8, true, true);
 		PaintMesh(noise.getMap(), meshVertices);
 
 		//OpenGl setup for drawing the terrain
@@ -48,6 +48,7 @@ namespace test
 
 		//Update variable for checking the change in noise settings
 		UpdatePrevCheckers();
+		player.SetPosition(glm::vec3(0.5f * m_Scaling_Factor, 0.5f* m_Scaling_Factor, 0.5f * m_Scaling_Factor));
 	}
 
 	TestNoiseMesh::~TestNoiseMesh()
@@ -79,13 +80,14 @@ namespace test
 		player.SteerPlayer(&window, meshVertices, stride, deltaTime);
 		CheckChange();
 
-
 		glm::mat4 model = glm::mat4(1.0f);
+		//model = glm::translate(model, glm::vec3(-0.5f, -0.5f, 0.0f));
 		
-		//TODO: Fix shaders to be able to use the material settings if BIOME opt isnt chosen
+		lightSource.SetPosition(glm::vec3(0.5f * m_Scaling_Factor, 2.0f * m_Scaling_Factor, 0.5f * m_Scaling_Factor));
+		
 		//Since we are using texture sampling we dont need to set ambient and diffuse color 
 		//but there is only one function that needs them as a parameter
-		m_Shader->SetMaterialUniforms(glm::vec3(0.5f, 0.5f, 0.5f), glm::vec3(0.5f, 0.5f, 0.5f), glm::vec3(0.1f, 0.1f, 0.1f), 16.0f);
+		m_Shader->SetMaterialUniforms(glm::vec3(0.6f, 0.6f, 0.6f), glm::vec3(0.6f, 0.6f, 0.6f), glm::vec3(0.1f, 0.1f, 0.1f), 8.0f);
 		m_Shader->SetLightUniforms(lightSource.GetPosition(), glm::vec3(0.2f, 0.2f, 0.2f), glm::vec3(0.5f, 0.5f, 0.5f), glm::vec3(1.0f, 1.0f, 1.0f));
 		m_Shader->SetViewPos((*player.GetCameraRef()).GetPosition());
 		m_Shader->SetMVP(model, *(player.GetCameraRef()->GetViewMatrix()), *(player.GetCameraRef()->GetProjectionMatrix()));
@@ -100,10 +102,10 @@ namespace test
 
 		//Render erosion if the simulation was performed
 		if (erosionDraw) {
-			model = glm::translate(model, glm::vec3(1.2f, 0.0f, 0.0f));
+			model = glm::translate(model, glm::vec3(m_Scaling_Factor + 0.2f , 0.0f, 0.0f));
 
 			m_VAO->AddBuffer(*m_erosionBuffer, layout);
-			m_Shader->SetMVP(model, *camera.GetViewMatrix(), *camera.GetProjectionMatrix());
+			m_Shader->SetMVP(model, *(player.GetCameraRef()->GetViewMatrix()), *(player.GetCameraRef()->GetProjectionMatrix()));
 
 			renderer.Draw(*m_VAO, *m_IndexBuffer, *m_Shader);
 			PrintTrack(model);
@@ -230,7 +232,7 @@ namespace test
 			prevCheck.seed != seed)
 		{
 			noise.setSeed(seed);
-			utilities::benchmark_void(utilities::CreateTerrainMesh, "CreateTerrainMesh", noise, meshVertices, meshIndices, 8, true, false);
+			utilities::benchmark_void(utilities::CreateTerrainMesh, "CreateTerrainMesh", noise, meshVertices, meshIndices, m_Scaling_Factor, 8, true, false);
 			PaintMesh(noise.getMap(), meshVertices);
 			UpdatePrevCheckers();
 
@@ -354,7 +356,7 @@ namespace test
 		}
 
 		erosion.SetMap(noise.getMap());
-		utilities::benchmark_void(utilities::PerformErosion, "PerformErosion", erosionVertices, meshIndices, trackDraw ? std::optional<float*>(traceVertices) : std::nullopt, stride, 0, 3, erosion);	
+		utilities::benchmark_void(utilities::PerformErosion, "PerformErosion", erosionVertices, meshIndices, m_Scaling_Factor, trackDraw ? std::optional<float*>(traceVertices) : std::nullopt, stride, 0, 3, erosion);	
 		PaintMesh(erosion.getMap(), erosionVertices);
 
 		m_erosionBuffer->UpdateData(erosionVertices, (height * width) * stride * sizeof(float));

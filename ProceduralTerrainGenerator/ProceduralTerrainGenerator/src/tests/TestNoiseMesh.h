@@ -46,6 +46,7 @@ namespace test
 		
 		//Mesh variables
 		unsigned int width, height, stride;
+		float m_Scaling_Factor;
 		int seed;
 
 		//Time variables
