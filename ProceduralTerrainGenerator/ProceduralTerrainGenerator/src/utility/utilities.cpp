@@ -82,6 +82,18 @@ namespace utilities
 		}
 	}
 
+	void parseNoiseChunksIntoVertices(float* vertices, int width, int height, int chunkX, int chunkY, float* map, float scalingFactor, unsigned int stride, unsigned int offset) {
+		for (int y = 0; y < height; y++)
+		{
+			for (int x = 0; x < width; x++)
+			{
+				vertices[((y * width) + x) * stride + offset] = x / (float)chunkX * scalingFactor;
+				vertices[((y * width) + x) * stride + offset + 1] = map[y * width + x] * scalingFactor;
+				vertices[((y * width) + x) * stride + offset + 2] = y / (float)chunkY *scalingFactor;
+			}
+		}
+	}
+
 	//Generates indices for simple mesh by conesting 4 vertices on the one cell of the grid to form 2 triangles
 	//@param indices - array of indices to be filled with data
 	//@param width - width of the noise map
@@ -99,6 +111,16 @@ namespace utilities
 				indices[index++] = x + 1 + ((y + 1) * width);
 			}
 		}
+	}
+
+	void GenerateTerrainMap(noise::SimplexNoiseClass& noise, float* vertices, unsigned int* indices, unsigned int stride) {
+		noise.initMap();
+		noise.generateFullMapNoise();
+		parseNoiseChunksIntoVertices(vertices, noise.getWidth(), noise.getHeight(), noise.getChunkWidth(), noise.getChunkHeight(), noise.getMap(), 1.0f / noise.getConfigRef().scale, stride, 0);
+		SimpleMeshIndicies(indices, noise.getWidth() * noise.getChunkWidth(), noise.getHeight() * noise.getChunkHeight());
+		InitializeNormals(vertices, stride, 3, noise.getHeight() * noise.getChunkHeight() * noise.getWidth() * noise.getChunkWidth());
+		CalculateNormals(vertices, indices, stride, 3, (noise.getWidth() * noise.getChunkWidth() - 1) * (noise.getHeight() * noise.getChunkHeight() - 1) * 6);
+		NormalizeVector3f(vertices, stride, 3, noise.getWidth() * noise.getChunkWidth() * noise.getHeight() * noise.getChunkHeight());
 	}
 
 	//Generates terrain map using Perlin Fractal Noise, transforming it into drawable mesh and

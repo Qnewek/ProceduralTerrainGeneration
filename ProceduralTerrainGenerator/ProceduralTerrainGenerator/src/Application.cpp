@@ -23,6 +23,7 @@
 
 #include "tests/TestNoiseMesh.h"
 #include "tests/TestImage.h"
+#include "tests/TestMapGen.h"
 
 #include "Noise.h"
 #include "utilities.h"
@@ -69,6 +70,7 @@ int main(void)
 
 		testMenu->RegisterTest<test::TestNoiseMesh>("Noise Mesh");
 		testMenu->RegisterTest<test::TestImage>("Test image");
+		testMenu->RegisterTest<test::TestMapGen>("Map generation");
 
         while (!glfwWindowShouldClose(window))
         {
