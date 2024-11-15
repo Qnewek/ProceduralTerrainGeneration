@@ -11,30 +11,31 @@
 
 namespace test
 {
-	TestNoiseMesh::TestNoiseMesh() :height(300), width(300), stride(8), seed(0), meshColor(PSEUDO_BIOME),
+	TestNoiseMesh::TestNoiseMesh() :height(300), width(300), stride(8), seed(0), meshColor(MONO),
 		erosionWindow(false), testSymmetrical(false), trackDraw(false), erosionDraw(false),
 		meshVertices(nullptr), traceVertices(nullptr), erosionVertices(nullptr), meshIndices(nullptr), 
 		noise(width, height), lightSource(glm::vec3(0.0f, 0.0f, 0.0f), 1.0f), erosion(width, height), camera(800, 600), 
 		player(800, 600, glm::vec3(0.0f, 0.0f, 0.0f), 0.0001f, 20.0f, false, height),
-		deltaTime(0.0f), lastFrame(0.0f), m_Scaling_Factor(5.0f)
+		deltaTime(0.0f), lastFrame(0.0f), m_Scaling_Factor(10.0f)
 	{
 		// 6 indices per quad which is 2 triangles so there will be (width-1 * height-1 * 2) triangles
 		meshIndices = new unsigned int[(width - 1) * (height - 1) * 6];
 		meshVertices = new float[width * height * stride];
 		
 		//Initial fractal noise generation in order to draw something on the start of the test
+		noise.initMap();
 		utilities::benchmark_void(utilities::CreateTerrainMesh, "CreateTerrainMesh", noise, meshVertices, meshIndices, m_Scaling_Factor, 8, true, true);
 		PaintMesh(noise.getMap(), meshVertices);
 
 		//OpenGl setup for drawing the terrain
 		m_VAO = std::make_unique<VertexArray>();
+		m_TrackVAO = std::make_unique<VertexArray>();
 		m_VertexBuffer = std::make_unique<VertexBuffer>(meshVertices, (height * width) * stride * sizeof(float));
+		m_erosionBuffer = std::make_unique<VertexBuffer>(erosionVertices, (height * width) * stride * sizeof(float));
 		m_IndexBuffer = std::make_unique<IndexBuffer>(meshIndices, (width - 1) * (height - 1) * 6);
 		m_Shader = std::make_unique<Shader>("res/shaders/Lightning_vertex.shader", "res/shaders/Lightning_fragment.shader");
-		m_Texture = std::make_unique<Texture>("res/textures/Basic_biome_texture_palette.jpg");
 		m_TrackShader = std::make_unique<Shader>("res/shaders/Trace_vertex.shader", "res/shaders/Trace_fragment.shader");
-		m_erosionBuffer = std::make_unique<VertexBuffer>(erosionVertices, (height * width) * stride * sizeof(float));
-		m_TrackVAO = std::make_unique<VertexArray>();
+		m_Texture = std::make_unique<Texture>("res/textures/Basic_biome_texture_palette.jpg");
 
 		//Layout of the vertex buffer
 		//Succesively: 

@@ -13,13 +13,23 @@
 namespace noise
 {
 	SimplexNoiseClass::SimplexNoiseClass(unsigned int width, unsigned int height)
-		: config(NoiseConfigParameters()), width(width), height(height)
+		: config(NoiseConfigParameters()), width(width), height(height),
+		heightMap(nullptr), chunkWidth(1), chunkHeight(1)
 	{
-		heightMap = new float[width * height];
 	}
 	SimplexNoiseClass::~SimplexNoiseClass()
 	{
 		delete[] heightMap;
+	}
+	void SimplexNoiseClass::initMap()
+	{
+		if (width > 0 && height > 0) {
+			delete[] heightMap;
+			heightMap = new float[width * chunkWidth * height * chunkHeight];
+		}
+		else {
+			std::cout << "[ERROR] Map size must be greater than 0" << std::endl;
+		}
 	}
 	void SimplexNoiseClass::setSeed(int seed) {
 		if (seed != 0 && seed != this->config.seed) {
@@ -27,6 +37,113 @@ namespace noise
 			SimplexNoise::reseed(seed);
 		}
 	}
+
+	void SimplexNoiseClass::setScale(float scale)
+	{
+		if (scale > 0.0f && scale != this->config.scale) {
+			this->config.scale = scale;
+		}
+		else {
+			std::cout << "[ERROR] Scale must be greater than 0" << std::endl;
+		}
+	}
+
+	void SimplexNoiseClass::setMapSize(unsigned int width, unsigned int height)
+	{
+		if (width > 0 && height > 0 && (width != this->width || height != this->height)) {
+			this->width = width;
+			this->height = height;
+		}
+	}
+
+	void SimplexNoiseClass::setChunkSize(unsigned int chunkWidth, unsigned int chunkHeight)
+	{
+		if (chunkWidth > 0 && chunkHeight > 0 && (chunkWidth != this->chunkWidth || chunkHeight != this->chunkHeight)){
+			this->chunkWidth = chunkWidth;
+			this->chunkHeight = chunkHeight;
+		}
+		else {
+			std::cout << "[ERROR] Chunk size must be greater than 0" << std::endl;
+		}
+	}
+
+	void SimplexNoiseClass::generateFullMapNoise() {
+		float amplitude;
+		float frequency;
+		float elevation;
+		float divider;
+		glm::vec2 vec = glm::vec2(0.0f, 0.0f);
+
+		//Generating noise chunk by chunk, [y,x] are the width and height sizes of each singular chunk
+		//[ChunkT, ChunkX] are the chunks counts on the x and y axis, adjusted by the scaling factor
+		//To apply correct offset to each chunk
+		for (int chunkY = 0; chunkY < height; chunkY++) {
+			for (int chunkX = 0; chunkX < width; chunkX++){
+				for (int y = 0; y < chunkHeight; y++) {
+					for (int x = 0; x < chunkWidth; x++) {
+						divider = 0.0f;
+						amplitude = 1.0f;
+						frequency = 1.0f;
+						elevation = 0.0f;
+
+						for (int i = 0; i < config.octaves; i++)
+						{
+							vec.x = frequency * ((chunkX * config.scale) + (x / float(chunkWidth) * config.scale));
+							vec.y = frequency * ((chunkY * config.scale) + (y / float(chunkHeight) * config.scale));
+
+							elevation += SimplexNoise::noise(vec.x, vec.y) * amplitude;
+							
+							divider += amplitude;
+							amplitude *= config.persistance;
+							frequency *= config.lacunarity;
+						}
+
+						elevation *= config.constrast;
+						elevation /= divider;
+
+						//Clipping values to be in range -1.0f and 1.0f
+						if (elevation < -1.0f) {
+							elevation = -1.0f;
+						}
+						else if (elevation > 1.0f) {
+							elevation = 1.0f;
+						}
+
+						//Dealing with negatives
+						if (config.option == Options::REFIT_ALL) {
+							elevation = (elevation + 1.0f) / 2.0f;
+						}
+						else if (elevation < 0.0f)
+						{
+							if (config.option == Options::FLATTEN_NEGATIVES)
+							{
+								elevation = 0.0f;
+							}
+							else if (config.option == Options::REVERT_NEGATIVES)
+							{
+								elevation = -(elevation * config.revertGain);
+							}
+						}
+						//Make ridge noise
+						if (config.ridge)
+							elevation = ridge(elevation, config.ridgeOffset, config.ridgeGain);
+
+						//Make island
+						if (config.island) {
+							elevation = std::fabsf(makeIsland(elevation, x, y));
+						}
+
+						//Redistribute the noise
+						elevation = std::pow(elevation, config.redistribution);
+
+						heightMap[((chunkY * chunkHeight + y) * width * chunkWidth) + chunkX * chunkWidth + x] = elevation;
+					}
+				}
+			}
+		}
+		std::cout << "[LOG] Noise successfully generated" << std::endl;
+	}
+
 	void SimplexNoiseClass::generateFractalNoise()
 	{
 		float amplitude;
@@ -57,8 +174,8 @@ namespace noise
 														 std::sinf(angley) / TAU * config.scale * frequency + config.yoffset)  * amplitude;
 					}
 					else {
-						vec.x = (x / (float)width  * config.scale * frequency) + config.xoffset;
-						vec.y = (y / (float)height * config.scale * frequency) + config.yoffset;
+						vec.x = (x / (float)width  * config.scale + config.xoffset) * frequency;
+						vec.y = (y / (float)height * config.scale + config.yoffset) * frequency;
 
 						elevation += SimplexNoise::noise(vec.x, vec.y) * amplitude;
 						//elevation += perlin(vec) * amplitude;

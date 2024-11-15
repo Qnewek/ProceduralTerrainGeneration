@@ -76,18 +76,27 @@ namespace noise
 
 		static float perlin(glm::vec2 v);
 		void generateFractalNoise();
+		void generateFullMapNoise();
 		float makeIsland(float e, int x, int y);
+		
+		void initMap();
 		void setSeed(int seed);
+		void setScale(float scale);
+		void setMapSize(unsigned int width, unsigned int height);
+		void setChunkSize(unsigned int chunkWidth, unsigned int chunkHeight);
 
 		float* getMap() const { return heightMap; }
 		unsigned int getWidth()  const { return width; }
 		unsigned int getHeight() const { return height; }
+		unsigned int getChunkWidth() const { return chunkWidth; }
+		unsigned int getChunkHeight() const { return chunkHeight; }
 		NoiseConfigParameters& getConfigRef() { return config; }
 
 	private:
 		NoiseConfigParameters config;
 		float* heightMap;
 		unsigned int width, height;
+		unsigned int chunkWidth, chunkHeight;
 
 		static glm::vec2 randomGradient(int ix, int iy);
 		static float dotGridGradient(int ix, int iy, float x, float y);

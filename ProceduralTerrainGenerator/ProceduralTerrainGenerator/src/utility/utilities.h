@@ -17,6 +17,7 @@ namespace utilities
 	void SimpleMeshIndicies(unsigned int* indices, int width, int height);
 	void GenCubeLayout(float* vertices, unsigned int* indices, float scalingFactor);
     void parseNoiseIntoVertices(float* vertices, int width, int height, float* map, float scalingFactor, unsigned int stride, unsigned int offset);
+    void parseNoiseChunksIntoVertices(float* vertices, int width, int height, int chunkX, int chunkY, float* map, float scalingFactor, unsigned int stride, unsigned int offset);
 
 	//Functions for dealing with 3D vectors
     void InitializeNormals(float* vertices, unsigned int stride, unsigned int offSet, unsigned int verticesCount);
@@ -25,6 +26,7 @@ namespace utilities
 	void NormalizeVector3f(float* vertices, unsigned int stride, unsigned int offSet, unsigned int verticesCount);
 	
 	//Terrain generation functions
+    void GenerateTerrainMap(noise::SimplexNoiseClass& noise, float* vertices, unsigned int* indices, unsigned int stride);
     void CreateTerrainMesh(noise::SimplexNoiseClass& noise, float* vertices, unsigned int* indices, float scalingFactor, unsigned int stride, bool normals, bool first);
     void PerformErosion(float* vertices, unsigned int* indices, float scalingFactor, std::optional<float*> Track, int stride, int positionsOffset, int normalsOffset, erosion::Erosion& erosion);
     void PaintBiome(float* vertices, float* map, int width, int height, unsigned int stride, unsigned int offset);
