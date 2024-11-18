@@ -2,18 +2,23 @@
 
 #include "utilities.h"
 
+#include "glm/glm.hpp"
+#include "glm/gtc/matrix_transform.hpp"
+
 test::TestMapGen::TestMapGen() : m_Width(30), m_Height(30), m_ChunkResX(40), m_ChunkResY(40), m_ChunkScale(0.05f), m_Stride(8),
 m_MeshVertices(nullptr), m_MeshIndices(nullptr), deltaTime(0.0f), lastFrame(0.0f),
 m_Player(800, 600, glm::vec3(0.0f, 0.0f, 0.0f), 0.0001f, 20.0f, false, m_Height * m_ChunkResY),
-m_LightSource(glm::vec3(0.0f, 0.0f, 0.0f), 1.0f), noise(m_Width, m_Height)
+m_LightSource(glm::vec3(0.0f, 0.0f, 0.0f), 1.0f), noise()
 {
 	// 6 indices per quad which is 2 triangles so there will be (width-1 * height-1 * 2) triangles
 	m_MeshIndices = new unsigned int[(m_Width * m_ChunkResX - 1) * (m_Height * m_ChunkResY - 1) * 6];
 	m_MeshVertices = new float[m_Width * m_ChunkResX * m_Height * m_ChunkResY * m_Stride];
 
 	noise.setMapSize(m_Width, m_Height);
+	noise.setMapSize(m_Width, m_Height);
 	noise.setChunkSize(m_ChunkResX, m_ChunkResY);
 	noise.setScale(m_ChunkScale);
+	noise.getConfigRef().option = noise::Options::REFIT_ALL;
 	utilities::benchmark_void(utilities::GenerateTerrainMap, "GenerateTerrainMap", noise, m_MeshVertices, m_MeshIndices, m_Stride);
 	utilities::PaintNotByTexture(m_MeshVertices, m_Width * m_ChunkResX, m_Height * m_ChunkResY, m_Stride, 6);
 
@@ -33,7 +38,7 @@ m_LightSource(glm::vec3(0.0f, 0.0f, 0.0f), 1.0f), noise(m_Width, m_Height)
 	m_Layout.Push<float>(2);
 
 	m_MainVAO->AddBuffer(*m_MainVertexBuffer, m_Layout);
-	m_Player.SetPosition(glm::vec3(1.0f, 1.0f, 1.0f));
+	m_Player.SetPosition(glm::vec3(0.5f * m_Width / m_ChunkScale, 1.0f / m_ChunkScale, 0.5f * m_Height / m_ChunkScale));
 }
 
 test::TestMapGen::~TestMapGen()
@@ -57,6 +62,7 @@ void test::TestMapGen::OnRender(GLFWwindow& window, Renderer& renderer)
 	m_Player.SteerPlayer(&window, m_MeshVertices, m_Stride, deltaTime);
 
 	glm::mat4 model = glm::mat4(1.0f);
+	model = glm::translate(model, glm::vec3(0.0f, -0.5f / m_ChunkScale, 0.0f));
 
 	m_LightSource.SetPosition(glm::vec3(20.0f, 20.0f, 20.0f));
 

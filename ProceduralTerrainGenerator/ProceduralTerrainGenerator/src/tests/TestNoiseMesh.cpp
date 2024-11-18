@@ -14,7 +14,7 @@ namespace test
 	TestNoiseMesh::TestNoiseMesh() :height(300), width(300), stride(8), seed(0), meshColor(MONO),
 		erosionWindow(false), testSymmetrical(false), trackDraw(false), erosionDraw(false),
 		meshVertices(nullptr), traceVertices(nullptr), erosionVertices(nullptr), meshIndices(nullptr), 
-		noise(width, height), lightSource(glm::vec3(0.0f, 0.0f, 0.0f), 1.0f), erosion(width, height), camera(800, 600), 
+		noise(), lightSource(glm::vec3(0.0f, 0.0f, 0.0f), 1.0f), erosion(width, height), camera(800, 600), 
 		player(800, 600, glm::vec3(0.0f, 0.0f, 0.0f), 0.0001f, 20.0f, false, height),
 		deltaTime(0.0f), lastFrame(0.0f), m_Scaling_Factor(10.0f)
 	{
@@ -23,6 +23,7 @@ namespace test
 		meshVertices = new float[width * height * stride];
 		
 		//Initial fractal noise generation in order to draw something on the start of the test
+		noise.setMapSize(width, height);
 		noise.initMap();
 		utilities::benchmark_void(utilities::CreateTerrainMesh, "CreateTerrainMesh", noise, meshVertices, meshIndices, m_Scaling_Factor, 8, true, true);
 		PaintMesh(noise.getMap(), meshVertices);

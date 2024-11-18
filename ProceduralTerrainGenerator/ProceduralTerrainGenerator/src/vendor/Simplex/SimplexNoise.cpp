@@ -103,6 +103,9 @@ static uint8_t originalPerm[256] = {
 */
 void SimplexNoise::reseed(int seed) {
 	std::copy(std::begin(originalPerm), std::end(originalPerm), std::begin(perm));
+	
+	if (seed == 0) return;
+
 	std::mt19937 generator(seed);
 	std::shuffle(std::begin(perm), std::end(perm), generator);
 }

@@ -180,15 +180,16 @@ namespace utilities
 	//@param stride - number of floats per vertex
 	//@param offset - offset in the vertex array to start with when filling the data
 	void PaintBiome(float* vertices, float* map, int width, int height, unsigned int stride, unsigned int offset) {
-		noise::SimplexNoiseClass noiseBiome(width, height);
-		noiseBiome.generateFractalNoise();
+		noise::SimplexNoiseClass* noiseBiome = new noise::SimplexNoiseClass();
+		noiseBiome->generateFractalNoise();
 		for (int y = 0; y < height; y++) {
 			for (int x = 0; x < width; x++)
 			{
-				vertices[((y * width) + x) * stride + offset]		= noiseBiome.getMap()	[y * width + x] > 0.0f ? noiseBiome.getMap()	[y * width + x] : 0.0f;
+				vertices[((y * width) + x) * stride + offset]		= noiseBiome->getMap()[y * width + x] > 0.0f ? noiseBiome->getMap()[y * width + x] : 0.0f;
 				vertices[((y * width) + x) * stride + offset + 1] = map	[y * width + x] > 0.0f ? map[y * width + x] : 0.0f;
 			}
 		}
+		delete noiseBiome;
 	}
 	//The functions sets the coords vertices of texture sampling what can be used as a condition
 	//for painting the terrain not based on the texture despite having the texture sampling layout of vertices

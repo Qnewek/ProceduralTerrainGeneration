@@ -1,3 +1,23 @@
 ﻿  Scanning sources for module dependencies...
-  TestMapGen.cpp
-  ProceduralTerrainGenerator.vcxproj -> C:\Users\Dawid\Documents\JakiesPopierdulki\Studia\ProceduralTerrainGeneration\ProceduralTerrainGenerator\Debug\ProceduralTerrainGenerator.exe
+  BiomeSettings.cpp
+  Noise.cpp
+C:\Users\Dawid\Documents\JakiesPopierdulki\Studia\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\terrainGeneration\Noise.cpp(117,31): warning C4018: '<': signed/unsigned mismatch
+C:\Users\Dawid\Documents\JakiesPopierdulki\Studia\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\terrainGeneration\Noise.cpp(118,32): warning C4018: '<': signed/unsigned mismatch
+C:\Users\Dawid\Documents\JakiesPopierdulki\Studia\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\terrainGeneration\Noise.cpp(119,23): warning C4018: '<': signed/unsigned mismatch
+C:\Users\Dawid\Documents\JakiesPopierdulki\Studia\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\terrainGeneration\Noise.cpp(120,24): warning C4018: '<': signed/unsigned mismatch
+C:\Users\Dawid\Documents\JakiesPopierdulki\Studia\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\terrainGeneration\Noise.cpp(200,21): warning C4018: '<': signed/unsigned mismatch
+C:\Users\Dawid\Documents\JakiesPopierdulki\Studia\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\terrainGeneration\Noise.cpp(202,22): warning C4018: '<': signed/unsigned mismatch
+C:\Users\Dawid\Documents\JakiesPopierdulki\Studia\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\terrainGeneration\Noise.cpp(212,17): warning C4305: 'initializing': truncation from 'long double' to 'float'
+C:\Users\Dawid\Documents\JakiesPopierdulki\Studia\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\terrainGeneration\Noise.cpp(295,21): warning C4018: '<': signed/unsigned mismatch
+C:\Users\Dawid\Documents\JakiesPopierdulki\Studia\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\terrainGeneration\Noise.cpp(297,22): warning C4018: '<': signed/unsigned mismatch
+C:\Users\Dawid\Documents\JakiesPopierdulki\Studia\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\terrainGeneration\Noise.cpp(324,19): warning C4244: '=': conversion from 'double' to 'float', possible loss of data
+C:\Users\Dawid\Documents\JakiesPopierdulki\Studia\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\terrainGeneration\Noise.cpp(330,17): warning C4244: '=': conversion from 'long double' to 'float', possible loss of data
+  Biome.cpp
+  utilities.cpp
+C:\Users\Dawid\Documents\JakiesPopierdulki\Studia\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\utility\utilities.cpp(217,21): warning C4018: '<': signed/unsigned mismatch
+C:\Users\Dawid\Documents\JakiesPopierdulki\Studia\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\utility\utilities.cpp(236,21): warning C4018: '<': signed/unsigned mismatch
+C:\Users\Dawid\Documents\JakiesPopierdulki\Studia\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\utility\utilities.cpp(273,21): warning C4018: '<': signed/unsigned mismatch
+  Generating Code...
+C:\Users\Dawid\Documents\JakiesPopierdulki\Studia\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\terrainGeneration\Noise.cpp(302,1): warning C4715: 'noise::SimplexNoiseClass::makeMapRidged': not all control paths return a value
+C:\Users\Dawid\Documents\JakiesPopierdulki\Studia\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\terrainGeneration\BiomeSettings.cpp(54,1): warning C4715: 'BiomeSettings::determineLevel': not all control paths return a value
+C:\Users\Dawid\Documents\JakiesPopierdulki\Studia\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\terrainGeneration\BiomeSettings.cpp(108,1): error C4716: 'BiomeSettings::makeLookUpTable': must return a value
