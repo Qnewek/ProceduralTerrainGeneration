@@ -2,7 +2,7 @@
 
 #include "utilities.h"
 
-test::TestMapGen::TestMapGen() : m_Width(100), m_Height(100), m_ChunkResX(20), m_ChunkResY(20), m_ChunkScale(0.1f), m_Stride(8),
+test::TestMapGen::TestMapGen() : m_Width(30), m_Height(30), m_ChunkResX(40), m_ChunkResY(40), m_ChunkScale(0.05f), m_Stride(8),
 m_MeshVertices(nullptr), m_MeshIndices(nullptr), deltaTime(0.0f), lastFrame(0.0f),
 m_Player(800, 600, glm::vec3(0.0f, 0.0f, 0.0f), 0.0001f, 20.0f, false, m_Height * m_ChunkResY),
 m_LightSource(glm::vec3(0.0f, 0.0f, 0.0f), 1.0f), noise(m_Width, m_Height)
