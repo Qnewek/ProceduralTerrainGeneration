@@ -82,14 +82,25 @@ namespace utilities
 		}
 	}
 
+	//Parses noise map into vertices for openGL to draw as a mesh, stride is the number of floats per vertex
+	//
+	//@param vertices - array of vertices to be filled with data
+	//@param width - width of the noise map in chunks
+	//@param height - height of the noise map in chunks
+	//@param chunkX - width of the chunk
+	//@param chunkY - height of the chunk
+	//@param map - noise map
+	//@param scalingFactor - scaling factor for the vertices
+	//@param stride - number of floats per vertex
+	//@param offset - offset in the vertex array to start with when filling the data
 	void parseNoiseChunksIntoVertices(float* vertices, int width, int height, int chunkX, int chunkY, float* map, float scalingFactor, unsigned int stride, unsigned int offset) {
-		for (int y = 0; y < height; y++)
+		for (int y = 0; y < height * chunkY; y++)
 		{
-			for (int x = 0; x < width; x++)
+			for (int x = 0; x < width * chunkX; x++)
 			{
-				vertices[((y * width) + x) * stride + offset] = x / (float)chunkX * scalingFactor;
-				vertices[((y * width) + x) * stride + offset + 1] = map[y * width + x] * scalingFactor;
-				vertices[((y * width) + x) * stride + offset + 2] = y / (float)chunkY *scalingFactor;
+				vertices[((y * width * chunkX) + x) * stride + offset] = x / (float)chunkX * scalingFactor;
+				vertices[((y * width * chunkX) + x) * stride + offset + 1] = map[y * width * chunkX + x] * scalingFactor;
+				vertices[((y * width * chunkX) + x) * stride + offset + 2] = y / (float)chunkY * scalingFactor;
 			}
 		}
 	}
