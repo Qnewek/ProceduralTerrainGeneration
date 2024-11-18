@@ -10,7 +10,8 @@ namespace noise
 	enum class Options {
 		REFIT_ALL,
 		FLATTEN_NEGATIVES,
-		REVERT_NEGATIVES
+		REVERT_NEGATIVES,
+		NOTHING
 	};
 
 	enum class IslandType {
@@ -49,15 +50,15 @@ namespace noise
 		float mixPower;
 		IslandType islandType;
 
-		//Symetric or sth
+		//Symmetrical or sth
 		bool symmetrical;
 
 		NoiseConfigParameters(int seed = 0, float xoffset = 0.0f, float yoffset = 0.0f, float scale = 1.0f, int octaves = 8,
 			float constrast = 1.0f, float redistribution = 1.0f, float lacunarity = 2.0f,
 			float persistance = 0.5f, float scaleDown = 1.0f, Options option = Options::REVERT_NEGATIVES, float revertGain = 0.5f, bool ridge = false,
 			float ridgeGain = 1.0f, float ridgeOffset = 0.5f, bool island = false, float mixPower = 0.5f,
-			IslandType islandType = IslandType::CONE, bool symmetrical = false)
-			:seed(seed), xoffset(xoffset), yoffset(yoffset), scale(scale), octaves(octaves), constrast(constrast),
+			IslandType islandType = IslandType::CONE, bool symmetrical = false):
+			seed(seed), xoffset(xoffset), yoffset(yoffset), scale(scale), octaves(octaves), constrast(constrast),
 			redistribution(redistribution), lacunarity(lacunarity), persistance(persistance), option(option), revertGain(revertGain),
 			ridge(ridge), ridgeGain(ridgeGain), ridgeOffset(ridgeOffset), island(island), islandType(islandType), mixPower(mixPower), 
 			symmetrical(symmetrical){}
@@ -71,19 +72,20 @@ namespace noise
 	class SimplexNoiseClass
 	{
 	public:
-		SimplexNoiseClass(unsigned int mapWidth, unsigned int mapHeigth);
+		SimplexNoiseClass();
 		~SimplexNoiseClass();
 
-		static float perlin(glm::vec2 v);
-		void generateFractalNoise();
-		void generateFullMapNoise();
+		bool generateFractalNoise();
+		bool generateFullMapNoise();
 		float makeIsland(float e, int x, int y);
-		
+		bool makeMapRidged();
+
 		void initMap();
 		void setSeed(int seed);
 		void setScale(float scale);
 		void setMapSize(unsigned int width, unsigned int height);
 		void setChunkSize(unsigned int chunkWidth, unsigned int chunkHeight);
+		void setConfig(NoiseConfigParameters config);
 
 		float* getMap() const { return heightMap; }
 		unsigned int getWidth()  const { return width; }
@@ -98,9 +100,6 @@ namespace noise
 		unsigned int width, height;
 		unsigned int chunkWidth, chunkHeight;
 
-		static glm::vec2 randomGradient(int ix, int iy);
-		static float dotGridGradient(int ix, int iy, float x, float y);
-		static float interpolate(float a0, float a1, float w);
 		static float ridge(float h, float offset, float gain);
 	};
 }
