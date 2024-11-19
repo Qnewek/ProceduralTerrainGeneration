@@ -143,6 +143,7 @@
     <ClCompile Include="src\terrainGeneration\Erosion.cpp" />
     <ClCompile Include="src\terrainGeneration\Noise.cpp" />
     <ClCompile Include="src\terrainGeneration\Biome.cpp" />
+    <ClCompile Include="src\terrainGeneration\TerrainGenerator.cpp" />
     <ClCompile Include="src\tests\Test.cpp" />
     <ClCompile Include="src\tests\TestImage.cpp" />
     <ClCompile Include="src\tests\TestMapGen.cpp" />
@@ -314,6 +315,7 @@
     <None Include="src\vendor\glm\gtx\wrap.inl" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="..\..\..\..\..\..\Downloads\spline.h" />
     <ClInclude Include="src\terrainGeneration\BiomeSettings.h" />
     <ClInclude Include="src\opengl\IndexBuffer.h" />
     <ClInclude Include="src\opengl\Renderer.h" />
@@ -321,6 +323,7 @@
     <ClInclude Include="src\terrainGeneration\Biome.h" />
     <ClInclude Include="src\terrainGeneration\Erosion.h" />
     <ClInclude Include="src\terrainGeneration\Noise.h" />
+    <ClInclude Include="src\terrainGeneration\TerrainGenerator.h" />
     <ClInclude Include="src\tests\Test.h" />
     <ClInclude Include="src\tests\TestImage.h" />
     <ClInclude Include="src\tests\TestMapGen.h" />
@@ -626,6 +629,7 @@
     <ClInclude Include="src\vendor\imgui\stb_textedit.h" />
     <ClInclude Include="src\vendor\imgui\stb_truetype.h" />
     <ClInclude Include="src\vendor\Simplex\SimplexNoise.h" />
+    <ClInclude Include="src\vendor\Splines\spline.h" />
     <ClInclude Include="src\vendor\stb_image\stb_image.h" />
     <ClInclude Include="src\opengl\VertexBufferLayout.h" />
     <ClInclude Include="src\opengl\VertexArray.h" />

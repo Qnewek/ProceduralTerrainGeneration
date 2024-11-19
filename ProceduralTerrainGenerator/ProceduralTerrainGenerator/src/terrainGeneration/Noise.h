@@ -76,7 +76,7 @@ namespace noise
 		~SimplexNoiseClass();
 
 		bool generateFractalNoise();
-		bool generateFullMapNoise();
+		bool generateFractalNoiseByChunks();
 		float makeIsland(float e, int x, int y);
 		bool makeMapRidged();
 
@@ -88,6 +88,7 @@ namespace noise
 		void setConfig(NoiseConfigParameters config);
 
 		float* getMap() const { return heightMap; }
+		float getVal(int x, int y) const { return heightMap[y * width * chunkWidth + x]; }
 		unsigned int getWidth()  const { return width; }
 		unsigned int getHeight() const { return height; }
 		unsigned int getChunkWidth() const { return chunkWidth; }

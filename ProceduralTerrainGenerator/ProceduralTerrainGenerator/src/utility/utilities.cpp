@@ -126,7 +126,7 @@ namespace utilities
 
 	void GenerateTerrainMap(noise::SimplexNoiseClass& noise, float* vertices, unsigned int* indices, unsigned int stride) {
 		noise.initMap();
-		noise.generateFullMapNoise();
+		noise.generateFractalNoiseByChunks();
 		parseNoiseChunksIntoVertices(vertices, noise.getWidth(), noise.getHeight(), noise.getChunkWidth(), noise.getChunkHeight(), noise.getMap(), 1.0f / noise.getConfigRef().scale, stride, 0);
 		SimpleMeshIndicies(indices, noise.getWidth() * noise.getChunkWidth(), noise.getHeight() * noise.getChunkHeight());
 		InitializeNormals(vertices, stride, 3, noise.getHeight() * noise.getChunkHeight() * noise.getWidth() * noise.getChunkWidth());
@@ -181,6 +181,8 @@ namespace utilities
 	//@param offset - offset in the vertex array to start with when filling the data
 	void PaintBiome(float* vertices, float* map, int width, int height, unsigned int stride, unsigned int offset) {
 		noise::SimplexNoiseClass* noiseBiome = new noise::SimplexNoiseClass();
+		noiseBiome->setMapSize(width, height);
+		noiseBiome->initMap();
 		noiseBiome->generateFractalNoise();
 		for (int y = 0; y < height; y++) {
 			for (int x = 0; x < width; x++)

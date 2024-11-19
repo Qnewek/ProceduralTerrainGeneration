@@ -8,6 +8,7 @@
 #include "Texture.h"
 #include "LightSource.h"
 #include "Noise.h"
+#include "TerrainGenerator.h"
 
 namespace test {
 
@@ -20,6 +21,9 @@ namespace test {
 		void OnUpdate(float deltaTime) override;
 		void OnRender(GLFWwindow& window, Renderer& renderer) override;
 		void OnImGuiRender() override;
+
+		void basicTerrainGeneration();
+		void conditionalTerrainGeneration();
 
 	private:
 		//OpenGL variables
@@ -37,6 +41,7 @@ namespace test {
 		Player m_Player;
 		LightSource m_LightSource;
 		noise::SimplexNoiseClass noise;
+		TerrainGenerator terrainGen;
 
 		//Variables
 		//Map size in chunks

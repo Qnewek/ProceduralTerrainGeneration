@@ -145,7 +145,7 @@ namespace test
 		ImGui::SliderFloat("Persistance",	 &noise.getConfigRef().persistance,		 0.1f, 1.0f);
 
 		//Dealing with negatives settings
-		static const char* options[] = { "REFIT_ALL", "FLATTEN_NEGATIVES", "REVERT_NEGATIVES"};
+		static const char* options[] = { "REFIT_ALL", "FLATTEN_NEGATIVES", "REVERT_NEGATIVES", "NOTHING"};
 		static int current_option = static_cast<int>(noise.getConfigRef().option);
 
 		if (ImGui::BeginCombo("Negatives: ", options[current_option]))
