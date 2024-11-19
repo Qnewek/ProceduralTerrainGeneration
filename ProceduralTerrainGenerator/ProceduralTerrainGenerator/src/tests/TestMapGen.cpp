@@ -2,25 +2,20 @@
 
 #include "utilities.h"
 
+#include "imgui/imgui.h"
 #include "glm/glm.hpp"
 #include "glm/gtc/matrix_transform.hpp"
 
-test::TestMapGen::TestMapGen() : m_Width(30), m_Height(30), m_ChunkResX(40), m_ChunkResY(40), m_ChunkScale(0.05f), m_Stride(8),
+test::TestMapGen::TestMapGen() : m_Width(20), m_Height(20), m_ChunkResX(10), m_ChunkResY(10), m_ChunkScale(0.05f), m_Stride(8),
 m_MeshVertices(nullptr), m_MeshIndices(nullptr), deltaTime(0.0f), lastFrame(0.0f),
 m_Player(800, 600, glm::vec3(0.0f, 0.0f, 0.0f), 0.0001f, 20.0f, false, m_Height * m_ChunkResY),
-m_LightSource(glm::vec3(0.0f, 0.0f, 0.0f), 1.0f), noise()
+m_LightSource(glm::vec3(0.0f, 0.0f, 0.0f), 1.0f), noise(), terrainGen()
 {
 	// 6 indices per quad which is 2 triangles so there will be (width-1 * height-1 * 2) triangles
 	m_MeshIndices = new unsigned int[(m_Width * m_ChunkResX - 1) * (m_Height * m_ChunkResY - 1) * 6];
 	m_MeshVertices = new float[m_Width * m_ChunkResX * m_Height * m_ChunkResY * m_Stride];
 
-	noise.setMapSize(m_Width, m_Height);
-	noise.setMapSize(m_Width, m_Height);
-	noise.setChunkSize(m_ChunkResX, m_ChunkResY);
-	noise.setScale(m_ChunkScale);
-	noise.getConfigRef().option = noise::Options::REFIT_ALL;
-	utilities::benchmark_void(utilities::GenerateTerrainMap, "GenerateTerrainMap", noise, m_MeshVertices, m_MeshIndices, m_Stride);
-	utilities::PaintNotByTexture(m_MeshVertices, m_Width * m_ChunkResX, m_Height * m_ChunkResY, m_Stride, 6);
+	conditionalTerrainGeneration();
 
 	//OpenGL setup for the mesh
 	m_MainVAO = std::make_unique<VertexArray>();
@@ -62,7 +57,7 @@ void test::TestMapGen::OnRender(GLFWwindow& window, Renderer& renderer)
 	m_Player.SteerPlayer(&window, m_MeshVertices, m_Stride, deltaTime);
 
 	glm::mat4 model = glm::mat4(1.0f);
-	model = glm::translate(model, glm::vec3(0.0f, -0.5f / m_ChunkScale, 0.0f));
+	model = glm::translate(model, glm::vec3(0.0f, 0.0f, 0.0f));
 
 	m_LightSource.SetPosition(glm::vec3(20.0f, 20.0f, 20.0f));
 
@@ -84,4 +79,51 @@ void test::TestMapGen::OnRender(GLFWwindow& window, Renderer& renderer)
 
 void test::TestMapGen::OnImGuiRender()
 {
+	ImVec2 minSize = ImVec2(500, 50);
+	ImVec2 maxSize = ImVec2(800, 800);
+
+	ImGui::SetNextWindowSizeConstraints(minSize, maxSize);
+	ImGui::Begin("Debug");
+
+	glm::vec3 playerPos = m_Player.GetCameraRef()->GetPosition();
+	ImGui::Text("Player pos: x = %.2f, y = %.2f, z = %.2f", playerPos.x, playerPos.y, playerPos.z);
+
+	ImGui::End();
 }
+
+void test::TestMapGen::basicTerrainGeneration()
+{
+	noise.setMapSize(m_Width, m_Height);
+	noise.setChunkSize(m_ChunkResX, m_ChunkResY);
+	noise.setScale(m_ChunkScale);
+	noise.getConfigRef().option = noise::Options::REFIT_ALL;
+	utilities::benchmark_void(utilities::GenerateTerrainMap, "GenerateTerrainMap", noise, m_MeshVertices, m_MeshIndices, m_Stride);
+	utilities::PaintNotByTexture(m_MeshVertices, m_Width * m_ChunkResX, m_Height * m_ChunkResY, m_Stride, 6);
+}
+
+void test::TestMapGen::conditionalTerrainGeneration()
+{
+	terrainGen.setSize(m_Width, m_Height);
+	terrainGen.setChunkResolution(m_ChunkResX);
+	terrainGen.setChunkScalingFactor(m_ChunkScale);
+	terrainGen.setSeed(124);
+	terrainGen.getContinentalnessNoiseConfig().constrast = 2.0f;
+	terrainGen.getMountainousNoiseConfig().constrast = 2.0f;
+	terrainGen.getPVNoiseConfig().constrast = 2.0f;
+	terrainGen.initializeMap();
+	terrainGen.setSplines({ {-1.0, -0.5, 0.0, 0.2, 0.6, 1.0}, {0.1, 0.3, 0.5, 0.6, 0.9, 1.0},	//Continentalness {X,Y}
+							{-1.0, -0.5, 0.0, 0.2, 0.6, 1.0}, {0.1, 0.5, 1.0, 5.0, 15.0, 30.0},	//Mountainousness {X,Y}
+							{-1.0, -0.5, 0.0, 0.2, 0.6, 1.0}, {1.0, 0.6, 0.3, 0.0, 0.2, 0.1}}); //PV {X,Y}
+
+	if (!terrainGen.generateHeightMap()) {
+		std::cout << "[ERROR] Map couldnt be generated" << std::endl;
+	}
+
+	utilities::parseNoiseChunksIntoVertices(m_MeshVertices, m_Width, m_Height, m_ChunkResX, m_ChunkResX, terrainGen.getHeightMap(), 1.0f / m_ChunkScale, m_Stride, 0);
+	utilities::SimpleMeshIndicies(m_MeshIndices, m_Width * m_ChunkResX, m_Height * m_ChunkResY);
+	utilities::InitializeNormals(m_MeshVertices, m_Stride, 3, m_Height * m_ChunkResY * m_Width * m_ChunkResX);
+	utilities::CalculateNormals(m_MeshVertices, m_MeshIndices, m_Stride, 3, (m_Width * m_ChunkResX - 1) * (m_Height * m_ChunkResY - 1) * 6);
+	utilities::NormalizeVector3f(m_MeshVertices, m_Stride, 3, m_Width * m_ChunkResX * m_Height * m_ChunkResY);
+}
+
+

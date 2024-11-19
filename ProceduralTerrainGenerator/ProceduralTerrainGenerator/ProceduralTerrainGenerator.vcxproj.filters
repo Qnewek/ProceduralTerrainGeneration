@@ -96,6 +96,9 @@
     <ClCompile Include="src\terrainGeneration\BiomeSettings.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="src\terrainGeneration\TerrainGenerator.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <None Include="src\vendor\glm\detail\func_common.inl">
@@ -1470,6 +1473,15 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="src\terrainGeneration\BiomeSettings.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\terrainGeneration\TerrainGenerator.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\..\..\..\Downloads\spline.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\vendor\Splines\spline.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
