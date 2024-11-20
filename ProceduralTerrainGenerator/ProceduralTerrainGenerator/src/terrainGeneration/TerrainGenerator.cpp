@@ -1,9 +1,10 @@
 #include "TerrainGenerator.h"
 
 #include <iostream>
+#include <math.h>
 
-TerrainGenerator::TerrainGenerator() : width(0), height(0), heightMap(nullptr), seed(0), chunkResolution(0), chunkScalingFactor(1.0f),
-continentalnessNoise(), mountainousNoise(), PVNoise(), continentalnessSpline(), mountainousSpline(), PVSpline()
+TerrainGenerator::TerrainGenerator() : width(0), height(0), heightMap(nullptr), seed(0), chunkResolution(0),
+continentalnessNoise(), mountainousNoise(), PVNoise(), continentalnessSpline(), mountainousSpline(), PVSpline(), seeLevel(64.0f)
 {
 	mountainousNoise.getConfigRef().option = noise::Options::NOTHING;
 	continentalnessNoise.getConfigRef().option = noise::Options::NOTHING;
@@ -49,6 +50,16 @@ void TerrainGenerator::setSeed(int seed)
 	this->seed = seed;
 }
 
+bool TerrainGenerator::setSeeLevel(float seeLevel)
+{
+	if (seeLevel < 0)
+		return false;
+
+	this->seeLevel = seeLevel;
+
+	return true;
+}
+
 bool TerrainGenerator::setChunkResolution(int resolution)
 {
 	if (resolution <= 0)
@@ -59,20 +70,6 @@ bool TerrainGenerator::setChunkResolution(int resolution)
 	this->mountainousNoise.setChunkSize(chunkResolution, chunkResolution);
 	this->continentalnessNoise.setChunkSize(chunkResolution, chunkResolution);
 	this->PVNoise.setChunkSize(chunkResolution, chunkResolution);
-
-	return true;
-}
-
-bool TerrainGenerator::setChunkScalingFactor(float scalingFactor)
-{
-	if (scalingFactor <= 0)
-		return false;
-
-	this->chunkScalingFactor = scalingFactor;
-
-	this->mountainousNoise.setScale(chunkScalingFactor);
-	this->continentalnessNoise.setScale(chunkScalingFactor);
-	this->PVNoise.setScale(chunkScalingFactor);
 
 	return true;
 }
@@ -109,11 +106,6 @@ float* TerrainGenerator::getHeightMap()
 	return heightMap;
 }
 
-float TerrainGenerator::getScalingFactor()
-{
-	return chunkScalingFactor;
-}
-
 noise::NoiseConfigParameters& TerrainGenerator::getContinentalnessNoiseConfig()
 {
 	return continentalnessNoise.getConfigRef();
@@ -131,7 +123,7 @@ noise::NoiseConfigParameters& TerrainGenerator::getPVNoiseConfig()
 
 bool TerrainGenerator::generateHeightMap()
 {
-	if (!heightMap || width <= 0 || height <= 0 || chunkResolution <= 0 || chunkScalingFactor <= 0) {
+	if (!heightMap || width <= 0 || height <= 0 || chunkResolution <= 0) {
 		std::cout << "[ERROR] HeightMap not initialized" << std::endl;
 		return false;
 	}
@@ -157,11 +149,22 @@ bool TerrainGenerator::generateHeightMap()
 
 	for (int y = 0; y < height * chunkResolution; y++) {
 		for (int x = 0; x < width * chunkResolution; x++) {
-			continentalness = continentalnessSpline(continentalnessNoise.getVal(x, y));
+			continentalness = continentalnessNoise.getVal(x, y);
 			mountainous = mountainousSpline(mountainousNoise.getVal(x, y));
-			PV = PVSpline(PVNoise.getVal(x, y));
+			//PV = PVSpline(PVNoise.getVal(x, y));
 
-			elevation = continentalness * mountainous * PV;
+			if (continentalness >= -0.2 && continentalness  <= 0.0) {
+				mountainous *= 0.0;
+			}
+			else if (continentalness > 0.0) {
+				mountainous *= continentalness;
+			}
+			else
+			{
+				mountainous *= -(continentalness + 0.2) / 25;
+			}
+
+			elevation = continentalnessSpline(continentalness) + mountainous;
 
 			heightMap[y * width * chunkResolution + x] = elevation;
 		}

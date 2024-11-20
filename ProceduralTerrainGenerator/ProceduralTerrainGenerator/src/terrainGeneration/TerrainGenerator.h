@@ -16,15 +16,14 @@ public:
 
 	bool setSize(int width, int height);
 	void setSeed(int seed);
+	bool setSeeLevel(float seeLevel);
 	bool setChunkResolution(int resolution);
-	bool setChunkScalingFactor(float scalingFactor);
 	void setContinentalnessNoiseConfig(noise::NoiseConfigParameters config);
 	void setMountainousNoiseConfig(noise::NoiseConfigParameters config);
 	void setPVNoiseConfig(noise::NoiseConfigParameters config);
 	bool setSplines(std::vector<std::vector<double>> splines);
 
 	float* getHeightMap();
-	float getScalingFactor();
 	noise::NoiseConfigParameters& getContinentalnessNoiseConfig();
 	noise::NoiseConfigParameters& getMountainousNoiseConfig();
 	noise::NoiseConfigParameters& getPVNoiseConfig();
@@ -36,7 +35,7 @@ private:
 	int seed;
 	int width, height;
 	int chunkResolution;
-	float chunkScalingFactor;
+	float seeLevel;
 
 	noise::SimplexNoiseClass continentalnessNoise;
 	noise::SimplexNoiseClass mountainousNoise;
