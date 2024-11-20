@@ -75,7 +75,7 @@ namespace utilities
 		{
 			for (int x = 0; x < width; x++)
 			{
-				vertices[((y * width) + x) * stride + offset    ] = x / (float)width * scalingFactor;
+				vertices[((y * width) + x) * stride + offset] = x / (float)width * scalingFactor;
 				vertices[((y * width) + x) * stride + offset + 1] = map[y * width + x] * scalingFactor;
 				vertices[((y * width) + x) * stride + offset + 2] = y / (float)height * scalingFactor;
 			}
@@ -99,7 +99,7 @@ namespace utilities
 			for (int x = 0; x < width * chunkX; x++)
 			{
 				vertices[((y * width * chunkX) + x) * stride + offset] = x / (float)chunkX * scalingFactor;
-				vertices[((y * width * chunkX) + x) * stride + offset + 1] = map[y * width * chunkX + x] * scalingFactor;
+				vertices[((y * width * chunkX) + x) * stride + offset + 1] = map[y * width * chunkX + x];
 				vertices[((y * width * chunkX) + x) * stride + offset + 2] = y / (float)chunkY * scalingFactor;
 			}
 		}

@@ -50,6 +50,7 @@ namespace test {
 		//Chunk resolution
 		int m_ChunkResX, m_ChunkResY;
 		float m_ChunkScale;
+		float realHeight, seeLevel;
 
 		//Time variables
 		float deltaTime, lastFrame;
