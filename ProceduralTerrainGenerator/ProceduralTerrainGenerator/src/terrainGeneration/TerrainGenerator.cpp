@@ -3,8 +3,10 @@
 #include <iostream>
 #include <math.h>
 
-TerrainGenerator::TerrainGenerator() : width(0), height(0), heightMap(nullptr), seed(0), chunkResolution(0),
-continentalnessNoise(), mountainousNoise(), PVNoise(), continentalnessSpline(), mountainousSpline(), PVSpline(), seeLevel(64.0f)
+TerrainGenerator::TerrainGenerator() : width(0), height(0), seed(0), chunkResolution(0),
+heightMap(nullptr), biomeMap(nullptr),
+continentalnessNoise(), mountainousNoise(), PVNoise(), continentalnessSpline(), mountainousSpline(), PVSpline(),
+seeLevel(64.0f)
 {
 	mountainousNoise.getConfigRef().option = noise::Options::NOTHING;
 	continentalnessNoise.getConfigRef().option = noise::Options::NOTHING;
@@ -14,19 +16,36 @@ continentalnessNoise(), mountainousNoise(), PVNoise(), continentalnessSpline(), 
 
 TerrainGenerator::~TerrainGenerator()
 {
-	delete[] heightMap;
+	if(heightMap)
+		delete[] heightMap;
+	if (biomeMap)
+		delete[] biomeMap;
 }
-
 
 bool TerrainGenerator::initializeMap()
 {
 	if (width <= 0 || height <= 0 || chunkResolution <= 0)
 		return false;
 
-	if (heightMap != nullptr)
+	if (heightMap)
 		delete[] heightMap;
-	
+
 	heightMap = new float[width * chunkResolution * height * chunkResolution];
+
+	return true;
+}
+
+bool TerrainGenerator::initializeBiomeMap()
+{
+	if (width <= 0 || height <= 0 || chunkResolution <= 0)
+		return false;
+
+	if (biomeMap)
+		delete[] biomeMap;
+
+	biomeMap = new int[width * chunkResolution * height * chunkResolution];
+
+	return true;
 }
 
 bool TerrainGenerator::setSize(int width, int height)
@@ -101,9 +120,34 @@ bool TerrainGenerator::setSplines(std::vector<std::vector<double>> splines)
 	return true;
 }
 
+/*bool TerrainGenerator::setBiomes(std::vector<Biome>& biomes)
+{
+	if (!biomeSettings.setBiomes(biomes))
+	{
+		std::cout << "[ERROR] Biomes couldnt be set" << std::endl;
+		return false;
+	}
+	return true;
+}
+
+bool TerrainGenerator::setRanges(std::vector<std::vector<RangedLevel>>& ranges)
+{
+	if (ranges.size() != 4)
+		return false;
+
+	biomeSettings.setRanges(ranges);
+
+	return true;
+}*/
+
 float* TerrainGenerator::getHeightMap()
 {
 	return heightMap;
+}
+
+int* TerrainGenerator::getBiomeMap()
+{
+	return biomeMap;
 }
 
 noise::NoiseConfigParameters& TerrainGenerator::getContinentalnessNoiseConfig()
@@ -120,6 +164,16 @@ noise::NoiseConfigParameters& TerrainGenerator::getPVNoiseConfig()
 {
 	return PVNoise.getConfigRef();
 }
+
+/*noise::NoiseConfigParameters& TerrainGenerator::getTemperatureNoiseConfig()
+{
+	return biomeSettings.getTemperatureNoiseConfig();
+}
+
+noise::NoiseConfigParameters& TerrainGenerator::getHumidityNoiseConfig()
+{
+	return biomeSettings.getHumidityNoiseConfig();
+}*/
 
 bool TerrainGenerator::generateHeightMap()
 {
@@ -140,7 +194,7 @@ bool TerrainGenerator::generateHeightMap()
 	PVNoise.initMap();
 	PVNoise.generateFractalNoiseByChunks();
 
-	std::cout << "[LOG] Interpolating heightMap" << std::endl;
+	std::cout << "[LOG] Evaluating heightMap..." << std::endl;
 
 	float continentalness = 0.0f;
 	float mountainous = 0.0f;
@@ -151,9 +205,9 @@ bool TerrainGenerator::generateHeightMap()
 		for (int x = 0; x < width * chunkResolution; x++) {
 			continentalness = continentalnessNoise.getVal(x, y);
 			mountainous = mountainousSpline(mountainousNoise.getVal(x, y));
-			//PV = PVSpline(PVNoise.getVal(x, y));
+			PV = PVSpline(PVNoise.getVal(x, y));
 
-			if (continentalness >= -0.2 && continentalness  <= 0.0) {
+			if (continentalness >= -0.2 && continentalness <= 0.0) {
 				mountainous *= 0.0;
 			}
 			else if (continentalness > 0.0) {
@@ -164,12 +218,42 @@ bool TerrainGenerator::generateHeightMap()
 				mountainous *= -(continentalness + 0.2) / 25;
 			}
 
-			elevation = continentalnessSpline(continentalness) + mountainous;
+			mountainous -= mountainous * PV;
+
+			elevation = continentalnessSpline(continentalness) + mountainous - (PV * 20.0f);
 
 			heightMap[y * width * chunkResolution + x] = elevation;
 		}
 	}
-	
-	std::cout << "[LOG] HeightMap interpolated " << std::endl;
+
+	std::cout << "[LOG] HeightMap succesfully evaluated " << std::endl;
+	return true;
+}
+
+bool TerrainGenerator::generateBiomes()
+{
+	/*if (!initializeBiomeMap()) {
+		return false;
+	}
+
+	if (!biomeSettings.biomify(biomeMap, width, height, chunkResolution, seed, continentalnessNoise, mountainousNoise)) {
+		return false;
+	}
+	*/
+	return true;
+}
+
+bool TerrainGenerator::performTerrainGeneration()
+{
+	if (!generateHeightMap())
+	{
+		return false;
+	}
+
+	if (!generateBiomes())
+	{
+		return false;
+	}
+
 	return true;
 }

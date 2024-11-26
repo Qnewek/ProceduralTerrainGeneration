@@ -135,11 +135,11 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="src\terrainGeneration\BiomeGenerator.cpp" />
     <ClCompile Include="src\Application.cpp" />
     <ClCompile Include="src\opengl\IndexBuffer.cpp" />
     <ClCompile Include="src\opengl\Renderer.cpp" />
     <ClCompile Include="src\opengl\Shader.cpp" />
-    <ClCompile Include="src\terrainGeneration\BiomeSettings.cpp" />
     <ClCompile Include="src\terrainGeneration\Erosion.cpp" />
     <ClCompile Include="src\terrainGeneration\Noise.cpp" />
     <ClCompile Include="src\terrainGeneration\Biome.cpp" />
@@ -315,7 +315,7 @@
     <None Include="src\vendor\glm\gtx\wrap.inl" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="src\terrainGeneration\BiomeSettings.h" />
+    <ClInclude Include="src\terrainGeneration\BiomeGenerator.h" />
     <ClInclude Include="src\opengl\IndexBuffer.h" />
     <ClInclude Include="src\opengl\Renderer.h" />
     <ClInclude Include="src\opengl\Shader.h" />
