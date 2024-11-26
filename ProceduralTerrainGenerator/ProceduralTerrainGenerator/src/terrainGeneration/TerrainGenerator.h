@@ -3,6 +3,8 @@
 #include <vector>
 
 #include "Noise.h"
+#include "BiomeGenerator.h"
+#include "Biome.h"
 
 #include "Splines/spline.h"
 
@@ -13,6 +15,7 @@ public:
 	~TerrainGenerator();
 
 	bool initializeMap();
+	bool initializeBiomeMap();
 
 	bool setSize(int width, int height);
 	void setSeed(int seed);
@@ -22,18 +25,27 @@ public:
 	void setMountainousNoiseConfig(noise::NoiseConfigParameters config);
 	void setPVNoiseConfig(noise::NoiseConfigParameters config);
 	bool setSplines(std::vector<std::vector<double>> splines);
+	//bool setBiomes(std::vector<Biome>& biomes);
+	//bool setRanges(std::vector<std::vector<RangedLevel>>& ranges);
 
 	float* getHeightMap();
+	int* getBiomeMap();
+	int getWidth(){ return width * chunkResolution; };
+	int getHeight(){ return height * chunkResolution; };
 	noise::NoiseConfigParameters& getContinentalnessNoiseConfig();
 	noise::NoiseConfigParameters& getMountainousNoiseConfig();
 	noise::NoiseConfigParameters& getPVNoiseConfig();
+	//noise::NoiseConfigParameters& getTemperatureNoiseConfig();
+	//noise::NoiseConfigParameters& getHumidityNoiseConfig();
 
 	bool generateHeightMap();
+	bool generateBiomes();
+	bool performTerrainGeneration();
 
 private:
 	float* heightMap;
-	int seed;
-	int width, height;
+	int* biomeMap;
+	int seed, width, height;
 	int chunkResolution;
 	float seeLevel;
 

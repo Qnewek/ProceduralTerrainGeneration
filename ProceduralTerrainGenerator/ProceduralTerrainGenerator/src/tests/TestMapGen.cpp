@@ -6,9 +6,9 @@
 #include "glm/glm.hpp"
 #include "glm/gtc/matrix_transform.hpp"
 
-test::TestMapGen::TestMapGen() : m_Width(50), m_Height(50), m_ChunkResX(40), m_ChunkResY(40), m_ChunkScale(0.05f), realHeight(255.0f),
+test::TestMapGen::TestMapGen() : m_Width(20), m_Height(20), m_ChunkResX(20), m_ChunkResY(20), m_ChunkScale(0.05f), realHeight(255.0f),
 m_Stride(8), m_MeshVertices(nullptr), m_MeshIndices(nullptr), deltaTime(0.0f), lastFrame(0.0f), seeLevel(64.0f),
-m_Player(800, 600, glm::vec3(0.0f, 0.0f, 0.0f), 0.0001f, 40.0f, false, m_Height * m_ChunkResY),
+m_Player(800, 600, glm::vec3(0.0f, 0.0f, 0.0f), 0.0001f, 40.0f, false, m_Height* m_ChunkResY),
 m_LightSource(glm::vec3(0.0f, 0.0f, 0.0f), 1.0f), noise(), terrainGen()
 {
 	// 6 indices per quad which is 2 triangles so there will be (width-1 * height-1 * 2) triangles
@@ -24,7 +24,7 @@ m_LightSource(glm::vec3(0.0f, 0.0f, 0.0f), 1.0f), noise(), terrainGen()
 	m_MainShader = std::make_unique<Shader>("res/shaders/Lightning_final_vertex.shader", "res/shaders/Lightning_final_fragment.shader");
 
 	//Layout of the vertex buffer
-		//Succesively: 
+		//Successively: 
 		// 3 floats for position [x,y,z], 
 		// 3 floats for normal vector indicating direction the vertex faces
 		// 2 floats for texture coordinates based on height
@@ -40,8 +40,10 @@ m_LightSource(glm::vec3(0.0f, 0.0f, 0.0f), 1.0f), noise(), terrainGen()
 
 test::TestMapGen::~TestMapGen()
 {
-	delete[] m_MeshVertices;
-	delete[] m_MeshIndices;
+	if (m_MeshVertices)
+		delete[] m_MeshVertices;
+	if (m_MeshIndices)
+		delete[] m_MeshIndices;
 }
 
 void test::TestMapGen::OnUpdate(float deltaTime)
@@ -59,7 +61,6 @@ void test::TestMapGen::OnRender(GLFWwindow& window, Renderer& renderer)
 	m_Player.SteerPlayer(&window, m_MeshVertices, m_Stride, deltaTime);
 
 	glm::mat4 model = glm::mat4(1.0f);
-	model = glm::translate(model, glm::vec3(0.0f, 0.0f, 0.0f));
 
 	//Since we are using texture sampling we dont need to set ambient and diffuse color 
 	//but there is only one function that needs them as a parameter
@@ -115,19 +116,45 @@ void test::TestMapGen::conditionalTerrainGeneration()
 	terrainGen.getMountainousNoiseConfig().constrast = 1.5f;
 	terrainGen.getMountainousNoiseConfig().scale = m_ChunkScale;
 
-
 	terrainGen.getPVNoiseConfig().constrast = 1.5f;
 	terrainGen.getPVNoiseConfig().ridgeGain = 3.0f;
 	terrainGen.getPVNoiseConfig().scale = m_ChunkScale;
 
+	/*terrainGen.getHumidityNoiseConfig().constrast = 1.5f;
+	terrainGen.getHumidityNoiseConfig().scale = m_ChunkScale;
+
+	terrainGen.getTemperatureNoiseConfig().constrast = 1.5f;
+	terrainGen.getTemperatureNoiseConfig().scale = m_ChunkScale;
+	*/
 
 	terrainGen.initializeMap();
 	terrainGen.setSplines({ {-1.0, -0.7, -0.2, 0.03, 0.3, 1.0}, {0.0, 40.0 ,64.0, 66.0, 68.0, 70.0},	//Continentalness {X,Y}
 							{-1.0, -0.78, -0.37, -0.2, 0.05, 0.45, 0.55, 1.0}, {0.0, 5.0, 10.0, 20.0, 30.0, 80.0, 100.0, 170.0},	//Mountainousness {X,Y}
-							{-1.0, -0.85, -0.6, 0.2, 0.7, 1.0}, {0.5, 0.6, 0.7, 0.8, 0.9, 1.0}}); //PV {X,Y}
+							{-1.0, -0.85, -0.6, 0.2, 0.7, 1.0}, {1.0, 0.7, 0.4, 0.2, 0.05, 0} }); //PV {X,Y}
 
-	if (!terrainGen.generateHeightMap()) {
+	/*std::vector<Biome> biomes = {
+		Biome(0, "Grassplains", {1, 2}, {1, 3}, {3, 5}, {0, 3}),
+		Biome(1, "Desert",		{2, 3}, {0, 1}, {3, 5}, {0, 4}),
+		Biome(2, "Snow",		{0, 1}, {0, 3}, {3, 5}, {0, 4}),
+		Biome(3, "Sand",		{0, 3}, {0, 3}, {2, 3}, {0, 7}),
+		Biome(4, "Mountain",	{0, 3}, {0, 3}, {4, 5}, {4, 7}),
+		Biome(5, "Ocean",		{0, 3}, {0, 3}, {0, 2}, {0, 7})
+	};
+
+	std::vector<std::vector<RangedLevel>> ranges = {
+		{{-1.0f, -0.5f, 0},{-0.5f, 0.0f, 1},{0.0f, 0.5f, 2},{0.5f, 1.0f, 3}},
+		{{-1.0f, -0.5f, 0},{-0.5f, 0.0f, 1},{0.0f, 0.5f, 2},{0.5f, 1.0f, 3}},
+		{{-1.0f, -0.7f, 0},{-0.7f, -0.2f, 1},{ -0.2f, 0.03f, 2},{0.03f, 0.3f, 3},{0.3f, 1.0f, 4}},
+		{{-1.0f, -0.78f, 0},{-0.78f, -0.37f, 1},{-0.37f, -0.2f, 2},{-0.2f, 0.05f, 3},{0.05f, 0.45f, 4},{0.45f, 0.55f, 5},{0.55f, 1.0f, 6}}
+	};*/
+
+	//terrainGen.setBiomes(biomes);
+	//terrainGen.setRanges(ranges);
+
+
+	if (!terrainGen.performTerrainGeneration()) {
 		std::cout << "[ERROR] Map couldnt be generated" << std::endl;
+		return;
 	}
 
 	utilities::parseNoiseChunksIntoVertices(m_MeshVertices, m_Width, m_Height, m_ChunkResX, m_ChunkResX, terrainGen.getHeightMap(), m_ChunkResX * 1.5f, m_Stride, 0);
@@ -135,6 +162,7 @@ void test::TestMapGen::conditionalTerrainGeneration()
 	utilities::InitializeNormals(m_MeshVertices, m_Stride, 3, m_Height * m_ChunkResY * m_Width * m_ChunkResX);
 	utilities::CalculateNormals(m_MeshVertices, m_MeshIndices, m_Stride, 3, (m_Width * m_ChunkResX - 1) * (m_Height * m_ChunkResY - 1) * 6);
 	utilities::NormalizeVector3f(m_MeshVertices, m_Stride, 3, m_Width * m_ChunkResX * m_Height * m_ChunkResY);
+	utilities::PaintNotByTexture(m_MeshVertices, m_Width * m_ChunkResX, m_Height * m_ChunkResY, m_Stride, 6);
 }
 
 
