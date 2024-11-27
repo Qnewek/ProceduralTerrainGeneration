@@ -6,22 +6,24 @@
 #include "glm/glm.hpp"
 #include "glm/gtc/matrix_transform.hpp"
 
-test::TestMapGen::TestMapGen() : m_Width(20), m_Height(20), m_ChunkResX(20), m_ChunkResY(20), m_ChunkScale(0.05f), realHeight(255.0f),
-m_Stride(7), m_MeshVertices(nullptr), m_MeshIndices(nullptr), deltaTime(0.0f), lastFrame(0.0f), seeLevel(64.0f),
+test::TestMapGen::TestMapGen() : m_Width(40), m_Height(40), m_ChunkResX(40), m_ChunkResY(40), m_ChunkScale(0.05f), realHeight(255.0f),
+m_Stride(8), m_MeshVertices(nullptr), m_MeshIndices(nullptr), deltaTime(0.0f), lastFrame(0.0f), seeLevel(64.0f),
 m_Player(800, 600, glm::vec3(0.0f, 0.0f, 0.0f), 0.0001f, 40.0f, false, m_Height* m_ChunkResY),
 m_LightSource(glm::vec3(0.0f, 0.0f, 0.0f), 1.0f), noise(), terrainGen()
 {
-	// 6 indices per quad which is 2 triangles so there will be (width-1 * height-1 * 2) triangles
+	//vertices times 4 cause we are using 4 unique vertices for each quad
+	//indices times 6 cause we are using 6 indices for forming each quad
+	m_MeshVertices = new float[(m_Width * m_ChunkResX-1) * (m_Height * m_ChunkResY - 1) * m_Stride * 4];
 	m_MeshIndices = new unsigned int[(m_Width * m_ChunkResX - 1) * (m_Height * m_ChunkResY - 1) * 6];
-	m_MeshVertices = new float[m_Width * m_ChunkResX * m_Height * m_ChunkResY * m_Stride];
 
 	conditionalTerrainGeneration();
 
 	//OpenGL setup for the mesh
 	m_MainVAO = std::make_unique<VertexArray>();
-	m_MainVertexBuffer = std::make_unique<VertexBuffer>(m_MeshVertices, m_Width * m_ChunkResX * m_Height * m_ChunkResY * m_Stride * sizeof(float));
+	m_MainVertexBuffer = std::make_unique<VertexBuffer>(m_MeshVertices, (m_Width * m_ChunkResX - 1) * (m_Height * m_ChunkResY - 1) * 4 * m_Stride * sizeof(float));
 	m_MainIndexBuffer = std::make_unique<IndexBuffer>(m_MeshIndices, (m_Width * m_ChunkResX - 1) * (m_Height * m_ChunkResY - 1) * 6);
 	m_MainShader = std::make_unique<Shader>("res/shaders/Lightning_final_vertex.shader", "res/shaders/Lightning_final_fragment.shader");
+	m_MainTexture = std::make_unique<Texture>("res/textures/texture.png");
 
 	//Layout of the vertex buffer
 		//Successively: 
@@ -30,7 +32,7 @@ m_LightSource(glm::vec3(0.0f, 0.0f, 0.0f), 1.0f), noise(), terrainGen()
 		// 1 float for Biome ID
 	m_Layout.Push<float>(3);
 	m_Layout.Push<float>(3);
-	m_Layout.Push<float>(1);
+	m_Layout.Push<float>(2);
 
 	m_MainVAO->AddBuffer(*m_MainVertexBuffer, m_Layout);
 	m_Player.SetPosition(glm::vec3(0.0f, 0.0f, 0.0f));
@@ -64,17 +66,19 @@ void test::TestMapGen::OnRender(GLFWwindow& window, Renderer& renderer)
 
 	//Since we are using texture sampling we dont need to set ambient and diffuse color 
 	//but there is only one function that needs them as a parameter
-	m_MainShader->SetMaterialUniforms(glm::vec3(0.6f, 0.6f, 0.6f), glm::vec3(0.6f, 0.6f, 0.6f), glm::vec3(0.1f, 0.1f, 0.1f), 8.0f);
+	m_MainShader->SetMaterialUniforms(glm::vec3(0.6f, 0.6f, 0.6f), glm::vec3(0.6f, 0.6f, 0.6f), glm::vec3(0.1f, 0.1f, 0.1f), 1.0f);
 	m_MainShader->SetLightUniforms(m_LightSource.GetPosition(), glm::vec3(0.2f, 0.2f, 0.2f), glm::vec3(0.5f, 0.5f, 0.5f), glm::vec3(1.0f, 1.0f, 1.0f));
 	m_MainShader->SetViewPos((*m_Player.GetCameraRef()).GetPosition());
 	m_MainShader->SetMVP(model, *(m_Player.GetCameraRef()->GetViewMatrix()), *(m_Player.GetCameraRef()->GetProjectionMatrix()));
 	m_MainShader->SetUniform1f("seeLevel", seeLevel);
+	m_MainShader->SetUniform1i("u_Texture", 0);
 
 	//Render lightning source cube
 	m_LightSource.Draw(renderer, *(m_Player.GetCameraRef()->GetViewMatrix()), *(m_Player.GetCameraRef()->GetProjectionMatrix()));
 
 	//Render terrain
 	m_MainVAO->AddBuffer(*m_MainVertexBuffer, m_Layout);
+	m_MainTexture->Bind();
 	renderer.DrawWithTexture(*m_MainVAO, *m_MainIndexBuffer, *m_MainShader);
 
 }
@@ -116,12 +120,12 @@ void test::TestMapGen::conditionalTerrainGeneration()
 							{-1.0, -0.85, -0.6, 0.2, 0.7, 1.0}, {1.0, 0.7, 0.4, 0.2, 0.05, 0} }); //PV {X,Y}
 
 	std::vector<biome::Biome> biomes = {
-		biome::Biome(0, "Grassplains",	{1, 2}, {1, 4}, {3, 5}, {0, 3}),
-		biome::Biome(1, "Desert",		{2, 4}, {0, 1}, {3, 5}, {0, 4}),
-		biome::Biome(2, "Snow",			{0, 1}, {0, 4}, {3, 5}, {0, 4}),
-		biome::Biome(3, "Sand",			{0, 4}, {0, 4}, {2, 3}, {0, 7}),
-		biome::Biome(4, "Mountain",		{0, 4}, {0, 4}, {4, 5}, {4, 7}),
-		biome::Biome(5, "Ocean",		{0, 4}, {0, 4}, {0, 2}, {0, 7})
+		biome::Biome(0, "Grassplains",	{1, 2}, {1, 4}, {3, 5}, {0, 3}, 3),
+		biome::Biome(1, "Desert",		{2, 4}, {0, 1}, {3, 5}, {0, 4}, 2),
+		biome::Biome(2, "Snow",			{0, 1}, {0, 4}, {3, 5}, {0, 4}, 7),
+		biome::Biome(3, "Sand",			{0, 4}, {0, 4}, {2, 3}, {0, 7}, 8),
+		biome::Biome(4, "Mountain",		{0, 4}, {0, 4}, {4, 5}, {4, 7}, 0),
+		biome::Biome(5, "Ocean",		{0, 4}, {0, 4}, {0, 2}, {0, 7}, 5)
 	};
 
 	std::vector<std::vector<RangedLevel>> ranges = {
@@ -140,12 +144,20 @@ void test::TestMapGen::conditionalTerrainGeneration()
 		return;
 	}
 
-	utilities::parseNoiseChunksIntoVertices(m_MeshVertices, m_Width, m_Height, m_ChunkResX, m_ChunkResX, terrainGen.getHeightMap(), m_ChunkResX * 1.5f, m_Stride, 0);
+	/*utilities::parseNoiseChunksIntoVertices(m_MeshVertices, m_Width, m_Height, m_ChunkResX, m_ChunkResX, terrainGen.getHeightMap(), m_ChunkResX * 1.5f, m_Stride, 0);
 	utilities::SimpleMeshIndicies(m_MeshIndices, m_Width * m_ChunkResX, m_Height * m_ChunkResY);
 	utilities::InitializeNormals(m_MeshVertices, m_Stride, 3, m_Height * m_ChunkResY * m_Width * m_ChunkResX);
 	utilities::CalculateNormals(m_MeshVertices, m_MeshIndices, m_Stride, 3, (m_Width * m_ChunkResX - 1) * (m_Height * m_ChunkResY - 1) * 6);
 	utilities::NormalizeVector3f(m_MeshVertices, m_Stride, 3, m_Width * m_ChunkResX * m_Height * m_ChunkResY);
 	utilities::AssignBiome(m_MeshVertices, terrainGen.getBiomeMap(), m_Width * m_ChunkResX, m_Height * m_ChunkResY, m_Stride, 6);
+	*/
+
+	utilities::createTiledVertices(m_MeshVertices, m_Width * m_ChunkResX, m_Height * m_ChunkResY, terrainGen.getHeightMap(), 0.5f, m_Stride, 0);
+	utilities::createIndicesTiledField(m_MeshIndices, m_Width * m_ChunkResX, m_Height * m_ChunkResY);
+	utilities::InitializeNormals(m_MeshVertices, m_Stride, 3, (m_Height * m_ChunkResY - 1) * (m_Width * m_ChunkResX - 1) * 4);
+	utilities::CalculateNormals(m_MeshVertices, m_MeshIndices, m_Stride, 3, (m_Width * m_ChunkResX - 1) * (m_Height * m_ChunkResY - 1) * 6);
+	utilities::NormalizeVector3f(m_MeshVertices, m_Stride, 3, (m_Height * m_ChunkResY - 1) * (m_Width * m_ChunkResX - 1) * 4);
+	utilities::AssignTexturesByBiomes(terrainGen, m_MeshVertices, m_Width * m_ChunkResX, m_Height * m_ChunkResY, 3, m_Stride, 6);
 }
 
 

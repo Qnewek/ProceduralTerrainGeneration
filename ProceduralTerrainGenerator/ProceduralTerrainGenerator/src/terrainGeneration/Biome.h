@@ -21,7 +21,7 @@ namespace biome {
 	public:
 		Biome();
 		Biome(int id, std::string name);
-		Biome(int id, std::string name, vec2 temperatureLevel, vec2 humidityLevel, vec2 continentalnessLevel, vec2 mountainousnessLevel);
+		Biome(int id, std::string name, vec2 temperatureLevel, vec2 humidityLevel, vec2 continentalnessLevel, vec2 mountainousnessLevel, int texOffset);
 		Biome(const Biome& b) = default;
 		~Biome();
 
@@ -31,6 +31,7 @@ namespace biome {
 		vec2 getMountainousnessLevel() const;
 		int getId() const;
 		std::string getName() const;
+		int getTexOffset() const;
 
 		void setTemperatureLevel(vec2 temperatureLevel);
 		void setHumidityLevel(vec2 humidityLevel);
@@ -41,6 +42,7 @@ namespace biome {
 		bool verifyBiome(const int& T, const int& H, const int& C, const int& M) const;
 	private:
 		int m_id;
+		int texOffset;
 		std::string m_Name;
 		vec2 m_TemperatureLevel;
 		vec2 m_HumidityLevel;

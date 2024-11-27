@@ -32,6 +32,8 @@ public:
 	int* getBiomeMap();
 	int getWidth(){ return width * chunkResolution; };
 	int getHeight(){ return height * chunkResolution; };
+	biome::Biome& getBiome(int id);
+	int getBiomeAt(int x, int y);
 	noise::NoiseConfigParameters& getContinentalnessNoiseConfig();
 	noise::NoiseConfigParameters& getMountainousNoiseConfig();
 	noise::NoiseConfigParameters& getPVNoiseConfig();

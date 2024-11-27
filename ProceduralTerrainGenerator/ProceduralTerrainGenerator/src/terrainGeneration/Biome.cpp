@@ -1,18 +1,17 @@
 #include "Biome.h"
 
 namespace biome{
-	Biome::Biome() : m_id(-1), m_Name(""), m_TemperatureLevel(), m_HumidityLevel(), m_ContinentalnessLevel(), m_MountainousnessLevel()
+	Biome::Biome() : m_id(-1), m_Name(""), m_TemperatureLevel(), m_HumidityLevel(), m_ContinentalnessLevel(), m_MountainousnessLevel(), texOffset(0)
 	{
 	}
 
-	Biome::Biome(int id, std::string name) : m_id(id), m_Name(name), m_TemperatureLevel(), m_HumidityLevel(), m_ContinentalnessLevel(), m_MountainousnessLevel()
+	Biome::Biome(int id, std::string name) : m_id(id), m_Name(name), m_TemperatureLevel(), m_HumidityLevel(), m_ContinentalnessLevel(), m_MountainousnessLevel(), texOffset(0)
 	{
 	}
 
-	Biome::Biome(int id, std::string name, vec2 temperatureLevel, vec2 humidityLevel, vec2 continentalnessLevel, vec2 mountainousnessLevel) : m_id(id), m_Name(name),
-		m_TemperatureLevel(temperatureLevel), m_HumidityLevel(humidityLevel), m_ContinentalnessLevel(continentalnessLevel), m_MountainousnessLevel(mountainousnessLevel)
+	Biome::Biome(int id, std::string name, vec2 temperatureLevel, vec2 humidityLevel, vec2 continentalnessLevel, vec2 mountainousnessLevel, int texOffset) : m_id(id), m_Name(name),
+		m_TemperatureLevel(temperatureLevel), m_HumidityLevel(humidityLevel), m_ContinentalnessLevel(continentalnessLevel), m_MountainousnessLevel(mountainousnessLevel), texOffset(texOffset)
 	{
-
 	}
 
 	Biome::~Biome()
@@ -47,6 +46,11 @@ namespace biome{
 	std::string Biome::getName() const
 	{
 		return m_Name;
+	}
+
+	int Biome::getTexOffset() const
+	{
+		return texOffset;
 	}
 
 	void Biome::setTemperatureLevel(vec2 temperatureLevel)

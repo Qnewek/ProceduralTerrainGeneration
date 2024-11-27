@@ -636,6 +636,9 @@
   </ItemGroup>
   <ItemGroup>
     <Image Include="res\textures\Basic_biome_texture_palette.jpg" />
+    <Image Include="res\textures\Grass.jpg" />
+    <Image Include="res\textures\texture.png" />
+    <Image Include="res\textures\Water.jpg" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

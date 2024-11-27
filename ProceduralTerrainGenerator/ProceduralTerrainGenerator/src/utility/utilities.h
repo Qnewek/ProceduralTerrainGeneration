@@ -9,6 +9,7 @@
 
 #include "Noise.h"
 #include "Erosion.h"
+#include "TerrainGenerator.h"
 
 namespace utilities
 {
@@ -18,12 +19,15 @@ namespace utilities
 	void GenCubeLayout(float* vertices, unsigned int* indices, float scalingFactor);
     void parseNoiseIntoVertices(float* vertices, int width, int height, float* map, float scalingFactor, unsigned int stride, unsigned int offset);
     void parseNoiseChunksIntoVertices(float* vertices, int width, int height, int chunkX, int chunkY, float* map, float scalingFactor, unsigned int stride, unsigned int offset);
+    bool createIndicesTiledField(unsigned int* indices, int width, int height);
+    bool createTiledVertices(float* vertices, int width, int height, float* map, float scalingFactor, unsigned int stride, unsigned int offset);
+
 
 	//Functions for dealing with 3D vectors
-    void InitializeNormals(float* vertices, unsigned int stride, unsigned int offSet, unsigned int verticesCount);
-    void CalculateNormals(float* vertices, unsigned int* indices, unsigned int stride, unsigned int offSet, unsigned int indexSize);
+    bool InitializeNormals(float* vertices, unsigned int stride, unsigned int offSet, unsigned int verticesCount);
+    bool CalculateNormals(float* vertices, unsigned int* indices, unsigned int stride, unsigned int offSet, unsigned int indexSize);
 	void AddVector3f(float* vertices, unsigned int index, glm::vec3 vector3f);
-	void NormalizeVector3f(float* vertices, unsigned int stride, unsigned int offSet, unsigned int verticesCount);
+	bool NormalizeVector3f(float* vertices, unsigned int stride, unsigned int offSet, unsigned int verticesCount);
 	
 	//Terrain generation functions
     void GenerateTerrainMap(noise::SimplexNoiseClass& noise, float* vertices, unsigned int* indices, unsigned int stride);
@@ -32,6 +36,7 @@ namespace utilities
     void PaintBiome(float* vertices, float* map, int width, int height, unsigned int stride, unsigned int offset);
     void PaintNotByTexture(float* vertices, int width, int height, unsigned int stride, unsigned int offset);
 	void AssignBiome(float* vertices, int* biomeMap, int width, int height, unsigned int stride, unsigned int offset);
+    void AssignTexturesByBiomes(TerrainGenerator& terraGen, float* vertices, int width, int height, int texAtlasSize, unsigned int stride, unsigned int offset);
 
 	//Benchmarking function
     template <typename Func, typename... Args>
