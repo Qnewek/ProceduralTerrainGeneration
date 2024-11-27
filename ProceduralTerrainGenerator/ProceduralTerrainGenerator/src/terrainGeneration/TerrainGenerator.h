@@ -4,7 +4,7 @@
 
 #include "Noise.h"
 #include "BiomeGenerator.h"
-#include "Biome.h"
+#include "Player.h"
 
 #include "Splines/spline.h"
 
@@ -25,8 +25,8 @@ public:
 	void setMountainousNoiseConfig(noise::NoiseConfigParameters config);
 	void setPVNoiseConfig(noise::NoiseConfigParameters config);
 	bool setSplines(std::vector<std::vector<double>> splines);
-	//bool setBiomes(std::vector<Biome>& biomes);
-	//bool setRanges(std::vector<std::vector<RangedLevel>>& ranges);
+	bool setBiomes(std::vector<biome::Biome>& biomes);
+	bool setRanges(std::vector<std::vector<RangedLevel>>& ranges);
 
 	float* getHeightMap();
 	int* getBiomeMap();
@@ -35,8 +35,8 @@ public:
 	noise::NoiseConfigParameters& getContinentalnessNoiseConfig();
 	noise::NoiseConfigParameters& getMountainousNoiseConfig();
 	noise::NoiseConfigParameters& getPVNoiseConfig();
-	//noise::NoiseConfigParameters& getTemperatureNoiseConfig();
-	//noise::NoiseConfigParameters& getHumidityNoiseConfig();
+	noise::NoiseConfigParameters& getTemperatureNoiseConfig();
+	noise::NoiseConfigParameters& getHumidityNoiseConfig();
 
 	bool generateHeightMap();
 	bool generateBiomes();
@@ -56,4 +56,6 @@ private:
 	tk::spline continentalnessSpline;
 	tk::spline mountainousSpline;
 	tk::spline PVSpline;
+
+	BiomeGenerator biomeGen;
 };

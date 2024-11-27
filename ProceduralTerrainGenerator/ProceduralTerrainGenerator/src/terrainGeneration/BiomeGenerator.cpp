@@ -46,7 +46,7 @@ int BiomeGenerator::determineLevel(WorldParameter p, float value)
 		return -1;
 		break;
 	}
-	std::cout << "[ERROR] Level not found" << std::endl;
+	std::cout << "[ERROR] Level not found for value: " << value << std::endl;
 	return -2;
 }
 
@@ -57,7 +57,6 @@ int BiomeGenerator::determineBiome(const int& temperature, const int& humidity, 
 			return it.first;
 	}
 
-	std::cout << "[ERROR] Biome not found, asigning default biome..." << std::endl;
 	return 0;
 }
 
@@ -71,15 +70,21 @@ bool BiomeGenerator::biomify(int* biomeMap, const int& width, const int& height,
 	temperatureNoise.setSeed(seed);
 	temperatureNoise.setMapSize(width, height);
 	temperatureNoise.setChunkSize(chunkRes, chunkRes);
+	temperatureNoise.getConfigRef().option = noise::Options::NOTHING;
+	temperatureNoise.getConfigRef().scale = 0.01f;
+	temperatureNoise.getConfigRef().constrast = 1.5f;
 	temperatureNoise.initMap();
 	if (!temperatureNoise.generateFractalNoiseByChunks()) {
 		std::cout << "[ERROR] Failed to generate temperature noise" << std::endl;
 		return false;
 	}
 
-	humidityNoise.setSeed(seed);
+	humidityNoise.setSeed(seed/2);
 	humidityNoise.setMapSize(width, height);
 	humidityNoise.setChunkSize(chunkRes, chunkRes);
+	humidityNoise.getConfigRef().option = noise::Options::NOTHING;
+	humidityNoise.getConfigRef().scale = 0.01f;
+	humidityNoise.getConfigRef().constrast = 1.5f;
 	humidityNoise.initMap();
 	if (!humidityNoise.generateFractalNoiseByChunks()) {
 		std::cout << "[ERROR] Failed to generate humidity noise" << std::endl;
@@ -97,15 +102,12 @@ bool BiomeGenerator::biomify(int* biomeMap, const int& width, const int& height,
 			M = determineLevel(WorldParameter::Mountainousness, mountainouss.getVal(x, y));
 
 			biomeMap[y * width * chunkRes + x] = determineBiome(H, T, C, M);
-
-			std::cout << "Biome: " << biomeMap[y * width * chunkRes + x] << std::endl;
 		}
 	}
-	std::cout << "[LOG] biomeMap succesfully evaluated " << std::endl;
 	return true;
 }
 
-Biome& BiomeGenerator::getBiome(int id)
+biome::Biome& BiomeGenerator::getBiome(int id)
 {
 	return m_Biomes[id];
 }
@@ -135,7 +137,7 @@ bool BiomeGenerator::setRanges(std::vector<std::vector<RangedLevel>>& ranges)
 	return true;
 }
 
-bool BiomeGenerator::setBiomes(std::vector<Biome>& biomes)
+bool BiomeGenerator::setBiomes(std::vector<biome::Biome>& biomes)
 {
 	if (biomes.empty()) {
 		std::cout << "[ERROR] Biomes initialization array empty!" << std::endl;
@@ -143,7 +145,7 @@ bool BiomeGenerator::setBiomes(std::vector<Biome>& biomes)
 	}
 
 	for (auto& it : biomes) {
-		m_Biomes[it.getId()] = it;
+		m_Biomes[it.getId()] = biome::Biome(it);
 	}
 
 	return true;

@@ -210,6 +210,23 @@ namespace utilities
 		}
 	}
 
+	void AssignBiome(float* vertices, int* biomeMap, int width, int height, unsigned int stride, unsigned int offset)
+	{
+		if (!biomeMap || !vertices)
+		{
+			std::cout << "[ERROR] Arrays not initialized" << std::endl;
+			return;
+		}
+
+		for (int y = 0; y < height; y++)
+		{
+			for (int x = 0; x < width; x++)
+			{
+				vertices[((y * width) + x) * stride + offset] = static_cast<float>(biomeMap[y * width + x]);
+			}
+		}
+	}
+
 	//Initializes normals for the vertices to be 0.0f, its needed for the AddVector3f function
 	//@param vertices - array of vertices to be filled with data
 	//@param stride - number of floats per vertex

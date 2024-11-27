@@ -18,7 +18,7 @@ struct Light {
 
 in vec3 FragPos;  
 in vec3 Normal;  
-in vec2 TexCoords;
+in vec3 BiomeColor;
   
 uniform vec3 viewPos;
 uniform Material material;
@@ -32,31 +32,22 @@ void main()
     vec3 diffuse;
     vec3 norm = normalize(Normal);
     vec3 lightDir = normalize(light.position - FragPos);
+    vec3 color = BiomeColor;
 
-    if (TexCoords.x < 0.0 && TexCoords.y < 0.0)
-    {
-        ambient = light.ambient * vec3(0.5,0.5,0.5);
-        float diff = max(dot(norm, lightDir), 0.0);
-        diffuse = light.diffuse * diff * vec3(0.5,0.5,0.5);
+    if(FragPos.y < seeLevel){
+        
+        color = vec3(0.6, 0.6, 0.55) * FragPos.y/ seeLevel;
     }
-    else
-    {
-        ambient = light.ambient * texture(u_Texture, TexCoords).rgb;
-        float diff = max(dot(norm, lightDir), 0.0);
-        diffuse = light.diffuse * diff * texture(u_Texture, TexCoords).rgb;
-    }
+
+    ambient = light.ambient * color;
+    float diff = max(dot(norm, lightDir), 0.0);
+    diffuse = light.diffuse * diff * color;
 
     // specular
     vec3 viewDir = normalize(viewPos - FragPos);
     vec3 reflectDir = reflect(-lightDir, norm);  
     float spec = pow(max(dot(viewDir, reflectDir), 0.0), material.shininess);
-    vec3 specular = light.specular * spec * material.specular;  
-        
-    if(FragPos.y < seeLevel){
-        ambient = ambient * FragPos.y/ seeLevel;
-        diffuse = diffuse * FragPos.y / seeLevel;
-        specular = specular * FragPos.y / seeLevel * 0.5;
-    }
+    vec3 specular = light.specular * spec * color * 0.2;  
 
     vec3 result = ambient + diffuse + specular;
     FragColor = vec4(result, 1.0);

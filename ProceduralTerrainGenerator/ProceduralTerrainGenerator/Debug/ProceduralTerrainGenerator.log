@@ -1,18 +1,4 @@
 ﻿  Scanning sources for module dependencies...
-  TerrainGenerator.cpp
-C:\Users\Dawid\Documents\JakiesPopierdulki\Studia\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\vendor\Splines\spline.h(44,9): warning C4068: unknown pragma 'GCC'
-  (compiling source file 'src/terrainGeneration/TerrainGenerator.cpp')
-  
-C:\Users\Dawid\Documents\JakiesPopierdulki\Studia\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\vendor\Splines\spline.h(45,9): warning C4068: unknown pragma 'GCC'
-  (compiling source file 'src/terrainGeneration/TerrainGenerator.cpp')
-  
-C:\Users\Dawid\Documents\JakiesPopierdulki\Studia\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\vendor\Splines\spline.h(681,9): warning C4068: unknown pragma 'GCC'
-  (compiling source file 'src/terrainGeneration/TerrainGenerator.cpp')
-  
-C:\Users\Dawid\Documents\JakiesPopierdulki\Studia\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\terrainGeneration\TerrainGenerator.cpp(207,35): warning C4244: '=': conversion from 'double' to 'float', possible loss of data
-C:\Users\Dawid\Documents\JakiesPopierdulki\Studia\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\terrainGeneration\TerrainGenerator.cpp(208,17): warning C4244: '=': conversion from 'double' to 'float', possible loss of data
-C:\Users\Dawid\Documents\JakiesPopierdulki\Studia\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\terrainGeneration\TerrainGenerator.cpp(218,45): warning C4244: '*=': conversion from 'double' to 'float', possible loss of data
-C:\Users\Dawid\Documents\JakiesPopierdulki\Studia\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\terrainGeneration\TerrainGenerator.cpp(223,69): warning C4244: '=': conversion from 'double' to 'float', possible loss of data
   TestMapGen.cpp
 C:\Users\Dawid\Documents\JakiesPopierdulki\Studia\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\vendor\Splines\spline.h(44,9): warning C4068: unknown pragma 'GCC'
   (compiling source file 'src/tests/TestMapGen.cpp')
@@ -23,5 +9,4 @@ C:\Users\Dawid\Documents\JakiesPopierdulki\Studia\ProceduralTerrainGeneration\Pr
 C:\Users\Dawid\Documents\JakiesPopierdulki\Studia\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\vendor\Splines\spline.h(681,9): warning C4068: unknown pragma 'GCC'
   (compiling source file 'src/tests/TestMapGen.cpp')
   
-  Generating Code...
   ProceduralTerrainGenerator.vcxproj -> C:\Users\Dawid\Documents\JakiesPopierdulki\Studia\ProceduralTerrainGeneration\ProceduralTerrainGenerator\Debug\ProceduralTerrainGenerator.exe
