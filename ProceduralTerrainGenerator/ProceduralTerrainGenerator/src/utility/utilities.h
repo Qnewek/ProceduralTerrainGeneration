@@ -31,6 +31,7 @@ namespace utilities
     void PerformErosion(float* vertices, unsigned int* indices, float scalingFactor, std::optional<float*> Track, int stride, int positionsOffset, int normalsOffset, erosion::Erosion& erosion);
     void PaintBiome(float* vertices, float* map, int width, int height, unsigned int stride, unsigned int offset);
     void PaintNotByTexture(float* vertices, int width, int height, unsigned int stride, unsigned int offset);
+	void AssignBiome(float* vertices, int* biomeMap, int width, int height, unsigned int stride, unsigned int offset);
 
 	//Benchmarking function
     template <typename Func, typename... Args>

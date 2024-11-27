@@ -25,19 +25,19 @@ public:
 	BiomeGenerator();
 	~BiomeGenerator();
 
-	Biome& getBiome(int id);
+	biome::Biome& getBiome(int id);
 	noise::NoiseConfigParameters& getTemperatureNoiseConfig();
 	noise::NoiseConfigParameters& getHumidityNoiseConfig();
 
 	bool setRanges(std::vector<std::vector<RangedLevel>>& ranges);
-	bool setBiomes(std::vector<Biome>& biomes);
+	bool setBiomes(std::vector<biome::Biome>& biomes);
 
 	int determineLevel(WorldParameter p, float value);
 	int determineBiome(const int& temperature, const int& humidity, const int& continentalness, const int& mountainousness);
 	bool biomify(int* biomeMap, const int& width, const int& height, const int& chunkRes, const int& seed, const noise::SimplexNoiseClass& continenatlnes, const noise::SimplexNoiseClass& mountainouss);
 
 private:
-	std::unordered_map<int, Biome> m_Biomes;
+	std::unordered_map<int, biome::Biome> m_Biomes;
 	std::vector<RangedLevel> m_ContinentalnessLevels;
 	std::vector<RangedLevel> m_HumidityLevels;
 	std::vector<RangedLevel> m_TemperatureLevels;

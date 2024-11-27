@@ -7,7 +7,7 @@
 #include "glm/gtc/matrix_transform.hpp"
 
 test::TestMapGen::TestMapGen() : m_Width(20), m_Height(20), m_ChunkResX(20), m_ChunkResY(20), m_ChunkScale(0.05f), realHeight(255.0f),
-m_Stride(8), m_MeshVertices(nullptr), m_MeshIndices(nullptr), deltaTime(0.0f), lastFrame(0.0f), seeLevel(64.0f),
+m_Stride(7), m_MeshVertices(nullptr), m_MeshIndices(nullptr), deltaTime(0.0f), lastFrame(0.0f), seeLevel(64.0f),
 m_Player(800, 600, glm::vec3(0.0f, 0.0f, 0.0f), 0.0001f, 40.0f, false, m_Height* m_ChunkResY),
 m_LightSource(glm::vec3(0.0f, 0.0f, 0.0f), 1.0f), noise(), terrainGen()
 {
@@ -27,10 +27,10 @@ m_LightSource(glm::vec3(0.0f, 0.0f, 0.0f), 1.0f), noise(), terrainGen()
 		//Successively: 
 		// 3 floats for position [x,y,z], 
 		// 3 floats for normal vector indicating direction the vertex faces
-		// 2 floats for texture coordinates based on height
+		// 1 float for Biome ID
 	m_Layout.Push<float>(3);
 	m_Layout.Push<float>(3);
-	m_Layout.Push<float>(2);
+	m_Layout.Push<float>(1);
 
 	m_MainVAO->AddBuffer(*m_MainVertexBuffer, m_Layout);
 	m_Player.SetPosition(glm::vec3(0.0f, 0.0f, 0.0f));
@@ -93,21 +93,11 @@ void test::TestMapGen::OnImGuiRender()
 	ImGui::End();
 }
 
-void test::TestMapGen::basicTerrainGeneration()
-{
-	noise.setMapSize(m_Width, m_Height);
-	noise.setChunkSize(m_ChunkResX, m_ChunkResY);
-	noise.setScale(m_ChunkScale);
-	noise.getConfigRef().option = noise::Options::REFIT_ALL;
-	utilities::benchmark_void(utilities::GenerateTerrainMap, "GenerateTerrainMap", noise, m_MeshVertices, m_MeshIndices, m_Stride);
-	utilities::PaintNotByTexture(m_MeshVertices, m_Width * m_ChunkResX, m_Height * m_ChunkResY, m_Stride, 6);
-}
-
 void test::TestMapGen::conditionalTerrainGeneration()
 {
 	terrainGen.setSize(m_Width, m_Height);
 	terrainGen.setChunkResolution(m_ChunkResX);
-	terrainGen.setSeed(124);
+	terrainGen.setSeed(742);
 
 	terrainGen.getContinentalnessNoiseConfig().constrast = 1.5f;
 	terrainGen.getContinentalnessNoiseConfig().octaves = 7;
@@ -120,36 +110,29 @@ void test::TestMapGen::conditionalTerrainGeneration()
 	terrainGen.getPVNoiseConfig().ridgeGain = 3.0f;
 	terrainGen.getPVNoiseConfig().scale = m_ChunkScale;
 
-	/*terrainGen.getHumidityNoiseConfig().constrast = 1.5f;
-	terrainGen.getHumidityNoiseConfig().scale = m_ChunkScale;
-
-	terrainGen.getTemperatureNoiseConfig().constrast = 1.5f;
-	terrainGen.getTemperatureNoiseConfig().scale = m_ChunkScale;
-	*/
-
 	terrainGen.initializeMap();
 	terrainGen.setSplines({ {-1.0, -0.7, -0.2, 0.03, 0.3, 1.0}, {0.0, 40.0 ,64.0, 66.0, 68.0, 70.0},	//Continentalness {X,Y}
 							{-1.0, -0.78, -0.37, -0.2, 0.05, 0.45, 0.55, 1.0}, {0.0, 5.0, 10.0, 20.0, 30.0, 80.0, 100.0, 170.0},	//Mountainousness {X,Y}
 							{-1.0, -0.85, -0.6, 0.2, 0.7, 1.0}, {1.0, 0.7, 0.4, 0.2, 0.05, 0} }); //PV {X,Y}
 
-	/*std::vector<Biome> biomes = {
-		Biome(0, "Grassplains", {1, 2}, {1, 3}, {3, 5}, {0, 3}),
-		Biome(1, "Desert",		{2, 3}, {0, 1}, {3, 5}, {0, 4}),
-		Biome(2, "Snow",		{0, 1}, {0, 3}, {3, 5}, {0, 4}),
-		Biome(3, "Sand",		{0, 3}, {0, 3}, {2, 3}, {0, 7}),
-		Biome(4, "Mountain",	{0, 3}, {0, 3}, {4, 5}, {4, 7}),
-		Biome(5, "Ocean",		{0, 3}, {0, 3}, {0, 2}, {0, 7})
+	std::vector<biome::Biome> biomes = {
+		biome::Biome(0, "Grassplains",	{1, 2}, {1, 4}, {3, 5}, {0, 3}),
+		biome::Biome(1, "Desert",		{2, 4}, {0, 1}, {3, 5}, {0, 4}),
+		biome::Biome(2, "Snow",			{0, 1}, {0, 4}, {3, 5}, {0, 4}),
+		biome::Biome(3, "Sand",			{0, 4}, {0, 4}, {2, 3}, {0, 7}),
+		biome::Biome(4, "Mountain",		{0, 4}, {0, 4}, {4, 5}, {4, 7}),
+		biome::Biome(5, "Ocean",		{0, 4}, {0, 4}, {0, 2}, {0, 7})
 	};
 
 	std::vector<std::vector<RangedLevel>> ranges = {
-		{{-1.0f, -0.5f, 0},{-0.5f, 0.0f, 1},{0.0f, 0.5f, 2},{0.5f, 1.0f, 3}},
-		{{-1.0f, -0.5f, 0},{-0.5f, 0.0f, 1},{0.0f, 0.5f, 2},{0.5f, 1.0f, 3}},
-		{{-1.0f, -0.7f, 0},{-0.7f, -0.2f, 1},{ -0.2f, 0.03f, 2},{0.03f, 0.3f, 3},{0.3f, 1.0f, 4}},
-		{{-1.0f, -0.78f, 0},{-0.78f, -0.37f, 1},{-0.37f, -0.2f, 2},{-0.2f, 0.05f, 3},{0.05f, 0.45f, 4},{0.45f, 0.55f, 5},{0.55f, 1.0f, 6}}
-	};*/
+		{{-1.0f, -0.5f, 0},{-0.5f, 0.0f, 1},{0.0f, 0.5f, 2},{0.5f, 1.1f, 3}},
+		{{-1.0f, -0.5f, 0},{-0.5f, 0.0f, 1},{0.0f, 0.5f, 2},{0.5f, 1.1f, 3}},
+		{{-1.0f, -0.7f, 0},{-0.7f, -0.2f, 1},{ -0.2f, 0.03f, 2},{0.03f, 0.3f, 3},{0.3f, 1.1f, 4}},
+		{{-1.0f, -0.78f, 0},{-0.78f, -0.37f, 1},{-0.37f, -0.2f, 2},{-0.2f, 0.05f, 3},{0.05f, 0.45f, 4},{0.45f, 0.55f, 5},{0.55f, 1.1f, 6}}
+	};
 
-	//terrainGen.setBiomes(biomes);
-	//terrainGen.setRanges(ranges);
+	terrainGen.setBiomes(biomes);
+	terrainGen.setRanges(ranges);
 
 
 	if (!terrainGen.performTerrainGeneration()) {
@@ -162,7 +145,7 @@ void test::TestMapGen::conditionalTerrainGeneration()
 	utilities::InitializeNormals(m_MeshVertices, m_Stride, 3, m_Height * m_ChunkResY * m_Width * m_ChunkResX);
 	utilities::CalculateNormals(m_MeshVertices, m_MeshIndices, m_Stride, 3, (m_Width * m_ChunkResX - 1) * (m_Height * m_ChunkResY - 1) * 6);
 	utilities::NormalizeVector3f(m_MeshVertices, m_Stride, 3, m_Width * m_ChunkResX * m_Height * m_ChunkResY);
-	utilities::PaintNotByTexture(m_MeshVertices, m_Width * m_ChunkResX, m_Height * m_ChunkResY, m_Stride, 6);
+	utilities::AssignBiome(m_MeshVertices, terrainGen.getBiomeMap(), m_Width * m_ChunkResX, m_Height * m_ChunkResY, m_Stride, 6);
 }
 
 

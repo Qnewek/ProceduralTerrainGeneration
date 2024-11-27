@@ -101,6 +101,6 @@ namespace noise
 		unsigned int width, height;
 		unsigned int chunkWidth, chunkHeight;
 
-		static float ridge(float h, float offset, float gain);
+		float ridge(float h, float offset, float gain);
 	};
 }

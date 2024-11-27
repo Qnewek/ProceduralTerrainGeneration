@@ -6,7 +6,7 @@
 TerrainGenerator::TerrainGenerator() : width(0), height(0), seed(0), chunkResolution(0),
 heightMap(nullptr), biomeMap(nullptr),
 continentalnessNoise(), mountainousNoise(), PVNoise(), continentalnessSpline(), mountainousSpline(), PVSpline(),
-seeLevel(64.0f)
+seeLevel(64.0f), biomeGen()
 {
 	mountainousNoise.getConfigRef().option = noise::Options::NOTHING;
 	continentalnessNoise.getConfigRef().option = noise::Options::NOTHING;
@@ -120,9 +120,9 @@ bool TerrainGenerator::setSplines(std::vector<std::vector<double>> splines)
 	return true;
 }
 
-/*bool TerrainGenerator::setBiomes(std::vector<Biome>& biomes)
+bool TerrainGenerator::setBiomes(std::vector<biome::Biome>& biomes)
 {
-	if (!biomeSettings.setBiomes(biomes))
+	if (!biomeGen.setBiomes(biomes))
 	{
 		std::cout << "[ERROR] Biomes couldnt be set" << std::endl;
 		return false;
@@ -135,10 +135,10 @@ bool TerrainGenerator::setRanges(std::vector<std::vector<RangedLevel>>& ranges)
 	if (ranges.size() != 4)
 		return false;
 
-	biomeSettings.setRanges(ranges);
+	biomeGen.setRanges(ranges);
 
 	return true;
-}*/
+}
 
 float* TerrainGenerator::getHeightMap()
 {
@@ -165,15 +165,15 @@ noise::NoiseConfigParameters& TerrainGenerator::getPVNoiseConfig()
 	return PVNoise.getConfigRef();
 }
 
-/*noise::NoiseConfigParameters& TerrainGenerator::getTemperatureNoiseConfig()
+noise::NoiseConfigParameters& TerrainGenerator::getTemperatureNoiseConfig()
 {
-	return biomeSettings.getTemperatureNoiseConfig();
+	return biomeGen.getTemperatureNoiseConfig();
 }
 
 noise::NoiseConfigParameters& TerrainGenerator::getHumidityNoiseConfig()
 {
-	return biomeSettings.getHumidityNoiseConfig();
-}*/
+	return biomeGen.getHumidityNoiseConfig();
+}
 
 bool TerrainGenerator::generateHeightMap()
 {
@@ -232,14 +232,14 @@ bool TerrainGenerator::generateHeightMap()
 
 bool TerrainGenerator::generateBiomes()
 {
-	/*if (!initializeBiomeMap()) {
+	if (!initializeBiomeMap()) {
 		return false;
 	}
 
-	if (!biomeSettings.biomify(biomeMap, width, height, chunkResolution, seed, continentalnessNoise, mountainousNoise)) {
+	if (!biomeGen.biomify(biomeMap, width, height, chunkResolution, seed, continentalnessNoise, mountainousNoise)) {
 		return false;
 	}
-	*/
+
 	return true;
 }
 
