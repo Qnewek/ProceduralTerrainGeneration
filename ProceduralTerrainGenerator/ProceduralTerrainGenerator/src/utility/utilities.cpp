@@ -105,6 +105,68 @@ namespace utilities
 		}
 	}
 
+	bool createTiledVertices(float* vertices, int width, int height, float* map, float scalingFactor, unsigned int stride, unsigned int offset) {
+		if (!vertices) {
+			std::cout << "[ERROR] Vertices array not initialized" << std::endl;
+			return false;
+		}
+
+		int index = offset;
+
+		for (int y = 0; y < (height - 1); y++)
+		{
+			for (int x = 0; x < (width - 1); x++)
+			{
+				vertices[index] = x * scalingFactor;
+				vertices[index + 1] = map[y * width + x];
+				vertices[index + 2] = y * scalingFactor;
+
+				index += stride;
+
+				vertices[index] = (x + 1) * scalingFactor;
+				vertices[index + 1] = map[y * width + x + 1];
+				vertices[index + 2] = y * scalingFactor;
+
+				index += stride;
+
+				vertices[index] = (x + 1) * scalingFactor;
+				vertices[index + 1] = map[(y + 1) * width + x + 1];
+				vertices[index + 2] = (y + 1) * scalingFactor;
+
+				index += stride;
+
+				vertices[index] = x * scalingFactor;
+				vertices[index + 1] = map[(y + 1) * width + x];
+				vertices[index + 2] = (y + 1) * scalingFactor;
+
+				index += stride;
+			}
+		}
+
+		return true;
+	}
+
+	bool createIndicesTiledField(unsigned int* indices, int width, int height) {
+		if (!indices) {
+			std::cout << "[ERROR] Indices array not initialized" << std::endl;
+			return false;
+		}
+
+		int index = 0;
+
+		for (int i = 0; i < (height - 1) * (width - 1); i++) {
+			indices[index++] = i * 4;
+			indices[index++] = i * 4 + 1;
+			indices[index++] = i * 4 + 2;
+
+			indices[index++] = i * 4;
+			indices[index++] = i * 4 + 2;
+			indices[index++] = i * 4 + 3;
+		}
+
+		return true;
+	}
+
 	//Generates indices for simple mesh by conesting 4 vertices on the one cell of the grid to form 2 triangles
 	//@param indices - array of indices to be filled with data
 	//@param width - width of the noise map
@@ -227,17 +289,66 @@ namespace utilities
 		}
 	}
 
+	void AssignTexturesByBiomes(TerrainGenerator& terraGen, float* vertices, int width, int height, int texAtlasSize, unsigned int stride, unsigned int offset)
+	{
+		if (!terraGen.getBiomeMap() || !vertices)
+		{
+			std::cout << "[ERROR] Arrays not initialized" << std::endl;
+			return;
+		}
+
+		int index = offset;
+		int texOffset = 0;
+
+		for (int y = 0; y < (height - 1); y++)
+		{
+			for (int x = 0; x < (width - 1); x++)
+			{
+				
+				texOffset = terraGen.getBiome(terraGen.getBiomeAt(x, y)).getTexOffset();
+
+
+				vertices[index] = texOffset % texAtlasSize / static_cast<float>(texAtlasSize);
+				vertices[index + 1] = texOffset / texAtlasSize / static_cast<float>(texAtlasSize);
+
+				index += stride;
+
+				vertices[index] = (texOffset % texAtlasSize) / static_cast<float>(texAtlasSize) + (0.99 / texAtlasSize);
+				vertices[index + 1] = texOffset / texAtlasSize / static_cast<float>(texAtlasSize);
+				index += stride;
+
+				vertices[index] = (texOffset % texAtlasSize) / static_cast<float>(texAtlasSize) + (0.99 / texAtlasSize);
+				vertices[index + 1] = (texOffset / texAtlasSize + 1) / static_cast<float>(texAtlasSize);
+
+				index += stride;
+
+				vertices[index] = texOffset % texAtlasSize / static_cast<float>(texAtlasSize);
+				vertices[index + 1] = (texOffset / texAtlasSize + 1) / static_cast<float>(texAtlasSize);
+
+				index += stride;
+			}
+		}
+		
+	}
+
 	//Initializes normals for the vertices to be 0.0f, its needed for the AddVector3f function
 	//@param vertices - array of vertices to be filled with data
 	//@param stride - number of floats per vertex
 	//@param offSet - offset in the vertex array to start with when filling the data
 	//@param verticesCount - number of vertices
-	void InitializeNormals(float* vertices, unsigned int stride, unsigned int offSet, unsigned int verticesCount) {
+	bool InitializeNormals(float* vertices, unsigned int stride, unsigned int offSet, unsigned int verticesCount) {
+		if (!vertices) {
+			std::cout << "[ERROR] Vertices array not initialized" << std::endl;
+			return false;
+		}
+		
 		for (int i = 0; i < verticesCount; i++) {
 			vertices[i * stride + offSet] = 0.0f;
 			vertices[i * stride + offSet + 1] = 0.0f;
 			vertices[i * stride + offSet + 2] = 0.0f;
 		}
+
+		return true;
 	}
 
 	//Calculates normals for the vertices based on the indices of the triangles
@@ -246,11 +357,16 @@ namespace utilities
 	//@param stride - number of floats per vertex
 	//@param offSet - offset in the vertex array to start with when filling the data
 	//@param indexSize - number of indices
-	void CalculateNormals(float* vertices, unsigned int* indices, unsigned int stride, unsigned int offSet, unsigned int indexSize) {
+	bool CalculateNormals(float* vertices, unsigned int* indices, unsigned int stride, unsigned int offSet, unsigned int indexSize) {
 		if (indexSize % 3 != 0) {
 			std::cout << "Index size is not a multiple of 3, hence its not a set of triangles" << std::endl;
-			return;
+			return false;
 		}
+		if (!vertices) {
+			std::cout << "[ERROR] Vertices array not initialized" << std::endl;
+			return false;
+		}
+
 		glm::vec3 tmp;
 		for (int i = 0; i < indexSize; i += 3) {
 			tmp = glm::vec3(
@@ -287,7 +403,12 @@ namespace utilities
 	//@param stride - number of floats per vertex
 	//@param offSet - offset in the vertex array to start with when filling the data
 	//@param verticesCount - number of vertices
-	void NormalizeVector3f(float* vertices, unsigned int stride, unsigned int offSet, unsigned int verticesCount) {
+	bool NormalizeVector3f(float* vertices, unsigned int stride, unsigned int offSet, unsigned int verticesCount) {
+		if (!vertices) {
+			std::cout << "[ERROR] Vertices array not initialized" << std::endl;
+			return false;
+		}
+		
 		glm::vec3 tmp;
 		for (int i = 0; i < verticesCount; i++) {
 			tmp = glm::vec3(

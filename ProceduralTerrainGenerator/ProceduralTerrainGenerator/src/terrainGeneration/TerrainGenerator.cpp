@@ -150,6 +150,18 @@ int* TerrainGenerator::getBiomeMap()
 	return biomeMap;
 }
 
+biome::Biome& TerrainGenerator::getBiome(int id)
+{
+	return biomeGen.getBiome(id);
+}
+
+int TerrainGenerator::getBiomeAt(int x, int y)
+{
+	if (!biomeMap)
+		return -1;	
+	return biomeMap[y * width * chunkResolution + x];
+}
+
 noise::NoiseConfigParameters& TerrainGenerator::getContinentalnessNoiseConfig()
 {
 	return continentalnessNoise.getConfigRef();

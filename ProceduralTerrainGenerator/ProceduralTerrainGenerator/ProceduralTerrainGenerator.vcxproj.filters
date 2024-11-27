@@ -93,10 +93,10 @@
     <ClCompile Include="src\terrainGeneration\Biome.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="src\terrainGeneration\BiomeSettings.cpp">
+    <ClCompile Include="src\terrainGeneration\TerrainGenerator.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="src\terrainGeneration\TerrainGenerator.cpp">
+    <ClCompile Include="src\terrainGeneration\BiomeGenerator.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
@@ -1472,18 +1472,27 @@
     <ClInclude Include="src\terrainGeneration\Biome.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="src\terrainGeneration\BiomeSettings.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="src\terrainGeneration\TerrainGenerator.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="src\vendor\Splines\spline.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="src\terrainGeneration\BiomeGenerator.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <Image Include="res\textures\Basic_biome_texture_palette.jpg">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="res\textures\Water.jpg">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="res\textures\Grass.jpg">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="res\textures\texture.png">
       <Filter>Resource Files</Filter>
     </Image>
   </ItemGroup>

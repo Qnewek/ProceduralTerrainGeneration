@@ -22,7 +22,6 @@ namespace test {
 		void OnRender(GLFWwindow& window, Renderer& renderer) override;
 		void OnImGuiRender() override;
 
-		void basicTerrainGeneration();
 		void conditionalTerrainGeneration();
 
 	private:
