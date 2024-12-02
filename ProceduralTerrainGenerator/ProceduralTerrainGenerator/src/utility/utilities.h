@@ -10,6 +10,7 @@
 #include "Noise.h"
 #include "Erosion.h"
 #include "TerrainGenerator.h"
+#include "Object.h"
 
 namespace utilities
 {
@@ -21,7 +22,8 @@ namespace utilities
     void parseNoiseChunksIntoVertices(float* vertices, int width, int height, int chunkX, int chunkY, float* map, float scalingFactor, unsigned int stride, unsigned int offset);
     bool createIndicesTiledField(unsigned int* indices, int width, int height);
     bool createTiledVertices(float* vertices, int width, int height, float* map, float scalingFactor, unsigned int stride, unsigned int offset);
-
+    void PaintNotByTexture(float* vertices, int width, int height, unsigned int stride, unsigned int offset);
+    object::Object* loadObj(const std::string& dirPath, const std::string& fileName);
 
 	//Functions for dealing with 3D vectors
     bool InitializeNormals(float* vertices, unsigned int stride, unsigned int offSet, unsigned int verticesCount);
@@ -34,7 +36,6 @@ namespace utilities
     void CreateTerrainMesh(noise::SimplexNoiseClass& noise, float* vertices, unsigned int* indices, float scalingFactor, unsigned int stride, bool normals, bool first);
     void PerformErosion(float* vertices, unsigned int* indices, float scalingFactor, std::optional<float*> Track, int stride, int positionsOffset, int normalsOffset, erosion::Erosion& erosion);
     void PaintBiome(float* vertices, float* map, int width, int height, unsigned int stride, unsigned int offset);
-    void PaintNotByTexture(float* vertices, int width, int height, unsigned int stride, unsigned int offset);
 	void AssignBiome(float* vertices, int* biomeMap, int width, int height, unsigned int stride, unsigned int offset);
     void AssignTexturesByBiomes(TerrainGenerator& terraGen, float* vertices, int width, int height, int texAtlasSize, unsigned int stride, unsigned int offset);
 

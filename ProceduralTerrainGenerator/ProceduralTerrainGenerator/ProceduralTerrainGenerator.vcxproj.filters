@@ -99,6 +99,9 @@
     <ClCompile Include="src\terrainGeneration\BiomeGenerator.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="src\utility\Objects\Object.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <None Include="src\vendor\glm\detail\func_common.inl">
@@ -525,6 +528,7 @@
     <None Include="res\shaders\test_frag.shader" />
     <None Include="res\shaders\Trace_vertex.shader" />
     <None Include="res\shaders\Trace_fragment.shader" />
+    <None Include="res\models\Tree\Tree.mtl" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\opengl\Renderer.h">
@@ -1481,6 +1485,12 @@
     <ClInclude Include="src\terrainGeneration\BiomeGenerator.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="src\utility\Objects\Object.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\vendor\ObjLoader\tiny_obj_loader.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <Image Include="res\textures\Basic_biome_texture_palette.jpg">
@@ -1495,5 +1505,23 @@
     <Image Include="res\textures\texture.png">
       <Filter>Resource Files</Filter>
     </Image>
+    <Image Include="res\models\Tree\DB2X2_L01.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="res\models\Tree\bark_0021.jpg">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="res\models\Tree\DB2X2_L01_Spec.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="res\models\Tree\tree.jpeg">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="res\models\Tree\tree2.jpeg">
+      <Filter>Resource Files</Filter>
+    </Image>
+  </ItemGroup>
+  <ItemGroup>
+    <Object Include="res\models\Tree\Tree.obj" />
   </ItemGroup>
 </Project>

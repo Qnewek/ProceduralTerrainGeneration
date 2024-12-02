@@ -6,7 +6,7 @@
 #include "glm/glm.hpp"
 #include "glm/gtc/matrix_transform.hpp"
 
-test::TestMapGen::TestMapGen() : m_Width(40), m_Height(40), m_ChunkResX(40), m_ChunkResY(40), m_ChunkScale(0.05f), realHeight(255.0f),
+test::TestMapGen::TestMapGen() : m_Width(5), m_Height(5), m_ChunkResX(5), m_ChunkResY(5), m_ChunkScale(0.05f), realHeight(255.0f),
 m_Stride(8), m_MeshVertices(nullptr), m_MeshIndices(nullptr), deltaTime(0.0f), lastFrame(0.0f), seeLevel(64.0f),
 m_Player(800, 600, glm::vec3(0.0f, 0.0f, 0.0f), 0.0001f, 40.0f, false, m_Height* m_ChunkResY),
 m_LightSource(glm::vec3(0.0f, 0.0f, 0.0f), 1.0f), noise(), terrainGen()
@@ -29,7 +29,7 @@ m_LightSource(glm::vec3(0.0f, 0.0f, 0.0f), 1.0f), noise(), terrainGen()
 		//Successively: 
 		// 3 floats for position [x,y,z], 
 		// 3 floats for normal vector indicating direction the vertex faces
-		// 1 float for Biome ID
+		// 2 floats for Biome texture coordinates
 	m_Layout.Push<float>(3);
 	m_Layout.Push<float>(3);
 	m_Layout.Push<float>(2);
@@ -38,6 +38,9 @@ m_LightSource(glm::vec3(0.0f, 0.0f, 0.0f), 1.0f), noise(), terrainGen()
 	m_Player.SetPosition(glm::vec3(0.0f, 0.0f, 0.0f));
 	m_LightSource.SetPosition(glm::vec3(2.0f * realHeight, 2.0f * realHeight, 2.0f * realHeight));
 	//m_Player.SetPosition(glm::vec3(0.5f * m_Width / m_ChunkScale, 1.0f / m_ChunkScale, 0.5f * m_Height / m_ChunkScale));
+
+	object::Object* obj = utilities::loadObj("res/models/Tree/", "Tree.obj");
+	delete obj;
 }
 
 test::TestMapGen::~TestMapGen()
@@ -143,14 +146,6 @@ void test::TestMapGen::conditionalTerrainGeneration()
 		std::cout << "[ERROR] Map couldnt be generated" << std::endl;
 		return;
 	}
-
-	/*utilities::parseNoiseChunksIntoVertices(m_MeshVertices, m_Width, m_Height, m_ChunkResX, m_ChunkResX, terrainGen.getHeightMap(), m_ChunkResX * 1.5f, m_Stride, 0);
-	utilities::SimpleMeshIndicies(m_MeshIndices, m_Width * m_ChunkResX, m_Height * m_ChunkResY);
-	utilities::InitializeNormals(m_MeshVertices, m_Stride, 3, m_Height * m_ChunkResY * m_Width * m_ChunkResX);
-	utilities::CalculateNormals(m_MeshVertices, m_MeshIndices, m_Stride, 3, (m_Width * m_ChunkResX - 1) * (m_Height * m_ChunkResY - 1) * 6);
-	utilities::NormalizeVector3f(m_MeshVertices, m_Stride, 3, m_Width * m_ChunkResX * m_Height * m_ChunkResY);
-	utilities::AssignBiome(m_MeshVertices, terrainGen.getBiomeMap(), m_Width * m_ChunkResX, m_Height * m_ChunkResY, m_Stride, 6);
-	*/
 
 	utilities::createTiledVertices(m_MeshVertices, m_Width * m_ChunkResX, m_Height * m_ChunkResY, terrainGen.getHeightMap(), 0.5f, m_Stride, 0);
 	utilities::createIndicesTiledField(m_MeshIndices, m_Width * m_ChunkResX, m_Height * m_ChunkResY);
