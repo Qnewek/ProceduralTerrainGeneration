@@ -76,7 +76,7 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>GLEW_STATIC;WIN32;_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>src;src\opengl;src\vendor;src\utility;src\terrainGeneration;$(SolutionDir)Dependencies\GLFW\include;$(SolutionDir)Dependencies\GLEW\include</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>src;src\opengl;src\vendor;src\utility;src\utility\Objects;src\terrainGeneration;$(SolutionDir)Dependencies\GLFW\include;$(SolutionDir)Dependencies\GLEW\include</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpp20</LanguageStandard>
     </ClCompile>
     <Link>
@@ -94,7 +94,7 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>GLEW_STATIC;WIN32;NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>src;src\opengl;src\vendor;src\utility;src\terrainGeneration;$(SolutionDir)Dependencies\GLFW\include;$(SolutionDir)Dependencies\GLEW\include</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>src;src\opengl;src\vendor;src\utility;src\utility\Objects;src\terrainGeneration;$(SolutionDir)Dependencies\GLFW\include;$(SolutionDir)Dependencies\GLEW\include</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpp20</LanguageStandard>
     </ClCompile>
     <Link>
@@ -151,6 +151,7 @@
     <ClCompile Include="src\opengl\Texture.cpp" />
     <ClCompile Include="src\utility\Camera.cpp" />
     <ClCompile Include="src\utility\LightSource.cpp" />
+    <ClCompile Include="src\utility\Objects\Object.cpp" />
     <ClCompile Include="src\utility\Player.cpp" />
     <ClCompile Include="src\utility\utilities.cpp" />
     <ClCompile Include="src\vendor\glm\detail\glm.cpp" />
@@ -165,6 +166,7 @@
     <ClCompile Include="src\opengl\VertexBuffer.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <None Include="res\models\Tree\Tree.mtl" />
     <None Include="res\shaders\light_source_fragment.shader" />
     <None Include="res\shaders\light_source_vertex.shader" />
     <None Include="res\shaders\Lightning_final_fragment.shader" />
@@ -315,6 +317,7 @@
     <None Include="src\vendor\glm\gtx\wrap.inl" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="src\utility\Objects\Object.h" />
     <ClInclude Include="src\terrainGeneration\BiomeGenerator.h" />
     <ClInclude Include="src\opengl\IndexBuffer.h" />
     <ClInclude Include="src\opengl\Renderer.h" />
@@ -627,6 +630,7 @@
     <ClInclude Include="src\vendor\imgui\stb_rect_pack.h" />
     <ClInclude Include="src\vendor\imgui\stb_textedit.h" />
     <ClInclude Include="src\vendor\imgui\stb_truetype.h" />
+    <ClInclude Include="src\vendor\ObjLoader\tiny_obj_loader.h" />
     <ClInclude Include="src\vendor\Simplex\SimplexNoise.h" />
     <ClInclude Include="src\vendor\Splines\spline.h" />
     <ClInclude Include="src\vendor\stb_image\stb_image.h" />
@@ -635,10 +639,21 @@
     <ClInclude Include="src\opengl\VertexBuffer.h" />
   </ItemGroup>
   <ItemGroup>
+    <Image Include="res\models\Tree\bark_0021.jpg" />
+    <Image Include="res\models\Tree\DB2X2_L01.png" />
+    <Image Include="res\models\Tree\DB2X2_L01_Spec.png" />
+    <Image Include="res\models\Tree\tree.jpeg" />
+    <Image Include="res\models\Tree\tree2.jpeg" />
     <Image Include="res\textures\Basic_biome_texture_palette.jpg" />
     <Image Include="res\textures\Grass.jpg" />
     <Image Include="res\textures\texture.png" />
     <Image Include="res\textures\Water.jpg" />
+  </ItemGroup>
+  <ItemGroup>
+    <Object Include="res\models\Tree\Tree.obj">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">true</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">true</ExcludedFromBuild>
+    </Object>
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

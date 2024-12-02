@@ -1,3 +1,5 @@
+#define TINYOBJLOADER_IMPLEMENTATION
+
 #include "utilities.h"
 
 #include <math.h>
@@ -5,6 +7,7 @@
 #include <iostream>
 #include "glm/glm.hpp"
 #include "glm/gtc/matrix_transform.hpp"
+#include "ObjLoader/tiny_obj_loader.h"
 
 namespace utilities
 {
@@ -270,6 +273,34 @@ namespace utilities
 				vertices[((y * width) + x) * stride + offset + 1] = -1.0f;
 			}
 		}
+	}
+
+	object::Object* loadObj(const std::string& dirPath, const std::string& fileName)
+	{
+		tinyobj::ObjReaderConfig reader_config;
+		reader_config.mtl_search_path = dirPath;
+		tinyobj::ObjReader reader;
+
+		if (!reader.ParseFromFile(dirPath + fileName, reader_config))
+		{
+			if (!reader.Error().empty())
+			{
+				std::cerr << "TinyObjReader: " << reader.Error();
+			}
+			exit(1);
+		}
+		if (!reader.Warning().empty()) {
+			std::cout << "TinyObjReader: " << reader.Warning();
+		}
+
+		auto& attrib = reader.GetAttrib();
+		auto& shapes = reader.GetShapes();
+		auto& materials = reader.GetMaterials();
+
+
+
+
+		return new object::Object();
 	}
 
 	void AssignBiome(float* vertices, int* biomeMap, int width, int height, unsigned int stride, unsigned int offset)
