@@ -1,4 +1,45 @@
 ﻿  Scanning sources for module dependencies...
+  Application.cpp
+C:\Users\Dawid\Documents\JakiesPopierdulki\Studia\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\vendor\Splines\spline.h(44,9): warning C4068: unknown pragma 'GCC'
+  (compiling source file 'src/Application.cpp')
+  
+C:\Users\Dawid\Documents\JakiesPopierdulki\Studia\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\vendor\Splines\spline.h(45,9): warning C4068: unknown pragma 'GCC'
+  (compiling source file 'src/Application.cpp')
+  
+C:\Users\Dawid\Documents\JakiesPopierdulki\Studia\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\vendor\Splines\spline.h(681,9): warning C4068: unknown pragma 'GCC'
+  (compiling source file 'src/Application.cpp')
+  
+  TestMapGen.cpp
+C:\Users\Dawid\Documents\JakiesPopierdulki\Studia\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\vendor\Splines\spline.h(44,9): warning C4068: unknown pragma 'GCC'
+  (compiling source file 'src/tests/TestMapGen.cpp')
+  
+C:\Users\Dawid\Documents\JakiesPopierdulki\Studia\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\vendor\Splines\spline.h(45,9): warning C4068: unknown pragma 'GCC'
+  (compiling source file 'src/tests/TestMapGen.cpp')
+  
+C:\Users\Dawid\Documents\JakiesPopierdulki\Studia\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\vendor\Splines\spline.h(681,9): warning C4068: unknown pragma 'GCC'
+  (compiling source file 'src/tests/TestMapGen.cpp')
+  
+  TestNoiseMesh.cpp
+C:\Users\Dawid\Documents\JakiesPopierdulki\Studia\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\vendor\Splines\spline.h(44,9): warning C4068: unknown pragma 'GCC'
+  (compiling source file 'src/tests/TestNoiseMesh.cpp')
+  
+C:\Users\Dawid\Documents\JakiesPopierdulki\Studia\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\vendor\Splines\spline.h(45,9): warning C4068: unknown pragma 'GCC'
+  (compiling source file 'src/tests/TestNoiseMesh.cpp')
+  
+C:\Users\Dawid\Documents\JakiesPopierdulki\Studia\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\vendor\Splines\spline.h(681,9): warning C4068: unknown pragma 'GCC'
+  (compiling source file 'src/tests/TestNoiseMesh.cpp')
+  
+  LightSource.cpp
+C:\Users\Dawid\Documents\JakiesPopierdulki\Studia\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\vendor\Splines\spline.h(44,9): warning C4068: unknown pragma 'GCC'
+  (compiling source file 'src/utility/LightSource.cpp')
+  
+C:\Users\Dawid\Documents\JakiesPopierdulki\Studia\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\vendor\Splines\spline.h(45,9): warning C4068: unknown pragma 'GCC'
+  (compiling source file 'src/utility/LightSource.cpp')
+  
+C:\Users\Dawid\Documents\JakiesPopierdulki\Studia\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\vendor\Splines\spline.h(681,9): warning C4068: unknown pragma 'GCC'
+  (compiling source file 'src/utility/LightSource.cpp')
+  
+  Object.cpp
   utilities.cpp
 C:\Users\Dawid\Documents\JakiesPopierdulki\Studia\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\vendor\Splines\spline.h(44,9): warning C4068: unknown pragma 'GCC'
   (compiling source file 'src/utility/utilities.cpp')
@@ -9,11 +50,14 @@ C:\Users\Dawid\Documents\JakiesPopierdulki\Studia\ProceduralTerrainGeneration\Pr
 C:\Users\Dawid\Documents\JakiesPopierdulki\Studia\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\vendor\Splines\spline.h(681,9): warning C4068: unknown pragma 'GCC'
   (compiling source file 'src/utility/utilities.cpp')
   
-C:\Users\Dawid\Documents\JakiesPopierdulki\Studia\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\utility\utilities.cpp(346,85): warning C4244: '=': conversion from 'double' to 'float', possible loss of data
-C:\Users\Dawid\Documents\JakiesPopierdulki\Studia\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\utility\utilities.cpp(350,85): warning C4244: '=': conversion from 'double' to 'float', possible loss of data
-C:\Users\Dawid\Documents\JakiesPopierdulki\Studia\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\utility\utilities.cpp(375,21): warning C4018: '<': signed/unsigned mismatch
-C:\Users\Dawid\Documents\JakiesPopierdulki\Studia\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\utility\utilities.cpp(401,21): warning C4018: '<': signed/unsigned mismatch
-C:\Users\Dawid\Documents\JakiesPopierdulki\Studia\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\utility\utilities.cpp(443,21): warning C4018: '<': signed/unsigned mismatch
-C:\Users\Dawid\Documents\JakiesPopierdulki\Studia\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\utility\utilities.cpp(419,1): warning C4715: 'utilities::CalculateNormals': not all control paths return a value
-C:\Users\Dawid\Documents\JakiesPopierdulki\Studia\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\utility\utilities.cpp(453,1): warning C4715: 'utilities::NormalizeVector3f': not all control paths return a value
+C:\Users\Dawid\Documents\JakiesPopierdulki\Studia\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\utility\utilities.cpp(310,7): warning C4101: 'matId': unreferenced local variable
+C:\Users\Dawid\Documents\JakiesPopierdulki\Studia\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\utility\utilities.cpp(403,85): warning C4244: '=': conversion from 'double' to 'float', possible loss of data
+C:\Users\Dawid\Documents\JakiesPopierdulki\Studia\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\utility\utilities.cpp(407,85): warning C4244: '=': conversion from 'double' to 'float', possible loss of data
+C:\Users\Dawid\Documents\JakiesPopierdulki\Studia\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\utility\utilities.cpp(432,21): warning C4018: '<': signed/unsigned mismatch
+C:\Users\Dawid\Documents\JakiesPopierdulki\Studia\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\utility\utilities.cpp(458,21): warning C4018: '<': signed/unsigned mismatch
+C:\Users\Dawid\Documents\JakiesPopierdulki\Studia\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\utility\utilities.cpp(500,21): warning C4018: '<': signed/unsigned mismatch
+  Generating Code...
+C:\Users\Dawid\Documents\JakiesPopierdulki\Studia\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\utility\utilities.cpp(476,1): warning C4715: 'utilities::CalculateNormals': not all control paths return a value
+C:\Users\Dawid\Documents\JakiesPopierdulki\Studia\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\utility\utilities.cpp(510,1): warning C4715: 'utilities::NormalizeVector3f': not all control paths return a value
+C:\Users\Dawid\Documents\JakiesPopierdulki\Studia\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\utility\Objects\Object.cpp(50,1): warning C4715: 'object::Object::asignIndices': not all control paths return a value
   ProceduralTerrainGenerator.vcxproj -> C:\Users\Dawid\Documents\JakiesPopierdulki\Studia\ProceduralTerrainGeneration\ProceduralTerrainGenerator\Debug\ProceduralTerrainGenerator.exe
