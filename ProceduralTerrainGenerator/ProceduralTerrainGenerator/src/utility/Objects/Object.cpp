@@ -1,11 +1,15 @@
 #include "Object.h"
 
-object::Object::Object() : m_Name("Object"), texAtlasPath(""), id(0), m_MeshVertices(nullptr), m_MeshIndices(nullptr)
+int object::Object::count = 0;
+
+object::Object::Object() : m_Name("Object"), dirPath(""), id(0), m_MeshVertices(nullptr), m_MeshIndices(nullptr)
 {
+	count++;
 }
 
-object::Object::Object(int id, std::string name) : m_Name(name), texAtlasPath(""), id(id), m_MeshVertices(nullptr), m_MeshIndices(nullptr)
+object::Object::Object(std::string name) : m_Name(name), dirPath(""), id(count), m_MeshVertices(nullptr), m_MeshIndices(nullptr)
 {
+	count++;
 }
 
 object::Object::~Object()
@@ -14,6 +18,7 @@ object::Object::~Object()
 		delete[] m_MeshVertices;
 	if (m_MeshIndices)
 		delete[] m_MeshIndices;
+	count--;
 }
 
 bool object::Object::isSpecified()
@@ -34,7 +39,7 @@ bool object::Object::asignVertices(vertex*& vertices)
 	return false;
 }
 
-bool object::Object::asignIndices(unsigned int*& indices)
+bool object::Object::asignIndices(faceTriangle*& indices)
 {
 	if (indices)
 	{
@@ -44,7 +49,7 @@ bool object::Object::asignIndices(unsigned int*& indices)
 	}
 }
 
-bool object::Object::addMaterial(material& mat)
+void object::Object::addMaterial(const material& mat, int id)
 {
-	return false;
+	materials.emplace(id, mat);
 }

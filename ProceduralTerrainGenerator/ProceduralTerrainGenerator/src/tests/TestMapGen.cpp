@@ -39,7 +39,7 @@ m_LightSource(glm::vec3(0.0f, 0.0f, 0.0f), 1.0f), noise(), terrainGen()
 	m_LightSource.SetPosition(glm::vec3(2.0f * realHeight, 2.0f * realHeight, 2.0f * realHeight));
 	//m_Player.SetPosition(glm::vec3(0.5f * m_Width / m_ChunkScale, 1.0f / m_ChunkScale, 0.5f * m_Height / m_ChunkScale));
 
-	object::Object* obj = utilities::loadObj("res/models/Tree/", "Tree.obj");
+	object::Object* obj = utilities::loadObj("res/models/Tree/", "Tree");
 	delete obj;
 }
 
