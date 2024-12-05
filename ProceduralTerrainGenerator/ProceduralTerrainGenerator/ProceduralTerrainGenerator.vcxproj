@@ -631,6 +631,7 @@
     <ClInclude Include="src\vendor\imgui\stb_textedit.h" />
     <ClInclude Include="src\vendor\imgui\stb_truetype.h" />
     <ClInclude Include="src\vendor\ObjLoader\tiny_obj_loader.h" />
+    <ClInclude Include="src\vendor\PoissonSampling\PoissonGenerator.h" />
     <ClInclude Include="src\vendor\Simplex\SimplexNoise.h" />
     <ClInclude Include="src\vendor\Splines\spline.h" />
     <ClInclude Include="src\vendor\stb_image\stb_image.h" />

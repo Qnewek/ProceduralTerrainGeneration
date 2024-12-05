@@ -121,25 +121,25 @@ namespace utilities
 			for (int x = 0; x < (width - 1); x++)
 			{
 				vertices[index] = x * scalingFactor;
-				vertices[index + 1] = map[y * width + x];
+				vertices[index + 1] = map[y * width + x] * scalingFactor;
 				vertices[index + 2] = y * scalingFactor;
 
 				index += stride;
 
 				vertices[index] = (x + 1) * scalingFactor;
-				vertices[index + 1] = map[y * width + x + 1];
+				vertices[index + 1] = map[y * width + x + 1] * scalingFactor;
 				vertices[index + 2] = y * scalingFactor;
 
 				index += stride;
 
 				vertices[index] = (x + 1) * scalingFactor;
-				vertices[index + 1] = map[(y + 1) * width + x + 1];
+				vertices[index + 1] = map[(y + 1) * width + x + 1] * scalingFactor;
 				vertices[index + 2] = (y + 1) * scalingFactor;
 
 				index += stride;
 
 				vertices[index] = x * scalingFactor;
-				vertices[index + 1] = map[(y + 1) * width + x];
+				vertices[index + 1] = map[(y + 1) * width + x] * scalingFactor;
 				vertices[index + 2] = (y + 1) * scalingFactor;
 
 				index += stride;
@@ -320,38 +320,46 @@ namespace utilities
 
 				// Loop over vertices in the face.
 				for (size_t v = 0; v < fv; v++) {
-					// access to vertex
 					tinyobj::index_t idx = shapes[s].mesh.indices[index_offset + v];
 
-					vertices[vertexIndex] = object::vertex();
-
-					tinyobj::real_t vx = attrib.vertices[3 * size_t(idx.vertex_index) + 0];
-					tinyobj::real_t vy = attrib.vertices[3 * size_t(idx.vertex_index) + 1];
-					tinyobj::real_t vz = attrib.vertices[3 * size_t(idx.vertex_index) + 2];
-
-					// Check if `normal_index` is zero or positive. negative = no normal data
-					if (idx.normal_index >= 0) {
-						tinyobj::real_t nx = attrib.normals[3 * size_t(idx.normal_index) + 0];
-						tinyobj::real_t ny = attrib.normals[3 * size_t(idx.normal_index) + 1];
-						tinyobj::real_t nz = attrib.normals[3 * size_t(idx.normal_index) + 2];
-					}
-
-					// Check if `texcoord_index` is zero or positive. negative = no texcoord data
-					if (idx.texcoord_index >= 0) {
-						tinyobj::real_t tx = attrib.texcoords[2 * size_t(idx.texcoord_index) + 0];
-						tinyobj::real_t ty = attrib.texcoords[2 * size_t(idx.texcoord_index) + 1];
-					}
+					vertices[vertexIndex] = object::vertex(attrib.vertices[3 * size_t(idx.vertex_index) + 0],
+						attrib.vertices[3 * size_t(idx.vertex_index) + 1],
+						attrib.vertices[3 * size_t(idx.vertex_index) + 2],
+						attrib.normals[3 * size_t(idx.normal_index) + 0],
+						attrib.normals[3 * size_t(idx.normal_index) + 1],
+						attrib.normals[3 * size_t(idx.normal_index) + 2],
+						attrib.texcoords[2 * size_t(idx.texcoord_index) + 0],
+						attrib.texcoords[2 * size_t(idx.texcoord_index) + 1],
+						shapes[s].mesh.material_ids[f]);
 					vertexIndex++;
 				}
 				index_offset += fv;
-
-				// per-face material
-				std::cout<<shapes[s].mesh.material_ids[f]<<std::endl;
 			}
 		}
 
-		obj->asignVertices(vertices);
+		for (auto& it : materials) {
+			obj->addMaterial(object::material(
+				it.diffuse_texname,
+				it.ambient_texname,
+				it.specular_texname,
+				{ static_cast<float>(it.ambient[0]), static_cast<float>(it.ambient[1]), static_cast<float>(it.ambient[2]) },
+				{ static_cast<float>(it.diffuse[0]), static_cast<float>(it.diffuse[1]), static_cast<float>(it.diffuse[2]) },
+				{ static_cast<float>(it.specular[0]), static_cast<float>(it.specular[1]), static_cast<float>(it.specular[2]) },
+				static_cast<float>(it.shininess)
+			));
+		}
+
+		obj->asignVertices(vertices, size);
 		obj->asignIndices(indices);
+
+		if (obj->isSpecified())
+		{
+			std::cout << "[LOG] Object loaded successfully" << std::endl;
+		}
+		else
+		{
+			std::cout << "[ERROR] Object couldnt be loaded" << std::endl;
+		}
 
 		return obj;
 	}

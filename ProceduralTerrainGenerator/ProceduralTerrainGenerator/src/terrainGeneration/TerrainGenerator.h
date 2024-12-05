@@ -1,6 +1,7 @@
 #pragma once
 
 #include <vector>
+#include <utility>
 
 #include "Noise.h"
 #include "BiomeGenerator.h"
@@ -43,13 +44,18 @@ public:
 	bool generateHeightMap();
 	bool generateBiomes();
 	bool performTerrainGeneration();
+	bool vegetationGeneration();
+	bool generateBiomeMapPerChunk();
 
 private:
 	float* heightMap;
 	int* biomeMap;
+	int* biomeMapPerChunk;
 	int seed, width, height;
 	int chunkResolution;
 	float seeLevel;
+
+	std::vector<std::vector<std::pair<int,int>>> vegetationPoints;
 
 	noise::SimplexNoiseClass continentalnessNoise;
 	noise::SimplexNoiseClass mountainousNoise;

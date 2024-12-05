@@ -1,16 +1,16 @@
 #include "Biome.h"
 
 namespace biome{
-	Biome::Biome() : m_id(-1), m_Name(""), m_TemperatureLevel(), m_HumidityLevel(), m_ContinentalnessLevel(), m_MountainousnessLevel(), texOffset(0)
+	Biome::Biome() : m_id(-1), m_Name(""), m_TemperatureLevel(), m_HumidityLevel(), m_ContinentalnessLevel(), m_MountainousnessLevel(), texOffset(0), vegetationLevel(0)
 	{
 	}
 
-	Biome::Biome(int id, std::string name) : m_id(id), m_Name(name), m_TemperatureLevel(), m_HumidityLevel(), m_ContinentalnessLevel(), m_MountainousnessLevel(), texOffset(0)
+	Biome::Biome(int id, std::string name) : m_id(id), m_Name(name), m_TemperatureLevel(), m_HumidityLevel(), m_ContinentalnessLevel(), m_MountainousnessLevel(), texOffset(0), vegetationLevel(0)
 	{
 	}
 
-	Biome::Biome(int id, std::string name, vec2 temperatureLevel, vec2 humidityLevel, vec2 continentalnessLevel, vec2 mountainousnessLevel, int texOffset) : m_id(id), m_Name(name),
-		m_TemperatureLevel(temperatureLevel), m_HumidityLevel(humidityLevel), m_ContinentalnessLevel(continentalnessLevel), m_MountainousnessLevel(mountainousnessLevel), texOffset(texOffset)
+	Biome::Biome(int id, std::string name, vec2 temperatureLevel, vec2 humidityLevel, vec2 continentalnessLevel, vec2 mountainousnessLevel, int texOffset, int vegetationLevel) : m_id(id), m_Name(name),
+		m_TemperatureLevel(temperatureLevel), m_HumidityLevel(humidityLevel), m_ContinentalnessLevel(continentalnessLevel), m_MountainousnessLevel(mountainousnessLevel), texOffset(texOffset), vegetationLevel(vegetationLevel)
 	{
 	}
 

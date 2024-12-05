@@ -9,6 +9,7 @@
 #include "LightSource.h"
 #include "Noise.h"
 #include "TerrainGenerator.h"
+#include "Object.h"
 
 namespace test {
 
@@ -27,20 +28,23 @@ namespace test {
 	private:
 		//OpenGL variables
 		std::unique_ptr<VertexArray> m_MainVAO;
-
 		std::unique_ptr<VertexBuffer> m_MainVertexBuffer;
-
 		std::unique_ptr<IndexBuffer> m_MainIndexBuffer;
-
 		std::unique_ptr<Shader> m_MainShader;
-
 		std::unique_ptr<Texture> m_MainTexture;
+
+		//std::unique_ptr<VertexArray> m_ObjectsVAO;
+		//std::unique_ptr<VertexBuffer> m_ObjectsVertexBuffer;
+		//std::unique_ptr<IndexBuffer> m_ObjectsIndexBuffer;
+		//std::unique_ptr<Shader> m_ObjectsShader;
+		//std::vector<std::unique_ptr<Texture>> texArray;
 
 		//Objects
 		Player m_Player;
 		LightSource m_LightSource;
 		noise::SimplexNoiseClass noise;
 		TerrainGenerator terrainGen;
+		//object::Object* obj;
 
 		//Variables
 		//Map size in chunks
@@ -56,6 +60,7 @@ namespace test {
 
 		//Layout
 		VertexBufferLayout m_Layout;
+		//VertexBufferLayout m_ObjectsLayout;
 		unsigned int m_Stride;
 
 		//Settings
