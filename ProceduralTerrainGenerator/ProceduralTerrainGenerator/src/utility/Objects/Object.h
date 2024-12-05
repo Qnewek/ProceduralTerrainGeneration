@@ -2,6 +2,7 @@
 
 #include <string>
 #include <unordered_map>
+#include <array>
 
 namespace object
 {
@@ -17,14 +18,18 @@ namespace object
 	};
 	struct material
 	{
-		std::string texFileName;
+		std::string ambientFileName;
+		std::string diffuseFileName;
+		std::string specularFileName;
+
 		float ambient[3];
 		float diffuse[3];
 		float specular[3];
 		float shininess;
 
-		material() : texFileName(""), ambient{0.0f, 0.0f, 0.0f}, diffuse{0.0f, 0.0f, 0.0f}, specular{0.0f, 0.0f, 0.0f}, shininess(0.0f) {}
-		material(std::string& fileName, float ambient[3], float diffuse[3], float specular[3], float shininess) : texFileName(fileName), ambient{ambient[0], ambient[1], ambient[2]}, diffuse{diffuse[0], diffuse[1], diffuse[2]}, specular{specular[0], specular[1], specular[2]}, shininess(shininess) {}
+		material() : ambientFileName(""), diffuseFileName(""), specularFileName(""), ambient{0.0f, 0.0f, 0.0f}, diffuse{0.0f, 0.0f, 0.0f}, specular{0.0f, 0.0f, 0.0f}, shininess(0.0f) {}
+		material(const std::string& diffuse_texname, const std::string& ambient_texname, const std::string& specular_texname,
+			const std::array<float, 3>& ambient, const std::array<float, 3>& diffuse, const std::array<float, 3>& specular, float shininess) :diffuseFileName(diffuse_texname), ambientFileName(ambient_texname), specularFileName(specular_texname), ambient{ ambient[0], ambient[1], ambient[2] }, diffuse{ diffuse[0], diffuse[1], diffuse[2] }, specular{ specular[0], specular[1], specular[2] }, shininess(shininess) {}
 	};
 	struct faceTriangle
 	{
@@ -41,17 +46,23 @@ namespace object
 
 		bool isSpecified();
 		
-		bool asignVertices(vertex*& vertices);
+		bool asignVertices(vertex*& vertices, int size);
 		bool asignIndices(faceTriangle*& indices);
-		void addMaterial(const material& mat, int id);
+		void addMaterial(material mat);
 		void asignDirPath(const std::string& path) { dirPath = path;}
 
 		material& getMaterial(int id) { return materials[id]; }
+		std::unordered_map<int, material>& getMaterials() { return materials; }
 		static int getCount() { return count; }
+		int getVerticesCount() { return m_VerticesCount; }
+		vertex* getVertices() { return m_MeshVertices; }
+		faceTriangle* getIndices() { return m_MeshIndices; }
+		std::string getDirPath() { return dirPath; }
 
 	private:
 		static int count;
 		int id;
+		int m_VerticesCount = 0;
 		faceTriangle* m_MeshIndices;
 		vertex* m_MeshVertices;
 		std::string m_Name;

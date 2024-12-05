@@ -10,6 +10,7 @@ class Texture
 	unsigned char* m_LocalBuffer;
 	int m_Width, m_Height, m_BPP;
 public:
+	Texture();
 	Texture(const std::string& path);
 	Texture(unsigned int width, unsigned int height, unsigned char* image);
 	~Texture();
@@ -21,4 +22,5 @@ public:
 	inline int GetHeight() const { return m_Height; }
 
 	void SetNewImage(unsigned char* image);
+	void SetNewImage(const std::string& path);
 };

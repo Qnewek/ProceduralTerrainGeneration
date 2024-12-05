@@ -1491,6 +1491,9 @@
     <ClInclude Include="src\vendor\ObjLoader\tiny_obj_loader.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="src\vendor\PoissonSampling\PoissonGenerator.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <Image Include="res\textures\Basic_biome_texture_palette.jpg">

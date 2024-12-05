@@ -4,12 +4,12 @@
 
 #include "imgui/imgui.h"
 #include "glm/glm.hpp"
-#include "glm/gtc/matrix_transform.hpp"
+#include "glm/gtc/matrix_transform.hpp"	
 
-test::TestMapGen::TestMapGen() : m_Width(5), m_Height(5), m_ChunkResX(5), m_ChunkResY(5), m_ChunkScale(0.05f), realHeight(255.0f),
+test::TestMapGen::TestMapGen() : m_Width(10), m_Height(10), m_ChunkResX(40), m_ChunkResY(40), m_ChunkScale(0.05f), realHeight(255.0f),
 m_Stride(8), m_MeshVertices(nullptr), m_MeshIndices(nullptr), deltaTime(0.0f), lastFrame(0.0f), seeLevel(64.0f),
 m_Player(800, 600, glm::vec3(0.0f, 0.0f, 0.0f), 0.0001f, 40.0f, false, m_Height* m_ChunkResY),
-m_LightSource(glm::vec3(0.0f, 0.0f, 0.0f), 1.0f), noise(), terrainGen()
+m_LightSource(glm::vec3(0.0f, 0.0f, 0.0f), 1.0f), noise(), terrainGen()//, obj(nullptr)
 {
 	//vertices times 4 cause we are using 4 unique vertices for each quad
 	//indices times 6 cause we are using 6 indices for forming each quad
@@ -25,6 +25,16 @@ m_LightSource(glm::vec3(0.0f, 0.0f, 0.0f), 1.0f), noise(), terrainGen()
 	m_MainShader = std::make_unique<Shader>("res/shaders/Lightning_final_vertex.shader", "res/shaders/Lightning_final_fragment.shader");
 	m_MainTexture = std::make_unique<Texture>("res/textures/texture.png");
 
+	//obj = utilities::loadObj("res/models/Tree/", "Tree");
+	//m_ObjectsVAO = std::make_unique<VertexArray>();
+	//m_ObjectsVertexBuffer = std::make_unique<VertexBuffer>(obj->getVertices(), obj->getVerticesCount() * sizeof(object::vertex));
+	//m_ObjectsIndexBuffer = std::make_unique<IndexBuffer>(obj->getIndices(), obj->getVerticesCount());
+	//m_ObjectsShader = std::make_unique<Shader>("res/shaders/test_vertex.shader", "res/shaders/test_frag.shader");	
+	//
+	//for (auto& it : obj->getMaterials()) {
+	//	texArray.push_back(std::make_unique<Texture>(obj->getDirPath() + it.second.diffuseFileName));
+	//}
+
 	//Layout of the vertex buffer
 		//Successively: 
 		// 3 floats for position [x,y,z], 
@@ -34,13 +44,17 @@ m_LightSource(glm::vec3(0.0f, 0.0f, 0.0f), 1.0f), noise(), terrainGen()
 	m_Layout.Push<float>(3);
 	m_Layout.Push<float>(2);
 
+	//m_ObjectsLayout.Push<float>(3);
+	//m_ObjectsLayout.Push<float>(3);
+	//m_ObjectsLayout.Push<float>(2);
+	//m_ObjectsLayout.Push<float>(1);
+
+
 	m_MainVAO->AddBuffer(*m_MainVertexBuffer, m_Layout);
+	//m_ObjectsVAO->AddBuffer(*m_ObjectsVertexBuffer, m_ObjectsLayout);
 	m_Player.SetPosition(glm::vec3(0.0f, 0.0f, 0.0f));
 	m_LightSource.SetPosition(glm::vec3(2.0f * realHeight, 2.0f * realHeight, 2.0f * realHeight));
 	//m_Player.SetPosition(glm::vec3(0.5f * m_Width / m_ChunkScale, 1.0f / m_ChunkScale, 0.5f * m_Height / m_ChunkScale));
-
-	object::Object* obj = utilities::loadObj("res/models/Tree/", "Tree");
-	delete obj;
 }
 
 test::TestMapGen::~TestMapGen()
@@ -123,12 +137,12 @@ void test::TestMapGen::conditionalTerrainGeneration()
 							{-1.0, -0.85, -0.6, 0.2, 0.7, 1.0}, {1.0, 0.7, 0.4, 0.2, 0.05, 0} }); //PV {X,Y}
 
 	std::vector<biome::Biome> biomes = {
-		biome::Biome(0, "Grassplains",	{1, 2}, {1, 4}, {3, 5}, {0, 3}, 3),
-		biome::Biome(1, "Desert",		{2, 4}, {0, 1}, {3, 5}, {0, 4}, 2),
-		biome::Biome(2, "Snow",			{0, 1}, {0, 4}, {3, 5}, {0, 4}, 7),
-		biome::Biome(3, "Sand",			{0, 4}, {0, 4}, {2, 3}, {0, 7}, 8),
-		biome::Biome(4, "Mountain",		{0, 4}, {0, 4}, {4, 5}, {4, 7}, 0),
-		biome::Biome(5, "Ocean",		{0, 4}, {0, 4}, {0, 2}, {0, 7}, 5)
+		biome::Biome(0, "Grassplains",	{1, 2}, {1, 4}, {3, 5}, {0, 3}, 3, m_ChunkResX * m_ChunkResY * 0.5f),
+		biome::Biome(1, "Desert",		{2, 4}, {0, 1}, {3, 5}, {0, 4}, 2, m_ChunkResX * m_ChunkResY * 0.05f),
+		biome::Biome(2, "Snow",			{0, 1}, {0, 4}, {3, 5}, {0, 4}, 7, m_ChunkResX * m_ChunkResY * 0.3f),
+		biome::Biome(3, "Sand",			{0, 4}, {0, 4}, {2, 3}, {0, 7}, 8, m_ChunkResX * m_ChunkResY * 0.05f),
+		biome::Biome(4, "Mountain",		{0, 4}, {0, 4}, {4, 5}, {4, 7}, 0, m_ChunkResX * m_ChunkResY * 0.2f),
+		biome::Biome(5, "Ocean",		{0, 4}, {0, 4}, {0, 2}, {0, 7}, 5, m_ChunkResX * m_ChunkResY * 0.0f)
 	};
 
 	std::vector<std::vector<RangedLevel>> ranges = {
@@ -147,7 +161,8 @@ void test::TestMapGen::conditionalTerrainGeneration()
 		return;
 	}
 
-	utilities::createTiledVertices(m_MeshVertices, m_Width * m_ChunkResX, m_Height * m_ChunkResY, terrainGen.getHeightMap(), 0.5f, m_Stride, 0);
+	seeLevel *= 0.2f;
+	utilities::createTiledVertices(m_MeshVertices, m_Width * m_ChunkResX, m_Height * m_ChunkResY, terrainGen.getHeightMap(), 0.2f, m_Stride, 0);
 	utilities::createIndicesTiledField(m_MeshIndices, m_Width * m_ChunkResX, m_Height * m_ChunkResY);
 	utilities::InitializeNormals(m_MeshVertices, m_Stride, 3, (m_Height * m_ChunkResY - 1) * (m_Width * m_ChunkResX - 1) * 4);
 	utilities::CalculateNormals(m_MeshVertices, m_MeshIndices, m_Stride, 3, (m_Width * m_ChunkResX - 1) * (m_Height * m_ChunkResY - 1) * 6);

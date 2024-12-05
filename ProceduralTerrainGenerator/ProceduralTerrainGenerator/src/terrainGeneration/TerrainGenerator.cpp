@@ -3,8 +3,10 @@
 #include <iostream>
 #include <math.h>
 
+#include "PoissonSampling/PoissonGenerator.h"
+
 TerrainGenerator::TerrainGenerator() : width(0), height(0), seed(0), chunkResolution(0),
-heightMap(nullptr), biomeMap(nullptr),
+heightMap(nullptr), biomeMap(nullptr), biomeMapPerChunk(nullptr),
 continentalnessNoise(), mountainousNoise(), PVNoise(), continentalnessSpline(), mountainousSpline(), PVSpline(),
 seeLevel(64.0f), biomeGen()
 {
@@ -20,6 +22,8 @@ TerrainGenerator::~TerrainGenerator()
 		delete[] heightMap;
 	if (biomeMap)
 		delete[] biomeMap;
+	if(biomeMapPerChunk)
+		delete[] biomeMapPerChunk;
 }
 
 bool TerrainGenerator::initializeMap()
@@ -259,13 +263,84 @@ bool TerrainGenerator::performTerrainGeneration()
 {
 	if (!generateHeightMap())
 	{
+		std::cout << "[ERROR] HeightMap couldnt be generated" << std::endl;
 		return false;
 	}
 
 	if (!generateBiomes())
 	{
+		std::cout << "[ERROR] Biomes couldnt be generated" << std::endl;
+		return false;
+	}
+	if (!generateBiomeMapPerChunk())
+	{
+		std::cout << "[ERROR] BiomeMapPerChunk couldnt be generated" << std::endl;
+		return false;
+	}
+	if (!vegetationGeneration())
+	{
+		std::cout << "[ERROR] Vegetation couldnt be generated" << std::endl;
 		return false;
 	}
 
+	return true;
+}
+
+bool TerrainGenerator::vegetationGeneration()
+{
+	if (!biomeMap || !biomeMapPerChunk) {
+		std::cout << "[ERROR] BiomeMap or BiomeMapPerChunk not initialized" << std::endl;
+		return false;
+	}
+
+	PoissonGenerator::DefaultPRNG PRNG;
+	vegetationPoints.resize(width * height);
+
+	for (int y = 0; y < height; y++) {
+		for (int x = 0; x < width; x++) {
+			const auto Points = PoissonGenerator::generatePoissonPoints(getBiome(biomeMapPerChunk[y * width + x]).getVegetationLevel(), PRNG);
+
+			for (int i = 0; i < Points.size(); i++)
+			{
+				vegetationPoints[y * width + x].push_back(std::make_pair(Points[i].x * chunkResolution + (x * chunkResolution), Points[i].y * chunkResolution + (y * chunkResolution)));
+			}
+		}
+	}
+
+	for (int y = 0; y < height; y++)
+	{
+		for (int x = 0; x < width; x++)
+		{
+			for (int i = 0; i < vegetationPoints[y * width + x].size(); i++)
+			{
+				std::cout << "Vegetation at: " << vegetationPoints[y * width + x][i].first << ", " << vegetationPoints[y * width + x][i].second << std::endl;
+			}
+		}
+	}
+
+	return true;
+}
+
+bool TerrainGenerator::generateBiomeMapPerChunk()
+{
+	if (!biomeMap) {
+		std::cout << "[ERROR] BiomeMap not initialized" << std::endl;
+		return false;
+	}
+
+	biomeMapPerChunk = new int[width * height];
+	int biomeSum = 0;
+
+	for (int y = 0; y < height; y++) {
+		for (int x = 0; x < width; x++) {
+			int biomeSum = 0;
+			for (int j = 0; j < chunkResolution; j++) {
+				for (int i = 0; i < chunkResolution; i++) {
+					biomeSum += biomeMap[(y * chunkResolution + j) * width * chunkResolution + (x * chunkResolution + i)];
+				}
+			}
+			biomeMapPerChunk[y * width + x] = biomeSum / (chunkResolution * chunkResolution);
+		}
+	}
 	return true;
 }

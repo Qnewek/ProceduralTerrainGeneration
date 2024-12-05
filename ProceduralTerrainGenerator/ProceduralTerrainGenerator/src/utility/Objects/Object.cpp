@@ -2,7 +2,7 @@
 
 int object::Object::count = 0;
 
-object::Object::Object() : m_Name("Object"), dirPath(""), id(0), m_MeshVertices(nullptr), m_MeshIndices(nullptr)
+object::Object::Object() : m_Name("Object"), dirPath(""), id(count), m_MeshVertices(nullptr), m_MeshIndices(nullptr)
 {
 	count++;
 }
@@ -28,12 +28,13 @@ bool object::Object::isSpecified()
 	return false;
 }
 
-bool object::Object::asignVertices(vertex*& vertices)
+bool object::Object::asignVertices(vertex*& vertices, int size)
 {
 	if (vertices)
 	{
 		m_MeshVertices = vertices;
 		vertices = nullptr;
+		m_VerticesCount = size;
 		return true;
 	}
 	return false;
@@ -49,7 +50,7 @@ bool object::Object::asignIndices(faceTriangle*& indices)
 	}
 }
 
-void object::Object::addMaterial(const material& mat, int id)
+void object::Object::addMaterial(material mat)
 {
-	materials.emplace(id, mat);
+	materials.emplace(materials.size(), mat);
 }
