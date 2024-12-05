@@ -6,7 +6,7 @@
 #include "glm/glm.hpp"
 #include "glm/gtc/matrix_transform.hpp"	
 
-test::TestMapGen::TestMapGen() : m_Width(10), m_Height(10), m_ChunkResX(40), m_ChunkResY(40), m_ChunkScale(0.05f), realHeight(255.0f),
+test::TestMapGen::TestMapGen() : m_Width(20), m_Height(20), m_ChunkResX(40), m_ChunkResY(40), m_ChunkScale(0.05f), realHeight(255.0f),
 m_Stride(8), m_MeshVertices(nullptr), m_MeshIndices(nullptr), deltaTime(0.0f), lastFrame(0.0f), seeLevel(64.0f),
 m_Player(800, 600, glm::vec3(0.0f, 0.0f, 0.0f), 0.0001f, 40.0f, false, m_Height* m_ChunkResY),
 m_LightSource(glm::vec3(0.0f, 0.0f, 0.0f), 1.0f), noise(), terrainGen()//, obj(nullptr)
