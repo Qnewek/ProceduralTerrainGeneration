@@ -307,17 +307,6 @@ bool TerrainGenerator::vegetationGeneration()
 		}
 	}
 
-	for (int y = 0; y < height; y++)
-	{
-		for (int x = 0; x < width; x++)
-		{
-			for (int i = 0; i < vegetationPoints[y * width + x].size(); i++)
-			{
-				std::cout << "Vegetation at: " << vegetationPoints[y * width + x][i].first << ", " << vegetationPoints[y * width + x][i].second << std::endl;
-			}
-		}
-	}
-
 	return true;
 }
 
