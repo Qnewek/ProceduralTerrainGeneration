@@ -153,6 +153,7 @@
     <ClCompile Include="src\utility\LightSource.cpp" />
     <ClCompile Include="src\utility\Objects\Object.cpp" />
     <ClCompile Include="src\utility\Player.cpp" />
+    <ClCompile Include="src\utility\TerrainGenApp.cpp" />
     <ClCompile Include="src\utility\utilities.cpp" />
     <ClCompile Include="src\vendor\glm\detail\glm.cpp" />
     <ClCompile Include="src\vendor\glm\glm.cppm" />
@@ -334,6 +335,7 @@
     <ClInclude Include="src\utility\Camera.h" />
     <ClInclude Include="src\utility\LightSource.h" />
     <ClInclude Include="src\utility\Player.h" />
+    <ClInclude Include="src\utility\TerrainGenApp.h" />
     <ClInclude Include="src\utility\utilities.h" />
     <ClInclude Include="src\vendor\glm\common.hpp" />
     <ClInclude Include="src\vendor\glm\detail\compute_common.hpp" />
@@ -640,6 +642,7 @@
     <ClInclude Include="src\opengl\VertexBuffer.h" />
   </ItemGroup>
   <ItemGroup>
+    <Image Include="res\models\texture.png" />
     <Image Include="res\models\Tree\bark_0021.jpg" />
     <Image Include="res\models\Tree\DB2X2_L01.png" />
     <Image Include="res\models\Tree\DB2X2_L01_Spec.png" />

@@ -31,7 +31,7 @@ void Renderer::DrawWithTexture(const VertexArray& va, const IndexBuffer& ib, con
 }
 
 
-void Renderer::Clear() const {
-    GLCALL(glClearColor(0.37f, 0.77f, 1.0f, 1.0f));
+void Renderer::Clear(glm::vec3 color) const {
+	glClearColor(color.x, color.y, color.z, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 }

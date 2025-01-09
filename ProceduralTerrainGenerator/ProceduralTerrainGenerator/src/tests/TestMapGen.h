@@ -24,6 +24,7 @@ namespace test {
 		void OnImGuiRender() override;
 
 		void conditionalTerrainGeneration();
+		void setTreeVertices();
 
 	private:
 		//OpenGL variables
@@ -38,6 +39,7 @@ namespace test {
 		//std::unique_ptr<IndexBuffer> m_ObjectsIndexBuffer;
 		//std::unique_ptr<Shader> m_ObjectsShader;
 		//std::vector<std::unique_ptr<Texture>> texArray;
+
 
 		//Objects
 		Player m_Player;
@@ -66,8 +68,14 @@ namespace test {
 		//Settings
 		float* m_MeshVertices;
 		unsigned int* m_MeshIndices;
+		float* m_treesPositions;
+		int treeIndicesCount;
 
-
+		unsigned int treeVAO, treeVBO, instanceVBO, EBO;
+		std::unique_ptr<Shader> m_TreeShader;
+	
+		//booleans
+		bool isTerrainDisplayed;
 	};
 
 }

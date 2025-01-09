@@ -48,7 +48,7 @@ namespace test
 
 	void TestImage::OnRender(GLFWwindow& window, Renderer& renderer)
 	{
-		renderer.Clear();
+		renderer.Clear(glm::vec3(0.6f, 0.6f, 0.6f));
 		m_Texture->Bind();
 		renderer.Draw(*m_VAO, *m_IndexBuffer, *m_Shader);
 	}

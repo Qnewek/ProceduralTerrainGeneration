@@ -71,7 +71,7 @@ namespace test
 
 	void TestNoiseMesh::OnRender(GLFWwindow& window, Renderer& renderer)
 	{
-		renderer.Clear();
+		renderer.Clear(glm::vec3(0.6f, 0.6f, 0.6f));
 
 		float currentFrame = static_cast<float>(glfwGetTime());
 		deltaTime = currentFrame - lastFrame;

@@ -24,6 +24,7 @@ namespace utilities
     bool createTiledVertices(float* vertices, int width, int height, float* map, float scalingFactor, unsigned int stride, unsigned int offset);
     void PaintNotByTexture(float* vertices, int width, int height, unsigned int stride, unsigned int offset);
     object::Object* loadObj(const std::string& dirPath, const std::string& name);
+	bool saveToObj(const std::string& dirPath, const std::string& name, float* vertices, unsigned int* indices, unsigned int stride, unsigned int indexSize, unsigned int verticesCount, bool mtl);
 
 	//Functions for dealing with 3D vectors
     bool InitializeNormals(float* vertices, unsigned int stride, unsigned int offSet, unsigned int verticesCount);
