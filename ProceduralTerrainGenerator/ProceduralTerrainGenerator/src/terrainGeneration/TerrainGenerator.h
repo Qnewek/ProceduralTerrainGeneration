@@ -33,13 +33,16 @@ public:
 	int* getBiomeMap();
 	int getWidth(){ return width * chunkResolution; };
 	int getHeight(){ return height * chunkResolution; };
+	float getHeightAt(int x, int y);
 	biome::Biome& getBiome(int id);
 	int getBiomeAt(int x, int y);
+	int getTreeCount() { return treeCount; };
 	noise::NoiseConfigParameters& getContinentalnessNoiseConfig();
 	noise::NoiseConfigParameters& getMountainousNoiseConfig();
 	noise::NoiseConfigParameters& getPVNoiseConfig();
 	noise::NoiseConfigParameters& getTemperatureNoiseConfig();
 	noise::NoiseConfigParameters& getHumidityNoiseConfig();
+	std::vector<std::vector<std::pair<int, int>>> getVegetationPoints() { return vegetationPoints; };
 
 	bool generateHeightMap();
 	bool generateBiomes();
@@ -54,6 +57,7 @@ private:
 	int seed, width, height;
 	int chunkResolution;
 	float seeLevel;
+	int treeCount;
 
 	std::vector<std::vector<std::pair<int,int>>> vegetationPoints;
 

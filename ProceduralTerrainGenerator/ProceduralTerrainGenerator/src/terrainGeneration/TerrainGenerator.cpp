@@ -154,6 +154,13 @@ int* TerrainGenerator::getBiomeMap()
 	return biomeMap;
 }
 
+float TerrainGenerator::getHeightAt(int x, int y)
+{
+	if (!heightMap)
+		return -1.0f;
+	return heightMap[y * width * chunkResolution + x];
+}
+
 biome::Biome& TerrainGenerator::getBiome(int id)
 {
 	return biomeGen.getBiome(id);
@@ -252,7 +259,7 @@ bool TerrainGenerator::generateBiomes()
 		return false;
 	}
 
-	if (!biomeGen.biomify(biomeMap, width, height, chunkResolution, seed, continentalnessNoise, mountainousNoise)) {
+	if (!biomeGen.biomify(heightMap ,biomeMap, width, height, chunkResolution, seed, continentalnessNoise, mountainousNoise)) {
 		return false;
 	}
 
@@ -293,6 +300,7 @@ bool TerrainGenerator::vegetationGeneration()
 		return false;
 	}
 
+	treeCount = 0;
 	PoissonGenerator::DefaultPRNG PRNG;
 	vegetationPoints.resize(width * height);
 
@@ -302,7 +310,10 @@ bool TerrainGenerator::vegetationGeneration()
 
 			for (int i = 0; i < Points.size(); i++)
 			{
+				if (getHeightAt(Points[i].x * chunkResolution + (x * chunkResolution), Points[i].y * chunkResolution + (y * chunkResolution)) < seeLevel)
+					continue;	
 				vegetationPoints[y * width + x].push_back(std::make_pair(Points[i].x * chunkResolution + (x * chunkResolution), Points[i].y * chunkResolution + (y * chunkResolution)));
+				treeCount++;
 			}
 		}
 	}

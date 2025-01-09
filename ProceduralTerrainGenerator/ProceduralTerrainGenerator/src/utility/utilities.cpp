@@ -3,6 +3,8 @@
 #include "utilities.h"
 
 #include <math.h>
+#include <fstream>
+#include <sstream>
 
 #include <iostream>
 #include "glm/glm.hpp"
@@ -362,6 +364,76 @@ namespace utilities
 		}
 
 		return obj;
+	}
+
+	bool saveToObj(const std::string& dirPath, const std::string& name, float* vertices, unsigned int* indices, unsigned int stride, unsigned int indexSize, unsigned int verticesCount, bool mtl)
+	{
+		if (!vertices || !indices)
+		{
+			std::cout << "[ERROR] Arrays not initialized" << std::endl;
+			return false;
+		}
+		if (mtl) {
+			std::string mtlfilename = dirPath + name + ".mtl";
+
+			std::ofstream mfile(mtlfilename);
+			if (!mfile.is_open()) {
+				std::cerr << "Failed to open file: " << mtlfilename << std::endl;
+				return false;
+			}
+
+			mfile << "newmtl " << "material0" << "\n";
+			mfile << "Ka " << 0.6f << " " << 0.6f << " " << 0.6f << "\n";
+			mfile << "Kd " << 0.6f << " " << 0.6f << " " << 0.6f << "\n";
+			mfile << "Ks " << 0.1f << " " << 0.1f << " " << 0.1f << "\n";
+			mfile << "Ns " << 1.0f << "\n";
+			mfile << "map_Kd " << "texture.png" << "\n";
+
+			mfile.close();
+			std::cout << "Material saved to " << mtlfilename << std::endl;
+		}
+		std::string filename = dirPath + name + ".obj";
+
+		std::ofstream file(filename);
+		if (!file.is_open()) {
+			std::cerr << "Failed to open file: " << filename << std::endl;
+			return false;
+		}
+		if (mtl) {
+			file << "mtllib " << name + ".mtl" << "\n";
+			file << "usemtl material0\n";
+		}
+
+		for (int y = 0; y < verticesCount; y += stride) {
+				float vx = vertices[y];
+				float vy = vertices[y+1];
+				float vz = vertices[y+2];
+				file << "v " << vx << " " << vy << " " << vz << "\n";
+		}
+		for (int y = 0; y < verticesCount; y += stride) {
+			float vx = vertices[y + 6];
+			float vy = vertices[y + 7];
+			file << "vt " << vx << " " << vy << "\n";
+		}
+		for (int y = 0; y < verticesCount; y += stride) {
+			float vx = vertices[y + 3];
+			float vy = vertices[y + 4];
+			float vz = vertices[y + 5];
+			file << "vn " << vx << " " << vy << " " << vz << "\n";
+		}
+
+		std::cout << "Vertices saved" << std::endl;
+		// Write faces
+		for (int y = 0; y < indexSize; y += 3) {
+			int one = indices[y];
+			int two = indices[y + 1];
+			int three = indices[y + 2];
+
+			file << "f " << one << "/" << one << "/" << one << " " << two << "/" << two << "/" << two << " " << three << "/" << three << "/" << three << "\n";
+		}
+
+		file.close();
+		std::cout << "Height map saved to " << filename << std::endl;
 	}
 
 	void AssignBiome(float* vertices, int* biomeMap, int width, int height, unsigned int stride, unsigned int offset)

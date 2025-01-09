@@ -34,7 +34,7 @@ public:
 
 	int determineLevel(WorldParameter p, float value);
 	int determineBiome(const int& temperature, const int& humidity, const int& continentalness, const int& mountainousness);
-	bool biomify(int* biomeMap, const int& width, const int& height, const int& chunkRes, const int& seed, const noise::SimplexNoiseClass& continenatlnes, const noise::SimplexNoiseClass& mountainouss);
+	bool biomify(float* map, int* biomeMap, const int& width, const int& height, const int& chunkRes, const int& seed, const noise::SimplexNoiseClass& continenatlnes, const noise::SimplexNoiseClass& mountainouss);
 
 private:
 	std::unordered_map<int, biome::Biome> m_Biomes;

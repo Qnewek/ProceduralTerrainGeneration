@@ -60,7 +60,7 @@ int BiomeGenerator::determineBiome(const int& temperature, const int& humidity, 
 	return 0;
 }
 
-bool BiomeGenerator::biomify(int* biomeMap, const int& width, const int& height, const int& chunkRes, const int& seed, const noise::SimplexNoiseClass& continenatlnes, const noise::SimplexNoiseClass& mountainouss)
+bool BiomeGenerator::biomify(float* map, int* biomeMap, const int& width, const int& height, const int& chunkRes, const int& seed, const noise::SimplexNoiseClass& continenatlnes, const noise::SimplexNoiseClass& mountainouss)
 {
 	if (!biomeMap) {
 		std::cout << "[ERROR] BiomeMap not initialized" << std::endl;
@@ -96,6 +96,10 @@ bool BiomeGenerator::biomify(int* biomeMap, const int& width, const int& height,
 
 	for (int y = 0; y < height * chunkRes; y++) {
 		for (int x = 0; x < width * chunkRes; x++) {
+			if (map[y * width * chunkRes + x] <= 64.0f) {
+				biomeMap[y * width * chunkRes + x] = 5;
+				continue;
+			}
 			H = determineLevel(WorldParameter::Humidity, humidityNoise.getVal(x, y));
 			T = determineLevel(WorldParameter::Temperature, temperatureNoise.getVal(x, y));
 			C = determineLevel(WorldParameter::Continentalness, continenatlnes.getVal(x, y));
