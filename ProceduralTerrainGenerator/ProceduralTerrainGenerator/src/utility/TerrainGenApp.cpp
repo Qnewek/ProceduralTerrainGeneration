@@ -10,7 +10,7 @@
 
 TerrainGenApp::TerrainGenApp() : window(nullptr), windowWidth(0), windowHeight(0), m_Scaling_Factor(0.4f), drawScale(1.0f),
 rightPanelWidth(400.0f),topPanelHeight(30.0f), bottomPanelHeight(200.0f), leftPanelWidth(400.0f), 
-width(200), height(200), prevHeight(200), prevWidth(200), tmpHeight(200), tmpWidth(200), stride(8), seed(123), deltaTime(0.0f), lastFrame(0.0f),
+width(800), height(800), prevHeight(800), prevWidth(800), tmpHeight(800), tmpWidth(800), stride(8), seed(123), deltaTime(0.0f), lastFrame(0.0f),
 renderer(), player(1920, 1080, glm::vec3(0.0f, 0.0f, 0.0f), 0.0001f, 1.0f, false, height),
 meshVertices(nullptr), meshIndices(nullptr), testSymmetrical(false), basicPerlinNoise(), noise(&basicPerlinNoise), layout(), currentMode(mode::PERLIN),
 erosionWindow(false), trackDraw(false), erosionDraw(false), erosionVertices(nullptr), traceVertices(nullptr), erosion(width, height),
@@ -158,8 +158,6 @@ void TerrainGenApp::ImGuiRender()
             ResizePerlin();
             resizeTerrainGeneration();
         }
-    }
-    if(!noiseEdit){
         if (ImGui::Button("Save file")) {
             if (currentMode == mode::PARAMETRIZED_GEN)
                 utilities::saveToObj("res/models/", "terrain", t_MeshVertices, t_MeshIndices, stride, (width - 1) * (height - 1) * 6, (width - 1) * (height - 1) * stride * 4, false);
@@ -189,6 +187,10 @@ void TerrainGenApp::ImGuiRender()
     if (biomeEdit) {
         BiomeImGui();
     }
+	if (treeEdit)
+	{
+		TreeTypesImGui();
+	}
     ImGui::End();
 
     ImGui::SetNextWindowPos(ImVec2(leftPanelWidth, 0), ImGuiCond_Always);
@@ -368,11 +370,7 @@ void TerrainGenApp::parametrizedImGui()
             editedType = 'h';
         }
         ImGui::Spacing();
-        if (ImGui::Button("Generate terrain"))
-        {
-            TerraGenPerform = true;
-            player.SetPosition(glm::vec3(0.0f, 80.0f, 0.0f));
-        }
+        
         ImGui::Separator();
         ImGui::Text("Vegetation settings");
         if (ImGui::Button("Vegetation generation"))
@@ -385,6 +383,16 @@ void TerrainGenApp::parametrizedImGui()
         if (ImGui::Button("Biomes settings")) {
             biomeEdit = !biomeEdit;
         }
+        if (ImGui::Button("Generate terrain"))
+        {
+            TerraGenPerform = true;
+            player.SetPosition(glm::vec3(0.0f, 80.0f, 0.0f));
+        }
+        /*
+        if (ImGui::Button("erode")) {
+            PerformErosion();
+        }
+        */
     }
 }
 
@@ -534,14 +542,45 @@ void TerrainGenApp::BiomeImGui()
                 if (it.getHumidityLevel().x > it.getHumidityLevel().y)
                     it.getHumidityLevelRef().x = it.getHumidityLevel().y;
 
+                ImGui::Text("Vegetation density");
+				ImGui::SliderInt("", &it.getVegetationLevelRef(), 0, m_ChunkResolution);
+
                 ImGui::PopItemWidth();
+                if(ImGui::Button("Configure tree types")) {
+                    treeEdit = true;
+					biomeEdit = false;
+                    biome = &it;
+                }
             }
+        }
+        ImGui::Separator();
+        if (ImGui::Button("+", ImVec2(50, 30))) {
+            biomes.push_back(biome::Biome(biomes.size(), "Default", {1, 2}, {1, 4}, {3, 5}, {0, 3}, 3, m_ChunkResolution * m_ChunkResolution * 0.2f));
         }
 		if (ImGui::Button("Save biomes")) {
 			terrainGen.setBiomes(biomes);
 		}
     }
     
+}
+
+void TerrainGenApp::TreeTypesImGui()
+{
+    if (ImGui::CollapsingHeader("Tree types")) {
+        for (int i = 0; i < biome->getTreeTypesRef().size(); i++) {
+            ImGui::Separator();
+			ImGui::Text("Tree type %d", i);
+			ImGui::SliderInt("Probability", &biome->getTreeTypesRef()[i].y, 0, 100);
+        }
+        ImGui::Separator();
+        if (ImGui::Button("+", ImVec2(50, 30))) {
+            biome->getTreeTypesRef().push_back({ 0, 0 });
+        }
+		if (ImGui::Button("Save tree types")) {
+            biomeEdit = true;
+			treeEdit = false;
+		}
+    }
 }
 
 void TerrainGenApp::SwapNoise(noise::SimplexNoiseClass* n)
@@ -626,6 +665,15 @@ void TerrainGenApp::TerrainGenerationDraw(glm::mat4& model) {
     m_TerGenTexture->Bind();
     if (isTerrainDisplayed)
         renderer.DrawWithTexture(*m_TerGenVAO, *m_TerGenIndexBuffer, *m_TerGenShader);
+    if (erosionDraw) {
+        model = glm::translate(model, glm::vec3(drawScale * m_Scaling_Factor * (width/prevChunkRes), 0.0f, 0.0f));
+
+        m_TerGenVAO->AddBuffer(*m_erosionBuffer, layout);
+        m_TerGenShader->SetMVP(model, *(player.GetCameraRef()->GetViewMatrix()), *(player.GetCameraRef()->GetProjectionMatrix()));
+
+        renderer.Draw(*m_TerGenVAO, *m_TerGenIndexBuffer, *m_TerGenShader);
+        PrintTrack(model);
+    }
 }
 void TerrainGenApp::DrawTrees(glm::mat4& model)
 {
@@ -713,8 +761,10 @@ void TerrainGenApp::ResizePerlin()
     meshVertices = new float[width * height * stride];
     meshIndices = new unsigned int[(width - 1) * (height - 1) * 6];
 
-	if (erosionVertices)
+    if (erosionVertices) {
 		DeactivateErosion();
+		erosion.Resize(width, height);
+    }
     
     noise->setMapSize(width, height);
 	noise->initMap();
@@ -790,13 +840,29 @@ void TerrainGenApp::PerformErosion() {
 
     //If erosion vertices are not allocated we need to allocate memory for them
     if (!erosionVertices) {
-        erosionVertices = new float[width * height * stride];
+        if(currentMode == mode::PERLIN)
+            erosionVertices = new float[width * height * stride];
+        else if(currentMode == mode::PARAMETRIZED_GEN)
+        erosionVertices = new float[(width - 1) * (height - 1) * stride * 4];
+    }
+    if (currentMode == mode::PERLIN) {
+        erosion.SetMap(noise->getMap());
+        utilities::benchmark_void(utilities::PerformErosion, "PerformErosion", erosionVertices, meshIndices, m_Scaling_Factor, trackDraw ? std::optional<float*>(traceVertices) : std::nullopt, stride, 0, 3, erosion);
+        utilities::PaintNotByTexture(erosionVertices, width, height, stride, 6);
+	}
+    else if (currentMode == mode::PARAMETRIZED_GEN) {
+        
+        erosion.SetMap(terrainGen.getHeightMap());
+        erosion.Erode(trackDraw ? std::optional<float*>(traceVertices) : std::nullopt);
+
+        utilities::createTiledVertices(erosionVertices, width, height, erosion.getMap(), m_Scaling_Factor, stride, 0);
+        utilities::InitializeNormals(erosionVertices, stride, 3, (height - 1) * (width - 1) * 4);
+        utilities::CalculateNormals(erosionVertices, t_MeshIndices, stride, 3, (width - 1) * (height - 1) * 6);
+        utilities::NormalizeVector3f(erosionVertices, stride, 3, (height - 1) * (width - 1) * 4);
+        utilities::AssignTexturesByBiomes(terrainGen, erosionVertices, width, height, 3, stride, 6);
     }
 
-    erosion.SetMap(noise->getMap());
-    utilities::benchmark_void(utilities::PerformErosion, "PerformErosion", erosionVertices, meshIndices, m_Scaling_Factor, trackDraw ? std::optional<float*>(traceVertices) : std::nullopt, stride, 0, 3, erosion);
-    utilities::PaintNotByTexture(erosionVertices, width, height, stride, 6);
-    m_erosionBuffer->UpdateData(erosionVertices, (height * width) * stride * sizeof(float));
+	m_erosionBuffer = std::make_unique<VertexBuffer>(erosionVertices, (height * width) * stride * sizeof(float));
     erosionDraw = true;
 }
 
