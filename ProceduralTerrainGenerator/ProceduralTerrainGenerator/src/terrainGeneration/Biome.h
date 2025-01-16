@@ -34,6 +34,15 @@ namespace biome {
 		std::string getName() const;
 		int getTexOffset() const;
 
+		int& getIdRef() { return m_id; }
+		vec2& getTemperatureLevelRef() { return m_TemperatureLevel; }
+		vec2& getHumidityLevelRef() { return m_HumidityLevel; }
+		vec2& getContinentalnessLevelRef() { return m_ContinentalnessLevel; }
+		vec2& getMountainousnessLevelRef() { return m_MountainousnessLevel; }
+		int& getVegetationLevelRef() { return vegetationLevel; }
+		std::string& getNameRef() { return m_Name; }
+		int& getTexOffsetRef() { return texOffset; }
+
 		void setTemperatureLevel(vec2 temperatureLevel);
 		void setHumidityLevel(vec2 humidityLevel);
 		void setContinentalnessLevel(vec2 continentalnessLevel);

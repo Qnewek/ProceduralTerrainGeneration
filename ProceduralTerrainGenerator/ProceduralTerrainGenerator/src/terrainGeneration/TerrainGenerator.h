@@ -26,8 +26,10 @@ public:
 	void setMountainousNoiseConfig(noise::NoiseConfigParameters config);
 	void setPVNoiseConfig(noise::NoiseConfigParameters config);
 	bool setSplines(std::vector<std::vector<double>> splines);
+	bool setSpline(char c, std::vector<std::vector<double>>  spline);
 	bool setBiomes(std::vector<biome::Biome>& biomes);
 	bool setRanges(std::vector<std::vector<RangedLevel>>& ranges);
+	bool setRange(char c, std::vector<RangedLevel> range);
 
 	float* getHeightMap();
 	int* getBiomeMap();
@@ -42,6 +44,11 @@ public:
 	noise::NoiseConfigParameters& getPVNoiseConfig();
 	noise::NoiseConfigParameters& getTemperatureNoiseConfig();
 	noise::NoiseConfigParameters& getHumidityNoiseConfig();
+	noise::SimplexNoiseClass& getContinentalnessNoise() { return continentalnessNoise; };
+	noise::SimplexNoiseClass& getMountainousNoise() { return mountainousNoise; };
+	noise::SimplexNoiseClass& getPVNoise() { return PVNoise; };
+	noise::SimplexNoiseClass& getTemperatureNoise() { return biomeGen.getTemperatureNoise(); };
+	noise::SimplexNoiseClass& getHumidityNoise() { return biomeGen.getHumidityNoise(); };
 	std::vector<std::vector<std::pair<int, int>>> getVegetationPoints() { return vegetationPoints; };
 
 	bool generateHeightMap();

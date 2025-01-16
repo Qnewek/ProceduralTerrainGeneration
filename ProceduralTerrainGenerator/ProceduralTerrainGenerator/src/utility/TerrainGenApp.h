@@ -19,53 +19,83 @@ public:
 
 	int Initialize();
 	void Start();
-	void ImGuiRender();
 
-	void Draw();
-	void PerformAction();
 	void UpdatePrevCheckers();
 	void CheckChange();
-	void DrawAdjacent(Renderer& renderer, glm::mat4& model);
-
+	void ResizePerlin();
+	void PerformPerlin();
+	void PerlinChunked();
+	
+	void ImGuiRender();
 	void perlinImgui();
 	void parametrizedImGui();
 	void ErosionWindowRender();
+	void ParameterImgui();
+	void BiomeImGui();
+	void SwapNoise(noise::SimplexNoiseClass* n);
+	
+	void Draw();
+	void PerlinDraw(glm::mat4& model);
+	void TerrainGenerationDraw(glm::mat4& model);
+	void DrawTrees(glm::mat4& model);
+	void PrintTrack(glm::mat4& model);
+
+	void PerformAction();
+	void DrawAdjacent(Renderer& renderer, glm::mat4& model);
 	void DeactivateErosion();
 	void PerformErosion();
-	void PrintTrack(glm::mat4& model);
-	void FullTerrainGeneration();
-	void conditionalTerrainGeneration();
-	void setTreeVertices();
 
-	void PerlinDraw();
-	void TerrainGenerationDraw();
+	void initializeTerrainGeneration();
+	void resizeTerrainGeneration();
+	void FullTerrainGeneration();
+	void TerrainGeneration();
+
+	void PrepareTreesDraw();
+
 private:
 	//Time variables
-	float deltaTime, lastFrame;
+	float deltaTime, lastFrame, drawScale;
 
-	//main variables
+	//Window Layout variables
 	int windowWidth, windowHeight;
 	float rightPanelWidth, topPanelHeight, bottomPanelHeight, leftPanelWidth;
-
-	//Basic vars
-	int width, height, stride, prevHeight, prevWidth, tmpHeight, tmpWidth;
-	float m_Scaling_Factor;
-
 	GLFWwindow* window;
 	Renderer renderer;
 	Player player;
+	std::string editedNoise = "";
+
+	//Map Size variables
+	int width, height, stride, prevHeight, prevWidth, tmpHeight, tmpWidth;
+	float m_Scaling_Factor;
 
 	//Pure Perlin
+	noise::SimplexNoiseClass basicPerlinNoise;
+	noise::SimplexNoiseClass* noise;
 	float* meshVertices;
 	unsigned int* meshIndices;
 	int seed;
 	bool testSymmetrical;
-	noise::SimplexNoiseClass noise;
 
 	//Erosion
+	erosion::Erosion erosion;
 	float *erosionVertices, *traceVertices;
 	bool erosionWindow, trackDraw, erosionDraw;
-	erosion::Erosion erosion;
+
+	//TerrainGenerator
+	TerrainGenerator terrainGen;
+	std::vector<std::vector<double>> splines;
+	std::vector<std::vector<RangedLevel>> ranges;
+	std::vector<biome::Biome> biomes;
+
+	char editedType = ' ';
+	int m_ChunkResolution, prevChunkRes, tmpChunkRes;
+	float m_ChunkScale, seeLevel, samplingScale = 0.05f;
+
+	//Settings
+	float* t_MeshVertices, * t_treesPositions;
+	unsigned int* t_MeshIndices;
+	int treeIndicesCount;
+	bool isTerrainDisplayed, drawTrees = false, TerraGenPerform = false, noiseEdit = false, biomeEdit = false;
 
 	//OpenGL stuff
 	VertexBufferLayout layout;
@@ -79,34 +109,16 @@ private:
 	std::unique_ptr<VertexBuffer> m_erosionBuffer;
 	std::unique_ptr<VertexBuffer> m_TrackBuffer;
 	std::unique_ptr<Shader> m_TrackShader;
-	
 	//TerrainGeneration openGl
 	std::unique_ptr<VertexArray> m_TerGenVAO;
 	std::unique_ptr<VertexBuffer> m_TerGenVertexBuffer;
 	std::unique_ptr<IndexBuffer> m_TerGenIndexBuffer;
 	std::unique_ptr<Shader> m_TerGenShader;
 	std::unique_ptr<Texture> m_TerGenTexture;
-
-	TerrainGenerator terrainGen;
-
-	int m_ChunkResolution;
-	float m_ChunkScale, seeLevel;
-	float samplingScale = 0.05f;
-
-	//Settings
-	float* t_MeshVertices;
-	unsigned int* t_MeshIndices;
-	float* t_treesPositions;
-	int treeIndicesCount;
-
+	//Tree openGl
 	unsigned int treeVAO, treeVBO, instanceVBO, EBO;
 	std::unique_ptr<Shader> m_TreeShader;
-
-	//booleans
-	bool isTerrainDisplayed;
-	bool drawTrees = false;
-	bool TerraGenPerform = false;
-
+	
 	enum class mode
 	{
 		PERLIN,

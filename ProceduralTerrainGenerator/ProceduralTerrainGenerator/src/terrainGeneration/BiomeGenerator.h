@@ -28,8 +28,11 @@ public:
 	biome::Biome& getBiome(int id);
 	noise::NoiseConfigParameters& getTemperatureNoiseConfig();
 	noise::NoiseConfigParameters& getHumidityNoiseConfig();
+	noise::SimplexNoiseClass& getTemperatureNoise() { return temperatureNoise; };
+	noise::SimplexNoiseClass& getHumidityNoise() { return humidityNoise; };
 
 	bool setRanges(std::vector<std::vector<RangedLevel>>& ranges);
+	bool setRange(char c, std::vector<RangedLevel> range);
 	bool setBiomes(std::vector<biome::Biome>& biomes);
 
 	int determineLevel(WorldParameter p, float value);

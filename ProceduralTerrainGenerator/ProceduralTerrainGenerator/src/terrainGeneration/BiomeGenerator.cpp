@@ -67,7 +67,7 @@ bool BiomeGenerator::biomify(float* map, int* biomeMap, const int& width, const 
 		return false;
 	}
 
-	temperatureNoise.setSeed(seed);
+	temperatureNoise.reseed();
 	temperatureNoise.setMapSize(width, height);
 	temperatureNoise.setChunkSize(chunkRes, chunkRes);
 	temperatureNoise.getConfigRef().option = noise::Options::NOTHING;
@@ -79,7 +79,7 @@ bool BiomeGenerator::biomify(float* map, int* biomeMap, const int& width, const 
 		return false;
 	}
 
-	humidityNoise.setSeed(seed/2);
+	humidityNoise.reseed();
 	humidityNoise.setMapSize(width, height);
 	humidityNoise.setChunkSize(chunkRes, chunkRes);
 	humidityNoise.getConfigRef().option = noise::Options::NOTHING;
@@ -138,6 +138,29 @@ bool BiomeGenerator::setRanges(std::vector<std::vector<RangedLevel>>& ranges)
 	m_ContinentalnessLevels = ranges[2];
 	m_MountainousnessLevels = ranges[3];
 
+	return true;
+}
+
+bool BiomeGenerator::setRange(char c, std::vector<RangedLevel> range)
+{
+	switch (c) {
+	case 'c':
+		m_ContinentalnessLevels = range;
+		break;
+	case 'm':
+		m_MountainousnessLevels = range;
+		break;
+	case 't':
+		m_TemperatureLevels = range;
+		break;
+	case 'h':
+		m_HumidityLevels = range;
+		break;
+	default:
+		std::cout << "[ERROR] Wrong biome option!" << std::endl;
+		return false;
+		break;
+	}
 	return true;
 }
 

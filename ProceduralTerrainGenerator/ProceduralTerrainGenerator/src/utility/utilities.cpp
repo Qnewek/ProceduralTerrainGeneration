@@ -80,9 +80,9 @@ namespace utilities
 		{
 			for (int x = 0; x < width; x++)
 			{
-				vertices[((y * width) + x) * stride + offset] = x / (float)width * scalingFactor;
-				vertices[((y * width) + x) * stride + offset + 1] = map[y * width + x] * scalingFactor;
-				vertices[((y * width) + x) * stride + offset + 2] = y / (float)height * scalingFactor;
+				vertices[((y * width) + x) * stride + offset] = x / (float)width;
+				vertices[((y * width) + x) * stride + offset + 1] = map[y * width + x];
+				vertices[((y * width) + x) * stride + offset + 2] = y / (float)height;
 			}
 		}
 	}
@@ -103,9 +103,9 @@ namespace utilities
 		{
 			for (int x = 0; x < width * chunkX; x++)
 			{
-				vertices[((y * width * chunkX) + x) * stride + offset] = x / (float)chunkX * scalingFactor;
+				vertices[((y * width * chunkX) + x) * stride + offset] = x / ((float)chunkX * width);
 				vertices[((y * width * chunkX) + x) * stride + offset + 1] = map[y * width * chunkX + x];
-				vertices[((y * width * chunkX) + x) * stride + offset + 2] = y / (float)chunkY * scalingFactor;
+				vertices[((y * width * chunkX) + x) * stride + offset + 2] = y / ((float)chunkY * height);
 			}
 		}
 	}
@@ -122,27 +122,27 @@ namespace utilities
 		{
 			for (int x = 0; x < (width - 1); x++)
 			{
-				vertices[index] = x * scalingFactor;
-				vertices[index + 1] = map[y * width + x] * scalingFactor;
-				vertices[index + 2] = y * scalingFactor;
+				vertices[index] = x;
+				vertices[index + 1] = map[y * width + x];
+				vertices[index + 2] = y;
 
 				index += stride;
 
-				vertices[index] = (x + 1) * scalingFactor;
-				vertices[index + 1] = map[y * width + x + 1] * scalingFactor;
-				vertices[index + 2] = y * scalingFactor;
+				vertices[index] = (x + 1);
+				vertices[index + 1] = map[y * width + x + 1];
+				vertices[index + 2] = y;
 
 				index += stride;
 
-				vertices[index] = (x + 1) * scalingFactor;
-				vertices[index + 1] = map[(y + 1) * width + x + 1] * scalingFactor;
-				vertices[index + 2] = (y + 1) * scalingFactor;
+				vertices[index] = (x + 1);
+				vertices[index + 1] = map[(y + 1) * width + x + 1];
+				vertices[index + 2] = (y + 1);
 
 				index += stride;
 
-				vertices[index] = x * scalingFactor;
-				vertices[index + 1] = map[(y + 1) * width + x] * scalingFactor;
-				vertices[index + 2] = (y + 1) * scalingFactor;
+				vertices[index] = x;
+				vertices[index + 1] = map[(y + 1) * width + x];
+				vertices[index + 2] = (y + 1);
 
 				index += stride;
 			}
