@@ -405,16 +405,16 @@ namespace utilities
 		}
 
 		for (int y = 0; y < verticesCount; y += stride) {
-				float vx = vertices[y];
-				float vy = vertices[y+1];
-				float vz = vertices[y+2];
-				file << "v " << vx << " " << vy << " " << vz << "\n";
+			float vx = vertices[y];
+			float vy = vertices[y+1];
+			float vz = vertices[y+2];
+			file << "v " << vx << " " << vy << " " << vz << "\n";
 		}
-		for (int y = 0; y < verticesCount; y += stride) {
+		/*for (int y = 0; y < verticesCount; y += stride) {
 			float vx = vertices[y + 6];
 			float vy = vertices[y + 7];
 			file << "vt " << vx << " " << vy << "\n";
-		}
+		}*/
 		for (int y = 0; y < verticesCount; y += stride) {
 			float vx = vertices[y + 3];
 			float vy = vertices[y + 4];
@@ -429,7 +429,7 @@ namespace utilities
 			int two = indices[y + 1];
 			int three = indices[y + 2];
 
-			file << "f " << one << "/" << one << "/" << one << " " << two << "/" << two << "/" << two << " " << three << "/" << three << "/" << three << "\n";
+			file << "f " << one << "/" << "/" << one << " " << two << "/" << "/" << two << " "<< three << "/" << "/" << three << "\n";
 		}
 
 		file.close();

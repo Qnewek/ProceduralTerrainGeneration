@@ -32,6 +32,7 @@ public:
 	void ErosionWindowRender();
 	void ParameterImgui();
 	void BiomeImGui();
+	void TreeTypesImGui();
 	void SwapNoise(noise::SimplexNoiseClass* n);
 	
 	void Draw();
@@ -86,6 +87,7 @@ private:
 	std::vector<std::vector<double>> splines;
 	std::vector<std::vector<RangedLevel>> ranges;
 	std::vector<biome::Biome> biomes;
+	biome::Biome* biome = nullptr;
 
 	char editedType = ' ';
 	int m_ChunkResolution, prevChunkRes, tmpChunkRes;
@@ -95,7 +97,7 @@ private:
 	float* t_MeshVertices, * t_treesPositions;
 	unsigned int* t_MeshIndices;
 	int treeIndicesCount;
-	bool isTerrainDisplayed, drawTrees = false, TerraGenPerform = false, noiseEdit = false, biomeEdit = false;
+	bool isTerrainDisplayed, drawTrees = false, TerraGenPerform = false, noiseEdit = false, biomeEdit = false, treeEdit = false;
 
 	//OpenGL stuff
 	VertexBufferLayout layout;

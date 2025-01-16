@@ -35,13 +35,14 @@ namespace biome {
 		int getTexOffset() const;
 
 		int& getIdRef() { return m_id; }
+		int& getVegetationLevelRef() { return vegetationLevel; }
+		int& getTexOffsetRef() { return texOffset; }
 		vec2& getTemperatureLevelRef() { return m_TemperatureLevel; }
 		vec2& getHumidityLevelRef() { return m_HumidityLevel; }
 		vec2& getContinentalnessLevelRef() { return m_ContinentalnessLevel; }
 		vec2& getMountainousnessLevelRef() { return m_MountainousnessLevel; }
-		int& getVegetationLevelRef() { return vegetationLevel; }
 		std::string& getNameRef() { return m_Name; }
-		int& getTexOffsetRef() { return texOffset; }
+		std::vector<vec2>& getTreeTypesRef() { return treeTypes; }
 
 		void setTemperatureLevel(vec2 temperatureLevel);
 		void setHumidityLevel(vec2 humidityLevel);
@@ -54,10 +55,13 @@ namespace biome {
 		int m_id;
 		int texOffset;
 		std::string m_Name;
-		int vegetationLevel;
+		
 		vec2 m_TemperatureLevel;
 		vec2 m_HumidityLevel;
 		vec2 m_ContinentalnessLevel;
 		vec2 m_MountainousnessLevel;
+
+		int vegetationLevel;
+		std::vector<vec2> treeTypes = {{0,100}};
 	};
 }
