@@ -13,6 +13,7 @@ public:
 	void SetPosition(glm::vec3 pos);
 	void SteerPlayer(GLFWwindow* window, float* mesh, int stride, float deltaTime);
 	void Jump();
+	void setSpeed(float speed);
 
 	Camera* GetCameraRef() { return &m_Camera; };
 

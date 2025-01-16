@@ -8,7 +8,7 @@
 TerrainGenerator::TerrainGenerator() : width(0), height(0), seed(0), chunkResolution(0),
 heightMap(nullptr), biomeMap(nullptr), biomeMapPerChunk(nullptr),
 continentalnessNoise(), mountainousNoise(), PVNoise(), continentalnessSpline(), mountainousSpline(), PVSpline(),
-seeLevel(64.0f), biomeGen()
+seeLevel(64.0f), biomeGen(), treeCount(0)
 {
 	mountainousNoise.getConfigRef().option = noise::Options::NOTHING;
 	continentalnessNoise.getConfigRef().option = noise::Options::NOTHING;
@@ -116,11 +116,30 @@ bool TerrainGenerator::setSplines(std::vector<std::vector<double>> splines)
 {
 	if (splines.size() <= 5)
 		return false;
-
 	continentalnessSpline.set_points(splines[0], splines[1]);
 	mountainousSpline.set_points(splines[2], splines[3]);
 	PVSpline.set_points(splines[4], splines[5]);
 
+	return true;
+}
+
+bool TerrainGenerator::setSpline(char c, std::vector<std::vector<double>> spline)
+{
+	switch (c)
+	{
+	case 'c':
+		continentalnessSpline.set_points(spline[0], spline[1]);
+		break;
+	case 'm':
+		mountainousSpline.set_points(spline[0], spline[1]);
+		break;
+	case 'p':
+		PVSpline.set_points(spline[0], spline[1]);
+		break;
+	default:
+		return false;
+		break;
+	}
 	return true;
 }
 
@@ -142,6 +161,11 @@ bool TerrainGenerator::setRanges(std::vector<std::vector<RangedLevel>>& ranges)
 	biomeGen.setRanges(ranges);
 
 	return true;
+}
+
+bool TerrainGenerator::setRange(char c, std::vector<RangedLevel> range)
+{
+	return biomeGen.setRange(c, range);
 }
 
 float* TerrainGenerator::getHeightMap()
@@ -205,16 +229,16 @@ bool TerrainGenerator::generateHeightMap()
 		return false;
 	}
 
-	continentalnessNoise.setSeed(seed);
 	continentalnessNoise.initMap();
+	continentalnessNoise.reseed();
 	continentalnessNoise.generateFractalNoiseByChunks();
 
-	mountainousNoise.setSeed(seed/2);
 	mountainousNoise.initMap();
+	mountainousNoise.reseed();
 	mountainousNoise.generateFractalNoiseByChunks();
 
-	PVNoise.setSeed(seed/3);
 	PVNoise.initMap();
+	PVNoise.reseed();
 	PVNoise.generateFractalNoiseByChunks();
 
 	std::cout << "[LOG] Evaluating heightMap..." << std::endl;
@@ -284,12 +308,6 @@ bool TerrainGenerator::performTerrainGeneration()
 		std::cout << "[ERROR] BiomeMapPerChunk couldnt be generated" << std::endl;
 		return false;
 	}
-	if (!vegetationGeneration())
-	{
-		std::cout << "[ERROR] Vegetation couldnt be generated" << std::endl;
-		return false;
-	}
-
 	return true;
 }
 
@@ -327,7 +345,7 @@ bool TerrainGenerator::generateBiomeMapPerChunk()
 		std::cout << "[ERROR] BiomeMap not initialized" << std::endl;
 		return false;
 	}
-
+	delete[] biomeMapPerChunk;
 	biomeMapPerChunk = new int[width * height];
 	int biomeSum = 0;
 

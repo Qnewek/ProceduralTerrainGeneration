@@ -82,6 +82,7 @@ namespace noise
 
 		void initMap();
 		void setSeed(int seed);
+		void reseed();
 		void setScale(float scale);
 		void setMapSize(unsigned int width, unsigned int height);
 		void setChunkSize(unsigned int chunkWidth, unsigned int chunkHeight);

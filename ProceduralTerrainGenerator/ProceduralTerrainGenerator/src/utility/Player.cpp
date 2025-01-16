@@ -50,3 +50,9 @@ void Player::SteerPlayer(GLFWwindow* window, float* mesh, int stride, float delt
 void Player::Jump()
 {
 }
+
+void Player::setSpeed(float speed)
+{
+	m_Speed = speed;
+	m_Camera.setSpeed(speed);
+}

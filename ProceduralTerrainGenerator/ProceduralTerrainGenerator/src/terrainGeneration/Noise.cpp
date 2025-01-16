@@ -26,7 +26,8 @@ namespace noise
 	void SimplexNoiseClass::initMap()
 	{
 		if (width > 0 && height > 0) {
-			delete[] heightMap;
+			if (heightMap)
+				delete[] heightMap;
 			heightMap = new float[width * chunkWidth * height * chunkHeight];
 		}
 		else {
@@ -43,6 +44,11 @@ namespace noise
 			this->config.seed = seed;
 			SimplexNoise::reseed(seed);
 		}
+	}
+
+	void SimplexNoiseClass::reseed()
+	{
+		SimplexNoise::reseed(this->config.seed);
 	}
 
 	//Sets the scale of the noise sampling, the higher the scale the more zoomed out the noise will be,
@@ -127,8 +133,8 @@ namespace noise
 
 						for (int i = 0; i < config.octaves; i++)
 						{
-							vec.x = frequency * ((chunkX * config.scale) + (x / float(chunkWidth) * config.scale));
-							vec.y = frequency * ((chunkY * config.scale) + (y / float(chunkHeight) * config.scale));
+							vec.x = frequency * (config.xoffset + (chunkX * config.scale) + (x / float(chunkWidth) * config.scale));
+							vec.y = frequency * (config.yoffset + (chunkY * config.scale) + (y / float(chunkHeight) * config.scale));
 
 							elevation += SimplexNoise::noise(vec.x, vec.y) * amplitude;
 							
