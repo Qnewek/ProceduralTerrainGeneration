@@ -11,10 +11,14 @@ out vec3 fColor;
 uniform mat4 model;
 uniform mat4 view;
 uniform mat4 projection;
+uniform float scale;
+uniform float stretch;
 
 void main()
 {
-    FragPos = vec3(model * vec4(aPos + aOffset, 1.0));
+    FragPos = vec3(model * vec4((aPos + aOffset) * scale, 1.0));
+    FragPos.x *= stretch;
+    FragPos.z *= stretch;
     Normal = aNormal;  
     
     gl_Position = projection * view * vec4(FragPos, 1.0);

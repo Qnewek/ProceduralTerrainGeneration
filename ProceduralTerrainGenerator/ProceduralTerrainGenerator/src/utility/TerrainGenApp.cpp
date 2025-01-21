@@ -223,6 +223,9 @@ void TerrainGenApp::ImGuiRender()
     ImGui::SetNextWindowSize(ImVec2(windowWidth - rightPanelWidth - leftPanelWidth, bottomPanelHeight), ImGuiCond_Always);
     ImGui::Begin("OutPut", nullptr, ImGuiWindowFlags_ResizeFromAnySide | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoScrollbar);
 	ImGui::Text("Press 'm' to enable rotation of the camera, press 'ESC' to release mouse");
+	ImGui::Text("Press 'w', 'a', 's', 'd' to move camera, 'space' to move up, 'ctrl' to move down");
+	ImGui::Text("Camera Position: (%.2f, %.2f, %.2f)", player.GetCameraRef()->GetPosition().x, player.GetCameraRef()->GetPosition().y, player.GetCameraRef()->GetPosition().z);
+    ImGui::Text("FPS: %.1f", 1.0f / deltaTime);
     if (noiseEdit) {
 		ImGui::Text("Editing %s noise...", editedNoise.c_str());
     }
@@ -679,7 +682,8 @@ void TerrainGenApp::DrawTrees(glm::mat4& model)
     m_TreeShader->SetLightUniforms(glm::vec3(0.5f * height, 255.0f, 0.5f * width), glm::vec3(0.2f, 0.2f, 0.2f), glm::vec3(0.5f, 0.5f, 0.5f), glm::vec3(1.0f, 1.0f, 1.0f));
     m_TreeShader->SetViewPos((*player.GetCameraRef()).GetPosition());
     m_TreeShader->SetMVP(model, *(player.GetCameraRef()->GetViewMatrix()), *(player.GetCameraRef()->GetProjectionMatrix()));
-
+    m_TreeShader->SetUniform1f("stretch", drawScale);
+    m_TreeShader->SetUniform1f("scale", m_Scaling_Factor);
 
     glBindVertexArray(treeVAO);
     glDrawElementsInstanced(GL_TRIANGLES, treeIndicesCount, GL_UNSIGNED_INT, 0, terrainGen.getTreeCount());
@@ -976,28 +980,31 @@ void TerrainGenApp::TerrainGeneration() {
 void TerrainGenApp::PrepareTreesDraw()
 {
     float treeVertices[] = {
-        0.4f * m_Scaling_Factor, 0.00f * m_Scaling_Factor, 0.4f * m_Scaling_Factor,   0.0f, -1.0f, 0.0f,  0.5f, 0.25f, 0.0f,
-        0.4f * m_Scaling_Factor, 0.00f * m_Scaling_Factor, 0.6f * m_Scaling_Factor,   0.0f, -1.0f, 0.0f,  0.5f, 0.25f, 0.0f,
-        0.6f * m_Scaling_Factor, 0.00f * m_Scaling_Factor, 0.6f * m_Scaling_Factor,   0.0f, -1.0f, 0.0f,  0.5f, 0.25f, 0.0f,
-        0.6f * m_Scaling_Factor, 0.00f * m_Scaling_Factor, 0.4f * m_Scaling_Factor,   0.0f, -1.0f, 0.0f,  0.5f, 0.25f, 0.0f,
+        0.4f, 0.00f, 0.4f,   0.0f, -1.0f, 0.0f,  0.5f, 0.25f, 0.0f,
+        0.4f, 0.00f, 0.6f,   0.0f, -1.0f, 0.0f,  0.5f, 0.25f, 0.0f,
+        0.6f, 0.00f, 0.6f,   0.0f, -1.0f, 0.0f,  0.5f, 0.25f, 0.0f,
+        0.6f, 0.00f, 0.4f,   0.0f, -1.0f, 0.0f,  0.5f, 0.25f, 0.0f,
        
-        0.4f * m_Scaling_Factor, 0.25f * m_Scaling_Factor, 0.4f * m_Scaling_Factor,   0.0f, 1.0f, 0.0f,   0.5f, 0.25f, 0.0f,
-        0.4f * m_Scaling_Factor, 0.25f * m_Scaling_Factor, 0.6f * m_Scaling_Factor,   0.0f, 1.0f, 0.0f,   0.5f, 0.25f, 0.0f,
-        0.6f * m_Scaling_Factor, 0.25f * m_Scaling_Factor, 0.6f * m_Scaling_Factor,   0.0f, 1.0f, 0.0f,   0.5f, 0.25f, 0.0f,
-        0.6f * m_Scaling_Factor, 0.25f * m_Scaling_Factor, 0.4f * m_Scaling_Factor,   0.0f, 1.0f, 0.0f,   0.5f, 0.25f, 0.0f,
+        0.4f, 0.25f, 0.4f,   0.0f, 1.0f, 0.0f,   0.5f, 0.25f, 0.0f,
+        0.4f, 0.25f, 0.6f,   0.0f, 1.0f, 0.0f,   0.5f, 0.25f, 0.0f,
+        0.6f, 0.25f, 0.6f,   0.0f, 1.0f, 0.0f,   0.5f, 0.25f, 0.0f,
+        0.6f, 0.25f, 0.4f,   0.0f, 1.0f, 0.0f,   0.5f, 0.25f, 0.0f,
 
-        0.0f * m_Scaling_Factor, 0.25f * m_Scaling_Factor, 0.0f * m_Scaling_Factor,   0.0f, 1.0f, 0.0f,   0.0f, 0.5f, 0.0f,
-        1.0f * m_Scaling_Factor, 0.25f * m_Scaling_Factor, 0.0f * m_Scaling_Factor,   0.0f, 1.0f, 0.0f,   0.0f, 0.5f, 0.0f,
-        1.0f * m_Scaling_Factor, 0.25f * m_Scaling_Factor, 1.0f * m_Scaling_Factor,   0.0f, 1.0f, 0.0f,   0.0f, 0.5f, 0.0f,
-        0.0f * m_Scaling_Factor, 0.25f * m_Scaling_Factor, 1.0f * m_Scaling_Factor,   0.0f, 1.0f, 0.0f,   0.0f, 0.5f, 0.0f,
-        0.5f * m_Scaling_Factor, 1.00f * m_Scaling_Factor, 0.5f * m_Scaling_Factor,   0.0f, 1.0f, 0.0f,   0.0f, 0.5f, 0.0f
+        0.0f, 0.25f, 0.0f,   0.0f, 1.0f, 0.0f,   0.0f, 0.5f, 0.0f,
+        1.0f, 0.25f, 0.0f,   0.0f, 1.0f, 0.0f,   0.0f, 0.5f, 0.0f,
+        1.0f, 0.25f, 1.0f,   0.0f, 1.0f, 0.0f,   0.0f, 0.5f, 0.0f,
+        0.0f, 0.25f, 1.0f,   0.0f, 1.0f, 0.0f,   0.0f, 0.5f, 0.0f,
+        0.5f, 1.00f, 0.5f,   0.0f, 1.0f, 0.0f,   0.0f, 0.5f, 0.0f
     };
 
     unsigned int treeIndices[] = {
+        //
         0, 1, 2,
         2, 3, 0,
+        //
         4, 5, 6,
         6, 7, 4,
+        //
         0, 1, 5,
         0, 5, 4,
         1, 2, 6,
@@ -1006,6 +1013,7 @@ void TerrainGenApp::PrepareTreesDraw()
         2, 7, 6,
         3, 0, 4,
         3, 4, 7,
+        //
         8, 9, 10,
         8, 10, 11,
         8, 9, 12,
@@ -1014,7 +1022,7 @@ void TerrainGenApp::PrepareTreesDraw()
         11, 8, 12
     };
 
-
+    treeIndicesCount = sizeof(treeIndices) / sizeof(treeIndices[0]);
 	terrainGen.vegetationGeneration();
 
     t_treesPositions = new float[3 * terrainGen.getTreeCount()];
@@ -1024,9 +1032,9 @@ void TerrainGenApp::PrepareTreesDraw()
 
     for (auto& it : terrainGen.getVegetationPoints()) {
         for (auto& it2 : it) {
-            t_treesPositions[index++] = it2.first * m_Scaling_Factor;
-            t_treesPositions[index++] = terrainGen.getHeightAt(it2.first, it2.second) * m_Scaling_Factor;
-            t_treesPositions[index++] = it2.second * m_Scaling_Factor;
+            t_treesPositions[index++] = it2.first;
+            t_treesPositions[index++] = terrainGen.getHeightAt(it2.first, it2.second);
+            t_treesPositions[index++] = it2.second;
         }
     }
 
