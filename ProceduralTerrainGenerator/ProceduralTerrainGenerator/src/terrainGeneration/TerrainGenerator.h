@@ -64,7 +64,7 @@ private:
 	int seed, width, height;
 	int chunkResolution;
 	float seeLevel;
-	int treeCount;
+	int treeCount = 0;
 
 	std::vector<std::vector<std::pair<int,int>>> vegetationPoints;
 

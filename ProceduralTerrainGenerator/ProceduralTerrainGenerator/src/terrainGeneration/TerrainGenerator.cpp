@@ -8,7 +8,7 @@
 TerrainGenerator::TerrainGenerator() : width(0), height(0), seed(0), chunkResolution(0),
 heightMap(nullptr), biomeMap(nullptr), biomeMapPerChunk(nullptr),
 continentalnessNoise(), mountainousNoise(), PVNoise(), continentalnessSpline(), mountainousSpline(), PVSpline(),
-seeLevel(64.0f), biomeGen(), treeCount(0)
+seeLevel(64.0f), biomeGen()
 {
 	mountainousNoise.getConfigRef().option = noise::Options::NOTHING;
 	continentalnessNoise.getConfigRef().option = noise::Options::NOTHING;
@@ -312,9 +312,10 @@ bool TerrainGenerator::vegetationGeneration()
 		return false;
 	}
 
-	treeCount = 0;
 	PoissonGenerator::DefaultPRNG PRNG;
 	vegetationPoints.resize(width * height);
+
+	treeCount = 0;
 
 	for (int y = 0; y < height; y++) {
 		for (int x = 0; x < width; x++) {
