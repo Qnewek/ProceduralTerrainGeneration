@@ -10,7 +10,7 @@
 
 TerrainGenApp::TerrainGenApp() : window(nullptr), windowWidth(0), windowHeight(0), m_Scaling_Factor(0.4f), drawScale(1.0f),
 rightPanelWidth(400.0f),topPanelHeight(30.0f), bottomPanelHeight(200.0f), leftPanelWidth(400.0f), 
-width(800), height(800), prevHeight(800), prevWidth(800), tmpHeight(800), tmpWidth(800), stride(8), seed(123), deltaTime(0.0f), lastFrame(0.0f),
+width(200), height(200), prevHeight(200), prevWidth(200), tmpHeight(200), tmpWidth(200), stride(8), seed(123), deltaTime(0.0f), lastFrame(0.0f),
 renderer(), player(1920, 1080, glm::vec3(0.0f, 0.0f, 0.0f), 0.0001f, 1.0f, false, height),
 meshVertices(nullptr), meshIndices(nullptr), testSymmetrical(false), basicPerlinNoise(), noise(&basicPerlinNoise), layout(), currentMode(mode::PERLIN),
 erosionWindow(false), trackDraw(false), erosionDraw(false), erosionVertices(nullptr), traceVertices(nullptr), erosion(width, height),
@@ -63,8 +63,6 @@ int TerrainGenApp::Initialize()
         std::cout << "error" << std::endl;
     }
 
-    GLCALL(glEnable(GL_BLEND));
-    GLCALL(glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA));
     glEnable(GL_DEPTH_TEST);
 
 	//Initialising basic mode variables
@@ -179,7 +177,7 @@ void TerrainGenApp::ImGuiRender()
 
     ImGui::SetNextWindowPos(ImVec2(0, 0), ImGuiCond_Always);
     ImGui::SetNextWindowSize(ImVec2(leftPanelWidth, windowHeight-60), ImGuiCond_Always);
-    ImGui::Begin("Parameters", nullptr, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_ResizeFromAnySide);
+    ImGui::Begin("Modify", nullptr, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_ResizeFromAnySide);
     leftPanelWidth = ImGui::GetWindowWidth() <= windowWidth/2 ? ImGui::GetWindowWidth() : windowWidth/2;
     if (noiseEdit) {
         ParameterImgui();
@@ -616,7 +614,6 @@ void TerrainGenApp::Draw()
 		model = glm::translate(model, glm::vec3(-0.5f, -0.5f, 0.0f));
         TerrainGenerationDraw(model);
         if (drawTrees) {
-
 			DrawTrees(model);
         }
     }
@@ -683,8 +680,8 @@ void TerrainGenApp::DrawTrees(glm::mat4& model)
     m_TreeShader->SetViewPos((*player.GetCameraRef()).GetPosition());
     m_TreeShader->SetMVP(model, *(player.GetCameraRef()->GetViewMatrix()), *(player.GetCameraRef()->GetProjectionMatrix()));
 
-    glBindVertexArray(treeVAO);
 
+    glBindVertexArray(treeVAO);
     glDrawElementsInstanced(GL_TRIANGLES, treeIndicesCount, GL_UNSIGNED_INT, 0, terrainGen.getTreeCount());
     glBindVertexArray(0);
 }
@@ -979,19 +976,16 @@ void TerrainGenApp::TerrainGeneration() {
 void TerrainGenApp::PrepareTreesDraw()
 {
     float treeVertices[] = {
-        // Core 
-        // Positions                          // Normals         // Color
-        // Bottom side
         0.4f * m_Scaling_Factor, 0.00f * m_Scaling_Factor, 0.4f * m_Scaling_Factor,   0.0f, -1.0f, 0.0f,  0.5f, 0.25f, 0.0f,
         0.4f * m_Scaling_Factor, 0.00f * m_Scaling_Factor, 0.6f * m_Scaling_Factor,   0.0f, -1.0f, 0.0f,  0.5f, 0.25f, 0.0f,
         0.6f * m_Scaling_Factor, 0.00f * m_Scaling_Factor, 0.6f * m_Scaling_Factor,   0.0f, -1.0f, 0.0f,  0.5f, 0.25f, 0.0f,
         0.6f * m_Scaling_Factor, 0.00f * m_Scaling_Factor, 0.4f * m_Scaling_Factor,   0.0f, -1.0f, 0.0f,  0.5f, 0.25f, 0.0f,
-        // top side
+       
         0.4f * m_Scaling_Factor, 0.25f * m_Scaling_Factor, 0.4f * m_Scaling_Factor,   0.0f, 1.0f, 0.0f,   0.5f, 0.25f, 0.0f,
         0.4f * m_Scaling_Factor, 0.25f * m_Scaling_Factor, 0.6f * m_Scaling_Factor,   0.0f, 1.0f, 0.0f,   0.5f, 0.25f, 0.0f,
         0.6f * m_Scaling_Factor, 0.25f * m_Scaling_Factor, 0.6f * m_Scaling_Factor,   0.0f, 1.0f, 0.0f,   0.5f, 0.25f, 0.0f,
         0.6f * m_Scaling_Factor, 0.25f * m_Scaling_Factor, 0.4f * m_Scaling_Factor,   0.0f, 1.0f, 0.0f,   0.5f, 0.25f, 0.0f,
-        // Tree crown
+
         0.0f * m_Scaling_Factor, 0.25f * m_Scaling_Factor, 0.0f * m_Scaling_Factor,   0.0f, 1.0f, 0.0f,   0.0f, 0.5f, 0.0f,
         1.0f * m_Scaling_Factor, 0.25f * m_Scaling_Factor, 0.0f * m_Scaling_Factor,   0.0f, 1.0f, 0.0f,   0.0f, 0.5f, 0.0f,
         1.0f * m_Scaling_Factor, 0.25f * m_Scaling_Factor, 1.0f * m_Scaling_Factor,   0.0f, 1.0f, 0.0f,   0.0f, 0.5f, 0.0f,
@@ -1000,13 +994,10 @@ void TerrainGenApp::PrepareTreesDraw()
     };
 
     unsigned int treeIndices[] = {
-        // Bottom 
         0, 1, 2,
         2, 3, 0,
-        // Top 
         4, 5, 6,
         6, 7, 4,
-        // Sides
         0, 1, 5,
         0, 5, 4,
         1, 2, 6,
@@ -1015,7 +1006,6 @@ void TerrainGenApp::PrepareTreesDraw()
         2, 7, 6,
         3, 0, 4,
         3, 4, 7,
-        // Crown
         8, 9, 10,
         8, 10, 11,
         8, 9, 12,
@@ -1024,12 +1014,9 @@ void TerrainGenApp::PrepareTreesDraw()
         11, 8, 12
     };
 
-    if (!terrainGen.vegetationGeneration())
-        std::cout << "[LOG] Trees generation failed!" << std::endl;
-    if (t_treesPositions) {
-        delete[] t_treesPositions;
-        t_treesPositions = nullptr;
-    }
+
+	terrainGen.vegetationGeneration();
+
     t_treesPositions = new float[3 * terrainGen.getTreeCount()];
     std::cout << terrainGen.getTreeCount() << std::endl;
 

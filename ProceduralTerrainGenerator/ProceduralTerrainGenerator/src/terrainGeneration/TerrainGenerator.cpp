@@ -254,21 +254,15 @@ bool TerrainGenerator::generateHeightMap()
 			mountainous = mountainousSpline(mountainousNoise.getVal(x, y));
 			PV = PVSpline(PVNoise.getVal(x, y));
 
-			if (continentalness >= -0.2 && continentalness <= 0.0) {
+			if (continentalness >= -0.2 && continentalness <= 0.0)
 				mountainous *= 0.0;
-			}
-			else if (continentalness > 0.0) {
+			else if (continentalness > 0.0)
 				mountainous *= continentalness;
-			}
 			else
-			{
 				mountainous *= -(continentalness + 0.2) / 25;
-			}
 
 			mountainous -= mountainous * PV;
-
 			elevation = continentalnessSpline(continentalness) + mountainous - (PV * 20.0f);
-
 			heightMap[y * width * chunkResolution + x] = elevation;
 		}
 	}

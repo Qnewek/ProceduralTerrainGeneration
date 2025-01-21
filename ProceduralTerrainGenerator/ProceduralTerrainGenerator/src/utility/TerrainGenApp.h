@@ -20,6 +20,7 @@ public:
 	int Initialize();
 	void Start();
 
+private:
 	void UpdatePrevCheckers();
 	void CheckChange();
 	void ResizePerlin();

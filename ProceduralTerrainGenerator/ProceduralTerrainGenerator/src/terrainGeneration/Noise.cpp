@@ -50,7 +50,7 @@ namespace noise
 	{
 		SimplexNoise::reseed(this->config.seed);
 	}
-
+		
 	//Sets the scale of the noise sampling, the higher the scale the more zoomed out the noise will be,
 	//
 	//@param scale - scale of the noise
@@ -231,7 +231,6 @@ namespace noise
 						vec.y = (y / (float)height * config.scale + config.yoffset) * frequency;
 
 						elevation += SimplexNoise::noise(vec.x, vec.y) * amplitude;
-						//elevation += perlin(vec) * amplitude;
 					}
 					divider += amplitude;
 					amplitude *= config.persistance;
