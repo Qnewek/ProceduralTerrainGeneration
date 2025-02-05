@@ -25,26 +25,26 @@ public:
 	BiomeGenerator();
 	~BiomeGenerator();
 
-	biome::Biome& getBiome(int id);
-	noise::NoiseConfigParameters& getTemperatureNoiseConfig();
-	noise::NoiseConfigParameters& getHumidityNoiseConfig();
-	noise::SimplexNoiseClass& getTemperatureNoise() { return temperatureNoise; };
-	noise::SimplexNoiseClass& getHumidityNoise() { return humidityNoise; };
+	biome::Biome& GetBiome(int id);
+	noise::NoiseConfigParameters& GetTemperatureNoiseConfig();
+	noise::NoiseConfigParameters& GetHumidityNoiseConfig();
+	noise::SimplexNoiseClass& GetTemperatureNoise() { return temperatureNoise; };
+	noise::SimplexNoiseClass& GetHumidityNoise() { return humidityNoise; };
 
-	bool setRanges(std::vector<std::vector<RangedLevel>>& ranges);
-	bool setRange(char c, std::vector<RangedLevel> range);
-	bool setBiomes(std::vector<biome::Biome>& biomes);
+	bool SetRanges(std::vector<std::vector<RangedLevel>>& ranges);
+	bool SetRange(char c, std::vector<RangedLevel> range);
+	bool SetBiomes(std::vector<biome::Biome>& b);
 
-	int determineLevel(WorldParameter p, float value);
-	int determineBiome(const int& temperature, const int& humidity, const int& continentalness, const int& mountainousness);
-	bool biomify(float* map, int* biomeMap, const int& width, const int& height, const int& chunkRes, const int& seed, const noise::SimplexNoiseClass& continenatlnes, const noise::SimplexNoiseClass& mountainouss);
+	int DetermineLevel(WorldParameter p, float value);
+	int DetermineBiome(const int& temperature, const int& humidity, const int& continentalness, const int& mountainousness);
+	bool Biomify(float* map, int* biomeMap, const int& width, const int& height, const int& chunkRes, const int& seed, const noise::SimplexNoiseClass& continenatlnes, const noise::SimplexNoiseClass& mountainouss);
 
 private:
-	std::unordered_map<int, biome::Biome> m_Biomes;
-	std::vector<RangedLevel> m_ContinentalnessLevels;
-	std::vector<RangedLevel> m_HumidityLevels;
-	std::vector<RangedLevel> m_TemperatureLevels;
-	std::vector<RangedLevel> m_MountainousnessLevels;
+	std::unordered_map<int, biome::Biome> biomes;
+	std::vector<RangedLevel> continentalnessLevels;
+	std::vector<RangedLevel> humidityLevels;
+	std::vector<RangedLevel> temperatureLevels;
+	std::vector<RangedLevel> mountainousnessLevels;
 
 	noise::SimplexNoiseClass temperatureNoise;
 	noise::SimplexNoiseClass humidityNoise;

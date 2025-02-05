@@ -1,16 +1,16 @@
 #include "Biome.h"
 
 namespace biome{
-	Biome::Biome() : m_id(-1), m_Name(""), m_TemperatureLevel(), m_HumidityLevel(), m_ContinentalnessLevel(), m_MountainousnessLevel(), texOffset(0), vegetationLevel(0)
+	Biome::Biome() : id(-1), name(""), temperatureLevel(), humidityLevel(), continentalnessLevel(), mountainousnessLevel(), texOffset(0), vegetationLevel(0)
 	{
 	}
 
-	Biome::Biome(int id, std::string name) : m_id(id), m_Name(name), m_TemperatureLevel(), m_HumidityLevel(), m_ContinentalnessLevel(), m_MountainousnessLevel(), texOffset(0), vegetationLevel(0)
+	Biome::Biome(int id, std::string name) : id(id), name(name), temperatureLevel(), humidityLevel(), continentalnessLevel(), mountainousnessLevel(), texOffset(0), vegetationLevel(0)
 	{
 	}
 
-	Biome::Biome(int id, std::string name, vec2 temperatureLevel, vec2 humidityLevel, vec2 continentalnessLevel, vec2 mountainousnessLevel, int texOffset, int vegetationLevel) : m_id(id), m_Name(name),
-		m_TemperatureLevel(temperatureLevel), m_HumidityLevel(humidityLevel), m_ContinentalnessLevel(continentalnessLevel), m_MountainousnessLevel(mountainousnessLevel), texOffset(texOffset), vegetationLevel(vegetationLevel)
+	Biome::Biome(int id, std::string name, vec2 temperatureLevel, vec2 humidityLevel, vec2 continentalnessLevel, vec2 mountainousnessLevel, int texOffset, int vegetationLevel) : id(id), name(name),
+		temperatureLevel(temperatureLevel), humidityLevel(humidityLevel), continentalnessLevel(continentalnessLevel), mountainousnessLevel(mountainousnessLevel), texOffset(texOffset), vegetationLevel(vegetationLevel)
 	{
 	}
 
@@ -18,71 +18,71 @@ namespace biome{
 	{
 	}
 
-	vec2 Biome::getTemperatureLevel() const
+	vec2 Biome::GetTemperatureLevel() const
 	{
-		return m_TemperatureLevel;
+		return temperatureLevel;
 	}
 
-	vec2 Biome::getHumidityLevel() const
+	vec2 Biome::GetHumidityLevel() const
 	{
-		return m_HumidityLevel;
+		return humidityLevel;
 	}
 
-	vec2 Biome::getContinentalnessLevel() const
+	vec2 Biome::GetContinentalnessLevel() const
 	{
-		return m_ContinentalnessLevel;
+		return continentalnessLevel;
 	}
 
-	vec2 Biome::getMountainousnessLevel() const
+	vec2 Biome::GetMountainousnessLevel() const
 	{
-		return m_MountainousnessLevel;
+		return mountainousnessLevel;
 	}
 
-	int Biome::getId() const
+	int Biome::GetId() const
 	{
-		return m_id;
+		return id;
 	}
 
-	std::string Biome::getName() const
+	std::string Biome::GetName() const
 	{
-		return m_Name;
+		return name;
 	}
 
-	int Biome::getTexOffset() const
+	int Biome::GetTexOffset() const
 	{
 		return texOffset;
 	}
 
-	void Biome::setTemperatureLevel(vec2 temperatureLevel)
+	void Biome::SetTemperatureLevel(vec2 temperatureLevel)
 	{
-		m_TemperatureLevel = temperatureLevel;
+		temperatureLevel = temperatureLevel;
 	}
 
-	void Biome::setHumidityLevel(vec2 humidityLevel)
+	void Biome::SetHumidityLevel(vec2 humidityLevel)
 	{
-		m_HumidityLevel = humidityLevel;
+		humidityLevel = humidityLevel;
 	}
 
-	void Biome::setContinentalnessLevel(vec2 continentalnessLevel)
+	void Biome::SetContinentalnessLevel(vec2 continentalnessLevel)
 	{
-		m_ContinentalnessLevel = continentalnessLevel;
+		continentalnessLevel = continentalnessLevel;
 	}
 
-	void Biome::setMountainousnessLevel(vec2 mountainousnessLevel)
+	void Biome::SetMountainousnessLevel(vec2 mountainousnessLevel)
 	{
-		m_MountainousnessLevel = mountainousnessLevel;
+		mountainousnessLevel = mountainousnessLevel;
 	}
 
-	bool Biome::isSpecified() const {
-		return m_TemperatureLevel.x != -1 && m_HumidityLevel.x != -1 &&
-			m_ContinentalnessLevel.x != -1 && m_MountainousnessLevel.x != -1;
+	bool Biome::IsSpecified() const {
+		return temperatureLevel.x != -1 && humidityLevel.x != -1 &&
+			continentalnessLevel.x != -1 && mountainousnessLevel.x != -1;
 	}
 
-	bool Biome::verifyBiome(const int& T, const int& H, const int& C, const int& M) const
+	bool Biome::VerifyBiome(const int& T, const int& H, const int& C, const int& M) const
 	{
-		return T >= m_TemperatureLevel.x && T < m_TemperatureLevel.y &&
-			H >= m_HumidityLevel.x && H < m_HumidityLevel.y &&
-			C >= m_ContinentalnessLevel.x && C < m_ContinentalnessLevel.y &&
-			M >= m_MountainousnessLevel.x && M < m_MountainousnessLevel.y;
+		return T >= temperatureLevel.x && T < temperatureLevel.y &&
+			H >= humidityLevel.x && H < humidityLevel.y &&
+			C >= continentalnessLevel.x && C < continentalnessLevel.y &&
+			M >= mountainousnessLevel.x && M < mountainousnessLevel.y;
 	}
 }

@@ -41,9 +41,9 @@ namespace noise
 		float revertGain;
 
 		//Ridge
-		bool ridge;
-		float ridgeGain;
-		float ridgeOffset;
+		bool Ridge;
+		float RidgeGain;
+		float RidgeOffset;
 
 		//Island
 		bool island;
@@ -55,17 +55,17 @@ namespace noise
 
 		NoiseConfigParameters(int seed = 0, float xoffset = 0.0f, float yoffset = 0.0f, float scale = 1.0f, int octaves = 8,
 			float constrast = 1.0f, float redistribution = 1.0f, float lacunarity = 2.0f,
-			float persistance = 0.5f, float scaleDown = 1.0f, Options option = Options::REVERT_NEGATIVES, float revertGain = 0.5f, bool ridge = false,
-			float ridgeGain = 1.0f, float ridgeOffset = 1.0f, bool island = false, float mixPower = 0.5f,
+			float persistance = 0.5f, float scaleDown = 1.0f, Options option = Options::REVERT_NEGATIVES, float revertGain = 0.5f, bool Ridge = false,
+			float RidgeGain = 1.0f, float RidgeOffset = 1.0f, bool island = false, float mixPower = 0.5f,
 			IslandType islandType = IslandType::CONE, bool symmetrical = false):
 			seed(seed), xoffset(xoffset), yoffset(yoffset), scale(scale), octaves(octaves), constrast(constrast),
 			redistribution(redistribution), lacunarity(lacunarity), persistance(persistance), option(option), revertGain(revertGain),
-			ridge(ridge), ridgeGain(ridgeGain), ridgeOffset(ridgeOffset), island(island), islandType(islandType), mixPower(mixPower), 
+			Ridge(Ridge), RidgeGain(RidgeGain), RidgeOffset(RidgeOffset), island(island), islandType(islandType), mixPower(mixPower), 
 			symmetrical(symmetrical){}
 
 		float getCheckSum() const {
 			return xoffset + yoffset + scale + octaves + constrast + redistribution + lacunarity +
-				persistance + ridgeGain + ridgeOffset + revertGain + mixPower + seed;
+				persistance + RidgeGain + RidgeOffset + revertGain + mixPower + seed;
 		}
 	};
 
@@ -75,26 +75,26 @@ namespace noise
 		SimplexNoiseClass();
 		~SimplexNoiseClass();
 
-		bool generateFractalNoise();
-		bool generateFractalNoiseByChunks();
-		float makeIsland(float e, int x, int y);
-		bool makeMapRidged();
+		bool GenerateFractalNoise();
+		bool GenerateFractalNoiseByChunks();
+		float MakeIsland(float e, int x, int y);
+		bool MakeMapRidged();
 
-		void initMap();
-		void setSeed(int seed);
-		void reseed();
-		void setScale(float scale);
-		void setMapSize(unsigned int width, unsigned int height);
-		void setChunkSize(unsigned int chunkWidth, unsigned int chunkHeight);
-		void setConfig(NoiseConfigParameters config);
+		void InitMap();
+		void SetSeed(int seed);
+		void Reseed();
+		void SetScale(float scale);
+		void SetMapSize(unsigned int width, unsigned int height);
+		void SetChunkSize(unsigned int chunkWidth, unsigned int chunkHeight);
+		void SetConfig(NoiseConfigParameters config);
 
-		float* getMap() const { return heightMap; }
-		float getVal(int x, int y) const { return heightMap[y * width * chunkWidth + x]; }
-		unsigned int getWidth()  const { return width; }
-		unsigned int getHeight() const { return height; }
-		unsigned int getChunkWidth() const { return chunkWidth; }
-		unsigned int getChunkHeight() const { return chunkHeight; }
-		NoiseConfigParameters& getConfigRef() { return config; }
+		float* GetMap() const { return heightMap; }
+		float GetVal(int x, int y) const { return heightMap[y * width * chunkWidth + x]; }
+		unsigned int GetWidth()  const { return width; }
+		unsigned int GetHeight() const { return height; }
+		unsigned int GetChunkWidth() const { return chunkWidth; }
+		unsigned int GetChunkHeight() const { return chunkHeight; }
+		NoiseConfigParameters& GetConfigRef() { return config; }
 
 	private:
 		NoiseConfigParameters config;
@@ -102,6 +102,6 @@ namespace noise
 		unsigned int width, height;
 		unsigned int chunkWidth, chunkHeight;
 
-		float ridge(float h, float offset, float gain);
+		float Ridge(float h, float offset, float gain);
 	};
 }

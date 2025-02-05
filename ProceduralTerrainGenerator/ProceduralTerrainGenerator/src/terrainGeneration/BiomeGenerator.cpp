@@ -9,33 +9,33 @@ BiomeGenerator::~BiomeGenerator()
 {
 }
 
-int BiomeGenerator::determineLevel(WorldParameter p, float value)
+int BiomeGenerator::DetermineLevel(WorldParameter p, float value)
 {
 	switch (p)
 	{
 	case WorldParameter::Humidity:
-		for (const auto& it : m_HumidityLevels) {
+		for (const auto& it : humidityLevels) {
 			if (value >= it.min && value < it.max) {
 				return it.level;
 			}
 		}
 		break;
 	case WorldParameter::Temperature:
-		for (const auto& it : m_TemperatureLevels) {
+		for (const auto& it : temperatureLevels) {
 			if (value >= it.min && value < it.max) {
 				return it.level;
 			}
 		}
 		break;
 	case WorldParameter::Continentalness:
-		for (const auto& it : m_ContinentalnessLevels) {
+		for (const auto& it : continentalnessLevels) {
 			if (value >= it.min && value < it.max) {
 				return it.level;
 			}
 		}
 		break;
 	case WorldParameter::Mountainousness:
-		for (const auto& it : m_MountainousnessLevels) {
+		for (const auto& it : mountainousnessLevels) {
 			if (value >= it.min && value < it.max) {
 				return it.level;
 			}
@@ -50,43 +50,43 @@ int BiomeGenerator::determineLevel(WorldParameter p, float value)
 	return -2;
 }
 
-int BiomeGenerator::determineBiome(const int& temperature, const int& humidity, const int& continentalness, const int& mountainousness)
+int BiomeGenerator::DetermineBiome(const int& temperature, const int& humidity, const int& continentalness, const int& mountainousness)
 {
-	for (auto& it : m_Biomes) {
-		if (it.second.verifyBiome(temperature, humidity, continentalness, mountainousness))
+	for (auto& it : biomes) {
+		if (it.second.VerifyBiome(temperature, humidity, continentalness, mountainousness))
 			return it.first;
 	}
 
 	return 0;
 }
 
-bool BiomeGenerator::biomify(float* map, int* biomeMap, const int& width, const int& height, const int& chunkRes, const int& seed, const noise::SimplexNoiseClass& continenatlnes, const noise::SimplexNoiseClass& mountainouss)
+bool BiomeGenerator::Biomify(float* map, int* biomeMap, const int& width, const int& height, const int& chunkRes, const int& seed, const noise::SimplexNoiseClass& continenatlnes, const noise::SimplexNoiseClass& mountainouss)
 {
 	if (!biomeMap) {
 		std::cout << "[ERROR] BiomeMap not initialized" << std::endl;
 		return false;
 	}
 
-	temperatureNoise.reseed();
-	temperatureNoise.setMapSize(width, height);
-	temperatureNoise.setChunkSize(chunkRes, chunkRes);
-	temperatureNoise.getConfigRef().option = noise::Options::NOTHING;
-	temperatureNoise.getConfigRef().scale = 0.01f;
-	temperatureNoise.getConfigRef().constrast = 1.5f;
-	temperatureNoise.initMap();
-	if (!temperatureNoise.generateFractalNoiseByChunks()) {
+	temperatureNoise.Reseed();
+	temperatureNoise.SetMapSize(width, height);
+	temperatureNoise.SetChunkSize(chunkRes, chunkRes);
+	temperatureNoise.GetConfigRef().option = noise::Options::NOTHING;
+	temperatureNoise.GetConfigRef().scale = 0.01f;
+	temperatureNoise.GetConfigRef().constrast = 1.5f;
+	temperatureNoise.InitMap();
+	if (!temperatureNoise.GenerateFractalNoiseByChunks()) {
 		std::cout << "[ERROR] Failed to generate temperature noise" << std::endl;
 		return false;
 	}
 
-	humidityNoise.reseed();
-	humidityNoise.setMapSize(width, height);
-	humidityNoise.setChunkSize(chunkRes, chunkRes);
-	humidityNoise.getConfigRef().option = noise::Options::NOTHING;
-	humidityNoise.getConfigRef().scale = 0.01f;
-	humidityNoise.getConfigRef().constrast = 1.5f;
-	humidityNoise.initMap();
-	if (!humidityNoise.generateFractalNoiseByChunks()) {
+	humidityNoise.Reseed();
+	humidityNoise.SetMapSize(width, height);
+	humidityNoise.SetChunkSize(chunkRes, chunkRes);
+	humidityNoise.GetConfigRef().option = noise::Options::NOTHING;
+	humidityNoise.GetConfigRef().scale = 0.01f;
+	humidityNoise.GetConfigRef().constrast = 1.5f;
+	humidityNoise.InitMap();
+	if (!humidityNoise.GenerateFractalNoiseByChunks()) {
 		std::cout << "[ERROR] Failed to generate humidity noise" << std::endl;
 		return false;
 	}
@@ -100,61 +100,61 @@ bool BiomeGenerator::biomify(float* map, int* biomeMap, const int& width, const 
 				biomeMap[y * width * chunkRes + x] = 5;
 				continue;
 			}
-			H = determineLevel(WorldParameter::Humidity, humidityNoise.getVal(x, y));
-			T = determineLevel(WorldParameter::Temperature, temperatureNoise.getVal(x, y));
-			C = determineLevel(WorldParameter::Continentalness, continenatlnes.getVal(x, y));
-			M = determineLevel(WorldParameter::Mountainousness, mountainouss.getVal(x, y));
+			H = DetermineLevel(WorldParameter::Humidity, humidityNoise.GetVal(x, y));
+			T = DetermineLevel(WorldParameter::Temperature, temperatureNoise.GetVal(x, y));
+			C = DetermineLevel(WorldParameter::Continentalness, continenatlnes.GetVal(x, y));
+			M = DetermineLevel(WorldParameter::Mountainousness, mountainouss.GetVal(x, y));
 
-			biomeMap[y * width * chunkRes + x] = determineBiome(H, T, C, M);
+			biomeMap[y * width * chunkRes + x] = DetermineBiome(H, T, C, M);
 		}
 	}
 	return true;
 }
 
-biome::Biome& BiomeGenerator::getBiome(int id)
+biome::Biome& BiomeGenerator::GetBiome(int id)
 {
-	return m_Biomes[id];
+	return biomes[id];
 }
 
-noise::NoiseConfigParameters& BiomeGenerator::getTemperatureNoiseConfig()
+noise::NoiseConfigParameters& BiomeGenerator::GetTemperatureNoiseConfig()
 {
-	return temperatureNoise.getConfigRef();
+	return temperatureNoise.GetConfigRef();
 }
 
-noise::NoiseConfigParameters& BiomeGenerator::getHumidityNoiseConfig()
+noise::NoiseConfigParameters& BiomeGenerator::GetHumidityNoiseConfig()
 {
-	return humidityNoise.getConfigRef();
+	return humidityNoise.GetConfigRef();
 }
 
-bool BiomeGenerator::setRanges(std::vector<std::vector<RangedLevel>>& ranges)
+bool BiomeGenerator::SetRanges(std::vector<std::vector<RangedLevel>>& ranges)
 {
 	if (ranges.size() != 4) {
 		std::cout << "[ERROR] Ranges initialization array empty!" << std::endl;
 		return false;
 	}
 
-	m_TemperatureLevels = ranges[0];
-	m_HumidityLevels = ranges[1];
-	m_ContinentalnessLevels = ranges[2];
-	m_MountainousnessLevels = ranges[3];
+	temperatureLevels = ranges[0];
+	humidityLevels = ranges[1];
+	continentalnessLevels = ranges[2];
+	mountainousnessLevels = ranges[3];
 
 	return true;
 }
 
-bool BiomeGenerator::setRange(char c, std::vector<RangedLevel> range)
+bool BiomeGenerator::SetRange(char c, std::vector<RangedLevel> range)
 {
 	switch (c) {
 	case 'c':
-		m_ContinentalnessLevels = range;
+		continentalnessLevels = range;
 		break;
 	case 'm':
-		m_MountainousnessLevels = range;
+		mountainousnessLevels = range;
 		break;
 	case 't':
-		m_TemperatureLevels = range;
+		temperatureLevels = range;
 		break;
 	case 'h':
-		m_HumidityLevels = range;
+		humidityLevels = range;
 		break;
 	default:
 		std::cout << "[ERROR] Wrong biome option!" << std::endl;
@@ -164,15 +164,15 @@ bool BiomeGenerator::setRange(char c, std::vector<RangedLevel> range)
 	return true;
 }
 
-bool BiomeGenerator::setBiomes(std::vector<biome::Biome>& biomes)
+bool BiomeGenerator::SetBiomes(std::vector<biome::Biome>& b)
 {
-	if (biomes.empty()) {
+	if (b.empty()) {
 		std::cout << "[ERROR] Biomes initialization array empty!" << std::endl;
 		return false;
 	}
 
-	for (auto& it : biomes) {
-		m_Biomes[it.getId()] = biome::Biome(it);
+	for (auto& it : b) {
+		biomes[it.GetId()] = biome::Biome(it);
 	}
 
 	return true;
