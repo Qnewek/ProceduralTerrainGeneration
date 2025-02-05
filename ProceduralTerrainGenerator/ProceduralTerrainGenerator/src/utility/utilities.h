@@ -18,12 +18,12 @@ namespace utilities
 	void ConvertToGrayscaleImage(float* data, unsigned char* image, int width, int height);
 	void SimpleMeshIndicies(unsigned int* indices, int width, int height);
 	void GenCubeLayout(float* vertices, unsigned int* indices, float scalingFactor);
-    void parseNoiseIntoVertices(float* vertices, int width, int height, float* map, float scalingFactor, unsigned int stride, unsigned int offset);
-    void parseNoiseChunksIntoVertices(float* vertices, int width, int height, int chunkX, int chunkY, float* map, float scalingFactor, unsigned int stride, unsigned int offset);
-    bool createIndicesTiledField(unsigned int* indices, int width, int height);
-    bool createTiledVertices(float* vertices, int width, int height, float* map, float scalingFactor, unsigned int stride, unsigned int offset);
+    void ParseNoiseIntoVerticesetationLevelRef(float* vertices, int width, int height, float* map, float scalingFactor, unsigned int stride, unsigned int offset);
+    void ParseNoiseChunksIntoVertices(float* vertices, int width, int height, int chunkX, int chunkY, float* map, float scalingFactor, unsigned int stride, unsigned int offset);
+    bool CreateIndicesTiledField(unsigned int* indices, int width, int height);
+    bool CreateTiledVertices(float* vertices, int width, int height, float* map, float scalingFactor, unsigned int stride, unsigned int offset);
     void PaintNotByTexture(float* vertices, int width, int height, unsigned int stride, unsigned int offset);
-    object::Object* loadObj(const std::string& dirPath, const std::string& name);
+    object::Object* LoadObj(const std::string& dirPath, const std::string& name);
 	bool saveToObj(const std::string& dirPath, const std::string& name, float* vertices, unsigned int* indices, unsigned int stride, unsigned int indexSize, unsigned int verticesCount, bool mtl);
 
 	//Functions for dealing with 3D vectors
@@ -42,7 +42,7 @@ namespace utilities
 
 	//Benchmarking function
     template <typename Func, typename... Args>
-    void benchmark_void(Func func, std::string funcName, Args&&... args) {
+    void benchmarkVoid(Func func, std::string funcName, Args&&... args) {
         auto start = std::chrono::high_resolution_clock::now();
 
         func(std::forward<Args>(args)...);

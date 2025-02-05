@@ -25,41 +25,41 @@ namespace biome {
 		Biome(const Biome& b) = default;
 		~Biome();
 
-		vec2 getTemperatureLevel() const;
-		vec2 getHumidityLevel() const;
-		vec2 getContinentalnessLevel() const;
-		vec2 getMountainousnessLevel() const;
-		int getId() const;
-		int getVegetationLevel() const { return vegetationLevel; };
-		std::string getName() const;
-		int getTexOffset() const;
+		int GetId() const;
+		int GetVegetationLevel() const { return vegetationLevel; };
+		int GetTexOffset() const;
+		vec2 GetTemperatureLevel() const;
+		vec2 GetHumidityLevel() const;
+		vec2 GetContinentalnessLevel() const;
+		vec2 GetMountainousnessLevel() const;
+		std::string GetName() const;
 
-		int& getIdRef() { return m_id; }
-		int& getVegetationLevelRef() { return vegetationLevel; }
-		int& getTexOffsetRef() { return texOffset; }
-		vec2& getTemperatureLevelRef() { return m_TemperatureLevel; }
-		vec2& getHumidityLevelRef() { return m_HumidityLevel; }
-		vec2& getContinentalnessLevelRef() { return m_ContinentalnessLevel; }
-		vec2& getMountainousnessLevelRef() { return m_MountainousnessLevel; }
-		std::string& getNameRef() { return m_Name; }
-		std::vector<vec2>& getTreeTypesRef() { return treeTypes; }
+		int& GetIdRef() { return id; }
+		int& GetVegetationLevelRef() { return vegetationLevel; }
+		int& GetTexOffsetRef() { return texOffset; }
+		vec2& GetTemperatureLevelRef() { return temperatureLevel; }
+		vec2& GetHumidityLevelRef() { return humidityLevel; }
+		vec2& GetContinentalnessLevelRef() { return continentalnessLevel; }
+		vec2& GetMountainousnessLevelRef() { return mountainousnessLevel; }
+		std::string& GetNameRef() { return name; }
+		std::vector<vec2>& GetTreeTypesRef() { return treeTypes; }
 
-		void setTemperatureLevel(vec2 temperatureLevel);
-		void setHumidityLevel(vec2 humidityLevel);
-		void setContinentalnessLevel(vec2 continentalnessLevel);
-		void setMountainousnessLevel(vec2 mountainousnessLevel);
+		void SetTemperatureLevel(vec2 temperatureLevel);
+		void SetHumidityLevel(vec2 humidityLevel);
+		void SetContinentalnessLevel(vec2 continentalnessLevel);
+		void SetMountainousnessLevel(vec2 mountainousnessLevel);
 
-		bool isSpecified() const;
-		bool verifyBiome(const int& T, const int& H, const int& C, const int& M) const;
+		bool IsSpecified() const;
+		bool VerifyBiome(const int& T, const int& H, const int& C, const int& M) const;
 	private:
-		int m_id;
+		int id;
 		int texOffset;
-		std::string m_Name;
+		std::string name;
 		
-		vec2 m_TemperatureLevel;
-		vec2 m_HumidityLevel;
-		vec2 m_ContinentalnessLevel;
-		vec2 m_MountainousnessLevel;
+		vec2 temperatureLevel;
+		vec2 humidityLevel;
+		vec2 continentalnessLevel;
+		vec2 mountainousnessLevel;
 
 		int vegetationLevel;
 		std::vector<vec2> treeTypes = {{0,100}};

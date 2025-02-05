@@ -75,7 +75,7 @@ namespace utilities
 	//@param stride - number of floats per vertex
 	//@param offset - offset in the vertex array to start with when filling the data
 
-	void parseNoiseIntoVertices(float* vertices, int width, int height, float* map, float scalingFactor, unsigned int stride, unsigned int offset) {
+	void ParseNoiseIntoVerticesetationLevelRef(float* vertices, int width, int height, float* map, float scalingFactor, unsigned int stride, unsigned int offset) {
 		for (int y = 0; y < height; y++)
 		{
 			for (int x = 0; x < width; x++)
@@ -98,7 +98,7 @@ namespace utilities
 	//@param scalingFactor - scaling factor for the vertices
 	//@param stride - number of floats per vertex
 	//@param offset - offset in the vertex array to start with when filling the data
-	void parseNoiseChunksIntoVertices(float* vertices, int width, int height, int chunkX, int chunkY, float* map, float scalingFactor, unsigned int stride, unsigned int offset) {
+	void ParseNoiseChunksIntoVertices(float* vertices, int width, int height, int chunkX, int chunkY, float* map, float scalingFactor, unsigned int stride, unsigned int offset) {
 		for (int y = 0; y < height * chunkY; y++)
 		{
 			for (int x = 0; x < width * chunkX; x++)
@@ -110,7 +110,7 @@ namespace utilities
 		}
 	}
 
-	bool createTiledVertices(float* vertices, int width, int height, float* map, float scalingFactor, unsigned int stride, unsigned int offset) {
+	bool CreateTiledVertices(float* vertices, int width, int height, float* map, float scalingFactor, unsigned int stride, unsigned int offset) {
 		if (!vertices) {
 			std::cout << "[ERROR] Vertices array not initialized" << std::endl;
 			return false;
@@ -151,7 +151,7 @@ namespace utilities
 		return true;
 	}
 
-	bool createIndicesTiledField(unsigned int* indices, int width, int height) {
+	bool CreateIndicesTiledField(unsigned int* indices, int width, int height) {
 		if (!indices) {
 			std::cout << "[ERROR] Indices array not initialized" << std::endl;
 			return false;
@@ -192,13 +192,13 @@ namespace utilities
 	}
 
 	void GenerateTerrainMap(noise::SimplexNoiseClass& noise, float* vertices, unsigned int* indices, unsigned int stride) {
-		noise.initMap();
-		noise.generateFractalNoiseByChunks();
-		parseNoiseChunksIntoVertices(vertices, noise.getWidth(), noise.getHeight(), noise.getChunkWidth(), noise.getChunkHeight(), noise.getMap(), 1.0f / noise.getConfigRef().scale, stride, 0);
-		SimpleMeshIndicies(indices, noise.getWidth() * noise.getChunkWidth(), noise.getHeight() * noise.getChunkHeight());
-		InitializeNormals(vertices, stride, 3, noise.getHeight() * noise.getChunkHeight() * noise.getWidth() * noise.getChunkWidth());
-		CalculateNormals(vertices, indices, stride, 3, (noise.getWidth() * noise.getChunkWidth() - 1) * (noise.getHeight() * noise.getChunkHeight() - 1) * 6);
-		NormalizeVector3f(vertices, stride, 3, noise.getWidth() * noise.getChunkWidth() * noise.getHeight() * noise.getChunkHeight());
+		noise.InitMap();
+		noise.GenerateFractalNoiseByChunks();
+		ParseNoiseChunksIntoVertices(vertices, noise.GetWidth(), noise.GetHeight(), noise.GetChunkWidth(), noise.GetChunkHeight(), noise.GetMap(), 1.0f / noise.GetConfigRef().scale, stride, 0);
+		SimpleMeshIndicies(indices, noise.GetWidth() * noise.GetChunkWidth(), noise.GetHeight() * noise.GetChunkHeight());
+		InitializeNormals(vertices, stride, 3, noise.GetHeight() * noise.GetChunkHeight() * noise.GetWidth() * noise.GetChunkWidth());
+		CalculateNormals(vertices, indices, stride, 3, (noise.GetWidth() * noise.GetChunkWidth() - 1) * (noise.GetHeight() * noise.GetChunkHeight() - 1) * 6);
+		NormalizeVector3f(vertices, stride, 3, noise.GetWidth() * noise.GetChunkWidth() * noise.GetHeight() * noise.GetChunkHeight());
 	}
 
 	//Generates terrain map using Perlin Fractal Noise, transforming it into drawable mesh and
@@ -211,14 +211,14 @@ namespace utilities
 	//@param first - boolean value to determine if indices should be generated
 	void CreateTerrainMesh(noise::SimplexNoiseClass &noise, float* vertices, unsigned int* indices, float scalingFactor, unsigned int stride, bool normals, bool first)
 	{
-		noise.generateFractalNoise();
-		parseNoiseIntoVertices(vertices, noise.getWidth(), noise.getHeight(), noise.getMap(), scalingFactor, stride, 0);
+		noise.GenerateFractalNoise();
+		ParseNoiseIntoVerticesetationLevelRef(vertices, noise.GetWidth(), noise.GetHeight(), noise.GetMap(), scalingFactor, stride, 0);
 		if (first)
-			SimpleMeshIndicies(indices, noise.getWidth(), noise.getHeight());
+			SimpleMeshIndicies(indices, noise.GetWidth(), noise.GetHeight());
 		if (normals) {
-			InitializeNormals(vertices, stride, 3, noise.getHeight() * noise.getWidth());
-			CalculateNormals (vertices, indices, stride, 3, (noise.getWidth() - 1) * (noise.getHeight() - 1) * 6);
-			NormalizeVector3f(vertices, stride, 3, noise.getWidth() * noise.getHeight());
+			InitializeNormals(vertices, stride, 3, noise.GetHeight() * noise.GetWidth());
+			CalculateNormals (vertices, indices, stride, 3, (noise.GetWidth() - 1) * (noise.GetHeight() - 1) * 6);
+			NormalizeVector3f(vertices, stride, 3, noise.GetWidth() * noise.GetHeight());
 		}
 	}
 
@@ -232,10 +232,10 @@ namespace utilities
 	//@param erosion - erosion object
 	void PerformErosion(float* vertices, unsigned int* indices, float scalingFactor, std::optional<float*> Track, int stride, int positionsOffset, int normalsOffset, erosion::Erosion& erosion) {
 		erosion.Erode(Track);
-		parseNoiseIntoVertices(vertices, erosion.getWidth(), erosion.getHeight(), erosion.getMap(), scalingFactor, stride, positionsOffset);
-		InitializeNormals(vertices, stride, normalsOffset, erosion.getHeight() * erosion.getWidth());
-		CalculateNormals(vertices, indices, stride, normalsOffset, (erosion.getWidth() - 1) * (erosion.getHeight() - 1) * 6);
-		NormalizeVector3f(vertices, stride, normalsOffset, erosion.getWidth() * erosion.getHeight());
+		ParseNoiseIntoVerticesetationLevelRef(vertices, erosion.GetWidth(), erosion.GetHeight(), erosion.GetMap(), scalingFactor, stride, positionsOffset);
+		InitializeNormals(vertices, stride, normalsOffset, erosion.GetHeight() * erosion.GetWidth());
+		CalculateNormals(vertices, indices, stride, normalsOffset, (erosion.GetWidth() - 1) * (erosion.GetHeight() - 1) * 6);
+		NormalizeVector3f(vertices, stride, normalsOffset, erosion.GetWidth() * erosion.GetHeight());
 	}
 
 	//Generates basic Perlin Fractal Noise and sets coords for texture sampling (painting biome)
@@ -248,13 +248,13 @@ namespace utilities
 	//@param offset - offset in the vertex array to start with when filling the data
 	void PaintBiome(float* vertices, float* map, int width, int height, unsigned int stride, unsigned int offset) {
 		noise::SimplexNoiseClass* noiseBiome = new noise::SimplexNoiseClass();
-		noiseBiome->setMapSize(width, height);
-		noiseBiome->initMap();
-		noiseBiome->generateFractalNoise();
+		noiseBiome->SetMapSize(width, height);
+		noiseBiome->InitMap();
+		noiseBiome->GenerateFractalNoise();
 		for (int y = 0; y < height; y++) {
 			for (int x = 0; x < width; x++)
 			{
-				vertices[((y * width) + x) * stride + offset]		= noiseBiome->getMap()[y * width + x] > 0.0f ? noiseBiome->getMap()[y * width + x] : 0.0f;
+				vertices[((y * width) + x) * stride + offset]		= noiseBiome->GetMap()[y * width + x] > 0.0f ? noiseBiome->GetMap()[y * width + x] : 0.0f;
 				vertices[((y * width) + x) * stride + offset + 1] = map	[y * width + x] > 0.0f ? map[y * width + x] : 0.0f;
 			}
 		}
@@ -277,7 +277,7 @@ namespace utilities
 		}
 	}
 
-	object::Object* loadObj(const std::string& dirPath, const std::string& name)
+	object::Object* LoadObj(const std::string& dirPath, const std::string& name)
 	{
 		tinyobj::ObjReaderConfig reader_config;
 		reader_config.mtl_search_path = dirPath;
@@ -455,7 +455,7 @@ namespace utilities
 
 	void AssignTexturesByBiomes(TerrainGenerator& terraGen, float* vertices, int width, int height, int texAtlasSize, unsigned int stride, unsigned int offset)
 	{
-		if (!terraGen.getBiomeMap() || !vertices)
+		if (!terraGen.GetBiomeMap() || !vertices)
 		{
 			std::cout << "[ERROR] Arrays not initialized" << std::endl;
 			return;
@@ -469,7 +469,7 @@ namespace utilities
 			for (int x = 0; x < (width - 1); x++)
 			{
 				
-				texOffset = terraGen.getBiome(terraGen.getBiomeAt(x, y)).getTexOffset();
+				texOffset = terraGen.GetBiome(terraGen.GetBiomeAt(x, y)).GetTexOffset();
 
 
 				vertices[index] = texOffset % texAtlasSize / static_cast<float>(texAtlasSize);

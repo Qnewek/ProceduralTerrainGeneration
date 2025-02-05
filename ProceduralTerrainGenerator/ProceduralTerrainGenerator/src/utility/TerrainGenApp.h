@@ -28,8 +28,8 @@ private:
 	void PerlinChunked();
 	
 	void ImGuiRender();
-	void perlinImgui();
-	void parametrizedImGui();
+	void PerlinImgui();
+	void ParametrizedImGui();
 	void ErosionWindowRender();
 	void ParameterImgui();
 	void BiomeImGui();
@@ -47,8 +47,8 @@ private:
 	void DeactivateErosion();
 	void PerformErosion();
 
-	void initializeTerrainGeneration();
-	void resizeTerrainGeneration();
+	void InitializeTerrainGeneration();
+	void ResizeTerrainGeneration();
 	void FullTerrainGeneration();
 	void TerrainGeneration();
 
@@ -68,7 +68,7 @@ private:
 
 	//Map Size variables
 	int width, height, stride, prevHeight, prevWidth, tmpHeight, tmpWidth;
-	float m_Scaling_Factor;
+	float scalingFactor;
 
 	//Pure Perlin
 	noise::SimplexNoiseClass basicPerlinNoise;
@@ -91,36 +91,36 @@ private:
 	biome::Biome* biome = nullptr;
 
 	char editedType = ' ';
-	int m_ChunkResolution, prevChunkRes, tmpChunkRes;
-	float m_ChunkScale, seeLevel, samplingScale = 0.05f;
+	int chunkResolution, prevChunkRes, tmpChunkRes;
+	float chunkScale, seeLevel, samplingScale = 0.05f;
 
 	//Settings
-	float* t_MeshVertices, * t_treesPositions;
-	unsigned int* t_MeshIndices;
+	float* tMeshVertices, * treesPositions;
+	unsigned int* tMeshIndices;
 	int treeIndicesCount;
-	bool isTerrainDisplayed, drawTrees = false, TerraGenPerform = false, noiseEdit = false, biomeEdit = false, treeEdit = false;
+	bool isTerrainDisplayed, drawTrees = false, terGenPerform = false, noiseEdit = false, biomeEdit = false, treeEdit = false;
 
 	//OpenGL stuff
 	VertexBufferLayout layout;
-	std::unique_ptr<VertexArray> m_MainVAO;
-	std::unique_ptr<VertexBuffer> m_MainVertexBuffer;
-	std::unique_ptr<IndexBuffer> m_MainIndexBuffer;
-	std::unique_ptr<Shader> m_MainShader;
-	std::unique_ptr<Texture> m_MainTexture;
+	std::unique_ptr<VertexArray> mainVAO;
+	std::unique_ptr<VertexBuffer> mainVertexBuffer;
+	std::unique_ptr<IndexBuffer> mainIndexBuffer;
+	std::unique_ptr<Shader> mainShader;
+	std::unique_ptr<Texture> mainTexture;
 	//Erosion separate openGl
-	std::unique_ptr<VertexArray> m_TrackVAO;
-	std::unique_ptr<VertexBuffer> m_erosionBuffer;
-	std::unique_ptr<VertexBuffer> m_TrackBuffer;
-	std::unique_ptr<Shader> m_TrackShader;
+	std::unique_ptr<VertexArray> erosionTrackVAO;
+	std::unique_ptr<VertexBuffer> erosionVertexBuffer;
+	std::unique_ptr<VertexBuffer> erosionTrackBuffer;
+	std::unique_ptr<Shader> erosionTrackShader;
 	//TerrainGeneration openGl
-	std::unique_ptr<VertexArray> m_TerGenVAO;
-	std::unique_ptr<VertexBuffer> m_TerGenVertexBuffer;
-	std::unique_ptr<IndexBuffer> m_TerGenIndexBuffer;
-	std::unique_ptr<Shader> m_TerGenShader;
-	std::unique_ptr<Texture> m_TerGenTexture;
+	std::unique_ptr<VertexArray> terGenVAO;
+	std::unique_ptr<VertexBuffer> terGenVertexBuffer;
+	std::unique_ptr<IndexBuffer> terGenIndexBuffer;
+	std::unique_ptr<Shader> terGenShader;
+	std::unique_ptr<Texture> terGenTexture;
 	//Tree openGl
 	unsigned int treeVAO, treeVBO, instanceVBO, EBO;
-	std::unique_ptr<Shader> m_TreeShader;
+	std::unique_ptr<Shader> treeShader;
 	
 	enum class mode
 	{

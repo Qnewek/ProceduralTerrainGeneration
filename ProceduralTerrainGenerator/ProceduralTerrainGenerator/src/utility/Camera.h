@@ -26,45 +26,45 @@ public:
 
 	glm::mat4* GetViewMatrix();
 	glm::mat4* GetProjectionMatrix();
-	glm::vec3 GetPosition() const { return m_Position; }
+	glm::vec3 GetPosition() const { return position; }
 
 	void EnableMouseControl(GLFWwindow* window);
 	void DisableMouseControl(GLFWwindow* window);
 
-	void setCameraConfig(glm::vec3 position, glm::vec3 front, glm::vec3 up, float yaw, float pitch, float speed, float sensitivity, float fov);
-	void setViewDist(glm::vec2 value) { viewDist = value; }
-	void setYaw(float value) { m_Yaw = value; }
-	void setPitch(float value) { m_Pitch = value; }
-	void setPosition(glm::vec3 value) { m_Position = value; }
-	void setSpeed(float value) { m_Speed = value; m_init_speed = value; }
-	void setSensitivity(float value) { m_Sensitivity = value; }
-	void setFov(float value) { m_Fov = value; }
-	void setScreenSize(unsigned int width, unsigned int height) { m_ScreenWidth = width; m_ScreenHeight = height; }
+	void SetCameraConfig(glm::vec3 position, glm::vec3 front, glm::vec3 up, float yaw, float pitch, float speed, float sensitivity, float fov);
+	void SetViewDist(glm::vec2 value) { viewDist = value; }
+	void SetYaw(float value) { yaw = value; }
+	void SetPitch(float value) { pitch = value; }
+	void SetPosition(glm::vec3 value) { position = value; }
+	void SetSpeed(float value) { speed = value; initSpeed = value; }
+	void SetSensitivity(float value) { sensitivity = value; }
+	void SetFov(float value) { fov = value; }
+	void SetScreenSize(unsigned int width, unsigned int height) { screenWidth = width; screenHeight = height; }
 
-	float getYaw() const{ return m_Yaw; }
-	float getPitch() const{ return m_Pitch; }
-	float& getSpeedRef() { return m_init_speed; }
+	float GetYaw() const{ return yaw; }
+	float GetPitch() const{ return pitch; }
+	float& GetSpeedRef() { return initSpeed; }
 
 private:
 	//Screen
-	unsigned int m_ScreenWidth;
-	unsigned int m_ScreenHeight;
+	unsigned int screenWidth;
+	unsigned int screenHeight;
 	//Camera position parameters
-	glm::vec3 m_Position;
-	glm::vec3 m_Front;
-	glm::vec3 m_Up;
-	glm::vec3 m_Right;
+	glm::vec3 position;
+	glm::vec3 front;
+	glm::vec3 up;
+	glm::vec3 right;
 	//Camera rotation parameters
-	float m_Yaw;
-	float m_Pitch;
+	float yaw;
+	float pitch;
 	float xpos;
 	float ypos;
 	//Camera options
 	glm::vec2 viewDist;
-	float m_init_speed;
-	float m_Speed;
-	float m_Sensitivity;
-	float m_Fov;
+	float initSpeed;
+	float speed;
+	float sensitivity;
+	float fov;
 	bool mouseControl;
 
 	//Matrices

@@ -144,10 +144,6 @@
     <ClCompile Include="src\terrainGeneration\Noise.cpp" />
     <ClCompile Include="src\terrainGeneration\Biome.cpp" />
     <ClCompile Include="src\terrainGeneration\TerrainGenerator.cpp" />
-    <ClCompile Include="src\tests\Test.cpp" />
-    <ClCompile Include="src\tests\TestImage.cpp" />
-    <ClCompile Include="src\tests\TestMapGen.cpp" />
-    <ClCompile Include="src\tests\TestNoiseMesh.cpp" />
     <ClCompile Include="src\opengl\Texture.cpp" />
     <ClCompile Include="src\utility\Camera.cpp" />
     <ClCompile Include="src\utility\LightSource.cpp" />
@@ -327,10 +323,6 @@
     <ClInclude Include="src\terrainGeneration\Erosion.h" />
     <ClInclude Include="src\terrainGeneration\Noise.h" />
     <ClInclude Include="src\terrainGeneration\TerrainGenerator.h" />
-    <ClInclude Include="src\tests\Test.h" />
-    <ClInclude Include="src\tests\TestImage.h" />
-    <ClInclude Include="src\tests\TestMapGen.h" />
-    <ClInclude Include="src\tests\TestNoiseMesh.h" />
     <ClInclude Include="src\opengl\Texture.h" />
     <ClInclude Include="src\utility\Camera.h" />
     <ClInclude Include="src\utility\LightSource.h" />

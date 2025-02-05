@@ -14,7 +14,7 @@ namespace erosion {
 	//Configuration parameters for the erosion
 	//@param erosionRate: The rate at which the droplet erodes the terrain
 	//@param depositionRate: The rate at which the droplet deposits sediment
-	//@param evaporationRate: The rate at which the droplet evaporates
+	//@param evaporationRate: The rate at which the droplet Evaporates
 	//@param gravity: The force of gravity on the droplet
 	//@param inertia: The inertia of the droplet
 	//@param minSlope: The minimum slope for the droplet to move
@@ -62,13 +62,13 @@ namespace erosion {
 
 		//Simulation functions
 		void Erode(std::optional<float*> Track);
-		vec2 getGradient(vec2 pos);
-		float getElevationDifference(vec2 posOld, vec2 posNew);
-		float getInterpolatedGridHeight(vec2 pos);
-		void distributeSediment(vec2 pos, float sedimentDropped);
-		float erodeRadius(vec2 oldPos, vec2 newPos, float ammountEroded);
-		bool isOnMap(vec2 pos);
-		void trackDroplets(float* vertices, vec2 pos, int step);
+		vec2 GetGradient(vec2 pos);
+		float GetElevationDifference(vec2 posOld, vec2 posNew);
+		float GetInterpolatedGridHeight(vec2 pos);
+		void DistributeSediment(vec2 pos, float sedimentDropped);
+		float ErodeRadius(vec2 oldPos, vec2 newPos, float ammountEroded);
+		bool IsOnMap(vec2 pos);
+		void TrackDroplets(float* vertices, vec2 pos, int step);
 
 		//Configuration functions
 		void SetConfig(ErosionConfig config);
@@ -77,11 +77,11 @@ namespace erosion {
 		void SetDropletCount(int dropletCount);
 
 		//Getters
-		ErosionConfig& getConfigRef();
-		int& getDropletCountRef() { return dropletCount; }
-		int getWidth() { return width; }
-		int getHeight() { return height; }
-		float* getMap() { return map; }
+		ErosionConfig& GetConfigRef();
+		int& GetDropletCountRef() { return dropletCount; }
+		int GetWidth() { return width; }
+		int GetHeight() { return height; }
+		float* GetMap() { return map; }
 
 	private:
 		float* map;
@@ -99,25 +99,25 @@ namespace erosion {
 		~Droplet();
 
 		//Getters
-		vec2 getPosition() { return position; }
-		vec2 getDirection() { return direction; }
-		float getVelocity() { return velocity; }
-		float getWater() { return water; }
-		float getSediment() { return sediment; }
-		float getCapacity() { return capacity; }
+		vec2 GetPosition() { return position; }
+		vec2 GetDirection() { return direction; }
+		float GetVelocity() { return velocity; }
+		float GetWater() { return water; }
+		float GetSediment() { return sediment; }
+		float GetCapacity() { return capacity; }
 
 		//Setters and calculation functions
-		void setPosition(vec2 position) { this->position = position; }
-		void setDirection(vec2 direction) { this->direction = direction; }
-		void adjustDirection(vec2 gradient, float inertia);
-		void adjustPosition();
-		void adjustVelocity(float elevationDifference, float gravity);
-		void adjustSediment(float sedimentCollected);
-		void evaporate(float evaporationRate);
-		float adjustCapacity(float minSlope, float erosionRate, float depositionRate, float elevationDifference);
-		float sedimentToGather(float erosionRate, float elevationDifference);
-		float dropSediment(float elevationDifference);
-		float dropSurplusSediment(float depositionRate);
+		void SetPosition(vec2 position) { this->position = position; }
+		void SetDirection(vec2 direction) { this->direction = direction; }
+		void AdjustDirection(vec2 gradient, float inertia);
+		void AdjustPosition();
+		void AdjustVelocity(float elevationDifference, float gravity);
+		void AdjustSediment(float sedimentCollected);
+		void Evaporate(float evaporationRate);
+		float AdjustCapacity(float minSlope, float erosionRate, float depositionRate, float elevationDifference);
+		float SedimentToGather(float erosionRate, float elevationDifference);
+		float DropSediment(float elevationDifference);
+		float DropSurplusSediment(float depositionRate);
 
 
 	private:

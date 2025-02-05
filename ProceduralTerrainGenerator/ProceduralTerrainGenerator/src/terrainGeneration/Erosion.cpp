@@ -85,7 +85,7 @@ namespace erosion {
 
 	//Get the reference to the configuration of the erosion
 	//@return reference to the ErosionConfig struct
-	ErosionConfig& Erosion::getConfigRef()
+	ErosionConfig& Erosion::GetConfigRef()
 	{
 		return config;
 	}
@@ -98,9 +98,9 @@ namespace erosion {
 	//@param vertices - pointer to the array of vertices to store the path of the droplet
 	//@param pos - position of the droplet
 	//@param step - step of the simulation (basically auxiliary index to save the pos of the function)
-	void Erosion::trackDroplets(float* vertices, vec2 pos, int step) {
+	void Erosion::TrackDroplets(float* vertices, vec2 pos, int step) {
 		vertices[step * 3] = pos.x / width;
-		vertices[step * 3 + 1] = getInterpolatedGridHeight(pos);
+		vertices[step * 3 + 1] = GetInterpolatedGridHeight(pos);
 		vertices[step * 3 + 2] = pos.y / height;
 	}
 
@@ -134,7 +134,7 @@ namespace erosion {
 
 			//If tracking enabled, save the droplets initial positions
 			if(Track.has_value() && Track.value())
-				trackDroplets(Track.value(), dropletCurrent->d->getPosition(), step++);
+				TrackDroplets(Track.value(), dropletCurrent->d->GetPosition(), step++);
 		}
 
 		dropletCurrent = dropletsHead->next;
@@ -154,18 +154,18 @@ namespace erosion {
 				}
 
 				//Calculate the gradient of current cell and adjust the direction of the droplet and its position
-				gradient = getGradient(dropletCurrent->d->getPosition());
-				oldPosition = dropletCurrent->d->getPosition();
-				dropletCurrent->d->adjustDirection(gradient, config.inertia);
+				gradient = GetGradient(dropletCurrent->d->GetPosition());
+				oldPosition = dropletCurrent->d->GetPosition();
+				dropletCurrent->d->AdjustDirection(gradient, config.inertia);
 				
 				//If tracking enabled, save the droplets path
 				if (Track.has_value() && Track.value())
-					trackDroplets(Track.value(), dropletCurrent->d->getPosition(), step++);
+					TrackDroplets(Track.value(), dropletCurrent->d->GetPosition(), step++);
 
 				//Check if the droplet is still on the map
-				if (isOnMap(dropletCurrent->d->getPosition())) {
+				if (IsOnMap(dropletCurrent->d->GetPosition())) {
 					//Calculate the difference in elevation between the old and new position of the droplet
-					float deltaElevation = getElevationDifference(oldPosition, dropletCurrent->d->getPosition());
+					float deltaElevation = GetElevationDifference(oldPosition, dropletCurrent->d->GetPosition());
 					
 					if (log) {
 						std::cout << "[LOG] Elevation difference: " << deltaElevation << std::endl;
@@ -178,7 +178,7 @@ namespace erosion {
 						if(log){
 							std::cout << "[LOG] Droplet is moving uphill\n";
 						}
-						distributeSediment(oldPosition, dropletCurrent->d->dropSediment(deltaElevation));
+						DistributeSediment(oldPosition, dropletCurrent->d->DropSediment(deltaElevation));
 					}
 					else {
 						if (log){
@@ -188,19 +188,19 @@ namespace erosion {
 						//function will return positive number which means that we need to drop some sediment on the old position
 						//based on the deposition rate. If the function returns negative number, it means we can erode points in the range
 						//of erosion radius and gather possible to collect sediment ammount and add it to the droplet.
-						float sedimentToCollect = dropletCurrent->d->adjustCapacity(config.minSlope, config.erosionRate, config.depositionRate, deltaElevation);
+						float sedimentToCollect = dropletCurrent->d->AdjustCapacity(config.minSlope, config.erosionRate, config.depositionRate, deltaElevation);
 						
 						if (sedimentToCollect > 0.0f) {
-							distributeSediment(oldPosition, sedimentToCollect);
+							DistributeSediment(oldPosition, sedimentToCollect);
 						}
 						else {
 							sedimentToCollect = -sedimentToCollect;
-							dropletCurrent->d->adjustSediment(erodeRadius(oldPosition, dropletCurrent->d->getPosition(), sedimentToCollect));
+							dropletCurrent->d->AdjustSediment(ErodeRadius(oldPosition, dropletCurrent->d->GetPosition(), sedimentToCollect));
 						}
 
 					}
-					dropletCurrent->d->adjustVelocity(deltaElevation, config.gravity);
-					dropletCurrent->d->evaporate(config.evaporationRate);
+					dropletCurrent->d->AdjustVelocity(deltaElevation, config.gravity);
+					dropletCurrent->d->Evaporate(config.evaporationRate);
 					dropletPrev = dropletCurrent;
 					dropletCurrent = dropletCurrent->next;
 				}
@@ -217,7 +217,7 @@ namespace erosion {
 			dropletsHead->deleteAll();
 	}
 
-	vec2 Erosion::getGradient(vec2 pos)
+	vec2 Erosion::GetGradient(vec2 pos)
 	{
 		vec2 gradient = { 0, 0 };
 
@@ -243,7 +243,7 @@ namespace erosion {
 		return gradient;
 	}
 
-	float Erosion::getInterpolatedGridHeight(vec2 pos) {
+	float Erosion::GetInterpolatedGridHeight(vec2 pos) {
 		//Get the integer part of the position ( x and y coordinates)
 		int x = static_cast<int>(pos.x);
 		int y = static_cast<int>(pos.y);
@@ -262,7 +262,7 @@ namespace erosion {
 		return diff;
 	}
 
-	float Erosion::getElevationDifference(vec2 posOld, vec2 posNew)
+	float Erosion::GetElevationDifference(vec2 posOld, vec2 posNew)
 	{
 		//Calculate the difference in elevation between the old and new position of the droplet
 		//Formula used: elevationDifference = elevation(posNew) - elevation(posOld)
@@ -270,8 +270,8 @@ namespace erosion {
 		//If the difference is positive, the droplet is moving uphill
 		//If the difference is negative, the droplet is moving downhill
 
-		float old = getInterpolatedGridHeight(posOld);
-		float newP = getInterpolatedGridHeight(posNew);
+		float old = GetInterpolatedGridHeight(posOld);
+		float newP = GetInterpolatedGridHeight(posNew);
 
 		if (log) {
 			std::cout << "[LOG] Old: " << old << " New: " << newP << std::endl;
@@ -280,7 +280,7 @@ namespace erosion {
 		return newP - old;
 	}
 
-	void Erosion::distributeSediment(vec2 pos, float sedimentDropped) {
+	void Erosion::DistributeSediment(vec2 pos, float sedimentDropped) {
 		int x = static_cast<int>(pos.x);
 		int y = static_cast<int>(pos.y);
 
@@ -297,7 +297,7 @@ namespace erosion {
 		map[(y + 1) * width + x + 1] += v * u * sedimentDropped;   //P(x+1, y+1) * v * u southEast point of the cell
 	}
 
-	float Erosion::erodeRadius(vec2 oldPos, vec2 newPos, float ammountEroded) {
+	float Erosion::ErodeRadius(vec2 oldPos, vec2 newPos, float ammountEroded) {
 		//Erode the terrain in a circular radius around the droplet
 		//Its done due to the fact that no thermal erosion or sediment sliding is simulated in this project
 		//In order to perform mentioned above action we need to calculate weights of each point within the radius
@@ -362,7 +362,7 @@ namespace erosion {
 
 	//Check if the droplet is still on the map
 	//@param pos - position of the droplet
-	bool Erosion::isOnMap(vec2 pos) {
+	bool Erosion::IsOnMap(vec2 pos) {
 		return pos.x >= 0.0f && pos.y >= 0.0f && pos.x < width - 1.0f && pos.y < height - 1.0f;
 	}
 
@@ -381,7 +381,7 @@ namespace erosion {
 	//Adjust the direction of the droplet based on the gradient of the current cell
 	//@param gradient - gradient of the current cell
 	//@param inertia - inertia parameter
-	void Droplet::adjustDirection(vec2 gradient, float inertia)
+	void Droplet::AdjustDirection(vec2 gradient, float inertia)
 	{
 		//Calculate the direction of the droplet using the formula: 
 		//direction(new) = direction(old) * inertia + gradient * (1 - inertia)
@@ -411,14 +411,14 @@ namespace erosion {
 			this->direction.x = dx / length;
 			this->direction.y = dy / length;
 		}
-		this->adjustPosition();
+		this->AdjustPosition();
 	}
 
 	//Update the position of the droplet using the formula:
 	//posion(new) = position(old) + direction(new)
 	//Formula does not take into account the velocity of the droplet in order not to "jump" over the cells
 	//This function performs one step which is not representing the real movement of the droplet in a time frame
-	void Droplet::adjustPosition()
+	void Droplet::AdjustPosition()
 	{
 		this->position.x += this->direction.x;
 		this->position.y += this->direction.y;
@@ -429,7 +429,7 @@ namespace erosion {
 	//Velocity(old) is squared to give old speed more weight in calculations
 	//than the slope of the terrain. elevationDifference is multiplied by gravity to 
 	//take gravity into cosideration when calculating the new velocity
-	void Droplet::adjustVelocity(float elevationDifference, float gravity) {
+	void Droplet::AdjustVelocity(float elevationDifference, float gravity) {
 		this->velocity = sqrtf((this->velocity * this->velocity) + (elevationDifference * gravity));
 		if (log) {
 			std::cout << "[LOG] Velocity: " << this->velocity << std::endl;
@@ -438,8 +438,8 @@ namespace erosion {
 
 	//Update the amount of water the droplet carries by evaporating a percentage of it
 	//Formula used: water(new) = water(old) * (1 - evaporationRate)
-	//@param evaporationRate - rate at which the droplet evaporates
-	void Droplet::evaporate(float evaporationRate) {
+	//@param evaporationRate - rate at which the droplet Evaporates
+	void Droplet::Evaporate(float evaporationRate) {
 		this->water *= (1 - evaporationRate);
 		if (log) {
 			std::cout << "[LOG] Water: " << this->water << std::endl;
@@ -454,7 +454,7 @@ namespace erosion {
 	//@param depositionRate - rate at which the droplet deposits sediment
 	//@param elevationDifference - difference in elevation between the old and new position of the droplet
 	//@return - the amount of sediment the droplet gathered or dropped
-	float Droplet::adjustCapacity(float minSlope, float erosionRate, float depositionRate, float elevationDifference)
+	float Droplet::AdjustCapacity(float minSlope, float erosionRate, float depositionRate, float elevationDifference)
 	{
 		this->capacity = std::max(-elevationDifference, minSlope) * this->velocity * this->water;
 
@@ -463,10 +463,10 @@ namespace erosion {
 		}
 
 		if (this->sediment > this->capacity) {
-			return this->dropSurplusSediment(depositionRate);
+			return this->DropSurplusSediment(depositionRate);
 		}
 		else {
-			return -this->sedimentToGather(erosionRate, elevationDifference);
+			return -this->SedimentToGather(erosionRate, elevationDifference);
 		}
 	}
 
@@ -474,24 +474,24 @@ namespace erosion {
 	//@param erosionRate - rate at which the droplet erodes the terrain
 	//@param elevationDifference - difference in elevation between the old and new position of the droplet
 	//@return - the ammount of sediment the droplet can gather
-	float Droplet::sedimentToGather(float erosionRate, float elevationDifference)
+	float Droplet::SedimentToGather(float erosionRate, float elevationDifference)
 	{
 		//If the droplet is moving downhill and it carries less sediment than its capacity,
 		//it will gather percentage of its remaining capacity adjusted by erosion rate from old position on th map
 		//Firstly it will return maximum ammount it can collect and then function in Erosion class will check if 
 		//Gathering that ammount of sediment is possible without going below 0 on some P(x,y)
-		float sedimentToGather = std::min((this->capacity - this->sediment) * erosionRate, -elevationDifference);
+		float SedimentToGather = std::min((this->capacity - this->sediment) * erosionRate, -elevationDifference);
 		if (log) {
 			std::cout << "[LOG] Sediment: " << this->sediment << std::endl;
-			std::cout << "[LOG] Sediment to gather: " << sedimentToGather << std::endl;
+			std::cout << "[LOG] Sediment to gather: " << SedimentToGather << std::endl;
 		}
 
-		return sedimentToGather;
+		return SedimentToGather;
 	}
 
 	//Adjust the amount of sediment the droplet carries by adding the sediment gathered from the map
 	//@param sedimentCollected - the amount of sediment the droplet gathered
-	void Droplet::adjustSediment(float sedimentCollected) {
+	void Droplet::AdjustSediment(float sedimentCollected) {
 		this->sediment += sedimentCollected;
 	}
 
@@ -501,7 +501,7 @@ namespace erosion {
 	//otherwise it will drop all the sediment it carries
 	//@param elevationDifference - difference in elevation between the old and new position of the droplet
 	//@return - the amount of sediment the droplet dropped
-	float Droplet::dropSediment(float elevationDifference)
+	float Droplet::DropSediment(float elevationDifference)
 	{
 		float dropAmount = std::min(elevationDifference, this->sediment);
 		this->sediment -= dropAmount;
@@ -516,7 +516,7 @@ namespace erosion {
 	//Calculate and drop the surplus sediment the droplet carries
 	//@param depositionRate - rate at which the droplet deposits sediment
 	//@return - the amount of sediment the droplet dropped
-	float Droplet::dropSurplusSediment(float depositionRate) {
+	float Droplet::DropSurplusSediment(float depositionRate) {
 		//Calculate surplus droplet has to drop and update the amount of sediment it carries
 		//taking into account the deposition rate
 		float surplusToDrop = (this->sediment - this->capacity) * depositionRate;
