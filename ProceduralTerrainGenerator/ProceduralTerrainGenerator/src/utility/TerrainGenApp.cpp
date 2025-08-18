@@ -65,6 +65,7 @@ int TerrainGenApp::Initialize()
     }
 
     glEnable(GL_DEPTH_TEST);
+    glEnable(GL_CULL_FACE);
 
 	//Initialising basic mode variables
     meshIndices = new unsigned int[(width - 1) * (height - 1) * 6];
