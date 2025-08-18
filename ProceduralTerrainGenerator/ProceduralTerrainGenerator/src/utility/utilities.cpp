@@ -160,13 +160,13 @@ namespace utilities
 		int index = 0;
 
 		for (int i = 0; i < (height - 1) * (width - 1); i++) {
-			indices[index++] = i * 4;
-			indices[index++] = i * 4 + 1;
 			indices[index++] = i * 4 + 2;
+			indices[index++] = i * 4 + 1;
+			indices[index++] = i * 4;
 
 			indices[index++] = i * 4;
-			indices[index++] = i * 4 + 2;
 			indices[index++] = i * 4 + 3;
+			indices[index++] = i * 4 + 2;
 		}
 
 		return true;
