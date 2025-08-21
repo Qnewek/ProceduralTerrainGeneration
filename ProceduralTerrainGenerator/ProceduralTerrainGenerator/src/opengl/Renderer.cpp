@@ -22,12 +22,14 @@ void Renderer::Draw(const VertexArray& va, const IndexBuffer& ib, const Shader& 
 
 	GLCALL(glDrawElements(GL_TRIANGLES, ib.GetCount(), GL_UNSIGNED_INT, nullptr));
 }
-void Renderer::DrawWithTexture(const VertexArray& va, const IndexBuffer& ib, const Shader& shader) const {
+void Renderer::DrawTriangleStrips(const VertexArray& va, const IndexBuffer& ib, const Shader& shader, int numStrips, int numVertPerStrip) const {
     shader.Bind();
     va.Bind();
     ib.Bind();
 
-    GLCALL(glDrawElements(GL_TRIANGLES, ib.GetCount(), GL_UNSIGNED_INT, nullptr));
+    for(unsigned int i = 0; i < numStrips; i++) {
+        GLCALL(glDrawElements(GL_TRIANGLE_STRIP, numVertPerStrip, GL_UNSIGNED_INT, (void*)(sizeof(unsigned) * (numVertPerStrip) * i)));
+	}
 }
 
 

@@ -8,11 +8,11 @@
 
 #include "utilities.h"
 
-TerrainGenApp::TerrainGenApp() : window(nullptr), windowWidth(0), windowHeight(0), scalingFactor(0.4f), drawScale(1.0f),
+TerrainGenApp::TerrainGenApp() : window(nullptr), windowWidth(0), windowHeight(0), scalingFactor(255.0f), drawScale(1.0f),
 rightPanelWidth(400.0f),topPanelHeight(30.0f), bottomPanelHeight(200.0f), leftPanelWidth(400.0f), 
-width(200), height(200), prevHeight(200), prevWidth(200), tmpHeight(200), tmpWidth(200),
+width(1000), height(1000), prevHeight(200), prevWidth(200), tmpHeight(200), tmpWidth(200),
 stride(8), seed(123), deltaTime(0.0f), lastFrame(0.0f), renderer(), layout(),
-player(1920, 1080, glm::vec3(0.0f, 0.0f, 0.0f), 0.0001f, 1.0f, false, height),
+player(1920, 1080, glm::vec3(0.0f, 0.0f, 0.0f), 0.0001f, 30.0f, false, height),
 meshVertices(nullptr), meshIndices(nullptr), tMeshVertices(nullptr), tMeshIndices(nullptr), treesPositions(nullptr), erosionVertices(nullptr), traceVertices(nullptr),
 erosionWindow(false), testSymmetrical(false), trackDraw(false), erosionDraw(false), isTerrainDisplayed(true),
 erosion(width, height), terrainGen(), basicPerlinNoise(), noise(&basicPerlinNoise),
@@ -65,22 +65,23 @@ int TerrainGenApp::Initialize()
     }
 
     glEnable(GL_DEPTH_TEST);
+	glDepthFunc(GL_LEQUAL);
     glEnable(GL_CULL_FACE);
 
 	//Initialising basic mode variables
-    meshIndices = new unsigned int[(width - 1) * (height - 1) * 6];
+    meshIndices = new unsigned int[(height - 1) * width * 2];
     meshVertices = new float[width * height * stride];
 
     //Initial fractal noise generation in order to draw something on the start of the test
     noise->SetMapSize(width, height);
 	noise->SetSeed(seed);
     noise->InitMap();
-    utilities::benchmarkVoid(utilities::CreateTerrainMesh, "CreateTerrainMesh", *noise, meshVertices, meshIndices, scalingFactor, stride, true, true);
+    utilities::benchmarkVoid(utilities::CreateTerrainMesh, "CreateTerrainMesh", *noise, meshVertices, meshIndices, 255.0f, stride, true, true);
     utilities::PaintNotByTexture(meshVertices, width, height, stride, 6);
 
 	mainVAO = std::make_unique<VertexArray>();
 	mainVertexBuffer = std::make_unique<VertexBuffer>(meshVertices, (height * width) * stride * sizeof(float));
-	mainIndexBuffer = std::make_unique<IndexBuffer>(meshIndices, (width - 1) * (height - 1) * 6);
+	mainIndexBuffer = std::make_unique<IndexBuffer>(meshIndices, (height - 1) * width * 2);
 	mainShader = std::make_unique<Shader>("res/shaders/Lightning_vertex.shader", "res/shaders/Lightning_fragment.shader");
 	mainTexture = std::make_unique<Texture>("res/textures/Basic_biome_texture_palette.jpg");
 
@@ -96,7 +97,7 @@ int TerrainGenApp::Initialize()
     player.SetPosition(glm::vec3(1.0f, 1.0f, 1.0f));
 
 	InitializeTerrainGeneration();
-
+   
     treeShader = std::make_unique<Shader>("res/shaders/test_vertex.shader", "res/shaders/test_frag.shader");
 
     return 0;
@@ -109,7 +110,7 @@ void TerrainGenApp::Start()
     ImGui::StyleColorsDark();
     while (!glfwWindowShouldClose(window))
     {
-        renderer.Clear(glm::vec3(0.2f, 0.2f, 0.2f));
+        renderer.Clear(glm::vec3(0.0f, 0.0f, 0.0f));
         float currentFrame = static_cast<float>(glfwGetTime());
         deltaTime = currentFrame - lastFrame;
         lastFrame = currentFrame;
@@ -607,16 +608,14 @@ void TerrainGenApp::Draw()
     glEnable(GL_SCISSOR_TEST);
     glViewport(leftPanelWidth, bottomPanelHeight, windowWidth - rightPanelWidth - leftPanelWidth, windowHeight - topPanelHeight - bottomPanelHeight);
     glScissor(leftPanelWidth, bottomPanelHeight, windowWidth - rightPanelWidth - leftPanelWidth, windowHeight - topPanelHeight - bottomPanelHeight);
-    renderer.Clear(glm::vec3(0.37f, 0.77f, 1.0f));
+	renderer.Clear(glm::vec3(0.0f, 0.0f, 0.0f));
     glm::mat4 model = glm::mat4(1.0f);
 
     if (currentMode == mode::PERLIN)
     {
-        model = glm::translate(model, glm::vec3(1.0f, 0.8f, 2.0f));
         PerlinDraw(model);
     }
     else if (currentMode == mode::PARAMETRIZED_GEN) {
-		model = glm::translate(model, glm::vec3(-0.5f, -0.5f, 0.0f));
         TerrainGenerationDraw(model);
         if (drawTrees) {
 			DrawTrees(model);
@@ -628,7 +627,7 @@ void TerrainGenApp::Draw()
 
 void TerrainGenApp::PerlinDraw(glm::mat4& model) {
     mainShader->SetMaterialUniforms(glm::vec3(0.6f, 0.6f, 0.6f), glm::vec3(0.6f, 0.6f, 0.6f), glm::vec3(0.1f, 0.1f, 0.1f), 8.0f);
-    mainShader->SetLightUniforms(glm::vec3(0.5f, 2.0f, 0.5f), glm::vec3(0.2f, 0.2f, 0.2f), glm::vec3(0.5f, 0.5f, 0.5f), glm::vec3(1.0f, 1.0f, 1.0f));
+    mainShader->SetLightUniforms(glm::vec3(width, scalingFactor + 20.0f , height), glm::vec3(0.5f, 0.5f, 0.5f), glm::vec3(0.5f, 0.5f, 0.5f), glm::vec3(1.0f, 1.0f, 1.0f));
     mainShader->SetViewPos((*player.GetCameraRef()).GetPosition());
     mainShader->SetMVP(model, *(player.GetCameraRef()->GetViewMatrix()), *(player.GetCameraRef()->GetProjectionMatrix()));
 	mainShader->SetUniform1f("stretch", drawScale);
@@ -636,7 +635,7 @@ void TerrainGenApp::PerlinDraw(glm::mat4& model) {
 
     mainTexture->Bind();
     mainVAO->AddBuffer(*mainVertexBuffer, layout);
-    renderer.DrawWithTexture(*mainVAO, *mainIndexBuffer, *mainShader);
+    renderer.DrawTriangleStrips(*mainVAO, *mainIndexBuffer, *mainShader, height-1, width*2);
     if (testSymmetrical)
         DrawAdjacent(renderer, model);
 
@@ -666,7 +665,7 @@ void TerrainGenApp::TerrainGenerationDraw(glm::mat4& model) {
     terGenVAO->AddBuffer(*terGenVertexBuffer, layout);
     terGenTexture->Bind();
     if (isTerrainDisplayed)
-        renderer.DrawWithTexture(*terGenVAO, *terGenIndexBuffer, *terGenShader);
+        renderer.Draw(*terGenVAO, *terGenIndexBuffer, *terGenShader);
     if (erosionDraw) {
         model = glm::translate(model, glm::vec3(drawScale * scalingFactor * (width/prevChunkRes), 0.0f, 0.0f));
 
@@ -778,7 +777,7 @@ void TerrainGenApp::ResizePerlin()
 
 void TerrainGenApp::PerformPerlin()
 {
-    utilities::benchmarkVoid(utilities::CreateTerrainMesh, "CreateTerrainMesh", *noise, meshVertices, meshIndices, scalingFactor, stride, true, true);
+    utilities::benchmarkVoid(utilities::CreateTerrainMesh, "CreateTerrainMesh", *noise, meshVertices, meshIndices, 255.0f, stride, true, true);
     utilities::PaintNotByTexture(meshVertices, width, height, stride, 6);
 
     UpdatePrevCheckers();
@@ -857,12 +856,12 @@ void TerrainGenApp::PerformErosion() {
         
         erosion.SetMap(terrainGen.GetHeightMap());
         erosion.Erode(trackDraw ? std::optional<float*>(traceVertices) : std::nullopt);
-
+        /*
         utilities::CreateTiledVertices(erosionVertices, width, height, erosion.GetMap(), scalingFactor, stride, 0);
         utilities::InitializeNormals(erosionVertices, stride, 3, (height - 1) * (width - 1) * 4);
         utilities::CalculateNormals(erosionVertices, tMeshIndices, stride, 3, (width - 1) * (height - 1) * 6);
         utilities::NormalizeVector3f(erosionVertices, stride, 3, (height - 1) * (width - 1) * 4);
-        utilities::AssignTexturesByBiomes(terrainGen, erosionVertices, width, height, 3, stride, 6);
+        utilities::AssignTexturesByBiomes(terrainGen, erosionVertices, width, height, 3, stride, 6);*/
     }
 
 	erosionVertexBuffer = std::make_unique<VertexBuffer>(erosionVertices, (height * width) * stride * sizeof(float));
@@ -969,10 +968,10 @@ void TerrainGenApp::TerrainGeneration() {
 
     utilities::CreateTiledVertices(tMeshVertices, width, height, terrainGen.GetHeightMap(), scalingFactor, stride, 0);
     utilities::CreateIndicesTiledField(tMeshIndices, width, height);
-    utilities::InitializeNormals(tMeshVertices, stride, 3, (height - 1) * (width - 1) * 4);
+    /*utilities::InitializeNormals(tMeshVertices, stride, 3, (height - 1) * (width - 1) * 4);
     utilities::CalculateNormals(tMeshVertices, tMeshIndices, stride, 3, (width - 1) * (height - 1) * 6);
     utilities::NormalizeVector3f(tMeshVertices, stride, 3, (height - 1) * (width - 1) * 4);
-    utilities::AssignTexturesByBiomes(terrainGen, tMeshVertices, width, height, 3, stride, 6);
+    utilities::AssignTexturesByBiomes(terrainGen, tMeshVertices, width, height, 3, stride, 6);*/
     std::cout << "[LOG] Terrain generation completed!" << std::endl;
 }
 

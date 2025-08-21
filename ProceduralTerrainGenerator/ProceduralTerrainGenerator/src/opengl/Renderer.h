@@ -21,6 +21,6 @@ class Renderer
 {
 public:
 	void Draw(const VertexArray& va, const IndexBuffer& ib, const Shader& shader) const;
-	void DrawWithTexture(const VertexArray& va, const IndexBuffer& ib, const Shader& shader) const;
+	void DrawTriangleStrips(const VertexArray& va, const IndexBuffer& ib, const Shader& shader, int numStrips, int numVertPerStrip) const;
 	void Clear(glm::vec3 color) const;
 };

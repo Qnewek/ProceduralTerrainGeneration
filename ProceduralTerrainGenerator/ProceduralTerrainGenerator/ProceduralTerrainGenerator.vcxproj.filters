@@ -87,10 +87,10 @@
     <ClCompile Include="src\terrainGeneration\BiomeGenerator.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="src\utility\Objects\Object.cpp">
+    <ClCompile Include="src\utility\TerrainGenApp.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="src\utility\TerrainGenApp.cpp">
+    <ClCompile Include="src\utility\NoiseBasedGenerating.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
@@ -1474,6 +1474,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="src\utility\TerrainGenApp.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\utility\NoiseBasedGenerating.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

@@ -10,28 +10,21 @@
 #include "Noise.h"
 #include "Erosion.h"
 #include "TerrainGenerator.h"
-#include "Object.h"
 
 namespace utilities
 {
 	//Different utility functions
 	void ConvertToGrayscaleImage(float* data, unsigned char* image, int width, int height);
-	void SimpleMeshIndicies(unsigned int* indices, int width, int height);
+	void MeshIndices(unsigned int* indices, int width, int height);
 	void GenCubeLayout(float* vertices, unsigned int* indices, float scalingFactor);
-    void ParseNoiseIntoVerticesetationLevelRef(float* vertices, int width, int height, float* map, float scalingFactor, unsigned int stride, unsigned int offset);
-    void ParseNoiseChunksIntoVertices(float* vertices, int width, int height, int chunkX, int chunkY, float* map, float scalingFactor, unsigned int stride, unsigned int offset);
+    void ParseNoiseIntoVertices(float* vertices, float* map, int width, int height, float scale, unsigned int stride, unsigned int offset);
     bool CreateIndicesTiledField(unsigned int* indices, int width, int height);
     bool CreateTiledVertices(float* vertices, int width, int height, float* map, float scalingFactor, unsigned int stride, unsigned int offset);
     void PaintNotByTexture(float* vertices, int width, int height, unsigned int stride, unsigned int offset);
-    object::Object* LoadObj(const std::string& dirPath, const std::string& name);
 	bool saveToObj(const std::string& dirPath, const std::string& name, float* vertices, unsigned int* indices, unsigned int stride, unsigned int indexSize, unsigned int verticesCount, bool mtl);
 
-	//Functions for dealing with 3D vectors
-    bool InitializeNormals(float* vertices, unsigned int stride, unsigned int offSet, unsigned int verticesCount);
-    bool CalculateNormals(float* vertices, unsigned int* indices, unsigned int stride, unsigned int offSet, unsigned int indexSize);
-	void AddVector3f(float* vertices, unsigned int index, glm::vec3 vector3f);
-	bool NormalizeVector3f(float* vertices, unsigned int stride, unsigned int offSet, unsigned int verticesCount);
-	
+    bool CalculateHeightMapNormals(float* vertices, unsigned int stride, unsigned int offSet, unsigned int width, unsigned int height);
+
 	//Terrain generation functions
     void GenerateTerrainMap(noise::SimplexNoiseClass& noise, float* vertices, unsigned int* indices, unsigned int stride);
     void CreateTerrainMesh(noise::SimplexNoiseClass& noise, float* vertices, unsigned int* indices, float scalingFactor, unsigned int stride, bool normals, bool first);
