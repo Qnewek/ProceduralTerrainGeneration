@@ -1,54 +1,4 @@
 ﻿  Trwa skanowanie źródeł pod kątem zależności modułów...
-  TerrainGenApp.cpp
-C:\Users\dawid\source\repos\Qnewek\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\vendor\Splines\spline.h(44,9): warning C4068: nieznana pragma „GCC”
-  (kompilowanie pliku źródłowego „src/utility/TerrainGenApp.cpp”)
-  
-C:\Users\dawid\source\repos\Qnewek\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\vendor\Splines\spline.h(45,9): warning C4068: nieznana pragma „GCC”
-  (kompilowanie pliku źródłowego „src/utility/TerrainGenApp.cpp”)
-  
-C:\Users\dawid\source\repos\Qnewek\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\vendor\Splines\spline.h(681,9): warning C4068: nieznana pragma „GCC”
-  (kompilowanie pliku źródłowego „src/utility/TerrainGenApp.cpp”)
-  
-C:\Users\dawid\source\repos\Qnewek\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\utility\TerrainGenApp.cpp(139,66): warning C4244: "argument": konwersja z "int" do "float", możliwa utrata danych
-C:\Users\dawid\source\repos\Qnewek\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\utility\TerrainGenApp.cpp(181,65): warning C4244: "argument": konwersja z "int" do "float", możliwa utrata danych
-C:\Users\dawid\source\repos\Qnewek\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\utility\TerrainGenApp.cpp(445,23): warning C4244: "inicjowanie": konwersja z "_Ty" do "float", możliwa utrata danych
-C:\Users\dawid\source\repos\Qnewek\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\utility\TerrainGenApp.cpp(445,23): warning C4244:         with
-C:\Users\dawid\source\repos\Qnewek\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\utility\TerrainGenApp.cpp(445,23): warning C4244:         [
-C:\Users\dawid\source\repos\Qnewek\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\utility\TerrainGenApp.cpp(445,23): warning C4244:             _Ty=double
-C:\Users\dawid\source\repos\Qnewek\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\utility\TerrainGenApp.cpp(445,23): warning C4244:         ]
-C:\Users\dawid\source\repos\Qnewek\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\utility\TerrainGenApp.cpp(446,23): warning C4244: "inicjowanie": konwersja z "_Ty" do "float", możliwa utrata danych
-C:\Users\dawid\source\repos\Qnewek\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\utility\TerrainGenApp.cpp(446,23): warning C4244:         with
-C:\Users\dawid\source\repos\Qnewek\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\utility\TerrainGenApp.cpp(446,23): warning C4244:         [
-C:\Users\dawid\source\repos\Qnewek\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\utility\TerrainGenApp.cpp(446,23): warning C4244:             _Ty=double
-C:\Users\dawid\source\repos\Qnewek\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\utility\TerrainGenApp.cpp(446,23): warning C4244:         ]
-C:\Users\dawid\source\repos\Qnewek\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\utility\TerrainGenApp.cpp(475,27): warning C4018: "<": niezgodność typu ze znakiem/bez znaku
-C:\Users\dawid\source\repos\Qnewek\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\utility\TerrainGenApp.cpp(483,10): warning C4018: "<": niezgodność typu ze znakiem/bez znaku
-C:\Users\dawid\source\repos\Qnewek\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\utility\TerrainGenApp.cpp(561,138): warning C4244: "argument": konwersja z "float" do "int", możliwa utrata danych
-C:\Users\dawid\source\repos\Qnewek\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\utility\TerrainGenApp.cpp(573,27): warning C4018: "<": niezgodność typu ze znakiem/bez znaku
-C:\Users\dawid\source\repos\Qnewek\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\utility\TerrainGenApp.cpp(608,129): warning C4244: "argument": konwersja z "float" do "GLsizei", możliwa utrata danych
-C:\Users\dawid\source\repos\Qnewek\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\utility\TerrainGenApp.cpp(608,81): warning C4244: "argument": konwersja z "float" do "GLsizei", możliwa utrata danych
-C:\Users\dawid\source\repos\Qnewek\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\utility\TerrainGenApp.cpp(608,32): warning C4244: "argument": konwersja z "float" do "GLint", możliwa utrata danych
-C:\Users\dawid\source\repos\Qnewek\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\utility\TerrainGenApp.cpp(608,16): warning C4244: "argument": konwersja z "float" do "GLint", możliwa utrata danych
-C:\Users\dawid\source\repos\Qnewek\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\utility\TerrainGenApp.cpp(609,128): warning C4244: "argument": konwersja z "float" do "GLsizei", możliwa utrata danych
-C:\Users\dawid\source\repos\Qnewek\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\utility\TerrainGenApp.cpp(609,80): warning C4244: "argument": konwersja z "float" do "GLsizei", możliwa utrata danych
-C:\Users\dawid\source\repos\Qnewek\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\utility\TerrainGenApp.cpp(609,31): warning C4244: "argument": konwersja z "float" do "GLint", możliwa utrata danych
-C:\Users\dawid\source\repos\Qnewek\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\utility\TerrainGenApp.cpp(609,15): warning C4244: "argument": konwersja z "float" do "GLint", możliwa utrata danych
-C:\Users\dawid\source\repos\Qnewek\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\utility\TerrainGenApp.cpp(903,109): warning C4244: "argument": konwersja z "float" do "int", możliwa utrata danych
-C:\Users\dawid\source\repos\Qnewek\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\utility\TerrainGenApp.cpp(904,105): warning C4244: "argument": konwersja z "float" do "int", możliwa utrata danych
-C:\Users\dawid\source\repos\Qnewek\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\utility\TerrainGenApp.cpp(905,104): warning C4244: "argument": konwersja z "float" do "int", możliwa utrata danych
-C:\Users\dawid\source\repos\Qnewek\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\utility\TerrainGenApp.cpp(906,104): warning C4244: "argument": konwersja z "float" do "int", możliwa utrata danych
-C:\Users\dawid\source\repos\Qnewek\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\utility\TerrainGenApp.cpp(907,107): warning C4244: "argument": konwersja z "float" do "int", możliwa utrata danych
-C:\Users\dawid\source\repos\Qnewek\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\utility\TerrainGenApp.cpp(908,104): warning C4244: "argument": konwersja z "float" do "int", możliwa utrata danych
-C:\Users\dawid\source\repos\Qnewek\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\utility\TerrainGenApp.cpp(1037,42): warning C4244: "=": konwersja z "_Ty1" do "float", możliwa utrata danych
-C:\Users\dawid\source\repos\Qnewek\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\utility\TerrainGenApp.cpp(1037,42): warning C4244:         with
-C:\Users\dawid\source\repos\Qnewek\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\utility\TerrainGenApp.cpp(1037,42): warning C4244:         [
-C:\Users\dawid\source\repos\Qnewek\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\utility\TerrainGenApp.cpp(1037,42): warning C4244:             _Ty1=int
-C:\Users\dawid\source\repos\Qnewek\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\utility\TerrainGenApp.cpp(1037,42): warning C4244:         ]
-C:\Users\dawid\source\repos\Qnewek\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\utility\TerrainGenApp.cpp(1039,42): warning C4244: "=": konwersja z "_Ty2" do "float", możliwa utrata danych
-C:\Users\dawid\source\repos\Qnewek\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\utility\TerrainGenApp.cpp(1039,42): warning C4244:         with
-C:\Users\dawid\source\repos\Qnewek\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\utility\TerrainGenApp.cpp(1039,42): warning C4244:         [
-C:\Users\dawid\source\repos\Qnewek\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\utility\TerrainGenApp.cpp(1039,42): warning C4244:             _Ty2=int
-C:\Users\dawid\source\repos\Qnewek\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\utility\TerrainGenApp.cpp(1039,42): warning C4244:         ]
   utilities.cpp
 C:\Users\dawid\source\repos\Qnewek\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\vendor\Splines\spline.h(44,9): warning C4068: nieznana pragma „GCC”
   (kompilowanie pliku źródłowego „src/utility/utilities.cpp”)
@@ -59,24 +9,20 @@ C:\Users\dawid\source\repos\Qnewek\ProceduralTerrainGeneration\ProceduralTerrain
 C:\Users\dawid\source\repos\Qnewek\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\vendor\Splines\spline.h(681,9): warning C4068: nieznana pragma „GCC”
   (kompilowanie pliku źródłowego „src/utility/utilities.cpp”)
   
-C:\Users\dawid\source\repos\Qnewek\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\utility\utilities.cpp(125,23): warning C4244: "=": konwersja z "int" do "float", możliwa utrata danych
-C:\Users\dawid\source\repos\Qnewek\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\utility\utilities.cpp(127,27): warning C4244: "=": konwersja z "int" do "float", możliwa utrata danych
-C:\Users\dawid\source\repos\Qnewek\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\utility\utilities.cpp(131,26): warning C4244: "=": konwersja z "int" do "float", możliwa utrata danych
-C:\Users\dawid\source\repos\Qnewek\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\utility\utilities.cpp(133,27): warning C4244: "=": konwersja z "int" do "float", możliwa utrata danych
-C:\Users\dawid\source\repos\Qnewek\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\utility\utilities.cpp(137,26): warning C4244: "=": konwersja z "int" do "float", możliwa utrata danych
-C:\Users\dawid\source\repos\Qnewek\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\utility\utilities.cpp(139,30): warning C4244: "=": konwersja z "int" do "float", możliwa utrata danych
-C:\Users\dawid\source\repos\Qnewek\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\utility\utilities.cpp(143,23): warning C4244: "=": konwersja z "int" do "float", możliwa utrata danych
-C:\Users\dawid\source\repos\Qnewek\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\utility\utilities.cpp(145,30): warning C4244: "=": konwersja z "int" do "float", możliwa utrata danych
-C:\Users\dawid\source\repos\Qnewek\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\utility\utilities.cpp(407,21): warning C4018: "<": niezgodność typu ze znakiem/bez znaku
-C:\Users\dawid\source\repos\Qnewek\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\utility\utilities.cpp(418,21): warning C4018: "<": niezgodność typu ze znakiem/bez znaku
-C:\Users\dawid\source\repos\Qnewek\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\utility\utilities.cpp(427,21): warning C4018: "<": niezgodność typu ze znakiem/bez znaku
-C:\Users\dawid\source\repos\Qnewek\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\utility\utilities.cpp(480,85): warning C4244: "=": konwersja z "double" do "float", możliwa utrata danych
-C:\Users\dawid\source\repos\Qnewek\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\utility\utilities.cpp(484,85): warning C4244: "=": konwersja z "double" do "float", możliwa utrata danych
-C:\Users\dawid\source\repos\Qnewek\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\utility\utilities.cpp(509,21): warning C4018: "<": niezgodność typu ze znakiem/bez znaku
-C:\Users\dawid\source\repos\Qnewek\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\utility\utilities.cpp(535,21): warning C4018: "<": niezgodność typu ze znakiem/bez znaku
-C:\Users\dawid\source\repos\Qnewek\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\utility\utilities.cpp(577,21): warning C4018: "<": niezgodność typu ze znakiem/bez znaku
-  Generowanie kodu...
-C:\Users\dawid\source\repos\Qnewek\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\utility\utilities.cpp(437,1): warning C4715: "utilities::saveToObj”: niewszystkie ścieżki kodu zwracają wartość
-C:\Users\dawid\source\repos\Qnewek\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\utility\utilities.cpp(553,1): warning C4715: "utilities::CalculateNormals”: niewszystkie ścieżki kodu zwracają wartość
-C:\Users\dawid\source\repos\Qnewek\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\utility\utilities.cpp(587,1): warning C4715: "utilities::NormalizeVector3f”: niewszystkie ścieżki kodu zwracają wartość
+C:\Users\dawid\source\repos\Qnewek\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\utility\utilities.cpp(102,23): warning C4244: "=": konwersja z "int" do "float", możliwa utrata danych
+C:\Users\dawid\source\repos\Qnewek\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\utility\utilities.cpp(104,27): warning C4244: "=": konwersja z "int" do "float", możliwa utrata danych
+C:\Users\dawid\source\repos\Qnewek\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\utility\utilities.cpp(108,26): warning C4244: "=": konwersja z "int" do "float", możliwa utrata danych
+C:\Users\dawid\source\repos\Qnewek\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\utility\utilities.cpp(110,27): warning C4244: "=": konwersja z "int" do "float", możliwa utrata danych
+C:\Users\dawid\source\repos\Qnewek\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\utility\utilities.cpp(114,26): warning C4244: "=": konwersja z "int" do "float", możliwa utrata danych
+C:\Users\dawid\source\repos\Qnewek\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\utility\utilities.cpp(116,30): warning C4244: "=": konwersja z "int" do "float", możliwa utrata danych
+C:\Users\dawid\source\repos\Qnewek\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\utility\utilities.cpp(120,23): warning C4244: "=": konwersja z "int" do "float", możliwa utrata danych
+C:\Users\dawid\source\repos\Qnewek\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\utility\utilities.cpp(122,30): warning C4244: "=": konwersja z "int" do "float", możliwa utrata danych
+C:\Users\dawid\source\repos\Qnewek\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\utility\utilities.cpp(289,21): warning C4018: "<": niezgodność typu ze znakiem/bez znaku
+C:\Users\dawid\source\repos\Qnewek\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\utility\utilities.cpp(300,21): warning C4018: "<": niezgodność typu ze znakiem/bez znaku
+C:\Users\dawid\source\repos\Qnewek\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\utility\utilities.cpp(309,21): warning C4018: "<": niezgodność typu ze znakiem/bez znaku
+C:\Users\dawid\source\repos\Qnewek\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\utility\utilities.cpp(362,85): warning C4244: "=": konwersja z "double" do "float", możliwa utrata danych
+C:\Users\dawid\source\repos\Qnewek\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\utility\utilities.cpp(366,85): warning C4244: "=": konwersja z "double" do "float", możliwa utrata danych
+C:\Users\dawid\source\repos\Qnewek\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\utility\utilities.cpp(390,20): warning C4018: "<": niezgodność typu ze znakiem/bez znaku
+C:\Users\dawid\source\repos\Qnewek\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\utility\utilities.cpp(391,22): warning C4018: "<": niezgodność typu ze znakiem/bez znaku
+C:\Users\dawid\source\repos\Qnewek\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\utility\utilities.cpp(319,1): warning C4715: "utilities::saveToObj”: niewszystkie ścieżki kodu zwracają wartość
   ProceduralTerrainGenerator.vcxproj -> C:\Users\dawid\source\repos\Qnewek\ProceduralTerrainGeneration\ProceduralTerrainGenerator\Debug\ProceduralTerrainGenerator.exe

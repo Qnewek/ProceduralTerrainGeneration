@@ -6,6 +6,7 @@ layout (location = 2) in vec2 aTexCoords;
 out vec3 FragPos;
 out vec3 Normal;
 out vec2 TexCoords;
+out float Height;
 
 uniform mat4 model;
 uniform mat4 view;
@@ -15,9 +16,9 @@ uniform float stretch;
 
 void main()
 {
-    FragPos = vec3(model * vec4(aPos.x * scale * stretch, aPos.y * scale, aPos.z * scale * stretch, 1.0));
-    Normal = aNormal;  
-    
-    gl_Position = projection * view * vec4(FragPos, 1.0);
+    Height = aPos.y;
+    FragPos = (view * model * vec4(aPos, 1.0)).xyz;
+    gl_Position = projection * view * model * vec4(aPos, 1.0);
     TexCoords = aTexCoords;
+    Normal = aNormal;
 }

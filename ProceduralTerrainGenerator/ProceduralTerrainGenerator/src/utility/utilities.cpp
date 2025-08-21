@@ -67,45 +67,22 @@ namespace utilities
 	}
 
 	//Parses noise map into vertices for openGL to draw as a mesh, stride is the number of floats per vertex
-	// 
+	//
 	//@param vertices - array of vertices to be filled with data
-	//@param width - width of the noise map
-	//@param height - height of the noise map
 	//@param map - noise map
+	//@param width - width of the noise map in chunks
+	//@param height - height of the noise map in chunks
+	//@param scale - scaling factor for generating height values
 	//@param stride - number of floats per vertex
 	//@param offset - offset in the vertex array to start with when filling the data
-
-	void ParseNoiseIntoVerticesetationLevelRef(float* vertices, int width, int height, float* map, float scalingFactor, unsigned int stride, unsigned int offset) {
+	void ParseNoiseIntoVertices(float* vertices, float* map, int width, int height, float scale, unsigned int stride, unsigned int offset) {
 		for (int y = 0; y < height; y++)
 		{
 			for (int x = 0; x < width; x++)
 			{
-				vertices[((y * width) + x) * stride + offset] = x / (float)width;
-				vertices[((y * width) + x) * stride + offset + 1] = map[y * width + x];
-				vertices[((y * width) + x) * stride + offset + 2] = y / (float)height;
-			}
-		}
-	}
-
-	//Parses noise map into vertices for openGL to draw as a mesh, stride is the number of floats per vertex
-	//
-	//@param vertices - array of vertices to be filled with data
-	//@param width - width of the noise map in chunks
-	//@param height - height of the noise map in chunks
-	//@param chunkX - width of the chunk
-	//@param chunkY - height of the chunk
-	//@param map - noise map
-	//@param scalingFactor - scaling factor for the vertices
-	//@param stride - number of floats per vertex
-	//@param offset - offset in the vertex array to start with when filling the data
-	void ParseNoiseChunksIntoVertices(float* vertices, int width, int height, int chunkX, int chunkY, float* map, float scalingFactor, unsigned int stride, unsigned int offset) {
-		for (int y = 0; y < height * chunkY; y++)
-		{
-			for (int x = 0; x < width * chunkX; x++)
-			{
-				vertices[((y * width * chunkX) + x) * stride + offset] = x / ((float)chunkX * width);
-				vertices[((y * width * chunkX) + x) * stride + offset + 1] = map[y * width * chunkX + x];
-				vertices[((y * width * chunkX) + x) * stride + offset + 2] = y / ((float)chunkY * height);
+				vertices[((y * width) + x) * stride + offset] = -width / 2.0f + x;
+				vertices[((y * width) + x) * stride + offset + 1] = map[y * width + x] * scale;
+				vertices[((y * width) + x) * stride + offset + 2] = -height / 2.0f + y;
 			}
 		}
 	}
@@ -172,21 +149,21 @@ namespace utilities
 		return true;
 	}
 
-	//Generates indices for simple mesh by conesting 4 vertices on the one cell of the grid to form 2 triangles
-	//@param indices - array of indices to be filled with data
-	//@param width - width of the noise map
-	//@param height - height of the noise map
-	void SimpleMeshIndicies(unsigned int* indices, int width, int height) {
+	//Generates indices for a mesh, by dividing the mesh into strips of triangles
+	//Method of indexing vertices in the grid shown below:
+	// 0---2
+	// | / |
+	// 1---3
+	//@param indices - pointer to the array of indices to be filled with index data
+	//@param width - width of the noise map (columns)
+	//@param height - height of the noise map (rows)
+	void MeshIndices(unsigned int* indices, int width, int height) {
 		int index = 0;
 		for (int y = 0; y < height - 1; y++) {
-			for (int x = 0; x < width - 1; x++) {
-				indices[index++] = x + (y * width);
-				indices[index++] = x + ((y + 1) * width);
-				indices[index++] = x + 1 + (y * width);
-
-				indices[index++] = x + 1 + (y * width);
-				indices[index++] = x + ((y + 1) * width);
-				indices[index++] = x + 1 + ((y + 1) * width);
+			for (int x = 0; x < width; x++) {
+				for(int k = 0; k < 2; k++) {
+					indices[index++] = width * (y + k) + x;
+				}
 			}
 		}
 	}
@@ -194,11 +171,9 @@ namespace utilities
 	void GenerateTerrainMap(noise::SimplexNoiseClass& noise, float* vertices, unsigned int* indices, unsigned int stride) {
 		noise.InitMap();
 		noise.GenerateFractalNoiseByChunks();
-		ParseNoiseChunksIntoVertices(vertices, noise.GetWidth(), noise.GetHeight(), noise.GetChunkWidth(), noise.GetChunkHeight(), noise.GetMap(), 1.0f / noise.GetConfigRef().scale, stride, 0);
-		SimpleMeshIndicies(indices, noise.GetWidth() * noise.GetChunkWidth(), noise.GetHeight() * noise.GetChunkHeight());
-		InitializeNormals(vertices, stride, 3, noise.GetHeight() * noise.GetChunkHeight() * noise.GetWidth() * noise.GetChunkWidth());
-		CalculateNormals(vertices, indices, stride, 3, (noise.GetWidth() * noise.GetChunkWidth() - 1) * (noise.GetHeight() * noise.GetChunkHeight() - 1) * 6);
-		NormalizeVector3f(vertices, stride, 3, noise.GetWidth() * noise.GetChunkWidth() * noise.GetHeight() * noise.GetChunkHeight());
+		ParseNoiseIntoVertices(vertices, noise.GetMap(), noise.GetWidth() * noise.GetChunkWidth(), noise.GetHeight() * noise.GetChunkHeight(), 255.0, stride, 0);
+		MeshIndices(indices, noise.GetWidth() * noise.GetChunkWidth(), noise.GetHeight() * noise.GetChunkHeight());
+		CalculateHeightMapNormals(vertices, stride, 3, noise.GetWidth() * noise.GetChunkWidth(), noise.GetHeight() * noise.GetChunkHeight());
 	}
 
 	//Generates terrain map using Perlin Fractal Noise, transforming it into drawable mesh and
@@ -212,13 +187,11 @@ namespace utilities
 	void CreateTerrainMesh(noise::SimplexNoiseClass &noise, float* vertices, unsigned int* indices, float scalingFactor, unsigned int stride, bool normals, bool first)
 	{
 		noise.GenerateFractalNoise();
-		ParseNoiseIntoVerticesetationLevelRef(vertices, noise.GetWidth(), noise.GetHeight(), noise.GetMap(), scalingFactor, stride, 0);
+		ParseNoiseIntoVertices(vertices, noise.GetMap(), noise.GetWidth(), noise.GetHeight(), scalingFactor, stride, 0);
 		if (first)
-			SimpleMeshIndicies(indices, noise.GetWidth(), noise.GetHeight());
+			MeshIndices(indices, noise.GetWidth(), noise.GetHeight());
 		if (normals) {
-			InitializeNormals(vertices, stride, 3, noise.GetHeight() * noise.GetWidth());
-			CalculateNormals (vertices, indices, stride, 3, (noise.GetWidth() - 1) * (noise.GetHeight() - 1) * 6);
-			NormalizeVector3f(vertices, stride, 3, noise.GetWidth() * noise.GetHeight());
+			CalculateHeightMapNormals(vertices, stride, 3, noise.GetWidth(), noise.GetHeight());
 		}
 	}
 
@@ -232,10 +205,8 @@ namespace utilities
 	//@param erosion - erosion object
 	void PerformErosion(float* vertices, unsigned int* indices, float scalingFactor, std::optional<float*> Track, int stride, int positionsOffset, int normalsOffset, erosion::Erosion& erosion) {
 		erosion.Erode(Track);
-		ParseNoiseIntoVerticesetationLevelRef(vertices, erosion.GetWidth(), erosion.GetHeight(), erosion.GetMap(), scalingFactor, stride, positionsOffset);
-		InitializeNormals(vertices, stride, normalsOffset, erosion.GetHeight() * erosion.GetWidth());
-		CalculateNormals(vertices, indices, stride, normalsOffset, (erosion.GetWidth() - 1) * (erosion.GetHeight() - 1) * 6);
-		NormalizeVector3f(vertices, stride, normalsOffset, erosion.GetWidth() * erosion.GetHeight());
+		ParseNoiseIntoVertices(vertices, erosion.GetMap(), erosion.GetWidth(), erosion.GetHeight(), scalingFactor, stride, positionsOffset);
+		CalculateHeightMapNormals(vertices, stride, normalsOffset, erosion.GetWidth(), erosion.GetHeight());
 	}
 
 	//Generates basic Perlin Fractal Noise and sets coords for texture sampling (painting biome)
@@ -275,95 +246,6 @@ namespace utilities
 				vertices[((y * width) + x) * stride + offset + 1] = -1.0f;
 			}
 		}
-	}
-
-	object::Object* LoadObj(const std::string& dirPath, const std::string& name)
-	{
-		tinyobj::ObjReaderConfig reader_config;
-		reader_config.mtl_search_path = dirPath;
-		tinyobj::ObjReader reader;
-
-		if (!reader.ParseFromFile(dirPath + name + ".obj", reader_config))
-		{
-			if (!reader.Error().empty())
-			{
-				std::cerr << "TinyObjReader: " << reader.Error();
-			}
-			exit(1);
-		}
-		if (!reader.Warning().empty()) {
-			std::cout << "TinyObjReader: " << reader.Warning();
-		}
-
-		auto& attrib = reader.GetAttrib();
-		auto& shapes = reader.GetShapes();
-		auto& materials = reader.GetMaterials();
-
-		object::Object* obj = new object::Object(name);
-		obj->asignDirPath(dirPath);
-		
-		int size = 0;
-
-		for (auto& it : shapes)
-		{
-			size += it.mesh.indices.size();
-		}
-
-		int vertexIndex = 0;
-		object::vertex* vertices = new object::vertex[size];
-		object::faceTriangle* indices = new object::faceTriangle[size / 3];
-
-		//Loop over shapes
-		for (size_t s = 0; s < shapes.size(); s++) {
-			// Loop over faces(polygon)
-			size_t index_offset = 0;
-			for (size_t f = 0; f < shapes[s].mesh.num_face_vertices.size(); f++) {
-				size_t fv = size_t(shapes[s].mesh.num_face_vertices[f]);
-
-				// Loop over vertices in the face.
-				for (size_t v = 0; v < fv; v++) {
-					tinyobj::index_t idx = shapes[s].mesh.indices[index_offset + v];
-
-					vertices[vertexIndex] = object::vertex(attrib.vertices[3 * size_t(idx.vertex_index) + 0],
-						attrib.vertices[3 * size_t(idx.vertex_index) + 1],
-						attrib.vertices[3 * size_t(idx.vertex_index) + 2],
-						attrib.normals[3 * size_t(idx.normal_index) + 0],
-						attrib.normals[3 * size_t(idx.normal_index) + 1],
-						attrib.normals[3 * size_t(idx.normal_index) + 2],
-						attrib.texcoords[2 * size_t(idx.texcoord_index) + 0],
-						attrib.texcoords[2 * size_t(idx.texcoord_index) + 1],
-						shapes[s].mesh.material_ids[f]);
-					vertexIndex++;
-				}
-				index_offset += fv;
-			}
-		}
-
-		for (auto& it : materials) {
-			obj->addMaterial(object::material(
-				it.diffuse_texname,
-				it.ambient_texname,
-				it.specular_texname,
-				{ static_cast<float>(it.ambient[0]), static_cast<float>(it.ambient[1]), static_cast<float>(it.ambient[2]) },
-				{ static_cast<float>(it.diffuse[0]), static_cast<float>(it.diffuse[1]), static_cast<float>(it.diffuse[2]) },
-				{ static_cast<float>(it.specular[0]), static_cast<float>(it.specular[1]), static_cast<float>(it.specular[2]) },
-				static_cast<float>(it.shininess)
-			));
-		}
-
-		obj->asignVertices(vertices, size);
-		obj->asignIndices(indices);
-
-		if (obj->isSpecified())
-		{
-			std::cout << "[LOG] Object loaded successfully" << std::endl;
-		}
-		else
-		{
-			std::cout << "[ERROR] Object couldnt be loaded" << std::endl;
-		}
-
-		return obj;
 	}
 
 	bool saveToObj(const std::string& dirPath, const std::string& name, float* vertices, unsigned int* indices, unsigned int stride, unsigned int indexSize, unsigned int verticesCount, bool mtl)
@@ -494,98 +376,57 @@ namespace utilities
 		}
 		
 	}
+	//Calculates normals for the height map based on the vertices and their positions
+	//This function uses the cross product of the horizontal and vertical vectors of neighbouring vertices to calculate the normal vector
 
-	//Initializes normals for the vertices to be 0.0f, its needed for the AddVector3f function
-	//@param vertices - array of vertices to be filled with data
-	//@param stride - number of floats per vertex
-	//@param offSet - offset in the vertex array to start with when filling the data
-	//@param verticesCount - number of vertices
-	bool InitializeNormals(float* vertices, unsigned int stride, unsigned int offSet, unsigned int verticesCount) {
+	bool CalculateHeightMapNormals(float* vertices, unsigned int stride, unsigned int offSet, unsigned int width, unsigned int height)
+	{
 		if (!vertices) {
-			std::cout << "[ERROR] Vertices array not initialized" << std::endl;
 			return false;
 		}
-		
-		for (int i = 0; i < verticesCount; i++) {
-			vertices[i * stride + offSet] = 0.0f;
-			vertices[i * stride + offSet + 1] = 0.0f;
-			vertices[i * stride + offSet + 2] = 0.0f;
+		glm::vec3 tmp(0.0f, 0.0f, 0.0f);
+		glm::vec3 vx(0.0f, 0.0f, 0.0f);
+		glm::vec3 vz(0.0f, 0.0f, 0.0f);
+		for(int z = 0; z < height; z++) {
+			for (int x = 0; x < width; x++) {
+				//Vertical vector
+				if (height == 1) {
+					vz = glm::vec3(0.0f, 0.0f, 0.0f);
+				}
+				else if (z == 0) {
+					vz = glm::vec3(0.0f, vertices[((z + 1) * width + x) * stride + 1] - vertices[(z * width + x) * stride + 1], 1.0f);
+				}
+				else if (z == height - 1) {
+					vz = glm::vec3(0.0f, vertices[((z - 1) * width + x) * stride + 1] - vertices[(z * width + x) * stride + 1], 1.0f);
+				}
+				else
+				{
+					vz = glm::vec3(0.0f, vertices[((z + 1) * width + x) * stride + 1] - vertices[((z - 1) * width + x) * stride + 1], 2.0f);
+				}
+				//Horizontal vector
+				if(width == 1) {
+					vx = glm::vec3(0.0f, 0.0f, 0.0f);
+				}
+				else if (x == 0) {
+					vx = glm::vec3(1.0f, vertices[(z * width + x + 1) * stride + 1] - vertices[(z * width + x) * stride + 1], 0.0f);
+				}
+				else if (x == width - 1) {
+					vx = glm::vec3(1.0f, vertices[(z * width + x - 1) * stride + 1] - vertices[(z * width + x) * stride + 1], 0.0f);
+				}
+				else
+				{
+					vx = glm::vec3(2.0f, vertices[(z * width + x + 1) * stride + 1] - vertices[(z * width + x - 1) * stride + 1], 0.0f);
+				}
+				//Cross product to get the normal vector and normalize it
+				tmp = glm::normalize(glm::cross(vz, vx));
+				//Set the normal vector to the vertex
+				vertices[(z * width + x) * stride + offSet] = tmp.x;
+				vertices[(z * width + x) * stride + offSet + 1] = tmp.y;
+				vertices[(z * width + x) * stride + offSet + 2] = tmp.z;
+			}
 		}
-
 		return true;
 	}
-
-	//Calculates normals for the vertices based on the indices of the triangles
-	//@param vertices - array of vertices to be filled with data
-	//@param indices - array of indices to be filled with data
-	//@param stride - number of floats per vertex
-	//@param offSet - offset in the vertex array to start with when filling the data
-	//@param indexSize - number of indices
-	bool CalculateNormals(float* vertices, unsigned int* indices, unsigned int stride, unsigned int offSet, unsigned int indexSize) {
-		if (indexSize % 3 != 0) {
-			std::cout << "Index size is not a multiple of 3, hence its not a set of triangles" << std::endl;
-			return false;
-		}
-		if (!vertices) {
-			std::cout << "[ERROR] Vertices array not initialized" << std::endl;
-			return false;
-		}
-
-		glm::vec3 tmp;
-		for (int i = 0; i < indexSize; i += 3) {
-			tmp = glm::vec3(
-				vertices[indices[i] * stride],
-				vertices[indices[i] * stride + 1],
-				vertices[indices[i] * stride + 2]);
-			tmp = glm::cross(
-				glm::vec3(
-					vertices[indices[i + 1] * stride],
-					vertices[indices[i + 1] * stride + 1],
-					vertices[indices[i + 1] * stride + 2]) - tmp,
-				glm::vec3(
-					vertices[indices[i + 2] * stride],
-					vertices[indices[i + 2] * stride + 1],
-					vertices[indices[i + 2] * stride + 2]) - tmp);
-			AddVector3f(vertices, indices[i] * stride + offSet, tmp);
-			AddVector3f(vertices, indices[i + 1] * stride + offSet, tmp);
-			AddVector3f(vertices, indices[i + 2] * stride + offSet, tmp);
-		}
-	}
-	//Requires floats in vertices representing a normal vector to be initialized with some value (Func initializeNomals {0.0f, 0.0f, 0.0f)
-	//Adds vector3f to the normal vector in the vertices array
-	//@param vertices - array of vertices to be filled with data
-	//@param index - index of the vertex
-	//@param vector3f - vector to be added to the normal vector
-	void AddVector3f(float* vertices, unsigned int index, glm::vec3 vector3f) {
-		vertices[index] += vector3f.x;
-		vertices[index + 1] += vector3f.y;
-		vertices[index + 2] += vector3f.z;
-	}
-
-	//Normalizes the normal vectors in the vertices array
-	//@param vertices - array of vertices to be filled with data
-	//@param stride - number of floats per vertex
-	//@param offSet - offset in the vertex array to start with when filling the data
-	//@param verticesCount - number of vertices
-	bool NormalizeVector3f(float* vertices, unsigned int stride, unsigned int offSet, unsigned int verticesCount) {
-		if (!vertices) {
-			std::cout << "[ERROR] Vertices array not initialized" << std::endl;
-			return false;
-		}
-		
-		glm::vec3 tmp;
-		for (int i = 0; i < verticesCount; i++) {
-			tmp = glm::vec3(
-				vertices[i * stride + offSet],
-				vertices[i * stride + offSet + 1],
-				vertices[i * stride + offSet + 2]);
-			tmp = glm::normalize(tmp);
-			vertices[i * stride + offSet] = tmp.x;
-			vertices[i * stride + offSet + 1] = tmp.y;
-			vertices[i * stride + offSet + 2] = tmp.z;
-		}
-	}
-
 }
 
 

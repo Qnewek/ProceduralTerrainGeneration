@@ -7,8 +7,8 @@ Player::Player(const unsigned int screenWidth, const unsigned int screenHeight, 
 	speed(speed), gravity(gravity), playerHeight(playerHeight),
 	camera(screenWidth, screenHeight)
 {
-	camera.SetCameraConfig(glm::vec3(spawnPoint.x, spawnPoint.y + this->playerHeight, spawnPoint.z), glm::vec3(0.0f, 0.0f, 1.0f), glm::vec3(0.0f, 1.0f, 0.0f), -90.0f, 0.0f, speed, 0.1f, 45.0f);
-	camera.SetViewDist(glm::vec2(0.00001f, 100.0f));
+	camera.SetCameraConfig(glm::vec3(spawnPoint.x, spawnPoint.y, spawnPoint.z), glm::vec3(0.0f, 0.0f, 1.0f), glm::vec3(0.0f, 1.0f, 0.0f), -90.0f, 0.0f, speed, 0.1f, 45.0f);
+	camera.SetViewDist(glm::vec2(0.1f, 500.0f));
 }
 
 Player::~Player()
@@ -19,7 +19,7 @@ void Player::SetPosition(glm::vec3 pos)
 {
 	this->position = pos;
 	this->spawnPoint = pos;
-	this->camera.SetPosition(glm::vec3(pos.x, pos.y + this->playerHeight, pos.z));
+	this->camera.SetPosition(glm::vec3(pos.x, pos.y, pos.z));
 }
 
 void Player::SteerPlayer(GLFWwindow* window, float* mesh, int stride, float deltaTime)
