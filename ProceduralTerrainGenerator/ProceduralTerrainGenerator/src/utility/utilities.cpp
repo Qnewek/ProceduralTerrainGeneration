@@ -76,6 +76,10 @@ namespace utilities
 	//@param stride - number of floats per vertex
 	//@param offset - offset in the vertex array to start with when filling the data
 	void ParseNoiseIntoVertices(float* vertices, float* map, int width, int height, float scale, unsigned int stride, unsigned int offset) {
+		if (!vertices || !map) {
+			std::cout << "[ERROR] Vertices array not initialized" << std::endl;
+			return;
+		}
 		for (int y = 0; y < height; y++)
 		{
 			for (int x = 0; x < width; x++)
@@ -203,7 +207,7 @@ namespace utilities
 	//@param positionsOffset - offset in the vertex array to start with when filling the data
 	//@param normalsOffset - offset in the vertex array to start with when filling the normals
 	//@param erosion - erosion object
-	void PerformErosion(erosion::Erosion& erosion, float* vertices, unsigned int* indices, float scalingFactor, std::optional<float*> Track, int stride) {
+	void PerformErosion(erosion::Erosion& erosion, float* vertices, float scalingFactor, std::optional<float*> Track, int stride) {
 		erosion.Erode(Track);
 		ParseNoiseIntoVertices(vertices, erosion.GetMap(), erosion.GetWidth(), erosion.GetHeight(), scalingFactor, stride, 0);
 		CalculateHeightMapNormals(vertices, stride, 3, erosion.GetWidth(), erosion.GetHeight());

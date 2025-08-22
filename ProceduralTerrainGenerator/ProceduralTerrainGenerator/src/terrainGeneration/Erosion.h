@@ -26,7 +26,7 @@ namespace erosion {
 	//@param initialCapacity: The initial capacity of the droplet
 	struct ErosionConfig {
 		//Erosion parameters
-		float erosionRate = 0.2f;
+		float erosionRate = 0.6f;
 		float depositionRate = 0.5f;
 		float evaporationRate = 0.01f;
 		
@@ -87,7 +87,7 @@ namespace erosion {
 		float* map;
 
 		int width, height;
-		int dropletCount = 1;
+		int dropletCount = 20000;
 
 		ErosionConfig config;
 	};

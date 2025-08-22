@@ -10,18 +10,15 @@
 
 TerrainGenApp::TerrainGenApp() : window(nullptr), windowWidth(0), windowHeight(0),
 rightPanelWidth(400.0f),topPanelHeight(30.0f), bottomPanelHeight(200.0f), leftPanelWidth(400.0f), 
-width(1000), height(1000), heightScale(255.0f), prevHeight(200), prevWidth(200), tmpHeight(200), tmpWidth(200),
+width(200), height(200), heightScale(255.0f), prevHeight(200), prevWidth(200), tmpHeight(200), tmpWidth(200),
 stride(8), seed(123), deltaTime(0.0f), lastFrame(0.0f), renderer(),
-camera(1920, 1080, glm::vec3(0.0f, heightScale/2.0f, 0.0f), 30.0f, 500.0f), tMeshVertices(nullptr), tMeshIndices(nullptr), treesPositions(nullptr), erosionVertices(nullptr), traceVertices(nullptr),
-erosionWindow(false), testSymmetrical(false), trackDraw(false), erosionDraw(false), isTerrainDisplayed(true),
-erosion(width, height), terrainGen(),currentMode(mode::PERLIN), chunkResolution(20), prevChunkRes(20), tmpChunkRes(20), seeLevel(64.0f), noiseGen()
+camera(1920, 1080, glm::vec3(0.0f, heightScale/2.0f, 0.0f), 30.0f, 500.0f), tMeshVertices(nullptr), tMeshIndices(nullptr), treesPositions(nullptr), testSymmetrical(false), isTerrainDisplayed(true), terrainGen(),currentMode(mode::PERLIN), chunkResolution(20), prevChunkRes(20), tmpChunkRes(20), seeLevel(64.0f), noiseGen()
 {
     std::cout << "[LOG] Initialized" << std::endl;
 }
 
 TerrainGenApp::~TerrainGenApp()
 {
-	delete[] traceVertices;
 	delete[] tMeshVertices;
 	delete[] tMeshIndices;
 	delete[] treesPositions;
@@ -139,8 +136,8 @@ void TerrainGenApp::ImGuiRender()
 	if (currentMode == mode::PARAMETRIZED_GEN)
         ParametrizedImGui();
     ImGui::Separator();
-	if (erosionWindow)
-		ErosionWindowRender();
+	/*if (erosionWindow)
+		ErosionWindowRender();*/
 
 
     ImGui::End();
@@ -367,35 +364,35 @@ void TerrainGenApp::ParametrizedImGui()
     }
 }
 
-void TerrainGenApp::ErosionWindowRender() {
-    if(ImGui::CollapsingHeader("Erosion Settings"))
-    {
-        ImGui::InputInt("Droplet count", &erosion.GetDropletCountRef());
-        ImGui::InputInt("Droplet lifetime", &erosion.GetConfigRef().dropletLifetime);
-        ImGui::InputFloat("Inertia", &erosion.GetConfigRef().inertia);
-        ImGui::InputFloat("Droplet init capacity", &erosion.GetConfigRef().initialCapacity, 0.01f, 1.0f);
-        ImGui::InputFloat("Droplet init velocity", &erosion.GetConfigRef().initialVelocity, 0.0f, 1.0f);
-        ImGui::InputFloat("Droplet init water", &erosion.GetConfigRef().initialWater, 0.0f, 1.0f);
-        ImGui::InputFloat("Erosion rate", &erosion.GetConfigRef().erosionRate, 0.0f, 1.0f);
-        ImGui::InputFloat("Deposition rate", &erosion.GetConfigRef().depositionRate, 0.0f, 1.0f);
-        ImGui::InputFloat("Evaporation rate", &erosion.GetConfigRef().evaporationRate, 0.0f, 1.0f);
-        ImGui::InputFloat("Gravity", &erosion.GetConfigRef().gravity, 0.0f, 10.0f);
-        ImGui::InputFloat("Min slope", &erosion.GetConfigRef().minSlope, 0.0f, 1.0f);
-        ImGui::InputInt("Erosion radius", &erosion.GetConfigRef().erosionRadius);
-        ImGui::InputFloat("Blur", &erosion.GetConfigRef().blur, 0.0f, 1.0f);
-
-        ImGui::Checkbox("Show traces of droplets", &trackDraw);
-
-        if (ImGui::Button("Erode map")) {
-            PerformErosion();
-        }
-        ImGui::SameLine();
-        if (ImGui::Button("Reset")) {
-            erosionDraw = false;
-            trackDraw = false;
-        }
-    }
-}
+//void TerrainGenApp::ErosionWindowRender() {
+//    if(ImGui::CollapsingHeader("Erosion Settings"))
+//    {
+//        ImGui::InputInt("Droplet count", &erosion.GetDropletCountRef());
+//        ImGui::InputInt("Droplet lifetime", &erosion.GetConfigRef().dropletLifetime);
+//        ImGui::InputFloat("Inertia", &erosion.GetConfigRef().inertia);
+//        ImGui::InputFloat("Droplet init capacity", &erosion.GetConfigRef().initialCapacity, 0.01f, 1.0f);
+//        ImGui::InputFloat("Droplet init velocity", &erosion.GetConfigRef().initialVelocity, 0.0f, 1.0f);
+//        ImGui::InputFloat("Droplet init water", &erosion.GetConfigRef().initialWater, 0.0f, 1.0f);
+//        ImGui::InputFloat("Erosion rate", &erosion.GetConfigRef().erosionRate, 0.0f, 1.0f);
+//        ImGui::InputFloat("Deposition rate", &erosion.GetConfigRef().depositionRate, 0.0f, 1.0f);
+//        ImGui::InputFloat("Evaporation rate", &erosion.GetConfigRef().evaporationRate, 0.0f, 1.0f);
+//        ImGui::InputFloat("Gravity", &erosion.GetConfigRef().gravity, 0.0f, 10.0f);
+//        ImGui::InputFloat("Min slope", &erosion.GetConfigRef().minSlope, 0.0f, 1.0f);
+//        ImGui::InputInt("Erosion radius", &erosion.GetConfigRef().erosionRadius);
+//        ImGui::InputFloat("Blur", &erosion.GetConfigRef().blur, 0.0f, 1.0f);
+//
+//        ImGui::Checkbox("Show traces of droplets", &trackDraw);
+//
+//        if (ImGui::Button("Erode map")) {
+//            
+//        }
+//        ImGui::SameLine();
+//        if (ImGui::Button("Reset")) {
+//            erosionDraw = false;
+//            trackDraw = false;
+//        }
+//    }
+//}
 
 void TerrainGenApp::ParameterImgui()
 {
@@ -633,22 +630,22 @@ void TerrainGenApp::DrawTrees(glm::mat4& model)
 }
 
 //Function drawing tracks of droplets on the eroded terrain mesh
-void TerrainGenApp::PrintTrack(glm::mat4& model) {
-    if (trackDraw && traceVertices) {
-        erosionTrackVAO->Bind();
-        erosionTrackBuffer->UpdateData(traceVertices, (erosion.GetConfigRef().dropletLifetime + 1) * erosion.GetDropletCountRef() * 3 * sizeof(float));
-        erosionTrackShader->SetMVP(model, *(camera.GetViewMatrix()), *(camera.GetProjectionMatrix()));
-
-        erosionTrackShader->Bind();
-        erosionTrackBuffer->Bind();
-
-        GLCALL(glEnableVertexAttribArray(0));
-        GLCALL(glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0));
-
-        GLCALL(glPointSize(2.0f));
-        GLCALL(glDrawArrays(GL_POINTS, 0, (erosion.GetConfigRef().dropletLifetime + 1) * erosion.GetDropletCountRef()));
-    }
-}
+//void TerrainGenApp::PrintTrack(glm::mat4& model) {
+//    if (trackDraw && traceVertices) {
+//        erosionTrackVAO->Bind();
+//        erosionTrackBuffer->UpdateData(traceVertices, (erosion.GetConfigRef().dropletLifetime + 1) * erosion.GetDropletCountRef() * 3 * sizeof(float));
+//        erosionTrackShader->SetMVP(model, *(camera.GetViewMatrix()), *(camera.GetProjectionMatrix()));
+//
+//        erosionTrackShader->Bind();
+//        erosionTrackBuffer->Bind();
+//
+//        GLCALL(glEnableVertexAttribArray(0));
+//        GLCALL(glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0));
+//
+//        GLCALL(glPointSize(2.0f));
+//        GLCALL(glDrawArrays(GL_POINTS, 0, (erosion.GetConfigRef().dropletLifetime + 1) * erosion.GetDropletCountRef()));
+//    }
+//}
 
 //-------------------------------------------------------------------------------------------------------
 //---------------------------------------MAIN-LOGIC-FUNCTIONS--------------------------------------------
@@ -696,65 +693,6 @@ void TerrainGenApp::CheckChange() {
     }*/
 }
 
-
-//-------------------------------------------------------------------------------------------------------
-//---------------------------------------------EROSION---------------------------------------------------
-//-------------------------------------------------------------------------------------------------------
-void TerrainGenApp::DeactivateErosion() {
-    if (traceVertices)
-    {
-        delete[] traceVertices;
-        traceVertices = nullptr;
-    }
-    if (erosionVertices)
-    {
-        delete[] erosionVertices;
-        erosionVertices = nullptr;
-    }
-    trackDraw = false;
-    erosionDraw = false;
-}
-
-void TerrainGenApp::PerformErosion() {
- //   //If tracks of droplets are drawn we need to allocate memory for the trace vertices
- //   if (trackDraw)
- //   {
- //       delete[] traceVertices;
- //       traceVertices = new float[(erosion.GetConfigRef().dropletLifetime + 1) * erosion.GetDropletCountRef() * 3];
-
- //       for (int i = 0; i < (erosion.GetConfigRef().dropletLifetime + 1) * erosion.GetDropletCountRef() * 3; i++) {
- //           traceVertices[i] = 0.0f;
- //       }
- //       erosionTrackBuffer = std::make_unique<VertexBuffer>(traceVertices, (erosion.GetConfigRef().dropletLifetime + 1) * erosion.GetDropletCountRef() * 3 * sizeof(float));
- //   }
-
- //   //If erosion vertices are not allocated we need to allocate memory for them
- //   if (!erosionVertices) {
- //       if(currentMode == mode::PERLIN)
- //           erosionVertices = new float[width * height * stride];
- //       else if(currentMode == mode::PARAMETRIZED_GEN)
- //       erosionVertices = new float[(width - 1) * (height - 1) * stride * 4];
- //   }
- //   if (currentMode == mode::PERLIN) {
- //       erosion.SetMap(noise->GetMap());
- //       utilities::benchmarkVoid(utilities::PerformErosion, "PerformErosion", erosionVertices, meshIndices, heightScale, trackDraw ? std::optional<float*>(traceVertices) : std::nullopt, stride, 0, 3, erosion);
- //       utilities::PaintNotByTexture(erosionVertices, width, height, stride, 6);
-	//}
- //   else if (currentMode == mode::PARAMETRIZED_GEN) {
- //       
- //       erosion.SetMap(terrainGen.GetHeightMap());
- //       erosion.Erode(trackDraw ? std::optional<float*>(traceVertices) : std::nullopt);
- //       /*
- //       utilities::CreateTiledVertices(erosionVertices, width, height, erosion.GetMap(), heightScale, stride, 0);
- //       utilities::InitializeNormals(erosionVertices, stride, 3, (height - 1) * (width - 1) * 4);
- //       utilities::CalculateNormals(erosionVertices, tMeshIndices, stride, 3, (width - 1) * (height - 1) * 6);
- //       utilities::NormalizeVector3f(erosionVertices, stride, 3, (height - 1) * (width - 1) * 4);
- //       utilities::AssignTexturesByBiomes(terrainGen, erosionVertices, width, height, 3, stride, 6);*/
- //   }
-
-	//erosionVertexBuffer = std::make_unique<VertexBuffer>(erosionVertices, (height * width) * stride * sizeof(float));
- //   erosionDraw = true;
-}
 
 //-------------------------------------------------------------------------------------------------------
 //---------------------------------------TERRAIN-GENERATION----------------------------------------------
