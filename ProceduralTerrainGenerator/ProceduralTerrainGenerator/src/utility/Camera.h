@@ -18,7 +18,7 @@ enum class CameraMovement
 class Camera
 {
 public:
-	Camera(const unsigned int ScreenWidth, const unsigned int ScreenHeight);
+	Camera(const unsigned int ScreenWidth, const unsigned int ScreenHeight, glm::vec3 _position, float cameraSpeed, float renderDistance);
 	~Camera();
 
 	glm::vec3 SteerCamera(GLFWwindow* window, float deltaTime, bool yAxisMovement);

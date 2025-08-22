@@ -5,11 +5,12 @@
 
 #include "Renderer.h"
 #include "Camera.h"
-#include "Player.h"
 #include "LightSource.h"
 #include "Noise.h"
 #include "Erosion.h"
 #include "TerrainGenerator.h"
+
+#include "NoiseBasedGenerating.h"
 
 class TerrainGenApp
 {
@@ -23,9 +24,6 @@ public:
 private:
 	void UpdatePrevCheckers();
 	void CheckChange();
-	void ResizePerlin();
-	void PerformPerlin();
-	void PerlinChunked();
 	
 	void ImGuiRender();
 	void PerlinImgui();
@@ -37,13 +35,11 @@ private:
 	void SwapNoise(noise::SimplexNoiseClass* n);
 	
 	void Draw();
-	void PerlinDraw(glm::mat4& model);
 	void TerrainGenerationDraw(glm::mat4& model);
 	void DrawTrees(glm::mat4& model);
 	void PrintTrack(glm::mat4& model);
 
 	void PerformAction();
-	void DrawAdjacent(Renderer& renderer, glm::mat4& model);
 	void DeactivateErosion();
 	void PerformErosion();
 
@@ -55,26 +51,25 @@ private:
 	void PrepareTreesDraw();
 
 private:
+	//SubSystems
+	NoiseBasedGenerating noiseGen;
+
 	//Time variables
-	float deltaTime, lastFrame, drawScale;
+	float deltaTime, lastFrame;
 
 	//Window Layout variables
 	int windowWidth, windowHeight;
 	float rightPanelWidth, topPanelHeight, bottomPanelHeight, leftPanelWidth;
 	GLFWwindow* window;
 	Renderer renderer;
-	Player player;
+	Camera camera;
 	std::string editedNoise = "";
 
 	//Map Size variables
 	int width, height, stride, prevHeight, prevWidth, tmpHeight, tmpWidth;
-	float scalingFactor;
+	float heightScale;
 
 	//Pure Perlin
-	noise::SimplexNoiseClass basicPerlinNoise;
-	noise::SimplexNoiseClass* noise;
-	float* meshVertices;
-	unsigned int* meshIndices;
 	int seed;
 	bool testSymmetrical;
 
@@ -100,13 +95,6 @@ private:
 	int treeIndicesCount;
 	bool isTerrainDisplayed, drawTrees = false, terGenPerform = false, noiseEdit = false, biomeEdit = false, treeEdit = false;
 
-	//OpenGL stuff
-	VertexBufferLayout layout;
-	std::unique_ptr<VertexArray> mainVAO;
-	std::unique_ptr<VertexBuffer> mainVertexBuffer;
-	std::unique_ptr<IndexBuffer> mainIndexBuffer;
-	std::unique_ptr<Shader> mainShader;
-	std::unique_ptr<Texture> mainTexture;
 	//Erosion separate openGl
 	std::unique_ptr<VertexArray> erosionTrackVAO;
 	std::unique_ptr<VertexBuffer> erosionVertexBuffer;

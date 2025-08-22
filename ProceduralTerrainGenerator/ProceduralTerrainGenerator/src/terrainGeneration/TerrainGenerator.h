@@ -5,7 +5,6 @@
 
 #include "Noise.h"
 #include "BiomeGenerator.h"
-#include "Player.h"
 
 #include "Splines/spline.h"
 

@@ -511,8 +511,8 @@
     </None>
     <None Include="res\shaders\Lightning_final_vertex.shader" />
     <None Include="res\shaders\Lightning_final_fragment.shader" />
-    <None Include="res\shaders\Lightning_vertex.shader" />
-    <None Include="res\shaders\Lightning_fragment.shader" />
+    <None Include="res\shaders\HeightMap_vertex.shader" />
+    <None Include="res\shaders\HeightMap_fragment.shader" />
     <None Include="res\shaders\light_source_fragment.shader" />
     <None Include="res\shaders\light_source_vertex.shader" />
     <None Include="res\shaders\test_vertex.shader" />

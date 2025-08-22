@@ -157,7 +157,7 @@ namespace utilities
 	//@param indices - pointer to the array of indices to be filled with index data
 	//@param width - width of the noise map (columns)
 	//@param height - height of the noise map (rows)
-	void MeshIndices(unsigned int* indices, int width, int height) {
+	void MeshIndicesStrips(unsigned int* indices, int width, int height) {
 		int index = 0;
 		for (int y = 0; y < height - 1; y++) {
 			for (int x = 0; x < width; x++) {
@@ -172,7 +172,7 @@ namespace utilities
 		noise.InitMap();
 		noise.GenerateFractalNoiseByChunks();
 		ParseNoiseIntoVertices(vertices, noise.GetMap(), noise.GetWidth() * noise.GetChunkWidth(), noise.GetHeight() * noise.GetChunkHeight(), 255.0, stride, 0);
-		MeshIndices(indices, noise.GetWidth() * noise.GetChunkWidth(), noise.GetHeight() * noise.GetChunkHeight());
+		MeshIndicesStrips(indices, noise.GetWidth() * noise.GetChunkWidth(), noise.GetHeight() * noise.GetChunkHeight());
 		CalculateHeightMapNormals(vertices, stride, 3, noise.GetWidth() * noise.GetChunkWidth(), noise.GetHeight() * noise.GetChunkHeight());
 	}
 
@@ -189,7 +189,7 @@ namespace utilities
 		noise.GenerateFractalNoise();
 		ParseNoiseIntoVertices(vertices, noise.GetMap(), noise.GetWidth(), noise.GetHeight(), scalingFactor, stride, 0);
 		if (first)
-			MeshIndices(indices, noise.GetWidth(), noise.GetHeight());
+			MeshIndicesStrips(indices, noise.GetWidth(), noise.GetHeight());
 		if (normals) {
 			CalculateHeightMapNormals(vertices, stride, 3, noise.GetWidth(), noise.GetHeight());
 		}
@@ -203,10 +203,10 @@ namespace utilities
 	//@param positionsOffset - offset in the vertex array to start with when filling the data
 	//@param normalsOffset - offset in the vertex array to start with when filling the normals
 	//@param erosion - erosion object
-	void PerformErosion(float* vertices, unsigned int* indices, float scalingFactor, std::optional<float*> Track, int stride, int positionsOffset, int normalsOffset, erosion::Erosion& erosion) {
+	void PerformErosion(erosion::Erosion& erosion, float* vertices, unsigned int* indices, float scalingFactor, std::optional<float*> Track, int stride) {
 		erosion.Erode(Track);
-		ParseNoiseIntoVertices(vertices, erosion.GetMap(), erosion.GetWidth(), erosion.GetHeight(), scalingFactor, stride, positionsOffset);
-		CalculateHeightMapNormals(vertices, stride, normalsOffset, erosion.GetWidth(), erosion.GetHeight());
+		ParseNoiseIntoVertices(vertices, erosion.GetMap(), erosion.GetWidth(), erosion.GetHeight(), scalingFactor, stride, 0);
+		CalculateHeightMapNormals(vertices, stride, 3, erosion.GetWidth(), erosion.GetHeight());
 	}
 
 	//Generates basic Perlin Fractal Noise and sets coords for texture sampling (painting biome)
