@@ -3,11 +3,10 @@
 #include "glm/gtc/matrix_transform.hpp"
 #include "glm/gtc/type_ptr.hpp"
 
-Camera::Camera(const unsigned int ScreenWidth, const unsigned int ScreenHeight) :
-	screenWidth(ScreenWidth), screenHeight(ScreenHeight),
-	position(glm::vec3(0.0f, 0.0f, 3.0f)), front(glm::vec3(0.0f, 0.0f, -1.0f)),
+Camera::Camera(const unsigned int ScreenWidth, const unsigned int ScreenHeight, glm::vec3 _position, float cameraSpeed, float renderDistance) :
+	screenWidth(ScreenWidth), screenHeight(ScreenHeight), position(position),
 	up(glm::vec3(0.0f, 1.0f, 0.0f)), right(), yaw(90.0f), pitch(0.0f),
-	speed(2.5f), sensitivity(0.1f), fov(45.0f), mouseControl(false), initSpeed(2.5f),
+	speed(cameraSpeed), sensitivity(0.1f), fov(45.0f), mouseControl(false), initSpeed(2.5f),
 	view(glm::mat4(1.0f)), projection(glm::mat4(1.0f)), viewDist(glm::vec2(0.1f, 100.0f)),
 	ypos(ScreenHeight / 2.0), xpos(ScreenWidth / 2.0)
 {

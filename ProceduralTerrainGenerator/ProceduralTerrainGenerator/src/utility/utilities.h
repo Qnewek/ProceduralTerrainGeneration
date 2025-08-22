@@ -15,7 +15,7 @@ namespace utilities
 {
 	//Different utility functions
 	void ConvertToGrayscaleImage(float* data, unsigned char* image, int width, int height);
-	void MeshIndices(unsigned int* indices, int width, int height);
+	void MeshIndicesStrips(unsigned int* indices, int width, int height);
 	void GenCubeLayout(float* vertices, unsigned int* indices, float scalingFactor);
     void ParseNoiseIntoVertices(float* vertices, float* map, int width, int height, float scale, unsigned int stride, unsigned int offset);
     bool CreateIndicesTiledField(unsigned int* indices, int width, int height);
@@ -28,7 +28,7 @@ namespace utilities
 	//Terrain generation functions
     void GenerateTerrainMap(noise::SimplexNoiseClass& noise, float* vertices, unsigned int* indices, unsigned int stride);
     void CreateTerrainMesh(noise::SimplexNoiseClass& noise, float* vertices, unsigned int* indices, float scalingFactor, unsigned int stride, bool normals, bool first);
-    void PerformErosion(float* vertices, unsigned int* indices, float scalingFactor, std::optional<float*> Track, int stride, int positionsOffset, int normalsOffset, erosion::Erosion& erosion);
+    void PerformErosion(erosion::Erosion& erosion, float* vertices, unsigned int* indices, float scalingFactor, std::optional<float*> Track, int stride);
     void PaintBiome(float* vertices, float* map, int width, int height, unsigned int stride, unsigned int offset);
 	void AssignBiome(float* vertices, int* biomeMap, int width, int height, unsigned int stride, unsigned int offset);
     void AssignTexturesByBiomes(TerrainGenerator& terraGen, float* vertices, int width, int height, int texAtlasSize, unsigned int stride, unsigned int offset);
