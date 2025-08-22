@@ -8,20 +8,17 @@
 
 #include "utilities.h"
 
-TerrainGenApp::TerrainGenApp() : window(nullptr), windowWidth(0), windowHeight(0),
-rightPanelWidth(400.0f),topPanelHeight(30.0f), bottomPanelHeight(200.0f), leftPanelWidth(400.0f), 
-width(200), height(200), heightScale(255.0f), prevHeight(200), prevWidth(200), tmpHeight(200), tmpWidth(200),
-stride(8), seed(123), deltaTime(0.0f), lastFrame(0.0f), renderer(),
-camera(1920, 1080, glm::vec3(0.0f, heightScale/2.0f, 0.0f), 30.0f, 500.0f), tMeshVertices(nullptr), tMeshIndices(nullptr), treesPositions(nullptr), testSymmetrical(false), isTerrainDisplayed(true), terrainGen(),currentMode(mode::PERLIN), chunkResolution(20), prevChunkRes(20), tmpChunkRes(20), seeLevel(64.0f), noiseGen()
+TerrainGenApp::TerrainGenApp() : window(nullptr), windowWidth(0), windowHeight(0), deltaTime(0.0f), lastFrame(0.0f),
+rightPanelWidth(400.0f),topPanelHeight(30.0f), bottomPanelHeight(200.0f), leftPanelWidth(400.0f),
+width(400), height(400), heightScale(255.0f), light(glm::vec3(width/2.0f, heightScale * 2, height/2.0f), 20.0f),
+camera(1920, 1080, glm::vec3(0.0f, heightScale / 2.0f, 0.0f), 30.0f, 500.0f), renderer(),
+noiseGen(), currentMode(mode::NOISE_HEIGHTMAP)
 {
-    std::cout << "[LOG] Initialized" << std::endl;
+    std::cout << "[LOG] Hub initialized" << std::endl;
 }
 
 TerrainGenApp::~TerrainGenApp()
 {
-	delete[] tMeshVertices;
-	delete[] tMeshIndices;
-	delete[] treesPositions;
 }
 
 
@@ -48,7 +45,6 @@ int TerrainGenApp::Initialize()
         glfwTerminate();
         return -1;
     }
-
     glfwMakeContextCurrent(window);
     glfwSwapInterval(1);
 
@@ -65,10 +61,9 @@ int TerrainGenApp::Initialize()
     ImGui::StyleColorsDark();
 
     //Logic initialization
-	noiseGen.Initialize(height, width, seed, heightScale);
+	light.Initialize();
+	noiseGen.Initialize(height, width, heightScale);
 
-    //UpdatePrevCheckers();
-	//InitializeTerrainGeneration();
    
     return 0;
 }
@@ -83,9 +78,7 @@ void TerrainGenApp::Start()
 
 		camera.SteerCamera(window, deltaTime, true);
 		Draw();
-
-		//ImGuiRender();
-        //PerformAction();
+        ImGuiRender();
 
         glfwSwapBuffers(window);
         glfwPollEvents();
@@ -96,9 +89,26 @@ void TerrainGenApp::Start()
     glfwTerminate();
 }
 
-//-------------------------------------------------------------------------------------------------------
-//-------------------------------------------------IMGUI-------------------------------------------------
-//-------------------------------------------------------------------------------------------------------
+void TerrainGenApp::Draw()
+{
+    glEnable(GL_SCISSOR_TEST);
+    glViewport(leftPanelWidth, bottomPanelHeight, windowWidth - rightPanelWidth - leftPanelWidth, windowHeight - topPanelHeight - bottomPanelHeight);
+    glScissor(leftPanelWidth, bottomPanelHeight, windowWidth - rightPanelWidth - leftPanelWidth, windowHeight - topPanelHeight - bottomPanelHeight);
+    renderer.Clear(glm::vec3(0.0f, 0.0f, 0.0f));
+    glm::mat4 model = glm::mat4(1.0f);
+
+    if (currentMode == mode::NOISE_HEIGHTMAP)
+    {
+        noiseGen.Draw(model, renderer, camera);
+    }
+    else if (currentMode == mode::TERRAIN_GEN) {
+
+    }
+	light.Draw(renderer, *camera.GetViewMatrix(), *camera.GetProjectionMatrix());
+
+    glDisable(GL_SCISSOR_TEST);
+}
+
 void TerrainGenApp::ImGuiRender()
 {
     ImGui_ImplGlfwGL3_NewFrame();
@@ -106,56 +116,27 @@ void TerrainGenApp::ImGuiRender()
     ImGui::SetNextWindowSize(ImVec2(rightPanelWidth, windowHeight-60), ImGuiCond_Always);
     ImGui::Begin("Tools", nullptr, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_ResizeFromAnySide);
     rightPanelWidth = ImGui::GetWindowWidth() <= windowWidth/2 ? ImGui::GetWindowWidth() : windowWidth/2;
-	ImGui::Text("Terrain settings");
-	ImGui::SliderFloat("Size", &heightScale, 1.0f, 255.0f);
-	ImGui::SliderFloat("Camera speed", &camera.GetSpeedRef(), 0.1f, 100.0f);
-	if (!noiseEdit)
-    {
-        ImGui::Text("Resize map");
-        ImGui::InputInt("Height", &tmpHeight);
-        ImGui::InputInt("Width", &tmpWidth);
-        if (currentMode == mode::PARAMETRIZED_GEN)
-            ImGui::InputInt("Chunk Resolution", &tmpChunkRes);
-        if (ImGui::Button("Resize"))
-        {
-            height = tmpHeight;
-            width = tmpWidth;
-            chunkResolution = tmpChunkRes;
-            ResizeTerrainGeneration();
-        }
-        if (ImGui::Button("Save file")) {
-            /*if (currentMode == mode::PARAMETRIZED_GEN)
-                utilities::saveToObj("res/models/", "terrain", tMeshVertices, tMeshIndices, stride, (width - 1) * (height - 1) * 6, (width - 1) * (height - 1) * stride * 4, false);
-            if (currentMode == mode::PERLIN)
-                utilities::saveToObj("res/models/", "terrain", meshVertices, meshIndices, stride, (width - 1) * (height - 1) * 6, width * height * stride, false);*/
-        }
-    }
+	ImGui::Text("Video settings");
+	ImGui::SliderFloat("Camera speed", &camera.GetSpeedRef(), 0.1f, 200.0f);
+	ImGui::SliderFloat("Camera FOV", &camera.GetFovRef(), 1.0f, 120.0f);
+	ImGui::SliderFloat("Camera sensitivity", &camera.GetSensitivityRef(), 0.01f, 1.0f);
+	ImGui::SliderFloat("Render distance", &camera.GetViewDist().y, 1.0f, 1000.0f);
 	ImGui::Separator();
-    if (currentMode == mode::PERLIN)
-        PerlinImgui();
-	if (currentMode == mode::PARAMETRIZED_GEN)
-        ParametrizedImGui();
+    if (currentMode == mode::NOISE_HEIGHTMAP) {
+        noiseGen.ImGuiDraw();
+    }
+    else if(currentMode == mode::TERRAIN_GEN) {
+        //TerrainGenImGui();
+	}
+
     ImGui::Separator();
-	/*if (erosionWindow)
-		ErosionWindowRender();*/
-
-
     ImGui::End();
 
     ImGui::SetNextWindowPos(ImVec2(0, 0), ImGuiCond_Always);
     ImGui::SetNextWindowSize(ImVec2(leftPanelWidth, windowHeight-60), ImGuiCond_Always);
     ImGui::Begin("Modify", nullptr, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_ResizeFromAnySide);
     leftPanelWidth = ImGui::GetWindowWidth() <= windowWidth/2 ? ImGui::GetWindowWidth() : windowWidth/2;
-    if (noiseEdit) {
-        ParameterImgui();
-    }
-    if (biomeEdit) {
-        BiomeImGui();
-    }
-	if (treeEdit)
-	{
-		TreeTypesImGui();
-	}
+   
     ImGui::End();
 
     ImGui::SetNextWindowPos(ImVec2(leftPanelWidth, 0), ImGuiCond_Always);
@@ -163,123 +144,34 @@ void TerrainGenApp::ImGuiRender()
 	ImGui::Begin("Mode", nullptr, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoTitleBar);
 	ImGui::Text("Mode: ");
     ImGui::SameLine();
-    if (ImGui::Button("Pure Perlin"))
+    if (ImGui::Button("Noise heightmap"))
     {
-		/*currentMode = mode::PERLIN;
-        noise = &basicPerlinNoise;
-		noiseEdit = false;
-		biomeEdit = false;
-        seed = (*noise).GetConfigRef().seed;
-		noise->Reseed();
-        player.SetPosition(glm::vec3(0.0f, 1.0f, 0.0f));
-		player.SetSpeed(1.0f);
-        PerformPerlin();*/
+		currentMode = mode::NOISE_HEIGHTMAP;
     }
     ImGui::SameLine();
-    if (ImGui::Button("Parametrized generation"))
+    if (ImGui::Button("TerrainGen"))
     {
-		currentMode = mode::PARAMETRIZED_GEN;
-		terGenPerform = true;
-		noiseEdit = false;
-        camera.SetPosition(glm::vec3(0.0f, heightScale/2.0f, 0.0f));
-		camera.SetSpeed(40.0f);
+        currentMode = mode::TERRAIN_GEN;
     }    
     ImGui::End();
 
     ImGui::SetNextWindowPos(ImVec2(leftPanelWidth, windowHeight - bottomPanelHeight - 60), ImGuiCond_Always);
     ImGui::SetNextWindowSize(ImVec2(windowWidth - rightPanelWidth - leftPanelWidth, bottomPanelHeight), ImGuiCond_Always);
     ImGui::Begin("OutPut", nullptr, ImGuiWindowFlags_ResizeFromAnySide | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoScrollbar);
-	ImGui::Text("Press 'm' to enable rotation of the camera, press 'ESC' to release mouse");
+	ImGui::Text("Press 'm' to enable rotation of the camera using mouse, press 'ESC' to exit mouse control");
 	ImGui::Text("Press 'w', 'a', 's', 'd' to move camera, 'space' to move up, 'ctrl' to move down");
 	ImGui::Text("Camera Position: (%.2f, %.2f, %.2f)", camera.GetPosition().x, camera.GetPosition().y, camera.GetPosition().z);
     ImGui::Text("FPS: %.1f", 1.0f / deltaTime);
-    if (noiseEdit) {
-		ImGui::Text("Editing %s noise...", editedNoise.c_str());
+    if (currentMode == mode::NOISE_HEIGHTMAP) {
+        noiseGen.ImGuiOutput();
     }
     bottomPanelHeight = ImGui::GetWindowHeight() <= windowHeight / 3 ? ImGui::GetWindowHeight() : windowHeight / 3;
     
     ImGui::End();
 
-
     ImGui::Render();
     ImGui_ImplGlfwGL3_RenderDrawData(ImGui::GetDrawData());
 }
-
-void TerrainGenApp::PerlinImgui() {
-    ////Seed
-    //if (ImGui::CollapsingHeader("Perlin Noise Settings")) {
-    //    ImGui::InputInt("Seed", &seed);
-
-    //    //Basic noise settings
-    //    ImGui::SliderInt("Octaves", &noise->GetConfigRef().octaves, 1, 8);
-
-    //    ImGui::SliderFloat("Offset x", &noise->GetConfigRef().xoffset, 0.0f, 5.0f);
-    //    ImGui::SliderFloat("Offset y", &noise->GetConfigRef().yoffset, 0.0f, 5.0f);
-    //    ImGui::SliderFloat("Scale", &noise->GetConfigRef().scale, 0.01f, 3.0f);
-    //    ImGui::SliderFloat("Constrast", &noise->GetConfigRef().constrast, 0.1f, 2.0f);
-    //    ImGui::SliderFloat("Redistribution", &noise->GetConfigRef().redistribution, 0.1f, 10.0f);
-    //    ImGui::SliderFloat("Lacunarity", &noise->GetConfigRef().lacunarity, 0.1f, 10.0f);
-    //    ImGui::SliderFloat("Persistance", &noise->GetConfigRef().persistance, 0.1f, 1.0f);
-
-    //    //Dealing with negatives settings
-    //    static const char* options[] = { "REFIT_ALL", "FLATTEN_NEGATIVES", "REVERT_NEGATIVES", "NOTHING" };
-    //    static int current_option = static_cast<int>(noise->GetConfigRef().option);
-
-    //    if (ImGui::BeginCombo("Negatives: ", options[current_option]))
-    //    {
-    //        for (int n = 0; n < IM_ARRAYSIZE(options); n++)
-    //        {
-    //            bool is_selected = (current_option == n);
-    //            if (ImGui::Selectable(options[n], is_selected)) {
-    //                current_option = n;
-    //                noise->GetConfigRef().option = static_cast<noise::Options>(n);
-    //            }
-    //            if (is_selected)
-    //                ImGui::SetItemDefaultFocus();
-    //        }
-    //        ImGui::EndCombo();
-    //    }
-    //    if (noise->GetConfigRef().option == noise::Options::REVERT_NEGATIVES)
-    //        ImGui::SliderFloat("Revert Gain", &noise->GetConfigRef().revertGain, 0.1f, 1.0f);
-
-    //    //Ridged noise settings
-    //    ImGui::Checkbox("Ridge", &noise->GetConfigRef().Ridge);
-    //    if (noise->GetConfigRef().Ridge)
-    //    {
-    //        ImGui::SliderFloat("Ridge Gain", &noise->GetConfigRef().RidgeGain, 0.1f, 10.0f);
-    //        ImGui::SliderFloat("Ridge Offset", &noise->GetConfigRef().RidgeOffset, 0.1f, 10.0f);
-    //    }
-
-    //    //Island settings
-    //    ImGui::Checkbox("Island", &noise->GetConfigRef().island);
-    //    if (noise->GetConfigRef().island)
-    //    {
-    //        static const char* islandTypes[] = { "CONE", "DIAGONAL", "EUKLIDEAN_SQUARED",
-    //                                             "SQUARE_BUMP","HYPERBOLOID", "SQUIRCLE",
-    //                                             "TRIG" };
-    //        static int current_island = static_cast<int>(noise->GetConfigRef().islandType);
-
-    //        if (ImGui::BeginCombo("Island type: ", islandTypes[current_island]))
-    //        {
-    //            for (int n = 0; n < IM_ARRAYSIZE(islandTypes); n++)
-    //            {
-    //                bool is_selected = (current_island == n);
-    //                if (ImGui::Selectable(islandTypes[n], is_selected)) {
-    //                    current_island = n;
-    //                    noise->GetConfigRef().islandType = static_cast<noise::IslandType>(n);
-    //                }
-    //                if (is_selected)
-    //                    ImGui::SetItemDefaultFocus();
-    //            }
-    //            ImGui::EndCombo();
-    //        }
-    //        ImGui::SliderFloat("Mix Power", &noise->GetConfigRef().mixPower, 0.0f, 1.0f);
-    //    }
-    //    //Generating "symmetrical" noise and checkbox for miroring it on the four sides
-    //    ImGui::Checkbox("Symmetrical", &noise->GetConfigRef().symmetrical);
-    //    if (noise->GetConfigRef().symmetrical) {
-    //        ImGui::Checkbox("Test Symmetrical", &testSymmetrical);
-    //    }
 
     //    if (noiseEdit) {
     //        if (ImGui::Button("Save config")) {
@@ -299,172 +191,148 @@ void TerrainGenApp::PerlinImgui() {
     //        }
     //    }
     //}
-}
+//}
 
-void TerrainGenApp::ParametrizedImGui()
-{
-    if (ImGui::CollapsingHeader("Terrain Generation Settings")) {
-        if (ImGui::Button("Display terrain")) {
-            isTerrainDisplayed = !isTerrainDisplayed;
-        }
-        ImGui::Separator();
-        ImGui::Text("Noise configuration");
-        if (ImGui::Button("Continentalness")) {
-            SwapNoise(&terrainGen.GetContinentalnessNoise());
-            editedNoise = "Continentalness";
-            editedType = 'c';
-        }
-        ImGui::SameLine();
-        if (ImGui::Button("Mountainousness")) {
-            SwapNoise(&terrainGen.GetMountainousNoise());
-            editedNoise = "Mountainousness";
-            editedType = 'm';
-        }
-        ImGui::SameLine();
-        if (ImGui::Button("Peaks&Valeys")) {
-            SwapNoise(&terrainGen.GetPVNoise());
-            editedNoise = "Peaks&Valeys";
-            editedType = 'p';
-        }
-        if (ImGui::Button("Temperature")) {
-            SwapNoise(&terrainGen.GetTemperatureNoise());
-            editedNoise = "Temperature";
-            editedType = 't';
-        }
-        ImGui::SameLine();
-        if (ImGui::Button("Humidity")) {
-            SwapNoise(&terrainGen.GetHumidityNoise());
-            editedNoise = "Humidity";
-            editedType = 'h';
-        }
-        ImGui::Spacing();
-        
-        ImGui::Separator();
-        ImGui::Text("Vegetation settings");
-        if (ImGui::Button("Vegetation generation"))
-        {
-            if (!treesPositions) {
-                PrepareTreesDraw();
-            }
-            drawTrees = true;
-        }
-        if (ImGui::Button("Biomes settings")) {
-            biomeEdit = !biomeEdit;
-        }
-        if (ImGui::Button("Generate terrain"))
-        {
-            terGenPerform = true;
-            camera.SetPosition(glm::vec3(0.0f, heightScale/2.0f, 0.0f));
-        }
-        /*
-        if (ImGui::Button("erode")) {
-            PerformErosion();
-        }
-        */
-    }
-}
+//void TerrainGenApp::ParametrizedImGui()
+//{
+    //if (ImGui::CollapsingHeader("Terrain Generation Settings")) {
+    //    if (ImGui::Button("Display terrain")) {
+    //        isTerrainDisplayed = !isTerrainDisplayed;
+    //    }
+    //    ImGui::Separator();
+    //    ImGui::Text("Noise configuration");
+    //    if (ImGui::Button("Continentalness")) {
+    //        SwapNoise(&terrainGen.GetContinentalnessNoise());
+    //        editedNoise = "Continentalness";
+    //        editedType = 'c';
+    //    }
+    //    ImGui::SameLine();
+    //    if (ImGui::Button("Mountainousness")) {
+    //        SwapNoise(&terrainGen.GetMountainousNoise());
+    //        editedNoise = "Mountainousness";
+    //        editedType = 'm';
+    //    }
+    //    ImGui::SameLine();
+    //    if (ImGui::Button("Peaks&Valeys")) {
+    //        SwapNoise(&terrainGen.GetPVNoise());
+    //        editedNoise = "Peaks&Valeys";
+    //        editedType = 'p';
+    //    }
+    //    if (ImGui::Button("Temperature")) {
+    //        SwapNoise(&terrainGen.GetTemperatureNoise());
+    //        editedNoise = "Temperature";
+    //        editedType = 't';
+    //    }
+    //    ImGui::SameLine();
+    //    if (ImGui::Button("Humidity")) {
+    //        SwapNoise(&terrainGen.GetHumidityNoise());
+    //        editedNoise = "Humidity";
+    //        editedType = 'h';
+    //    }
+    //    ImGui::Spacing();
+    //    
+    //    ImGui::Separator();
+    //    ImGui::Text("Vegetation settings");
+    //    if (ImGui::Button("Vegetation generation"))
+    //    {
+    //        if (!treesPositions) {
+    //            PrepareTreesDraw();
+    //        }
+    //        drawTrees = true;
+    //    }
+    //    if (ImGui::Button("Biomes settings")) {
+    //        biomeEdit = !biomeEdit;
+    //    }
+    //    if (ImGui::Button("Generate terrain"))
+    //    {
+    //        terGenPerform = true;
+    //        camera.SetPosition(glm::vec3(0.0f, heightScale/2.0f, 0.0f));
+    //    }
+    //    /*
+    //    if (ImGui::Button("erode")) {
+    //        PerformErosion();
+    //    }
+    //    */
+    //}
+//}
 
 //void TerrainGenApp::ErosionWindowRender() {
 //    if(ImGui::CollapsingHeader("Erosion Settings"))
 //    {
-//        ImGui::InputInt("Droplet count", &erosion.GetDropletCountRef());
-//        ImGui::InputInt("Droplet lifetime", &erosion.GetConfigRef().dropletLifetime);
-//        ImGui::InputFloat("Inertia", &erosion.GetConfigRef().inertia);
-//        ImGui::InputFloat("Droplet init capacity", &erosion.GetConfigRef().initialCapacity, 0.01f, 1.0f);
-//        ImGui::InputFloat("Droplet init velocity", &erosion.GetConfigRef().initialVelocity, 0.0f, 1.0f);
-//        ImGui::InputFloat("Droplet init water", &erosion.GetConfigRef().initialWater, 0.0f, 1.0f);
-//        ImGui::InputFloat("Erosion rate", &erosion.GetConfigRef().erosionRate, 0.0f, 1.0f);
-//        ImGui::InputFloat("Deposition rate", &erosion.GetConfigRef().depositionRate, 0.0f, 1.0f);
-//        ImGui::InputFloat("Evaporation rate", &erosion.GetConfigRef().evaporationRate, 0.0f, 1.0f);
-//        ImGui::InputFloat("Gravity", &erosion.GetConfigRef().gravity, 0.0f, 10.0f);
-//        ImGui::InputFloat("Min slope", &erosion.GetConfigRef().minSlope, 0.0f, 1.0f);
-//        ImGui::InputInt("Erosion radius", &erosion.GetConfigRef().erosionRadius);
-//        ImGui::InputFloat("Blur", &erosion.GetConfigRef().blur, 0.0f, 1.0f);
-//
-//        ImGui::Checkbox("Show traces of droplets", &trackDraw);
-//
-//        if (ImGui::Button("Erode map")) {
-//            
-//        }
-//        ImGui::SameLine();
-//        if (ImGui::Button("Reset")) {
-//            erosionDraw = false;
-//            trackDraw = false;
-//        }
+//        
 //    }
 //}
 
-void TerrainGenApp::ParameterImgui()
-{
-    if (ImGui::CollapsingHeader("Edit spline settings")) {
-        int in = 0;
-        if (editedType == 'm')
-            in = 2;
-        if (editedType == 'p')
-            in = 4;
+//void TerrainGenApp::ParameterImgui()
+//{
+//    if (ImGui::CollapsingHeader("Edit spline settings")) {
+//        int in = 0;
+//        if (editedType == 'm')
+//            in = 2;
+//        if (editedType == 'p')
+//            in = 4;
+//
+//        for (size_t i = 0; i < splines[in].size(); i++)
+//        {
+//            float arg = static_cast<float>(splines[in][i]);
+//            float value = static_cast<float>(splines[in + 1][i]);
+//            float min = i > 0 ? splines[in][i - 1] : -1.0f;
+//            float max = i < splines[in].size() - 1 ? splines[in][i + 1] : 1.0f;
+//
+//            ImGui::Separator();
+//            ImGui::Text("Point %d", i);
+//            ImGui::SliderFloat(("X" + std::to_string(i)).c_str(), &arg, min, max);
+//            ImGui::InputFloat(("Y" + std::to_string(i)).c_str(), &value, 0.01f, 0.1f);
+//
+//            splines[in][i] = static_cast<double>(arg);
+//            splines[in + 1][i] = static_cast<double>(value);
+//        }
+//        ImGui::Separator();
+//        if (ImGui::Button("+", ImVec2(50, 30))) {
+//            splines[in].push_back(1.0f);
+//            splines[in + 1].push_back(splines[in + 1].back());
+//        }
+//        if (ImGui::Button("Set splines")) {
+//            terrainGen.SetSpline(editedType, { splines[in], splines[in + 1] });
+//            std::cout << "[LOG] New spline set" << std::endl;
+//        }
+//    }
+//    if (editedType != 'p' && ImGui::CollapsingHeader("Edit biome range for current noise")) {
+//        int in = 0;
+//        if (editedType == 'h')
+//            in = 1;
+//        if (editedType == 'c')
+//            in = 2;
+//        if (editedType == 'm')
+//			in = 3;
+//
+//        for (int i = 0; i < ranges[in].size(); i++) {
+//			ImGui::Separator();
+//			ImGui::Text("Level %d", ranges[in][i].level);
+//			ImGui::LabelText(("Min" + std::to_string(ranges[in][i].level)).c_str(), "%f", ranges[in][i].min);
+//			ImGui::SliderFloat(("Max" + std::to_string(ranges[in][i].level)).c_str(), &ranges[in][i].max, -1.0f, 1.0f);
+//
+//            if (ranges[in][i].min > ranges[in][i].max)
+//                ranges[in][i].max = ranges[in][i].min;
+//			if (i < ranges[in].size() - 1 && ranges[in][i].max != ranges[in][i + 1].min) {
+//				ranges[in][i + 1].min = ranges[in][i].max;
+//			}
+//			
+//        }
+//        ImGui::Separator();
+//        if (ImGui::Button("+", ImVec2(50, 30))) {
+//			ranges[in].push_back({ 1.0f, 1.0f, ranges[in].back().level+1});
+//        }
+//        if (ImGui::Button("Set ranges")) {
+//			terrainGen.SetRange(editedType, ranges[in]);
+//            std::cout << "[LOG] New ranges set" << std::endl;
+//        }
+//    }
+//    
 
-        for (size_t i = 0; i < splines[in].size(); i++)
-        {
-            float arg = static_cast<float>(splines[in][i]);
-            float value = static_cast<float>(splines[in + 1][i]);
-            float min = i > 0 ? splines[in][i - 1] : -1.0f;
-            float max = i < splines[in].size() - 1 ? splines[in][i + 1] : 1.0f;
-
-            ImGui::Separator();
-            ImGui::Text("Point %d", i);
-            ImGui::SliderFloat(("X" + std::to_string(i)).c_str(), &arg, min, max);
-            ImGui::InputFloat(("Y" + std::to_string(i)).c_str(), &value, 0.01f, 0.1f);
-
-            splines[in][i] = static_cast<double>(arg);
-            splines[in + 1][i] = static_cast<double>(value);
-        }
-        ImGui::Separator();
-        if (ImGui::Button("+", ImVec2(50, 30))) {
-            splines[in].push_back(1.0f);
-            splines[in + 1].push_back(splines[in + 1].back());
-        }
-        if (ImGui::Button("Set splines")) {
-            terrainGen.SetSpline(editedType, { splines[in], splines[in + 1] });
-            std::cout << "[LOG] New spline set" << std::endl;
-        }
-    }
-    if (editedType != 'p' && ImGui::CollapsingHeader("Edit biome range for current noise")) {
-        int in = 0;
-        if (editedType == 'h')
-            in = 1;
-        if (editedType == 'c')
-            in = 2;
-        if (editedType == 'm')
-			in = 3;
-
-        for (int i = 0; i < ranges[in].size(); i++) {
-			ImGui::Separator();
-			ImGui::Text("Level %d", ranges[in][i].level);
-			ImGui::LabelText(("Min" + std::to_string(ranges[in][i].level)).c_str(), "%f", ranges[in][i].min);
-			ImGui::SliderFloat(("Max" + std::to_string(ranges[in][i].level)).c_str(), &ranges[in][i].max, -1.0f, 1.0f);
-
-            if (ranges[in][i].min > ranges[in][i].max)
-                ranges[in][i].max = ranges[in][i].min;
-			if (i < ranges[in].size() - 1 && ranges[in][i].max != ranges[in][i + 1].min) {
-				ranges[in][i + 1].min = ranges[in][i].max;
-			}
-			
-        }
-        ImGui::Separator();
-        if (ImGui::Button("+", ImVec2(50, 30))) {
-			ranges[in].push_back({ 1.0f, 1.0f, ranges[in].back().level+1});
-        }
-        if (ImGui::Button("Set ranges")) {
-			terrainGen.SetRange(editedType, ranges[in]);
-            std::cout << "[LOG] New ranges set" << std::endl;
-        }
-    }
-     
-}
-
-void TerrainGenApp::BiomeImGui()
-{
-    if (ImGui::CollapsingHeader("Biomes")) {
+//void TerrainGenApp::BiomeImGui()
+//{
+    /*if (ImGui::CollapsingHeader("Biomes")) {
         for (auto& it : biomes) {
             if (ImGui::CollapsingHeader(it.GetName().c_str())) {
                 ImGui::Separator();
@@ -528,13 +396,12 @@ void TerrainGenApp::BiomeImGui()
 		if (ImGui::Button("Save biomes")) {
 			terrainGen.SetBiomes(biomes);
 		}
-    }
+    }*/
     
-}
-
-void TerrainGenApp::TreeTypesImGui()
-{
-    if (ImGui::CollapsingHeader("Tree types")) {
+//
+//void TerrainGenApp::TreeTypesImGui()
+//{
+   /* if (ImGui::CollapsingHeader("Tree types")) {
         for (int i = 0; i < biome->GetTreeTypesRef().size(); i++) {
             ImGui::Separator();
 			ImGui::Text("Tree type %d", i);
@@ -548,48 +415,10 @@ void TerrainGenApp::TreeTypesImGui()
             biomeEdit = true;
 			treeEdit = false;
 		}
-    }
-}
+    }*/
+//}
 
-void TerrainGenApp::SwapNoise(noise::SimplexNoiseClass* n)
-{
-    /*currentMode = mode::PERLIN;
-    noiseEdit = true;
-	biomeEdit = false;
-    noise = n;
-    seed = noise->GetConfigRef().seed;
-	noise->Reseed();
-    player.SetPosition(glm::vec3(0.0f, 1.0f, 0.0f));
-    player.SetSpeed(1.0f);
-    PerlinChunked();*/
-}
-
-//-------------------------------------------------------------------------------------------------------
-//--------------------------------------------DRAWING-SECTION--------------------------------------------
-//-------------------------------------------------------------------------------------------------------
-void TerrainGenApp::Draw()
-{
-    glEnable(GL_SCISSOR_TEST);
-    glViewport(leftPanelWidth, bottomPanelHeight, windowWidth - rightPanelWidth - leftPanelWidth, windowHeight - topPanelHeight - bottomPanelHeight);
-    glScissor(leftPanelWidth, bottomPanelHeight, windowWidth - rightPanelWidth - leftPanelWidth, windowHeight - topPanelHeight - bottomPanelHeight);
-	renderer.Clear(glm::vec3(0.0f, 0.0f, 0.0f));
-    glm::mat4 model = glm::mat4(1.0f);
-
-    if (currentMode == mode::PERLIN)
-    {
-        noiseGen.Draw(model, renderer, camera);
-    }
-    else if (currentMode == mode::PARAMETRIZED_GEN) {
-        TerrainGenerationDraw(model);
-        if (drawTrees) {
-			DrawTrees(model);
-        }
-    }
-    
-    glDisable(GL_SCISSOR_TEST);
-}
-
-void TerrainGenApp::TerrainGenerationDraw(glm::mat4& model) {
+//void TerrainGenApp::TerrainGenerationDraw(glm::mat4& model) {
     /*terGenShader->Bind();
     terGenShader->SetMaterialUniforms(glm::vec3(0.6f, 0.6f, 0.6f), glm::vec3(0.6f, 0.6f, 0.6f), glm::vec3(0.1f, 0.1f, 0.1f), 1.0f);
     terGenShader->SetLightUniforms(glm::vec3(0.5f * height, 255.0f, 0.5f * width), glm::vec3(0.2f, 0.2f, 0.2f), glm::vec3(0.5f, 0.5f, 0.5f), glm::vec3(1.0f, 1.0f, 1.0f));
@@ -614,10 +443,10 @@ void TerrainGenApp::TerrainGenerationDraw(glm::mat4& model) {
         renderer.Draw(*terGenVAO, *terGenIndexBuffer, *terGenShader);
         PrintTrack(model);
     }*/
-}
-void TerrainGenApp::DrawTrees(glm::mat4& model)
-{
-    treeShader->Bind();
+//}
+//void TerrainGenApp::DrawTrees(glm::mat4& model)
+//{
+   /* treeShader->Bind();
     treeShader->SetMaterialUniforms(glm::vec3(0.6f, 0.6f, 0.6f), glm::vec3(0.6f, 0.6f, 0.6f), glm::vec3(0.1f, 0.1f, 0.1f), 1.0f);
     treeShader->SetLightUniforms(glm::vec3(0.5f * height, 255.0f, 0.5f * width), glm::vec3(0.2f, 0.2f, 0.2f), glm::vec3(0.5f, 0.5f, 0.5f), glm::vec3(1.0f, 1.0f, 1.0f));
     treeShader->SetViewPos(camera.GetPosition());
@@ -626,8 +455,8 @@ void TerrainGenApp::DrawTrees(glm::mat4& model)
 
     glBindVertexArray(treeVAO);
     glDrawElementsInstanced(GL_TRIANGLES, treeIndicesCount, GL_UNSIGNED_INT, 0, terrainGen.GetTreeCount());
-    glBindVertexArray(0);
-}
+    glBindVertexArray(0);*/
+//}
 
 //Function drawing tracks of droplets on the eroded terrain mesh
 //void TerrainGenApp::PrintTrack(glm::mat4& model) {
@@ -648,56 +477,9 @@ void TerrainGenApp::DrawTrees(glm::mat4& model)
 //}
 
 //-------------------------------------------------------------------------------------------------------
-//---------------------------------------MAIN-LOGIC-FUNCTIONS--------------------------------------------
-//-------------------------------------------------------------------------------------------------------
-void TerrainGenApp::PerformAction()
-{
-    switch (currentMode)
-    {
-    case TerrainGenApp::mode::PERLIN:    
-        CheckChange();
-        break;
-    case TerrainGenApp::mode::PARAMETRIZED_GEN:
-        if(terGenPerform)
-		    FullTerrainGeneration();
-        break;
-    default:
-        break;
-    }
-}
-
-void TerrainGenApp::UpdatePrevCheckers() {
-   /* prevCheck.prevCheckSum = noise->GetConfigRef().getCheckSum();
-    prevCheck.prevOpt = noise->GetConfigRef().option;
-    prevCheck.prevRidge = noise->GetConfigRef().Ridge;
-    prevCheck.prevIsland = noise->GetConfigRef().island;
-    prevCheck.prevIslandType = noise->GetConfigRef().islandType;
-    prevCheck.symmetrical = noise->GetConfigRef().symmetrical;
-    prevCheck.seed = seed;*/
-}
-
-void TerrainGenApp::CheckChange() {
-    /*if (prevCheck.prevOpt != noise->GetConfigRef().option ||
-        prevCheck.prevCheckSum != noise->GetConfigRef().getCheckSum() ||
-        prevCheck.prevRidge != noise->GetConfigRef().Ridge ||
-        prevCheck.prevIsland != noise->GetConfigRef().island ||
-        prevCheck.prevIslandType != noise->GetConfigRef().islandType ||
-        prevCheck.symmetrical != noise->GetConfigRef().symmetrical ||
-        prevCheck.seed != seed)
-    {
-        noise->SetSeed(seed);
-		if(!noiseEdit)
-            PerformPerlin();
-        else
-			PerlinChunked();
-    }*/
-}
-
-
-//-------------------------------------------------------------------------------------------------------
 //---------------------------------------TERRAIN-GENERATION----------------------------------------------
 //-------------------------------------------------------------------------------------------------------
-void TerrainGenApp::InitializeTerrainGeneration() {
+//void TerrainGenApp::InitializeTerrainGeneration() {
  //   terrainGen.SetSize(width / chunkResolution, height / chunkResolution);
  //   terrainGen.SetChunkResolution(chunkResolution);
 
@@ -743,9 +525,9 @@ void TerrainGenApp::InitializeTerrainGeneration() {
  //   terrainGen.SetSplines(splines);
  //   terrainGen.SetBiomes(biomes);
  //   terrainGen.SetRanges(ranges);
-}
-void TerrainGenApp::ResizeTerrainGeneration()
-{
+//}
+//void TerrainGenApp::ResizeTerrainGeneration()
+//{
     /*if (width != prevWidth || height != prevHeight || chunkResolution != prevChunkRes) {
         width = width + (chunkResolution - (width % chunkResolution));
 		height = height + (chunkResolution - (height % chunkResolution));
@@ -763,9 +545,9 @@ void TerrainGenApp::ResizeTerrainGeneration()
         FullTerrainGeneration();
 		std::cout << "[LOG] Terrain resized" << std::endl;
     }*/
-}
-void TerrainGenApp::FullTerrainGeneration()
-{
+//}
+//void TerrainGenApp::FullTerrainGeneration()
+//{
     //terGenPerform = false;
 
     //if (!tMeshVertices || !tMeshIndices)
@@ -784,28 +566,28 @@ void TerrainGenApp::FullTerrainGeneration()
     //terGenTexture = std::make_unique<Texture>("res/textures/texture.png");
 
     //terGenVAO->AddBuffer(*terGenVertexBuffer, layout);
-}
+//}
 
-void TerrainGenApp::TerrainGeneration() {
-    if (!terrainGen.PerformTerrainGeneration()) {
-        std::cout << "[ERROR] Map couldnt be generated" << std::endl;
-        return;
-    }
+//void TerrainGenApp::TerrainGeneration() {
+    //if (!terrainGen.PerformTerrainGeneration()) {
+    //    std::cout << "[ERROR] Map couldnt be generated" << std::endl;
+    //    return;
+    //}
 
-    utilities::CreateTiledVertices(tMeshVertices, width, height, terrainGen.GetHeightMap(), heightScale, stride, 0);
-    utilities::CreateIndicesTiledField(tMeshIndices, width, height);
-    /*utilities::InitializeNormals(tMeshVertices, stride, 3, (height - 1) * (width - 1) * 4);
-    utilities::CalculateNormals(tMeshVertices, tMeshIndices, stride, 3, (width - 1) * (height - 1) * 6);
-    utilities::NormalizeVector3f(tMeshVertices, stride, 3, (height - 1) * (width - 1) * 4);
-    utilities::AssignTexturesByBiomes(terrainGen, tMeshVertices, width, height, 3, stride, 6);*/
-    std::cout << "[LOG] Terrain generation completed!" << std::endl;
-}
+    //utilities::CreateTiledVertices(tMeshVertices, width, height, terrainGen.GetHeightMap(), heightScale, stride, 0);
+    //utilities::CreateIndicesTiledField(tMeshIndices, width, height);
+    //*utilities::InitializeNormals(tMeshVertices, stride, 3, (height - 1) * (width - 1) * 4);
+    //utilities::CalculateNormals(tMeshVertices, tMeshIndices, stride, 3, (width - 1) * (height - 1) * 6);
+    //utilities::NormalizeVector3f(tMeshVertices, stride, 3, (height - 1) * (width - 1) * 4);
+    //utilities::AssignTexturesByBiomes(terrainGen, tMeshVertices, width, height, 3, stride, 6);*/
+    //std::cout << "[LOG] Terrain generation completed!" << std::endl;
+//}
 
 //-------------------------------------------------------------------------------------------------------
 //--------------------------------------------VEGETATION-SECTION------------------------------------------
 //-------------------------------------------------------------------------------------------------------
-void TerrainGenApp::PrepareTreesDraw()
-{
+//void TerrainGenApp::PrepareTreesDraw()
+//{
  //   float treeVertices[] = {
  //       0.4f, 0.00f, 0.4f,   0.0f, -1.0f, 0.0f,  0.5f, 0.25f, 0.0f,
  //       0.4f, 0.00f, 0.6f,   0.0f, -1.0f, 0.0f,  0.5f, 0.25f, 0.0f,
@@ -894,5 +676,5 @@ void TerrainGenApp::PrepareTreesDraw()
  //   glVertexAttribDivisor(3, 1);
 
  //   glBindVertexArray(0);
-}
+//}
 

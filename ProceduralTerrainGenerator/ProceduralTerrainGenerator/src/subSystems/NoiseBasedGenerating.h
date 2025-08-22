@@ -14,7 +14,7 @@ class NoiseBasedGenerating
 		unsigned int* meshIndices;
 		unsigned int stride;
 		int width, height, seed;
-		bool wireFrame, erosionDraw;
+		bool wireFrame = false, erosionDraw = false, newSize = true, instantUpdate = true;
 		
 		//OpenGl objects
 		VertexBufferLayout layout;
@@ -32,9 +32,14 @@ class NoiseBasedGenerating
 		NoiseBasedGenerating();
 		~NoiseBasedGenerating();
 		
-		bool Initialize(int height, int width, int seed, float heightScale);
-		bool Resize(int height, int width);
+		bool Initialize(int height, int width, float heightScale);
+		bool Resize();
+		bool GenerateNoise();
 		bool SimulateErosion();
+
 		void Draw(glm::mat4& model, Renderer& renderer, Camera& camera);
+		void ImGuiDraw();
+		void ErosionImGui();
+		void ImGuiOutput();
 };
 

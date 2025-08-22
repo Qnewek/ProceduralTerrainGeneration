@@ -24,48 +24,6 @@ namespace utilities
 		}
 	}
 
-	//Generates cube layout for openGL to draw
-	//@param vertices - array of vertices to be filled with data
-	//@param indices - array of indices to be filled with data
-	void GenCubeLayout(float* vertices, unsigned int* indices, float scalingFactor) {
-		float cubeVertices[] = {
-			// Front row
-			-scalingFactor, -scalingFactor,  scalingFactor,
-			 scalingFactor, -scalingFactor,  scalingFactor,
-			 scalingFactor,  scalingFactor,  scalingFactor,
-			-scalingFactor,  scalingFactor,  scalingFactor,
-			// Back row
-			-scalingFactor, -scalingFactor, -scalingFactor,
-			 scalingFactor, -scalingFactor, -scalingFactor,
-			 scalingFactor,  scalingFactor, -scalingFactor,
-			-scalingFactor,  scalingFactor, -scalingFactor
-		};
-
-		//Cube indices
-		unsigned int cubeIndices[] = {
-			// Front 
-			0, 1, 2, 2, 3, 0,
-			// Back
-			4, 5, 6, 6, 7, 4,
-			// Left
-			4, 0, 3, 3, 7, 4,
-			// Right
-			1, 5, 6, 6, 2, 1,
-			// Top
-			3, 2, 6, 6, 7, 3,
-			// Bottom
-			4, 5, 1, 1, 0, 4
-		};
-
-		for (int i = 0; i < 24; ++i) {
-			vertices[i] = cubeVertices[i];
-		}
-
-		for (int i = 0; i < 36; ++i) {
-			indices[i] = cubeIndices[i];
-		}
-	}
-
 	//Parses noise map into vertices for openGL to draw as a mesh, stride is the number of floats per vertex
 	//
 	//@param vertices - array of vertices to be filled with data
@@ -90,6 +48,128 @@ namespace utilities
 			}
 		}
 	}
+
+	//Generates indices for a mesh, by dividing the mesh into strips of triangles
+	//Method of indexing vertices in the grid shown below:
+	// 0---2
+	// | / |
+	// 1---3
+	//@param indices - pointer to the array of indices to be filled with index data
+	//@param width - width of the noise map (columns)
+	//@param height - height of the noise map (rows)
+	void MeshIndicesStrips(unsigned int* indices, int width, int height) {
+		int index = 0;
+		for (int y = 0; y < height - 1; y++) {
+			for (int x = 0; x < width; x++) {
+				for(int k = 0; k < 2; k++) {
+					indices[index++] = width * (y + k) + x;
+				}
+			}
+		}
+	}
+
+	//Calculates normals for the height map based on the vertices and their positions
+	//This function uses the cross product of the horizontal and vertical vectors of neighbouring vertices to calculate the normal vector
+	//@param vertices - array of vertices to be filled with data
+	//@param stride - number of floats per vertex
+	//@param offSet - offset in the vertex array to start with when filling the normals
+	//@param width - width of the noise map in chunks
+	//@param height - height of the noise map in chunks
+	bool CalculateHeightMapNormals(float* vertices, unsigned int stride, unsigned int offSet, unsigned int width, unsigned int height)
+	{
+		if (!vertices) {
+			return false;
+		}
+		glm::vec3 tmp(0.0f, 0.0f, 0.0f);
+		glm::vec3 vx(0.0f, 0.0f, 0.0f);
+		glm::vec3 vz(0.0f, 0.0f, 0.0f);
+		for (int z = 0; z < height; z++) {
+			for (int x = 0; x < width; x++) {
+				//Vertical vector
+				if (height == 1) {
+					vz = glm::vec3(0.0f, 0.0f, 0.0f);
+				}
+				else if (z == 0) {
+					vz = glm::vec3(0.0f, vertices[((z + 1) * width + x) * stride + 1] - vertices[(z * width + x) * stride + 1], 1.0f);
+				}
+				else if (z == height - 1) {
+					vz = glm::vec3(0.0f, vertices[((z - 1) * width + x) * stride + 1] - vertices[(z * width + x) * stride + 1], 1.0f);
+				}
+				else
+				{
+					vz = glm::vec3(0.0f, vertices[((z + 1) * width + x) * stride + 1] - vertices[((z - 1) * width + x) * stride + 1], 2.0f);
+				}
+				//Horizontal vector
+				if (width == 1) {
+					vx = glm::vec3(0.0f, 0.0f, 0.0f);
+				}
+				else if (x == 0) {
+					vx = glm::vec3(1.0f, vertices[(z * width + x + 1) * stride + 1] - vertices[(z * width + x) * stride + 1], 0.0f);
+				}
+				else if (x == width - 1) {
+					vx = glm::vec3(1.0f, vertices[(z * width + x - 1) * stride + 1] - vertices[(z * width + x) * stride + 1], 0.0f);
+				}
+				else
+				{
+					vx = glm::vec3(2.0f, vertices[(z * width + x + 1) * stride + 1] - vertices[(z * width + x - 1) * stride + 1], 0.0f);
+				}
+				//Cross product to get the normal vector and normalize it
+				tmp = glm::normalize(glm::cross(vz, vx));
+				//Set the normal vector to the vertex
+				vertices[(z * width + x) * stride + offSet] = tmp.x;
+				vertices[(z * width + x) * stride + offSet + 1] = tmp.y;
+				vertices[(z * width + x) * stride + offSet + 2] = tmp.z;
+			}
+		}
+		return true;
+	}
+
+	//Generates terrain map using Perlin Fractal Noise, transforming it into drawable mesh and
+	//also dealing with initialization and calculations of normals for lightning purposes
+	//@param noise - Perlin noise object
+	//@param vertices - array of vertices to be filled with data
+	//@param indices - array of indices to be filled with data
+	//@param stride - number of floats per vertex
+	//@param normals - boolean value to determine if normals should be calculated
+	//@param first - boolean value to determine if indices should be generated
+	void CreateTerrainMesh(noise::SimplexNoiseClass& noise, float* vertices, unsigned int* indices, float scalingFactor, unsigned int stride, bool normals, bool first)
+	{
+		noise.GenerateFractalNoise();
+		ParseNoiseIntoVertices(vertices, noise.GetMap(), noise.GetWidth(), noise.GetHeight(), scalingFactor, stride, 0);
+		if (first)
+			MeshIndicesStrips(indices, noise.GetWidth(), noise.GetHeight());
+		if (normals) {
+			CalculateHeightMapNormals(vertices, stride, 3, noise.GetWidth(), noise.GetHeight());
+		}
+	}
+
+	//Performs erosion simulation on the terrain map, updating vertices, indices and normals
+	//@param vertices - array of vertices to be filled with data
+	//@param indices - array of indices to be filled with data
+	//@param Track - optional array of floats representing the track of the erosion
+	//@param stride - number of floats per vertex
+	//@param positionsOffset - offset in the vertex array to start with when filling the data
+	//@param normalsOffset - offset in the vertex array to start with when filling the normals
+	//@param erosion - erosion object
+	void PerformErosion(erosion::Erosion& erosion, float* vertices, float scalingFactor, std::optional<float*> Track, int stride) {
+		erosion.Erode(Track);
+		ParseNoiseIntoVertices(vertices, erosion.GetMap(), erosion.GetWidth(), erosion.GetHeight(), scalingFactor, stride, 0);
+		CalculateHeightMapNormals(vertices, stride, 3, erosion.GetWidth(), erosion.GetHeight());
+	}
+
+
+
+
+
+	//
+	//
+	//
+	//
+	//
+	//
+	
+
+
 
 	bool CreateTiledVertices(float* vertices, int width, int height, float* map, float scalingFactor, unsigned int stride, unsigned int offset) {
 		if (!vertices) {
@@ -132,6 +212,7 @@ namespace utilities
 		return true;
 	}
 
+
 	bool CreateIndicesTiledField(unsigned int* indices, int width, int height) {
 		if (!indices) {
 			std::cout << "[ERROR] Indices array not initialized" << std::endl;
@@ -153,64 +234,12 @@ namespace utilities
 		return true;
 	}
 
-	//Generates indices for a mesh, by dividing the mesh into strips of triangles
-	//Method of indexing vertices in the grid shown below:
-	// 0---2
-	// | / |
-	// 1---3
-	//@param indices - pointer to the array of indices to be filled with index data
-	//@param width - width of the noise map (columns)
-	//@param height - height of the noise map (rows)
-	void MeshIndicesStrips(unsigned int* indices, int width, int height) {
-		int index = 0;
-		for (int y = 0; y < height - 1; y++) {
-			for (int x = 0; x < width; x++) {
-				for(int k = 0; k < 2; k++) {
-					indices[index++] = width * (y + k) + x;
-				}
-			}
-		}
-	}
-
 	void GenerateTerrainMap(noise::SimplexNoiseClass& noise, float* vertices, unsigned int* indices, unsigned int stride) {
 		noise.InitMap();
 		noise.GenerateFractalNoiseByChunks();
 		ParseNoiseIntoVertices(vertices, noise.GetMap(), noise.GetWidth() * noise.GetChunkWidth(), noise.GetHeight() * noise.GetChunkHeight(), 255.0, stride, 0);
 		MeshIndicesStrips(indices, noise.GetWidth() * noise.GetChunkWidth(), noise.GetHeight() * noise.GetChunkHeight());
 		CalculateHeightMapNormals(vertices, stride, 3, noise.GetWidth() * noise.GetChunkWidth(), noise.GetHeight() * noise.GetChunkHeight());
-	}
-
-	//Generates terrain map using Perlin Fractal Noise, transforming it into drawable mesh and
-	//also dealing with initialization and calculations of normals for lightning purposes
-	//@param noise - Perlin noise object
-	//@param vertices - array of vertices to be filled with data
-	//@param indices - array of indices to be filled with data
-	//@param stride - number of floats per vertex
-	//@param normals - boolean value to determine if normals should be calculated
-	//@param first - boolean value to determine if indices should be generated
-	void CreateTerrainMesh(noise::SimplexNoiseClass &noise, float* vertices, unsigned int* indices, float scalingFactor, unsigned int stride, bool normals, bool first)
-	{
-		noise.GenerateFractalNoise();
-		ParseNoiseIntoVertices(vertices, noise.GetMap(), noise.GetWidth(), noise.GetHeight(), scalingFactor, stride, 0);
-		if (first)
-			MeshIndicesStrips(indices, noise.GetWidth(), noise.GetHeight());
-		if (normals) {
-			CalculateHeightMapNormals(vertices, stride, 3, noise.GetWidth(), noise.GetHeight());
-		}
-	}
-
-	//Performs erosion simulation on the terrain map, updating vertices, indices and normals
-	//@param vertices - array of vertices to be filled with data
-	//@param indices - array of indices to be filled with data
-	//@param Track - optional array of floats representing the track of the erosion
-	//@param stride - number of floats per vertex
-	//@param positionsOffset - offset in the vertex array to start with when filling the data
-	//@param normalsOffset - offset in the vertex array to start with when filling the normals
-	//@param erosion - erosion object
-	void PerformErosion(erosion::Erosion& erosion, float* vertices, float scalingFactor, std::optional<float*> Track, int stride) {
-		erosion.Erode(Track);
-		ParseNoiseIntoVertices(vertices, erosion.GetMap(), erosion.GetWidth(), erosion.GetHeight(), scalingFactor, stride, 0);
-		CalculateHeightMapNormals(vertices, stride, 3, erosion.GetWidth(), erosion.GetHeight());
 	}
 
 	//Generates basic Perlin Fractal Noise and sets coords for texture sampling (painting biome)
@@ -379,57 +408,6 @@ namespace utilities
 			}
 		}
 		
-	}
-	//Calculates normals for the height map based on the vertices and their positions
-	//This function uses the cross product of the horizontal and vertical vectors of neighbouring vertices to calculate the normal vector
-
-	bool CalculateHeightMapNormals(float* vertices, unsigned int stride, unsigned int offSet, unsigned int width, unsigned int height)
-	{
-		if (!vertices) {
-			return false;
-		}
-		glm::vec3 tmp(0.0f, 0.0f, 0.0f);
-		glm::vec3 vx(0.0f, 0.0f, 0.0f);
-		glm::vec3 vz(0.0f, 0.0f, 0.0f);
-		for(int z = 0; z < height; z++) {
-			for (int x = 0; x < width; x++) {
-				//Vertical vector
-				if (height == 1) {
-					vz = glm::vec3(0.0f, 0.0f, 0.0f);
-				}
-				else if (z == 0) {
-					vz = glm::vec3(0.0f, vertices[((z + 1) * width + x) * stride + 1] - vertices[(z * width + x) * stride + 1], 1.0f);
-				}
-				else if (z == height - 1) {
-					vz = glm::vec3(0.0f, vertices[((z - 1) * width + x) * stride + 1] - vertices[(z * width + x) * stride + 1], 1.0f);
-				}
-				else
-				{
-					vz = glm::vec3(0.0f, vertices[((z + 1) * width + x) * stride + 1] - vertices[((z - 1) * width + x) * stride + 1], 2.0f);
-				}
-				//Horizontal vector
-				if(width == 1) {
-					vx = glm::vec3(0.0f, 0.0f, 0.0f);
-				}
-				else if (x == 0) {
-					vx = glm::vec3(1.0f, vertices[(z * width + x + 1) * stride + 1] - vertices[(z * width + x) * stride + 1], 0.0f);
-				}
-				else if (x == width - 1) {
-					vx = glm::vec3(1.0f, vertices[(z * width + x - 1) * stride + 1] - vertices[(z * width + x) * stride + 1], 0.0f);
-				}
-				else
-				{
-					vx = glm::vec3(2.0f, vertices[(z * width + x + 1) * stride + 1] - vertices[(z * width + x - 1) * stride + 1], 0.0f);
-				}
-				//Cross product to get the normal vector and normalize it
-				tmp = glm::normalize(glm::cross(vz, vx));
-				//Set the normal vector to the vertex
-				vertices[(z * width + x) * stride + offSet] = tmp.x;
-				vertices[(z * width + x) * stride + offSet + 1] = tmp.y;
-				vertices[(z * width + x) * stride + offSet + 2] = tmp.z;
-			}
-		}
-		return true;
 	}
 }
 

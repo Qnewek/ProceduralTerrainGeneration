@@ -219,7 +219,7 @@ namespace erosion {
 
 	vec2 Erosion::GetGradient(vec2 pos)
 	{
-		vec2 gradient = { 0, 0 };
+		vec2 gradient = { 0.0f, 0.0f };
 
 		//Get the integer part of the position ( x and y coordinates)
 		int x = static_cast<int>(pos.x);
@@ -232,10 +232,16 @@ namespace erosion {
 		//It is assumed that erode function checks if the drop fell outside the map
 		//Formula used: g(pos) = ( (P(x+1, y) - P(x, y)) * (1 - v) + (P(x+1, y+1) - P(x, y+1)) * v )
 		//						 ( (P(x, y+1) - P(x, y)) * (1 - u) + (P(x+1, y+1) - P(x+1, y)) * u )
-		gradient.x = (map[y * width + x + 1] - map[y * width + x]) * (1 - v) +
-					 ((map[(y + 1) * width + x + 1] - map[(y + 1) * width + x]) * v);
-		gradient.y = (map[(y + 1) * width + x] - map[y * width + x]) * (1 - u) +
-					 ((map[(y + 1) * width + x + 1] - map[y * width + x + 1]) * u);
+		if (x < width - 1 && y < height - 1) {
+			gradient.x = (map[y * width + x + 1] - map[y * width + x]) * (1 - v) +
+						 ((map[(y + 1) * width + x + 1] - map[(y + 1) * width + x]) * v);
+			gradient.y = (map[(y + 1) * width + x] - map[y * width + x]) * (1 - u) +
+						 ((map[(y + 1) * width + x + 1] - map[y * width + x + 1]) * u);
+		}
+		else {
+			gradient.x = 1.0f;
+			gradient.y = 1.0f;
+		}
 
 		if (log) {
 			std::cout << "[LOG] Gradient: " << gradient.x << " " << gradient.y << std::endl;
@@ -254,11 +260,15 @@ namespace erosion {
 
 		//Interpolate the height of the grid using bilinear interpolation
 		//Formula used: H(pos) = P(x, y) * (1 - v) * (1 - u) + P(x+1, y) * v * (1 - u) + P(x, y+1) * (1 - v) * u + P(x+1, y+1) * v * u
-		//It is assumed that the erode function checks if the drop fell outside the map
-		float diff ((map[y * width + x] * (1 - v) * (1 - u)) + //P(x, y) * (1 - v) * (1 - u) northWest point of the cell
-					(map[y * width + x + 1] * v * (1 - u))   + //P(x+1, y) * v * (1 - u) northEast point of the cell
-					(map[(y + 1) * width + x] * (1 - v) * u) + //P(x, y+1) * (1 - v) * u southWest point of the cell
-					(map[(y + 1) * width + x + 1] * v * u));   //P(x+1, y+1) * v * u southEast point of the cell
+		//It is assumed that the erode function checks if the drop fell outside the map		
+		if (x >= width - 1 || y >= height - 1) {
+			return 0.0f;
+		}
+
+		float diff = ((map[y * width + x] * (1 - v) * (1 - u)) + //P(x, y) * (1 - v) * (1 - u) northWest point of the cell
+					 (map[y * width + x + 1] * v * (1 - u))   + //P(x+1, y) * v * (1 - u) northEast point of the cell
+					 (map[(y + 1) * width + x] * (1 - v) * u) + //P(x, y+1) * (1 - v) * u southWest point of the cell
+					 (map[(y + 1) * width + x + 1] * v * u));   //P(x+1, y+1) * v * u southEast point of the cell
 		return diff;
 	}
 
@@ -292,9 +302,14 @@ namespace erosion {
 		//Its not distributed in the radius of erosion in order to fill a small 1-cell gap
 		//There is no need to blur the map via radius
 		map[y * width + x] += (1 - v) * (1 - u) * sedimentDropped; //P(x, y) * (1 - v) * (1 - u) northWest point of the cell
-		map[y * width + x + 1] += v * (1 - u) * sedimentDropped;   //P(x+1, y) * v * (1 - u) northEast point of the cell
-		map[(y + 1) * width + x] += (1 - v) * u * sedimentDropped; //P(x, y+1) * (1 - v) * u southWest point of the cell
-		map[(y + 1) * width + x + 1] += v * u * sedimentDropped;   //P(x+1, y+1) * v * u southEast point of the cell
+		if (x < width - 1) {
+			map[y * width + x + 1] += v * (1 - u) * sedimentDropped;   //P(x+1, y) * v * (1 - u) northEast point of the cell
+		}
+		if (y < height - 1) {
+			map[(y + 1) * width + x] += (1 - v) * u * sedimentDropped; //P(x, y+1) * (1 - v) * u southWest point of the cell
+			if (x < width - 1)
+				map[(y + 1) * width + x + 1] += v * u * sedimentDropped;   //P(x+1, y+1) * v * u southEast point of the cell
+		}
 	}
 
 	float Erosion::ErodeRadius(vec2 oldPos, vec2 newPos, float ammountEroded) {
