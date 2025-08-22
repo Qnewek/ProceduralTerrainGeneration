@@ -40,8 +40,6 @@ private:
 	void PrintTrack(glm::mat4& model);
 
 	void PerformAction();
-	void DeactivateErosion();
-	void PerformErosion();
 
 	void InitializeTerrainGeneration();
 	void ResizeTerrainGeneration();
@@ -73,11 +71,6 @@ private:
 	int seed;
 	bool testSymmetrical;
 
-	//Erosion
-	erosion::Erosion erosion;
-	float *erosionVertices, *traceVertices;
-	bool erosionWindow, trackDraw, erosionDraw;
-
 	//TerrainGenerator
 	TerrainGenerator terrainGen;
 	std::vector<std::vector<double>> splines;
@@ -95,11 +88,6 @@ private:
 	int treeIndicesCount;
 	bool isTerrainDisplayed, drawTrees = false, terGenPerform = false, noiseEdit = false, biomeEdit = false, treeEdit = false;
 
-	//Erosion separate openGl
-	std::unique_ptr<VertexArray> erosionTrackVAO;
-	std::unique_ptr<VertexBuffer> erosionVertexBuffer;
-	std::unique_ptr<VertexBuffer> erosionTrackBuffer;
-	std::unique_ptr<Shader> erosionTrackShader;
 	//TerrainGeneration openGl
 	std::unique_ptr<VertexArray> terGenVAO;
 	std::unique_ptr<VertexBuffer> terGenVertexBuffer;

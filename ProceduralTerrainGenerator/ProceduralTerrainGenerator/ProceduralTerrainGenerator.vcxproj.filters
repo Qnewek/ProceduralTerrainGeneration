@@ -75,9 +75,6 @@
     <ClCompile Include="src\terrainGeneration\Erosion.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="src\utility\Player.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="src\terrainGeneration\Biome.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -1447,9 +1444,6 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="src\terrainGeneration\Erosion.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="src\utility\Player.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="src\terrainGeneration\Biome.h">

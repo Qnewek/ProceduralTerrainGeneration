@@ -28,7 +28,7 @@ namespace utilities
 	//Terrain generation functions
     void GenerateTerrainMap(noise::SimplexNoiseClass& noise, float* vertices, unsigned int* indices, unsigned int stride);
     void CreateTerrainMesh(noise::SimplexNoiseClass& noise, float* vertices, unsigned int* indices, float scalingFactor, unsigned int stride, bool normals, bool first);
-    void PerformErosion(erosion::Erosion& erosion, float* vertices, unsigned int* indices, float scalingFactor, std::optional<float*> Track, int stride);
+    void PerformErosion(erosion::Erosion& erosion, float* vertices, float scalingFactor, std::optional<float*> Track, int stride);
     void PaintBiome(float* vertices, float* map, int width, int height, unsigned int stride, unsigned int offset);
 	void AssignBiome(float* vertices, int* biomeMap, int width, int height, unsigned int stride, unsigned int offset);
     void AssignTexturesByBiomes(TerrainGenerator& terraGen, float* vertices, int width, int height, int texAtlasSize, unsigned int stride, unsigned int offset);
