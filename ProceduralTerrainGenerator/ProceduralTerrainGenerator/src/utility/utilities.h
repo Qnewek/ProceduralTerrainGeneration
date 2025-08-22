@@ -13,27 +13,31 @@
 
 namespace utilities
 {
-	//Different utility functions
 	void ConvertToGrayscaleImage(float* data, unsigned char* image, int width, int height);
-	void MeshIndicesStrips(unsigned int* indices, int width, int height);
-	void GenCubeLayout(float* vertices, unsigned int* indices, float scalingFactor);
     void ParseNoiseIntoVertices(float* vertices, float* map, int width, int height, float scale, unsigned int stride, unsigned int offset);
+	void MeshIndicesStrips(unsigned int* indices, int width, int height);
+    bool CalculateHeightMapNormals(float* vertices, unsigned int stride, unsigned int offSet, unsigned int width, unsigned int height);
+   
+    void CreateTerrainMesh(noise::SimplexNoiseClass& noise, float* vertices, unsigned int* indices, float scalingFactor, unsigned int stride, bool normals, bool first);
+    void PerformErosion(erosion::Erosion& erosion, float* vertices, float scalingFactor, std::optional<float*> Track, int stride);
+    
+    
+
+
     bool CreateIndicesTiledField(unsigned int* indices, int width, int height);
     bool CreateTiledVertices(float* vertices, int width, int height, float* map, float scalingFactor, unsigned int stride, unsigned int offset);
     void PaintNotByTexture(float* vertices, int width, int height, unsigned int stride, unsigned int offset);
 	bool saveToObj(const std::string& dirPath, const std::string& name, float* vertices, unsigned int* indices, unsigned int stride, unsigned int indexSize, unsigned int verticesCount, bool mtl);
-
-    bool CalculateHeightMapNormals(float* vertices, unsigned int stride, unsigned int offSet, unsigned int width, unsigned int height);
-
-	//Terrain generation functions
     void GenerateTerrainMap(noise::SimplexNoiseClass& noise, float* vertices, unsigned int* indices, unsigned int stride);
-    void CreateTerrainMesh(noise::SimplexNoiseClass& noise, float* vertices, unsigned int* indices, float scalingFactor, unsigned int stride, bool normals, bool first);
-    void PerformErosion(erosion::Erosion& erosion, float* vertices, float scalingFactor, std::optional<float*> Track, int stride);
     void PaintBiome(float* vertices, float* map, int width, int height, unsigned int stride, unsigned int offset);
 	void AssignBiome(float* vertices, int* biomeMap, int width, int height, unsigned int stride, unsigned int offset);
     void AssignTexturesByBiomes(TerrainGenerator& terraGen, float* vertices, int width, int height, int texAtlasSize, unsigned int stride, unsigned int offset);
 
-	//Benchmarking function
+
+
+    //-----
+	//Other
+    //-----
     template <typename Func, typename... Args>
     void benchmarkVoid(Func func, std::string funcName, Args&&... args) {
         auto start = std::chrono::high_resolution_clock::now();

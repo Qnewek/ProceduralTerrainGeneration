@@ -44,32 +44,19 @@ public:
 	float GetYaw() const{ return yaw; }
 	float GetPitch() const{ return pitch; }
 	float& GetSpeedRef() { return initSpeed; }
+	float& GetFovRef()  { return fov; }
+	float& GetSensitivityRef() { return sensitivity; }
+	glm::vec2& GetViewDist() { return viewDist; }
 
 private:
-	//Screen
-	unsigned int screenWidth;
-	unsigned int screenHeight;
-	//Camera position parameters
-	glm::vec3 position;
-	glm::vec3 front;
-	glm::vec3 up;
-	glm::vec3 right;
-	//Camera rotation parameters
-	float yaw;
-	float pitch;
-	float xpos;
-	float ypos;
-	//Camera options
-	glm::vec2 viewDist;
-	float initSpeed;
-	float speed;
-	float sensitivity;
-	float fov;
+	unsigned int screenWidth, screenHeight;
+	float yaw, pitch, xpos, ypos;
+	float initSpeed, speed, sensitivity, fov;
 	bool mouseControl;
 
-	//Matrices
-	glm::mat4 view;
-	glm::mat4 projection;
+	glm::vec3 position, front, up, right;
+	glm::vec2 viewDist;
+	glm::mat4 view, projection;
 
 	void UpdateCameraVectors(CameraMovement movement);
 };

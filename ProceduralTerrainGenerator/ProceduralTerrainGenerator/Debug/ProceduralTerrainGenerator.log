@@ -1,12 +1,46 @@
 ﻿  Trwa skanowanie źródeł pod kątem zależności modułów...
-  NoiseBasedGenerating.cpp
+  Application.cpp
 C:\Users\dawid\source\repos\Qnewek\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\vendor\Splines\spline.h(44,9): warning C4068: nieznana pragma „GCC”
-  (kompilowanie pliku źródłowego „src/utility/NoiseBasedGenerating.cpp”)
+  (kompilowanie pliku źródłowego „src/Application.cpp”)
   
 C:\Users\dawid\source\repos\Qnewek\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\vendor\Splines\spline.h(45,9): warning C4068: nieznana pragma „GCC”
-  (kompilowanie pliku źródłowego „src/utility/NoiseBasedGenerating.cpp”)
+  (kompilowanie pliku źródłowego „src/Application.cpp”)
   
 C:\Users\dawid\source\repos\Qnewek\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\vendor\Splines\spline.h(681,9): warning C4068: nieznana pragma „GCC”
-  (kompilowanie pliku źródłowego „src/utility/NoiseBasedGenerating.cpp”)
+  (kompilowanie pliku źródłowego „src/Application.cpp”)
   
+  TerrainGenApp.cpp
+C:\Users\dawid\source\repos\Qnewek\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\vendor\Splines\spline.h(44,9): warning C4068: nieznana pragma „GCC”
+  (kompilowanie pliku źródłowego „src/subSystems/TerrainGenApp.cpp”)
+  
+C:\Users\dawid\source\repos\Qnewek\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\vendor\Splines\spline.h(45,9): warning C4068: nieznana pragma „GCC”
+  (kompilowanie pliku źródłowego „src/subSystems/TerrainGenApp.cpp”)
+  
+C:\Users\dawid\source\repos\Qnewek\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\vendor\Splines\spline.h(681,9): warning C4068: nieznana pragma „GCC”
+  (kompilowanie pliku źródłowego „src/subSystems/TerrainGenApp.cpp”)
+  
+C:\Users\dawid\source\repos\Qnewek\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\subSystems\TerrainGenApp.cpp(95,129): warning C4244: "argument": konwersja z "float" do "GLsizei", możliwa utrata danych
+C:\Users\dawid\source\repos\Qnewek\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\subSystems\TerrainGenApp.cpp(95,81): warning C4244: "argument": konwersja z "float" do "GLsizei", możliwa utrata danych
+C:\Users\dawid\source\repos\Qnewek\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\subSystems\TerrainGenApp.cpp(95,32): warning C4244: "argument": konwersja z "float" do "GLint", możliwa utrata danych
+C:\Users\dawid\source\repos\Qnewek\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\subSystems\TerrainGenApp.cpp(95,16): warning C4244: "argument": konwersja z "float" do "GLint", możliwa utrata danych
+C:\Users\dawid\source\repos\Qnewek\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\subSystems\TerrainGenApp.cpp(96,128): warning C4244: "argument": konwersja z "float" do "GLsizei", możliwa utrata danych
+C:\Users\dawid\source\repos\Qnewek\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\subSystems\TerrainGenApp.cpp(96,80): warning C4244: "argument": konwersja z "float" do "GLsizei", możliwa utrata danych
+C:\Users\dawid\source\repos\Qnewek\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\subSystems\TerrainGenApp.cpp(96,31): warning C4244: "argument": konwersja z "float" do "GLint", możliwa utrata danych
+C:\Users\dawid\source\repos\Qnewek\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\subSystems\TerrainGenApp.cpp(96,15): warning C4244: "argument": konwersja z "float" do "GLint", możliwa utrata danych
+C:\Users\dawid\source\repos\Qnewek\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\subSystems\TerrainGenApp.cpp(116,66): warning C4244: "argument": konwersja z "int" do "float", możliwa utrata danych
+C:\Users\dawid\source\repos\Qnewek\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\subSystems\TerrainGenApp.cpp(136,65): warning C4244: "argument": konwersja z "int" do "float", możliwa utrata danych
+  LightSource.cpp
+C:\Users\dawid\source\repos\Qnewek\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\vendor\Splines\spline.h(44,9): warning C4068: nieznana pragma „GCC”
+  (kompilowanie pliku źródłowego „src/utility/LightSource.cpp”)
+  
+C:\Users\dawid\source\repos\Qnewek\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\vendor\Splines\spline.h(45,9): warning C4068: nieznana pragma „GCC”
+  (kompilowanie pliku źródłowego „src/utility/LightSource.cpp”)
+  
+C:\Users\dawid\source\repos\Qnewek\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\vendor\Splines\spline.h(681,9): warning C4068: nieznana pragma „GCC”
+  (kompilowanie pliku źródłowego „src/utility/LightSource.cpp”)
+  
+  Generowanie kodu...
+LINK : warning LNK4098: domyślna biblioteka "MSVCRT" powoduje konflikt z innymi bibliotekami; użyj opcji /NODEFAULTLIB:biblioteka
+LINK : warning LNK4098: domyślna biblioteka "LIBCMT" powoduje konflikt z innymi bibliotekami; użyj opcji /NODEFAULTLIB:biblioteka
+glew32s.lib(glew.obj) : warning LNK4099: nie znaleziono pliku PDB "vc120.pdb" z elementem "glew32s.lib(glew.obj)" lub w pozycji "C:\Users\dawid\source\repos\Qnewek\ProceduralTerrainGeneration\ProceduralTerrainGenerator\Debug\vc120.pdb"; obiekt zostanie skonsolidowany bez informacji debugowania
   ProceduralTerrainGenerator.vcxproj -> C:\Users\dawid\source\repos\Qnewek\ProceduralTerrainGeneration\ProceduralTerrainGenerator\Debug\ProceduralTerrainGenerator.exe
