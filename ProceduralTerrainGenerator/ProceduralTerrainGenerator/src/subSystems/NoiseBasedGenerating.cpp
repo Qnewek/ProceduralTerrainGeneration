@@ -87,7 +87,7 @@ bool NoiseBasedGenerating::GenerateNoise()
 		meshIndices = new unsigned int[(height - 1) * width * 2]; // indices for strips
 	}
 
-	utilities::benchmarkVoid(utilities::CreateTerrainMesh, "CreateTerrainMesh", noise, vertices, meshIndices, heightScale, stride, true, newSize);
+	utilities::benchmarkVoid(utilities::CreateTerrainMesh, "CreateTerrainMesh", noise, vertices, meshIndices, heightScale, stride, true, newSize, displayMode);
 	newSize = false;
 
 	mainVertexBuffer = std::make_unique<VertexBuffer>(vertices, (height * width) * stride * sizeof(float));
@@ -118,7 +118,7 @@ bool NoiseBasedGenerating::SimulateErosion()
 	}
 
 	erosion.SetMap(noise.GetMap());
-	utilities::benchmarkVoid(utilities::PerformErosion, "PerformErosion", erosion, erosionVertices, heightScale, std::nullopt, stride);
+	utilities::benchmarkVoid(utilities::PerformErosion, "PerformErosion", erosion, erosionVertices, heightScale, std::nullopt, stride, displayMode);
 	erosionVertexBuffer = std::make_unique<VertexBuffer>(erosionVertices, (height * width) * stride * sizeof(float));
 	erosionVAO->AddBuffer(*erosionVertexBuffer, layout);
 	erosionDraw = true;
@@ -127,12 +127,12 @@ bool NoiseBasedGenerating::SimulateErosion()
 	return true;
 }
 
-void NoiseBasedGenerating::Draw(Renderer& renderer, Camera& camera)
+void NoiseBasedGenerating::Draw(Renderer& renderer, Camera& camera, LightSource& light)
 {
 	glm::mat4 model = glm::mat4(1.0f);
 	model = glm::scale(model, glm::vec3(modelScale, modelScale, modelScale));
 	mainShader->SetMaterialUniforms(glm::vec3(0.6f, 0.6f, 0.6f), glm::vec3(0.6f, 0.6f, 0.6f), glm::vec3(0.1f, 0.1f, 0.1f), 1.0f);
-	mainShader->SetLightUniforms(glm::vec3(noise.GetWidth(), heightScale + 20.0f, noise.GetHeight()), glm::vec3(0.5f, 0.5f, 0.5f), glm::vec3(0.5f, 0.5f, 0.5f), glm::vec3(0.5f, 0.5f, 0.5f));
+	mainShader->SetLightUniforms(light.GetPosition(), light.GetAmbient(), light.GetDiffuse(), light.GetSpecular());
 	mainShader->SetViewPos(camera.GetPosition());
 	mainShader->SetUniform1f("step", topoStep);
 	mainShader->SetUniform1f("bandWidth", topoBandWidth);
@@ -141,67 +141,70 @@ void NoiseBasedGenerating::Draw(Renderer& renderer, Camera& camera)
 	renderer.DrawTriangleStrips(*mainVAO, *mainIndexBuffer, *mainShader, noise.GetHeight() - 1, noise.GetWidth() * 2);
 
 	if (erosionDraw) {
-		model = glm::translate(model, glm::vec3(width * modelScale + 1.0f, 0.0f, 0.0f));
+		model = glm::translate(model, glm::vec3(width + 1.0f, 0.0f, 0.0f));
 		mainShader->SetMVP(model, *camera.GetViewMatrix(), *camera.GetProjectionMatrix());
 		renderer.DrawTriangleStrips(*erosionVAO, *mainIndexBuffer, *mainShader, erosion.GetHeight() - 1, erosion.GetWidth() * 2);
 	}
+	light.Draw(renderer, *camera.GetViewMatrix(), *camera.GetProjectionMatrix());
 }
 
 void NoiseBasedGenerating::ImGuiDraw()
 {
-	ImGui::Text("Heightmap settings");
-	//Size
-	ImGui::Text("Resize map");
-	ImGui::InputInt("Height", &height);
-	ImGui::InputInt("Width", &width);
-	if (ImGui::Button("Resize")) {
-		Resize();
+	if(ImGui::CollapsingHeader("Heightmap settings", ImGuiTreeNodeFlags_DefaultOpen)){
+		ImGui::Text("Resize map");
+		ImGui::InputInt("Height", &height);
+		ImGui::InputInt("Width", &width);
+		if (ImGui::Button("Resize")) {
+			Resize();
+		}
 	}
-	ImGui::Separator();
-	//Display
-	ImGui::Text("Display settings:");
-	ImGui::Text("Model scale:");
-	ImGui::SliderFloat("", &modelScale, 0.1f, 5.0f);
-	ImGui::Text("Mode:");
-	static const char* displayOptions[] = { "GREYSCALE", "TOPOGRAPHICAL", "OTHER" };
-	static int currentDisplayOption = static_cast<int>(displayMode);
-	bool paint = false;
+	if (ImGui::CollapsingHeader("Display settings:", ImGuiTreeNodeFlags_DefaultOpen)) {
+		ImGui::Text("Model scale:");
+		ImGui::SliderFloat("Model scale", &modelScale, 0.1f, 5.0f);
+		ImGui::Text("Isopleth:");
+		ImGui::SliderFloat("Step", &topoStep, 1.0f, heightScale);
+		ImGui::SliderFloat("Band width", &topoBandWidth, 0.1f, 1.0f);
 
-	if (ImGui::BeginCombo("", displayOptions[currentDisplayOption]))
-	{
-		for (int n = 0; n < IM_ARRAYSIZE(displayOptions); n++)
+		static const char* displayOptions[] = { "GREYSCALE", "TOPOGRAPHICAL", "OTHER" };
+		static int currentDisplayOption = static_cast<int>(displayMode);
+		bool paint = false;
+
+		if (ImGui::BeginCombo("Mode", displayOptions[currentDisplayOption]))
 		{
-			bool is_selected = (currentDisplayOption == n);
-			if (ImGui::Selectable(displayOptions[n], is_selected)) {
-				currentDisplayOption = n;
-				displayMode = static_cast<utilities::heightMapMode>(n);
-				paint = true;
+			for (int n = 0; n < IM_ARRAYSIZE(displayOptions); n++)
+			{
+				bool is_selected = (currentDisplayOption == n);
+				if (ImGui::Selectable(displayOptions[n], is_selected)) {
+					currentDisplayOption = n;
+					displayMode = static_cast<utilities::heightMapMode>(n);
+					paint = true;
+				}
+				if (is_selected)
+					ImGui::SetItemDefaultFocus();
 			}
-			if (is_selected)
-				ImGui::SetItemDefaultFocus();
+			ImGui::EndCombo();
 		}
-		ImGui::EndCombo();
-	}
 
-	if (paint) {
-		utilities::PaintVerticesByHeight(vertices, width, height, heightScale, stride, displayMode, 1, 6);
-		mainVertexBuffer->UpdateData(vertices, (height * width) * stride * sizeof(float));
-		mainVAO->AddBuffer(*mainVertexBuffer, layout);
-	}
-
-	if (ImGui::Checkbox("WireFrame", &wireFrame)) {
-		if (wireFrame) {
-			glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
-			glDisable(GL_CULL_FACE);
+		if (paint) {
+			utilities::PaintVerticesByHeight(vertices, width, height, heightScale, stride, displayMode, 1, 6);
+			mainVertexBuffer->UpdateData(vertices, (height * width) * stride * sizeof(float));
+			mainVAO->AddBuffer(*mainVertexBuffer, layout);
 		}
-		else {
-			glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
-			glEnable(GL_CULL_FACE);
-		}
-	}
 
-	if (ImGui::Button("Save file")) {
-		std::cout << "[LOG] Well it will work one day i promise!" << std::endl;
+		if (ImGui::Checkbox("WireFrame", &wireFrame)) {
+			if (wireFrame) {
+				glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+				glDisable(GL_CULL_FACE);
+			}
+			else {
+				glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+				glEnable(GL_CULL_FACE);
+			}
+		}
+
+		if (ImGui::Button("Save file")) {
+			std::cout << "[LOG] Well it will work one day i promise!" << std::endl;
+		}
 	}
 	//Noise settings
 	if (ImGui::CollapsingHeader("Noise Settings")) {

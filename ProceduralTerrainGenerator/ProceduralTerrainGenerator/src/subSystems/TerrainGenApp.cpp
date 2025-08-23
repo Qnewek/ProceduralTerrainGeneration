@@ -10,9 +10,9 @@
 
 TerrainGenApp::TerrainGenApp() : window(nullptr), windowWidth(0), windowHeight(0), deltaTime(0.0f), lastFrame(0.0f),
 rightPanelWidth(400.0f),topPanelHeight(30.0f), bottomPanelHeight(200.0f), leftPanelWidth(400.0f),
-width(400), height(400), heightScale(255.0f), light(glm::vec3(width/2.0f, heightScale * 2, height/2.0f), 20.0f),
+width(400), height(400), heightScale(255.0f),
 camera(1920, 1080, glm::vec3(0.0f, heightScale / 2.0f, 0.0f), 30.0f, 500.0f), renderer(),
-noiseGen(), currentMode(mode::NOISE_HEIGHTMAP)
+noiseGen(), currentMode(mode::NOISE_HEIGHTMAP), light(glm::vec3(0.0f, 0.0f, 0.0f), 20.0f)
 {
     std::cout << "[LOG] Hub initialized" << std::endl;
 }
@@ -62,9 +62,9 @@ int TerrainGenApp::Initialize()
 
     //Logic initialization
 	camera.SetScreenSize(windowWidth - rightPanelWidth - leftPanelWidth, windowHeight - topPanelHeight - bottomPanelHeight);
-    light.Initialize();
 	noiseGen.Initialize(height, width, heightScale);
-
+    light.Initialize();
+    light.SetPosition(glm::vec3(width, heightScale, height));
    
     return 0;
 }
@@ -99,12 +99,11 @@ void TerrainGenApp::Draw()
 
     if (currentMode == mode::NOISE_HEIGHTMAP)
     {
-        noiseGen.Draw(renderer, camera);
+        noiseGen.Draw(renderer, camera, light);
     }
     else if (currentMode == mode::TERRAIN_GEN) {
 
     }
-	light.Draw(renderer, *camera.GetViewMatrix(), *camera.GetProjectionMatrix());
 
     glDisable(GL_SCISSOR_TEST);
 }
@@ -116,12 +115,9 @@ void TerrainGenApp::ImGuiRender()
     ImGui::SetNextWindowSize(ImVec2(rightPanelWidth, windowHeight-60), ImGuiCond_Always);
     ImGui::Begin("Tools", nullptr, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_ResizeFromAnySide);
     rightPanelWidth = ImGui::GetWindowWidth() <= windowWidth/2 ? ImGui::GetWindowWidth() : windowWidth/2;
-	ImGui::Text("Video settings");
-	ImGui::SliderFloat("Camera speed", &camera.GetSpeedRef(), 0.1f, 200.0f);
-	ImGui::SliderFloat("Camera FOV", &camera.GetFovRef(), 1.0f, 120.0f);
-	ImGui::SliderFloat("Camera sensitivity", &camera.GetSensitivityRef(), 0.01f, 1.0f);
-	ImGui::SliderFloat("Render distance", &camera.GetViewDist().y, 1.0f, 1000.0f);
-	ImGui::Separator();
+
+	camera.ImGuiDraw();
+	light.ImGuiDraw();
     if (currentMode == mode::NOISE_HEIGHTMAP) {
         noiseGen.ImGuiDraw();
     }
