@@ -4,10 +4,11 @@
 
 #include "glm/glm.hpp"
 #include "glm/gtc/matrix_transform.hpp"
+#include "imgui/imgui.h"
 
 #include <iostream>
 
-LightSource::LightSource(glm::vec3 lightPos, float _size) : lightPos(lightPos), size(_size)
+LightSource::LightSource(glm::vec3 lightPos, float _size) : lightPos(lightPos), size(_size), ambient(0.2f, 0.2f, 0.2f), diffuse(0.5f, 0.5f, 0.5f), specular(1.0f, 1.0f, 1.0f)
 {
 }
 
@@ -70,4 +71,14 @@ void LightSource::Draw(Renderer& renderer, glm::mat4& view, glm::mat4& projectio
 
 	renderer.Draw(*m_VAO, *m_IndexBuffer, *m_Shader);
 	m_Shader->Unbind();
+}
+
+void LightSource::ImGuiDraw() {
+	if (ImGui::CollapsingHeader("Light parameters:")) {
+		ImGui::DragFloat3("Position", (float*)&lightPos, 0.1f);
+		ImGui::DragFloat("Size", &size, 0.01f, 0.01f, 10.0f);
+		ImGui::ColorEdit3("Ambient", (float*)&ambient);
+		ImGui::ColorEdit3("Diffuse", (float*)&diffuse);
+		ImGui::ColorEdit3("Specular", (float*)&specular);
+	}
 }

@@ -3,6 +3,7 @@
 #include "Erosion.h"
 #include "Camera.h"
 #include "utilities.h"
+#include "LightSource.h"
 
 #include "VertexBufferLayout.h"
 
@@ -39,7 +40,7 @@ class NoiseBasedGenerating
 		bool GenerateNoise();
 		bool SimulateErosion();
 
-		void Draw(Renderer& renderer, Camera& camera);
+		void Draw(Renderer& renderer, Camera& camera, LightSource& light);
 		void ImGuiDraw();
 		void ErosionImGui();
 		void ImGuiOutput();

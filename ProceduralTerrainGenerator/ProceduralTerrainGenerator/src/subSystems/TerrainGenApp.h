@@ -5,9 +5,9 @@
 
 #include "Renderer.h"
 #include "Camera.h"
-#include "LightSource.h"
 #include "Noise.h"
 #include "Erosion.h"
+#include "LightSource.h"
 #include "TerrainGenerator.h"
 
 #include "NoiseBasedGenerating.h"

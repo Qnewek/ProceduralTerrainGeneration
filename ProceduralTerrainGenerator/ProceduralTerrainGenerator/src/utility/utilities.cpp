@@ -193,7 +193,7 @@ namespace utilities
 	//@param stride - number of floats per vertex
 	//@param normals - boolean value to determine if normals should be calculated
 	//@param first - boolean value to determine if indices should be generated
-	void CreateTerrainMesh(noise::SimplexNoiseClass& noise, float* vertices, unsigned int* indices, float scalingFactor, unsigned int stride, bool normals, bool first)
+	void CreateTerrainMesh(noise::SimplexNoiseClass& noise, float* vertices, unsigned int* indices, float scalingFactor, unsigned int stride, bool normals, bool first, heightMapMode mode)
 	{
 		noise.GenerateFractalNoise();
 		ParseNoiseIntoVertices(vertices, noise.GetMap(), noise.GetWidth(), noise.GetHeight(), scalingFactor, stride, 0);
@@ -202,7 +202,7 @@ namespace utilities
 		if (normals) {
 			CalculateHeightMapNormals(vertices, stride, 3, noise.GetWidth(), noise.GetHeight());
 		}
-		PaintVerticesByHeight(vertices, noise.GetWidth(), noise.GetHeight(), scalingFactor, stride, heightMapMode::GREYSCALE, 1, 6);
+		PaintVerticesByHeight(vertices, noise.GetWidth(), noise.GetHeight(), scalingFactor, stride, mode, 1, 6);
 	}
 
 	//Performs erosion simulation on the terrain map, updating vertices, indices and normals
@@ -213,11 +213,11 @@ namespace utilities
 	//@param positionsOffset - offset in the vertex array to start with when filling the data
 	//@param normalsOffset - offset in the vertex array to start with when filling the normals
 	//@param erosion - erosion object
-	void PerformErosion(erosion::Erosion& erosion, float* vertices, float scalingFactor, std::optional<float*> Track, int stride) {
+	void PerformErosion(erosion::Erosion& erosion, float* vertices, float scalingFactor, std::optional<float*> Track, int stride, heightMapMode mode) {
 		erosion.Erode(Track);
 		ParseNoiseIntoVertices(vertices, erosion.GetMap(), erosion.GetWidth(), erosion.GetHeight(), scalingFactor, stride, 0);
 		CalculateHeightMapNormals(vertices, stride, 3, erosion.GetWidth(), erosion.GetHeight());
-		PaintVerticesByHeight(vertices, erosion.GetWidth(), erosion.GetHeight(), scalingFactor, stride, heightMapMode::GREYSCALE, 1, 6);
+		PaintVerticesByHeight(vertices, erosion.GetWidth(), erosion.GetHeight(), scalingFactor, stride, mode, 1, 6);
 	}
 
 

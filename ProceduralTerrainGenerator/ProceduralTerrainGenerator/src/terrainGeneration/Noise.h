@@ -62,11 +62,6 @@ namespace noise
 			redistribution(redistribution), lacunarity(lacunarity), persistance(persistance), option(option), revertGain(revertGain),
 			Ridge(Ridge), RidgeGain(RidgeGain), RidgeOffset(RidgeOffset), island(island), islandType(islandType), mixPower(mixPower), 
 			symmetrical(symmetrical){}
-
-		float getCheckSum() const {
-			return xoffset + yoffset + scale + octaves + constrast + redistribution + lacunarity +
-				persistance + RidgeGain + RidgeOffset + revertGain + mixPower + seed;
-		}
 	};
 
 	class SimplexNoiseClass
