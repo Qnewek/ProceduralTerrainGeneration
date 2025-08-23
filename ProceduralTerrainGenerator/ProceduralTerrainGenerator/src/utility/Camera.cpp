@@ -29,6 +29,13 @@ void Camera::SetCameraConfig(glm::vec3 position, glm::vec3 front, glm::vec3 up, 
 	right = glm::normalize(glm::cross(front, up));
 	up = glm::normalize(glm::cross(right, front));
 }
+void Camera::SetScreenSize(unsigned int width, unsigned int height)
+{
+	screenWidth = width;
+	screenHeight = height;
+	xpos = width / 2.0f;
+	ypos = height / 2.0f;
+}
 void Camera::UpdateCameraVectors(CameraMovement movement) {
 	if (movement == CameraMovement::FORWARD)
 		position += speed * front;

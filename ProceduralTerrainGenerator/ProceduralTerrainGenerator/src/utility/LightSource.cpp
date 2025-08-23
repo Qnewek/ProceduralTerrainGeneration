@@ -45,13 +45,9 @@ void LightSource::Initialize() {
 		4, 5, 1, 4, 1, 0
 	};
 
-	std::cout << "[LOG] œmieciu " << std::endl;
 	m_VAO = std::make_unique<VertexArray>();
-	std::cout << "[LOG] Light source initialized" << std::endl;
 	m_VertexBuffer = std::make_unique<VertexBuffer>(cubeVertices, 24 * sizeof(float));
-	std::cout << "[LOG] Light source initialized" << std::endl;
 	m_IndexBuffer = std::make_unique<IndexBuffer>(cubeIndices, 36);
-	std::cout << "[LOG] Light source initialized" << std::endl;
 	m_Shader = std::make_unique<Shader>("res/shaders/Light_source_vertex.shader", "res/shaders/Light_source_fragment.shader");
 
 

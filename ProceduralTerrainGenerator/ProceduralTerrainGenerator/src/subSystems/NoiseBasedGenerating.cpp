@@ -2,15 +2,13 @@
 
 #include <iostream>
 
-#include "utilities.h"
-
 #include "imgui/imgui.h"
 #include "imgui/imgui_impl_glfw_gl3.h"
 #include "glm/glm.hpp"
 #include "glm/gtc/matrix_transform.hpp"
 
 NoiseBasedGenerating::NoiseBasedGenerating() : noise(), erosion(1, 1), vertices(nullptr), erosionVertices(nullptr), meshIndices(nullptr), 
-width(0), height(0), heightScale(255.0f), stride(6), 
+width(0), height(0), heightScale(255.0f), modelScale(1.0f), topoBandWidth(0.2f), topoStep(10.0f), stride(9),
 seed(0)
 {
 }
@@ -35,6 +33,7 @@ bool NoiseBasedGenerating::Initialize(int height, int width, float heightScale)
 {
 	erosionVAO = std::make_unique<VertexArray>();
 	mainVAO = std::make_unique<VertexArray>();
+	layout.Push<float>(3);
 	layout.Push<float>(3);
 	layout.Push<float>(3);
 
@@ -128,18 +127,21 @@ bool NoiseBasedGenerating::SimulateErosion()
 	return true;
 }
 
-void NoiseBasedGenerating::Draw(glm::mat4& model, Renderer& renderer, Camera& camera)
+void NoiseBasedGenerating::Draw(Renderer& renderer, Camera& camera)
 {
+	glm::mat4 model = glm::mat4(1.0f);
+	model = glm::scale(model, glm::vec3(modelScale, modelScale, modelScale));
 	mainShader->SetMaterialUniforms(glm::vec3(0.6f, 0.6f, 0.6f), glm::vec3(0.6f, 0.6f, 0.6f), glm::vec3(0.1f, 0.1f, 0.1f), 1.0f);
 	mainShader->SetLightUniforms(glm::vec3(noise.GetWidth(), heightScale + 20.0f, noise.GetHeight()), glm::vec3(0.5f, 0.5f, 0.5f), glm::vec3(0.5f, 0.5f, 0.5f), glm::vec3(0.5f, 0.5f, 0.5f));
 	mainShader->SetViewPos(camera.GetPosition());
+	mainShader->SetUniform1f("step", topoStep);
+	mainShader->SetUniform1f("bandWidth", topoBandWidth);
 	mainShader->SetMVP(model, *camera.GetViewMatrix(), *camera.GetProjectionMatrix());
-	mainShader->SetUniform1f("scale", heightScale);
 
 	renderer.DrawTriangleStrips(*mainVAO, *mainIndexBuffer, *mainShader, noise.GetHeight() - 1, noise.GetWidth() * 2);
 
 	if (erosionDraw) {
-		model = glm::translate(model, glm::vec3(width + 1.0f, 0.0f, 0.0f));
+		model = glm::translate(model, glm::vec3(width * modelScale + 1.0f, 0.0f, 0.0f));
 		mainShader->SetMVP(model, *camera.GetViewMatrix(), *camera.GetProjectionMatrix());
 		renderer.DrawTriangleStrips(*erosionVAO, *mainIndexBuffer, *mainShader, erosion.GetHeight() - 1, erosion.GetWidth() * 2);
 	}
@@ -157,15 +159,47 @@ void NoiseBasedGenerating::ImGuiDraw()
 	}
 	ImGui::Separator();
 	//Display
-	ImGui::Text("Heightmap display setting:");
+	ImGui::Text("Display settings:");
+	ImGui::Text("Model scale:");
+	ImGui::SliderFloat("", &modelScale, 0.1f, 5.0f);
+	ImGui::Text("Mode:");
+	static const char* displayOptions[] = { "GREYSCALE", "TOPOGRAPHICAL", "OTHER" };
+	static int currentDisplayOption = static_cast<int>(displayMode);
+	bool paint = false;
+
+	if (ImGui::BeginCombo("", displayOptions[currentDisplayOption]))
+	{
+		for (int n = 0; n < IM_ARRAYSIZE(displayOptions); n++)
+		{
+			bool is_selected = (currentDisplayOption == n);
+			if (ImGui::Selectable(displayOptions[n], is_selected)) {
+				currentDisplayOption = n;
+				displayMode = static_cast<utilities::heightMapMode>(n);
+				paint = true;
+			}
+			if (is_selected)
+				ImGui::SetItemDefaultFocus();
+		}
+		ImGui::EndCombo();
+	}
+
+	if (paint) {
+		utilities::PaintVerticesByHeight(vertices, width, height, heightScale, stride, displayMode, 1, 6);
+		mainVertexBuffer->UpdateData(vertices, (height * width) * stride * sizeof(float));
+		mainVAO->AddBuffer(*mainVertexBuffer, layout);
+	}
+
 	if (ImGui::Checkbox("WireFrame", &wireFrame)) {
 		if (wireFrame) {
 			glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+			glDisable(GL_CULL_FACE);
 		}
 		else {
 			glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+			glEnable(GL_CULL_FACE);
 		}
 	}
+
 	if (ImGui::Button("Save file")) {
 		std::cout << "[LOG] Well it will work one day i promise!" << std::endl;
 	}
@@ -194,7 +228,7 @@ void NoiseBasedGenerating::ImGuiDraw()
 				if (ImGui::Selectable(options[n], is_selected)) {
 					current_option = n;
 					noise.GetConfigRef().option = static_cast<noise::Options>(n);
-					regenerate = true; // zmiana opcji = regeneracja
+					regenerate = true;
 				}
 				if (is_selected)
 					ImGui::SetItemDefaultFocus();

@@ -39,7 +39,7 @@ public:
 	void SetSpeed(float value) { speed = value; initSpeed = value; }
 	void SetSensitivity(float value) { sensitivity = value; }
 	void SetFov(float value) { fov = value; }
-	void SetScreenSize(unsigned int width, unsigned int height) { screenWidth = width; screenHeight = height; }
+	void SetScreenSize(unsigned int width, unsigned int height);
 
 	float GetYaw() const{ return yaw; }
 	float GetPitch() const{ return pitch; }
