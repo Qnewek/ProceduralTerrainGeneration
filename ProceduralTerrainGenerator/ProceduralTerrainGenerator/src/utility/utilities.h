@@ -13,11 +13,19 @@
 
 namespace utilities
 {
+    enum class heightMapMode
+    {
+        GREYSCALE,
+        TOPOGRAPHICAL,
+        OTHER
+	};
+
 	void ConvertToGrayscaleImage(float* data, unsigned char* image, int width, int height);
     void ParseNoiseIntoVertices(float* vertices, float* map, int width, int height, float scale, unsigned int stride, unsigned int offset);
 	void MeshIndicesStrips(unsigned int* indices, int width, int height);
     bool CalculateHeightMapNormals(float* vertices, unsigned int stride, unsigned int offSet, unsigned int width, unsigned int height);
-   
+	bool PaintVerticesByHeight(float* vertices, const int& width, const int& height, const float& heightScale, const unsigned int& stride, heightMapMode m, unsigned int heightOffSet , unsigned int colorOffset);
+
     void CreateTerrainMesh(noise::SimplexNoiseClass& noise, float* vertices, unsigned int* indices, float scalingFactor, unsigned int stride, bool normals, bool first);
     void PerformErosion(erosion::Erosion& erosion, float* vertices, float scalingFactor, std::optional<float*> Track, int stride);
     

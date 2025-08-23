@@ -61,7 +61,8 @@ int TerrainGenApp::Initialize()
     ImGui::StyleColorsDark();
 
     //Logic initialization
-	light.Initialize();
+	camera.SetScreenSize(windowWidth - rightPanelWidth - leftPanelWidth, windowHeight - topPanelHeight - bottomPanelHeight);
+    light.Initialize();
 	noiseGen.Initialize(height, width, heightScale);
 
    
@@ -95,11 +96,10 @@ void TerrainGenApp::Draw()
     glViewport(leftPanelWidth, bottomPanelHeight, windowWidth - rightPanelWidth - leftPanelWidth, windowHeight - topPanelHeight - bottomPanelHeight);
     glScissor(leftPanelWidth, bottomPanelHeight, windowWidth - rightPanelWidth - leftPanelWidth, windowHeight - topPanelHeight - bottomPanelHeight);
     renderer.Clear(glm::vec3(0.0f, 0.0f, 0.0f));
-    glm::mat4 model = glm::mat4(1.0f);
 
     if (currentMode == mode::NOISE_HEIGHTMAP)
     {
-        noiseGen.Draw(model, renderer, camera);
+        noiseGen.Draw(renderer, camera);
     }
     else if (currentMode == mode::TERRAIN_GEN) {
 

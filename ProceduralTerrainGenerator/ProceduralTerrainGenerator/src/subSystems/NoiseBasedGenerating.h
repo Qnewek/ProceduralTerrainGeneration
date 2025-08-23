@@ -2,6 +2,7 @@
 #include "Noise.h"
 #include "Erosion.h"
 #include "Camera.h"
+#include "utilities.h"
 
 #include "VertexBufferLayout.h"
 
@@ -10,11 +11,12 @@ class NoiseBasedGenerating
 	private:
 		//Config
 		float* vertices, *erosionVertices;
-		float heightScale;
+		float heightScale, modelScale, topoStep, topoBandWidth;
 		unsigned int* meshIndices;
 		unsigned int stride;
 		int width, height, seed;
 		bool wireFrame = false, erosionDraw = false, newSize = true, instantUpdate = true;
+		utilities::heightMapMode displayMode = utilities::heightMapMode::GREYSCALE;
 		
 		//OpenGl objects
 		VertexBufferLayout layout;
@@ -37,7 +39,7 @@ class NoiseBasedGenerating
 		bool GenerateNoise();
 		bool SimulateErosion();
 
-		void Draw(glm::mat4& model, Renderer& renderer, Camera& camera);
+		void Draw(Renderer& renderer, Camera& camera);
 		void ImGuiDraw();
 		void ErosionImGui();
 		void ImGuiOutput();

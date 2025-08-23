@@ -124,6 +124,67 @@ namespace utilities
 		return true;
 	}
 
+	//Generates a color based on the height value, using a gradient from blue to green to red
+	//@param hNorm - normalized height value (0 to 1)
+	glm::vec3 getTopoColor(float hNorm) {
+		// Od niebieskiego (0) przez zielony (0.5) do czerwonego (1)
+		if (hNorm < 0.5f)
+			return glm::mix(glm::vec3(0.0f, 0.0f, 1.0f), glm::vec3(0.0f, 1.0f, 0.0f), hNorm * 2.0f);
+		else
+			return glm::mix(glm::vec3(0.0f, 1.0f, 0.0f), glm::vec3(1.0f, 0.0f, 0.0f), (hNorm - 0.5f) * 2.0f);
+	}
+
+	//Paints vertices based on their height, using either grayscale or topographical coloring
+	//@param vertices - array of vertices to be filled with data
+	//@param width - width of the noise map in chunks
+	//@param height - height of the noise map in chunks
+	//@param heightScale - scaling factor for generating height values
+	//@param stride - number of floats per vertex
+	//@param m - mode of coloring (grayscale or topographical)
+	//@param heightOffSet - offset in the vertex array to start with when filling the height data
+	//@param colorOffset - offset in the vertex array to start with when filling the color data
+	//@param topo_Step - step value for topographical coloring
+	bool PaintVerticesByHeight(float* vertices, const int& width, const int& height, const float& heightScale, const unsigned int& stride, heightMapMode m, unsigned int heightOffSet, unsigned int colorOffset)
+	{
+		if(!vertices) {
+			std::cout << "[ERROR] Vertices array not initialized" << std::endl;
+			return false;
+		}
+		if (m == heightMapMode::GREYSCALE) {
+			for (int y = 0; y < height; y++) {
+				for (int x = 0; x < width; x++) {
+					float h = vertices[(y * width + x) * stride + heightOffSet];
+					float hNorm = std::clamp((h + 16.0f) / heightScale, 0.0f, 1.0f);
+
+					vertices[(y * width + x) * stride + colorOffset] = hNorm;
+					vertices[(y * width + x) * stride + colorOffset + 1] = hNorm;
+					vertices[(y * width + x) * stride + colorOffset + 2] = hNorm;
+				}
+			}
+			std::cout << "[LOG] Greyscale painting applied" << std::endl;
+		}
+		else if (m == heightMapMode::TOPOGRAPHICAL) {
+			float bandWidth = 0.2f;
+			for (int y = 0; y < height; y++) {
+				for (int x = 0; x < width; x++) {
+					float h = vertices[(y * width + x) * stride + heightOffSet];
+					float hNorm = std::clamp((h + 16.0f) / heightScale, 0.0f, 1.0f);
+
+					glm::vec3 topoColor = getTopoColor(hNorm);
+
+					vertices[(y * width + x) * stride + colorOffset] = topoColor.r;
+					vertices[(y * width + x) * stride + colorOffset + 1] = topoColor.g;
+					vertices[(y * width + x) * stride + colorOffset + 2] = topoColor.b;
+				}
+			}
+			std::cout << "[LOG] Topographical painting applied" << std::endl;
+		}
+		else {
+			std::cout << "[LOG] Painting mode not recognized" << std::endl;
+		}
+		return true;
+	}
+
 	//Generates terrain map using Perlin Fractal Noise, transforming it into drawable mesh and
 	//also dealing with initialization and calculations of normals for lightning purposes
 	//@param noise - Perlin noise object
@@ -141,6 +202,7 @@ namespace utilities
 		if (normals) {
 			CalculateHeightMapNormals(vertices, stride, 3, noise.GetWidth(), noise.GetHeight());
 		}
+		PaintVerticesByHeight(vertices, noise.GetWidth(), noise.GetHeight(), scalingFactor, stride, heightMapMode::GREYSCALE, 1, 6);
 	}
 
 	//Performs erosion simulation on the terrain map, updating vertices, indices and normals
@@ -155,6 +217,7 @@ namespace utilities
 		erosion.Erode(Track);
 		ParseNoiseIntoVertices(vertices, erosion.GetMap(), erosion.GetWidth(), erosion.GetHeight(), scalingFactor, stride, 0);
 		CalculateHeightMapNormals(vertices, stride, 3, erosion.GetWidth(), erosion.GetHeight());
+		PaintVerticesByHeight(vertices, erosion.GetWidth(), erosion.GetHeight(), scalingFactor, stride, heightMapMode::GREYSCALE, 1, 6);
 	}
 
 
