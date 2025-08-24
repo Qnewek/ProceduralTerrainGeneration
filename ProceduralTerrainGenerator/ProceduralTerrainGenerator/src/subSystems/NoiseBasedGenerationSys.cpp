@@ -1,4 +1,4 @@
-#include "NoiseBasedGenerating.h"
+#include "NoiseBasedGenerationSys.h"
 
 #include <iostream>
 
@@ -7,13 +7,13 @@
 #include "glm/glm.hpp"
 #include "glm/gtc/matrix_transform.hpp"
 
-NoiseBasedGenerating::NoiseBasedGenerating() : noise(), erosion(1, 1), vertices(nullptr), erosionVertices(nullptr), meshIndices(nullptr), 
-width(0), height(0), heightScale(255.0f), modelScale(1.0f), topoBandWidth(0.2f), topoStep(10.0f), stride(9),
+NoiseBasedGenerationSys::NoiseBasedGenerationSys() : noise(), erosion(1, 1), vertices(nullptr), erosionVertices(nullptr), meshIndices(nullptr), 
+width(0), height(0), heightScale(1.0f), modelScale(1.0f), topoBandWidth(0.2f), topoStep(10.0f), stride(9),
 seed(0)
 {
 }
 
-NoiseBasedGenerating::~NoiseBasedGenerating()
+NoiseBasedGenerationSys::~NoiseBasedGenerationSys()
 {
 	if (vertices) {
 		delete[] vertices;
@@ -29,7 +29,7 @@ NoiseBasedGenerating::~NoiseBasedGenerating()
 	}
 }
 
-bool NoiseBasedGenerating::Initialize(int height, int width, float heightScale)
+bool NoiseBasedGenerationSys::Initialize(int _height, int _width, float _heightScale)
 {
 	erosionVAO = std::make_unique<VertexArray>();
 	mainVAO = std::make_unique<VertexArray>();
@@ -37,10 +37,10 @@ bool NoiseBasedGenerating::Initialize(int height, int width, float heightScale)
 	layout.Push<float>(3);
 	layout.Push<float>(3);
 
-	this->height = height;
-	this->width = width;
+	this->height = _height;
+	this->width = _width;
 	this->seed = noise.GetConfigRef().seed;
-	this->heightScale = heightScale;
+	this->heightScale = _heightScale;
 
 	if(!GenerateNoise()) {
 		std::cout << "[ERROR] Invalid height or width value" << std::endl;
@@ -51,7 +51,7 @@ bool NoiseBasedGenerating::Initialize(int height, int width, float heightScale)
 }
 
 //It is assumed that the valuse were changed using UI
-bool NoiseBasedGenerating::Resize() {
+bool NoiseBasedGenerationSys::Resize() {
 	if (height <= 0 || width <= 0) {
 		std::cout << "[ERROR] Invalid height or width value" << std::endl;
 		return false;
@@ -65,7 +65,7 @@ bool NoiseBasedGenerating::Resize() {
 	return true;
 }
 
-bool NoiseBasedGenerating::GenerateNoise()
+bool NoiseBasedGenerationSys::GenerateNoise()
 {
 	if(width <=0 || height <= 0) {
 		std::cout << "[ERROR] Invalid height or width value" << std::endl;
@@ -99,7 +99,7 @@ bool NoiseBasedGenerating::GenerateNoise()
 	return true;
 }
 
-bool NoiseBasedGenerating::SimulateErosion()
+bool NoiseBasedGenerationSys::SimulateErosion()
 {
 	if(width <=1 || height <= 1) {
 		std::cout << "[ERROR] Invalid height or width value" << std::endl;
@@ -127,7 +127,7 @@ bool NoiseBasedGenerating::SimulateErosion()
 	return true;
 }
 
-void NoiseBasedGenerating::Draw(Renderer& renderer, Camera& camera, LightSource& light)
+void NoiseBasedGenerationSys::Draw(Renderer& renderer, Camera& camera, LightSource& light)
 {
 	glm::mat4 model = glm::mat4(1.0f);
 	model = glm::scale(model, glm::vec3(modelScale, modelScale, modelScale));
@@ -145,10 +145,9 @@ void NoiseBasedGenerating::Draw(Renderer& renderer, Camera& camera, LightSource&
 		mainShader->SetMVP(model, *camera.GetViewMatrix(), *camera.GetProjectionMatrix());
 		renderer.DrawTriangleStrips(*erosionVAO, *mainIndexBuffer, *mainShader, erosion.GetHeight() - 1, erosion.GetWidth() * 2);
 	}
-	light.Draw(renderer, *camera.GetViewMatrix(), *camera.GetProjectionMatrix());
 }
 
-void NoiseBasedGenerating::ImGuiDraw()
+void NoiseBasedGenerationSys::ImGuiDraw()
 {
 	if(ImGui::CollapsingHeader("Heightmap settings", ImGuiTreeNodeFlags_DefaultOpen)){
 		ImGui::Text("Resize map");
@@ -287,7 +286,7 @@ void NoiseBasedGenerating::ImGuiDraw()
 	ErosionImGui();
 }
 
-void NoiseBasedGenerating::ErosionImGui()
+void NoiseBasedGenerationSys::ErosionImGui()
 {
 	//Erosion settings
 	if (ImGui::CollapsingHeader("Erosion Settings")) {
@@ -315,7 +314,7 @@ void NoiseBasedGenerating::ErosionImGui()
 	}
 }
 
-void NoiseBasedGenerating::ImGuiOutput()
+void NoiseBasedGenerationSys::ImGuiOutput()
 {
 	if (noise.GetHeight() * noise.GetWidth() > 500 * 500) {
 		ImGui::TextColored(
@@ -326,3 +325,4 @@ void NoiseBasedGenerating::ImGuiOutput()
 		);
 	}
 }
+

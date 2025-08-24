@@ -120,6 +120,13 @@ void Camera::ImGuiDraw() {
 	}
 }
 
+void Camera::ImGuiOutPut()
+{
+	ImGui::Text("Press 'm' to enable rotation of the camera using mouse, press 'ESC' to exit mouse control");
+	ImGui::Text("Press 'w', 'a', 's', 'd' to move camera, 'space' to move up, 'ctrl' to move down");
+	ImGui::Text("Camera Position: (%.2f, %.2f, %.2f)", this->GetPosition().x, this->GetPosition().y, this->GetPosition().z);
+}
+
 glm::mat4* Camera::GetViewMatrix() {
 	view = glm::mat4(1.0f);
 	view = glm::lookAt(position, position + front, up);

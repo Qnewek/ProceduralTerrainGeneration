@@ -10,7 +10,8 @@
 #include "LightSource.h"
 #include "TerrainGenerator.h"
 
-#include "NoiseBasedGenerating.h"
+#include "NoiseBasedGenerationSys.h"
+#include "TerrainGenerationSys.h"
 
 class TerrainGenApp
 {
@@ -27,7 +28,8 @@ private:
 	
 private:
 	//SubSystems
-	NoiseBasedGenerating noiseGen;
+	NoiseBasedGenerationSys noiseGenSys;
+	TerrainGenerationSys terrainGenSys;
 
 	//Time variables
 	float deltaTime, lastFrame;

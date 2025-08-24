@@ -18,61 +18,6 @@ namespace biome{
 	{
 	}
 
-	vec2 Biome::GetTemperatureLevel() const
-	{
-		return temperatureLevel;
-	}
-
-	vec2 Biome::GetHumidityLevel() const
-	{
-		return humidityLevel;
-	}
-
-	vec2 Biome::GetContinentalnessLevel() const
-	{
-		return continentalnessLevel;
-	}
-
-	vec2 Biome::GetMountainousnessLevel() const
-	{
-		return mountainousnessLevel;
-	}
-
-	int Biome::GetId() const
-	{
-		return id;
-	}
-
-	std::string Biome::GetName() const
-	{
-		return name;
-	}
-
-	int Biome::GetTexOffset() const
-	{
-		return texOffset;
-	}
-
-	void Biome::SetTemperatureLevel(vec2 temperatureLevel)
-	{
-		temperatureLevel = temperatureLevel;
-	}
-
-	void Biome::SetHumidityLevel(vec2 humidityLevel)
-	{
-		humidityLevel = humidityLevel;
-	}
-
-	void Biome::SetContinentalnessLevel(vec2 continentalnessLevel)
-	{
-		continentalnessLevel = continentalnessLevel;
-	}
-
-	void Biome::SetMountainousnessLevel(vec2 mountainousnessLevel)
-	{
-		mountainousnessLevel = mountainousnessLevel;
-	}
-
 	bool Biome::IsSpecified() const {
 		return temperatureLevel.x != -1 && humidityLevel.x != -1 &&
 			continentalnessLevel.x != -1 && mountainousnessLevel.x != -1;

@@ -1,4 +1,10 @@
 #version 330 core
+
+in vec3 FragPos;  
+in vec3 Normal;  
+in vec3 Color;
+in float Height;
+
 out vec4 FragColor;
 
 struct Material {
@@ -16,39 +22,38 @@ struct Light {
     vec3 specular;
 };
 
-in vec3 FragPos;  
-in vec3 Normal;  
-in vec2 TexCoords;
   
 uniform vec3 viewPos;
 uniform Material material;
 uniform Light light;
-uniform sampler2D u_Texture;
-uniform float seeLevel;
+uniform float step;
+uniform float bandWidth;
 
 void main()
 {
+    vec3 baseColor = Color;
+
+    float modHeight = mod(Height, step);
+    if (modHeight < bandWidth) {
+        baseColor *= 0.5;
+    }
+    
     vec3 ambient;
     vec3 diffuse;
-    vec3 norm = normalize(Normal);
+    vec3 norm = Normal;
     vec3 lightDir = normalize(light.position - FragPos);
 
-    ambient = light.ambient * texture(u_Texture, TexCoords).rgb;
+    ambient = light.ambient * baseColor.rgb;
     float diff = max(dot(norm, lightDir), 0.0);
-    diffuse = light.diffuse * diff * texture(u_Texture, TexCoords).rgb;
+    diffuse = light.diffuse * diff * baseColor.rgb;
 
-    // specular
     vec3 viewDir = normalize(viewPos - FragPos);
     vec3 reflectDir = reflect(-lightDir, norm);  
     float spec = pow(max(dot(viewDir, reflectDir), 0.0), material.shininess);
-    vec3 specular = light.specular * spec * texture(u_Texture, TexCoords).rgb;  
-
-    if(FragPos.y < seeLevel){
-        ambient = ambient * FragPos.y / seeLevel;    
-        diffuse = diffuse * FragPos.y / seeLevel;
-        specular = specular * FragPos.y / seeLevel * 0.5;
-    }
+    vec3 specular = light.specular * spec * baseColor.rgb;  
 
     vec3 result = ambient + diffuse + specular;
+
     FragColor = vec4(result, 1.0);
 }
+    

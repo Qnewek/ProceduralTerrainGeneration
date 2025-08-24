@@ -12,7 +12,7 @@ TerrainGenApp::TerrainGenApp() : window(nullptr), windowWidth(0), windowHeight(0
 rightPanelWidth(400.0f),topPanelHeight(30.0f), bottomPanelHeight(200.0f), leftPanelWidth(400.0f),
 width(400), height(400), heightScale(255.0f),
 camera(1920, 1080, glm::vec3(0.0f, heightScale / 2.0f, 0.0f), 30.0f, 500.0f), renderer(),
-noiseGen(), currentMode(mode::NOISE_HEIGHTMAP), light(glm::vec3(0.0f, 0.0f, 0.0f), 20.0f)
+noiseGenSys(), currentMode(mode::NOISE_HEIGHTMAP), light(glm::vec3(0.0f, 0.0f, 0.0f), 20.0f)
 {
     std::cout << "[LOG] Hub initialized" << std::endl;
 }
@@ -62,7 +62,8 @@ int TerrainGenApp::Initialize()
 
     //Logic initialization
 	camera.SetScreenSize(windowWidth - rightPanelWidth - leftPanelWidth, windowHeight - topPanelHeight - bottomPanelHeight);
-	noiseGen.Initialize(height, width, heightScale);
+	noiseGenSys.Initialize(height, width, heightScale);
+	terrainGenSys.Initialize(height, width, heightScale);
     light.Initialize();
     light.SetPosition(glm::vec3(width, heightScale, height));
    
@@ -90,6 +91,7 @@ void TerrainGenApp::Start()
     glfwTerminate();
 }
 
+
 void TerrainGenApp::Draw()
 {
     glEnable(GL_SCISSOR_TEST);
@@ -97,12 +99,13 @@ void TerrainGenApp::Draw()
     glScissor(leftPanelWidth, bottomPanelHeight, windowWidth - rightPanelWidth - leftPanelWidth, windowHeight - topPanelHeight - bottomPanelHeight);
     renderer.Clear(glm::vec3(0.0f, 0.0f, 0.0f));
 
+    light.Draw(renderer, *camera.GetViewMatrix(), *camera.GetProjectionMatrix());
     if (currentMode == mode::NOISE_HEIGHTMAP)
     {
-        noiseGen.Draw(renderer, camera, light);
+        noiseGenSys.Draw(renderer, camera, light);
     }
     else if (currentMode == mode::TERRAIN_GEN) {
-
+		terrainGenSys.Draw(renderer, camera, light);
     }
 
     glDisable(GL_SCISSOR_TEST);
@@ -119,10 +122,10 @@ void TerrainGenApp::ImGuiRender()
 	camera.ImGuiDraw();
 	light.ImGuiDraw();
     if (currentMode == mode::NOISE_HEIGHTMAP) {
-        noiseGen.ImGuiDraw();
+        noiseGenSys.ImGuiDraw();
     }
     else if(currentMode == mode::TERRAIN_GEN) {
-        //TerrainGenImGui();
+		terrainGenSys.ImGuiDraw();
 	}
 
     ImGui::Separator();
@@ -154,12 +157,11 @@ void TerrainGenApp::ImGuiRender()
     ImGui::SetNextWindowPos(ImVec2(leftPanelWidth, windowHeight - bottomPanelHeight - 60), ImGuiCond_Always);
     ImGui::SetNextWindowSize(ImVec2(windowWidth - rightPanelWidth - leftPanelWidth, bottomPanelHeight), ImGuiCond_Always);
     ImGui::Begin("OutPut", nullptr, ImGuiWindowFlags_ResizeFromAnySide | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoScrollbar);
-	ImGui::Text("Press 'm' to enable rotation of the camera using mouse, press 'ESC' to exit mouse control");
-	ImGui::Text("Press 'w', 'a', 's', 'd' to move camera, 'space' to move up, 'ctrl' to move down");
-	ImGui::Text("Camera Position: (%.2f, %.2f, %.2f)", camera.GetPosition().x, camera.GetPosition().y, camera.GetPosition().z);
     ImGui::Text("FPS: %.1f", 1.0f / deltaTime);
+	
+    camera.ImGuiOutPut();
     if (currentMode == mode::NOISE_HEIGHTMAP) {
-        noiseGen.ImGuiOutput();
+        noiseGenSys.ImGuiOutput();
     }
     bottomPanelHeight = ImGui::GetWindowHeight() <= windowHeight / 3 ? ImGui::GetWindowHeight() : windowHeight / 3;
     
@@ -168,26 +170,6 @@ void TerrainGenApp::ImGuiRender()
     ImGui::Render();
     ImGui_ImplGlfwGL3_RenderDrawData(ImGui::GetDrawData());
 }
-
-    //    if (noiseEdit) {
-    //        if (ImGui::Button("Save config")) {
-    //            currentMode = mode::PARAMETRIZED_GEN;
-    //            terGenPerform = true;
-    //            noiseEdit = false;
-    //            player.SetPosition(glm::vec3(0.0f, 80.0f, 0.0f));
-    //            player.SetSpeed(40.0f);
-    //        }
-    //    }
-    //    if (!noiseEdit) {
-    //        if (ImGui::Button("Erode"))
-    //        {
-    //            erosionWindow = !erosionWindow;
-    //            if (!erosionWindow)
-    //                DeactivateErosion();
-    //        }
-    //    }
-    //}
-//}
 
 //void TerrainGenApp::ParametrizedImGui()
 //{
@@ -250,13 +232,6 @@ void TerrainGenApp::ImGuiRender()
     //    }
     //    */
     //}
-//}
-
-//void TerrainGenApp::ErosionWindowRender() {
-//    if(ImGui::CollapsingHeader("Erosion Settings"))
-//    {
-//        
-//    }
 //}
 
 //void TerrainGenApp::ParameterImgui()
@@ -440,6 +415,26 @@ void TerrainGenApp::ImGuiRender()
         PrintTrack(model);
     }*/
 //}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 //void TerrainGenApp::DrawTrees(glm::mat4& model)
 //{
    /* treeShader->Bind();
@@ -452,131 +447,6 @@ void TerrainGenApp::ImGuiRender()
     glBindVertexArray(treeVAO);
     glDrawElementsInstanced(GL_TRIANGLES, treeIndicesCount, GL_UNSIGNED_INT, 0, terrainGen.GetTreeCount());
     glBindVertexArray(0);*/
-//}
-
-//Function drawing tracks of droplets on the eroded terrain mesh
-//void TerrainGenApp::PrintTrack(glm::mat4& model) {
-//    if (trackDraw && traceVertices) {
-//        erosionTrackVAO->Bind();
-//        erosionTrackBuffer->UpdateData(traceVertices, (erosion.GetConfigRef().dropletLifetime + 1) * erosion.GetDropletCountRef() * 3 * sizeof(float));
-//        erosionTrackShader->SetMVP(model, *(camera.GetViewMatrix()), *(camera.GetProjectionMatrix()));
-//
-//        erosionTrackShader->Bind();
-//        erosionTrackBuffer->Bind();
-//
-//        GLCALL(glEnableVertexAttribArray(0));
-//        GLCALL(glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0));
-//
-//        GLCALL(glPointSize(2.0f));
-//        GLCALL(glDrawArrays(GL_POINTS, 0, (erosion.GetConfigRef().dropletLifetime + 1) * erosion.GetDropletCountRef()));
-//    }
-//}
-
-//-------------------------------------------------------------------------------------------------------
-//---------------------------------------TERRAIN-GENERATION----------------------------------------------
-//-------------------------------------------------------------------------------------------------------
-//void TerrainGenApp::InitializeTerrainGeneration() {
- //   terrainGen.SetSize(width / chunkResolution, height / chunkResolution);
- //   terrainGen.SetChunkResolution(chunkResolution);
-
-	//terrainGen.GetContinentalnessNoiseConfig().seed = 3;
- //   terrainGen.GetContinentalnessNoiseConfig().constrast = 1.5f;
- //   terrainGen.GetContinentalnessNoiseConfig().octaves = 7;
- //   terrainGen.GetContinentalnessNoiseConfig().scale = samplingScale;
-
- //   terrainGen.GetMountainousNoiseConfig().seed = 9;
- //   terrainGen.GetMountainousNoiseConfig().constrast = 1.5f;
- //   terrainGen.GetMountainousNoiseConfig().scale = samplingScale;
-
- //   terrainGen.GetPVNoiseConfig().seed = 456;
- //   terrainGen.GetPVNoiseConfig().constrast = 1.5f;
- //   terrainGen.GetPVNoiseConfig().RidgeGain = 3.0f;
- //   terrainGen.GetPVNoiseConfig().scale = samplingScale;
-
-	//terrainGen.GetTemperatureNoiseConfig().seed = 123;
- //   terrainGen.GetHumidityNoiseConfig().seed = 62;
-
- //   terrainGen.InitializeMap();
-
- //   splines = { {-1.0, -0.7, -0.2, 0.03, 0.3, 1.0}, {0.0, 40.0 ,64.0, 66.0, 68.0, 70.0},	//Continentalness {X,Y}
- //               {-1.0, -0.78, -0.37, -0.2, 0.05, 0.45, 0.55, 1.0}, {0.0, 5.0, 10.0, 20.0, 30.0, 80.0, 100.0, 170.0},	//Mountainousness {X,Y}
- //               {-1.0, -0.85, -0.6, 0.2, 0.7, 1.0}, {1.0, 0.7, 0.4, 0.2, 0.05, 0} };
-
- //   biomes = {
- //       biome::Biome(0, "Grassplains",	{1, 2}, {1, 4}, {3, 5}, {0, 3}, 3, chunkResolution * chunkResolution * 0.2f),
- //       biome::Biome(1, "Desert",		{2, 4}, {0, 1}, {3, 5}, {0, 4}, 2, chunkResolution * chunkResolution * 0.01f),
- //       biome::Biome(2, "Snow",			{0, 1}, {0, 4}, {3, 5}, {0, 4}, 7, chunkResolution * chunkResolution * 0.03f),
- //       biome::Biome(3, "Sand",			{0, 4}, {0, 4}, {2, 3}, {0, 7}, 8, chunkResolution * chunkResolution * 0.01f),
- //       biome::Biome(4, "Mountain",		{0, 4}, {0, 4}, {4, 5}, {4, 7}, 0, chunkResolution * chunkResolution * 0.02f),
- //       biome::Biome(5, "Ocean",		{0, 4}, {0, 4}, {0, 2}, {0, 7}, 5, chunkResolution * chunkResolution * 0.0f)
- //   };
-
- //   ranges = {
- //       {{-1.0f, -0.5f, 0},{-0.5f, 0.0f, 1},{0.0f, 0.5f, 2},{0.5f, 1.1f, 3}},
- //       {{-1.0f, -0.5f, 0},{-0.5f, 0.0f, 1},{0.0f, 0.5f, 2},{0.5f, 1.1f, 3}},
- //       {{-1.0f, -0.7f, 0},{-0.7f, -0.2f, 1},{ -0.2f, 0.03f, 2},{0.03f, 0.3f, 3},{0.3f, 1.1f, 4}},
- //       {{-1.0f, -0.78f, 0},{-0.78f, -0.37f, 1},{-0.37f, -0.2f, 2},{-0.2f, 0.05f, 3},{0.05f, 0.45f, 4},{0.45f, 0.55f, 5},{0.55f, 1.1f, 6}}
- //   };
-
- //   terrainGen.SetSplines(splines);
- //   terrainGen.SetBiomes(biomes);
- //   terrainGen.SetRanges(ranges);
-//}
-//void TerrainGenApp::ResizeTerrainGeneration()
-//{
-    /*if (width != prevWidth || height != prevHeight || chunkResolution != prevChunkRes) {
-        width = width + (chunkResolution - (width % chunkResolution));
-		height = height + (chunkResolution - (height % chunkResolution));
-        terrainGen.SetSize(width / chunkResolution , height / chunkResolution);
-        terrainGen.SetChunkResolution(chunkResolution);
-        terrainGen.InitializeMap();
-        prevWidth = width;
-        prevHeight = height;
-		prevChunkRes = chunkResolution;
-        delete[] tMeshVertices;
-        delete[] tMeshIndices;
-        tMeshIndices = nullptr;
-        tMeshVertices = nullptr;
-		terGenPerform = true;
-        FullTerrainGeneration();
-		std::cout << "[LOG] Terrain resized" << std::endl;
-    }*/
-//}
-//void TerrainGenApp::FullTerrainGeneration()
-//{
-    //terGenPerform = false;
-
-    //if (!tMeshVertices || !tMeshIndices)
-    //{
-    //    tMeshVertices = new float[(width - 1) * (height - 1) * stride * 4];
-    //    tMeshIndices = new unsigned int[(width - 1) * (height - 1) * 6];
-    //}
-
-    //TerrainGeneration();
-
-    ////OpenGL setup for the mesh
-    //terGenVAO = std::make_unique<VertexArray>();
-    //terGenVertexBuffer = std::make_unique<VertexBuffer>(tMeshVertices, (width - 1) * (height - 1) * 4 * stride * sizeof(float));
-    //terGenIndexBuffer = std::make_unique<IndexBuffer>(tMeshIndices, (width - 1) * (height - 1) * 6);
-    //terGenShader = std::make_unique<Shader>("res/shaders/Lightning_final_vertex.shader", "res/shaders/Lightning_final_fragment.shader");
-    //terGenTexture = std::make_unique<Texture>("res/textures/texture.png");
-
-    //terGenVAO->AddBuffer(*terGenVertexBuffer, layout);
-//}
-
-//void TerrainGenApp::TerrainGeneration() {
-    //if (!terrainGen.PerformTerrainGeneration()) {
-    //    std::cout << "[ERROR] Map couldnt be generated" << std::endl;
-    //    return;
-    //}
-
-    //utilities::CreateTiledVertices(tMeshVertices, width, height, terrainGen.GetHeightMap(), heightScale, stride, 0);
-    //utilities::CreateIndicesTiledField(tMeshIndices, width, height);
-    //*utilities::InitializeNormals(tMeshVertices, stride, 3, (height - 1) * (width - 1) * 4);
-    //utilities::CalculateNormals(tMeshVertices, tMeshIndices, stride, 3, (width - 1) * (height - 1) * 6);
-    //utilities::NormalizeVector3f(tMeshVertices, stride, 3, (height - 1) * (width - 1) * 4);
-    //utilities::AssignTexturesByBiomes(terrainGen, tMeshVertices, width, height, 3, stride, 6);*/
-    //std::cout << "[LOG] Terrain generation completed!" << std::endl;
 //}
 
 //-------------------------------------------------------------------------------------------------------

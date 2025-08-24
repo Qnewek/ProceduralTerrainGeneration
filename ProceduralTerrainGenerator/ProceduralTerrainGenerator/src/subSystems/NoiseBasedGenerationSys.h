@@ -7,7 +7,7 @@
 
 #include "VertexBufferLayout.h"
 
-class NoiseBasedGenerating
+class NoiseBasedGenerationSys
 {
 	private:
 		//Config
@@ -32,10 +32,10 @@ class NoiseBasedGenerating
 		noise::SimplexNoiseClass noise;
 		erosion::Erosion erosion;
 	public:
-		NoiseBasedGenerating();
-		~NoiseBasedGenerating();
+		NoiseBasedGenerationSys();
+		~NoiseBasedGenerationSys();
 		
-		bool Initialize(int height, int width, float heightScale);
+		bool Initialize(int _height, int _width, float _heightScale);
 		bool Resize();
 		bool GenerateNoise();
 		bool SimulateErosion();

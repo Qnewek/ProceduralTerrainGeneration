@@ -87,7 +87,10 @@
     <ClCompile Include="src\subSystems\TerrainGenApp.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="src\subSystems\NoiseBasedGenerating.cpp">
+    <ClCompile Include="src\subSystems\NoiseBasedGenerationSys.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\subSystems\TerrainGenerationSys.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
@@ -506,17 +509,12 @@
     <None Include="src\vendor\glm\gtx\wrap.inl">
       <Filter>Header Files</Filter>
     </None>
-    <None Include="res\shaders\Lightning_final_vertex.shader" />
-    <None Include="res\shaders\Lightning_final_fragment.shader" />
+    <None Include="res\shaders\Terrain_fragment.shader" />
+    <None Include="res\shaders\Terrain_vertex.shader" />
     <None Include="res\shaders\HeightMap_vertex.shader" />
     <None Include="res\shaders\HeightMap_fragment.shader" />
     <None Include="res\shaders\Light_source_fragment.shader" />
     <None Include="res\shaders\Light_source_vertex.shader" />
-    <None Include="res\shaders\test_vertex.shader" />
-    <None Include="res\shaders\test_frag.shader" />
-    <None Include="res\shaders\Trace_vertex.shader" />
-    <None Include="res\shaders\Trace_fragment.shader" />
-    <None Include="res\models\Tree\Tree.mtl" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\opengl\Renderer.h">
@@ -1470,7 +1468,10 @@
     <ClInclude Include="src\subSystems\TerrainGenApp.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="src\subSystems\NoiseBasedGenerating.h">
+    <ClInclude Include="src\subSystems\NoiseBasedGenerationSys.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\subSystems\TerrainGenerationSys.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
@@ -1485,24 +1486,6 @@
       <Filter>Resource Files</Filter>
     </Image>
     <Image Include="res\textures\texture.png">
-      <Filter>Resource Files</Filter>
-    </Image>
-    <Image Include="res\models\Tree\DB2X2_L01.png">
-      <Filter>Resource Files</Filter>
-    </Image>
-    <Image Include="res\models\Tree\bark_0021.jpg">
-      <Filter>Resource Files</Filter>
-    </Image>
-    <Image Include="res\models\Tree\DB2X2_L01_Spec.png">
-      <Filter>Resource Files</Filter>
-    </Image>
-    <Image Include="res\models\Tree\tree.jpeg">
-      <Filter>Resource Files</Filter>
-    </Image>
-    <Image Include="res\models\Tree\tree2.jpeg">
-      <Filter>Resource Files</Filter>
-    </Image>
-    <Image Include="res\models\texture.png">
       <Filter>Resource Files</Filter>
     </Image>
   </ItemGroup>
