@@ -24,6 +24,7 @@ public:
 	glm::vec3 SteerCamera(GLFWwindow* window, float deltaTime, bool yAxisMovement);
 	void RotateCamera(GLFWwindow* window);
 	void ImGuiDraw();
+	void ImGuiOutPut();
 
 	glm::mat4* GetViewMatrix();
 	glm::mat4* GetProjectionMatrix();
