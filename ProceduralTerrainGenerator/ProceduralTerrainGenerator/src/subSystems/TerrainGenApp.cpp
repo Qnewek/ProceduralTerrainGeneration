@@ -11,7 +11,7 @@
 TerrainGenApp::TerrainGenApp() : window(nullptr), windowWidth(0), windowHeight(0), deltaTime(0.0f), lastFrame(0.0f),
 rightPanelWidth(400.0f),topPanelHeight(30.0f), bottomPanelHeight(200.0f), leftPanelWidth(400.0f),
 width(400), height(400), heightScale(255.0f),
-camera(1920, 1080, glm::vec3(0.0f, heightScale / 2.0f, 0.0f), 30.0f, 500.0f), renderer(),
+camera(1920, 1080, glm::vec3(0.0f, heightScale / 2.0f, 0.0f), 100.0f, 1000.0f), renderer(),
 noiseGenSys(), currentMode(mode::NOISE_HEIGHTMAP), light(glm::vec3(0.0f, 0.0f, 0.0f), 20.0f)
 {
     std::cout << "[LOG] Hub initialized" << std::endl;
@@ -82,6 +82,7 @@ void TerrainGenApp::Start()
 		Draw();
         ImGuiRender();
 
+        camera.SetScreenSize(windowWidth - rightPanelWidth - leftPanelWidth, windowHeight - topPanelHeight - bottomPanelHeight);
         glfwSwapBuffers(window);
         glfwPollEvents();
     }
@@ -133,9 +134,16 @@ void TerrainGenApp::ImGuiRender()
 
     ImGui::SetNextWindowPos(ImVec2(0, 0), ImGuiCond_Always);
     ImGui::SetNextWindowSize(ImVec2(leftPanelWidth, windowHeight-60), ImGuiCond_Always);
-    ImGui::Begin("Modify", nullptr, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_ResizeFromAnySide);
+    ImGui::Begin("IDK", nullptr, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_ResizeFromAnySide);
     leftPanelWidth = ImGui::GetWindowWidth() <= windowWidth/2 ? ImGui::GetWindowWidth() : windowWidth/2;
-   
+    if (ImGui::CollapsingHeader("A few words...")) {
+		ImGui::TextWrapped("Hi Dear User!\n"
+			"I am more than happy to be able to introduce my Procedural Generation App to you.\n"
+			"It a project ive been working on for some time now because the field it covers extremely interests me and it was the topic of my thesis.\n"
+			"I hope you will find it a bit interesting and fun to play with "
+			"and feel free to contact me if you have any questions or suggestions.\n");
+    }
+
     ImGui::End();
 
     ImGui::SetNextWindowPos(ImVec2(leftPanelWidth, 0), ImGuiCond_Always);
@@ -157,11 +165,14 @@ void TerrainGenApp::ImGuiRender()
     ImGui::SetNextWindowPos(ImVec2(leftPanelWidth, windowHeight - bottomPanelHeight - 60), ImGuiCond_Always);
     ImGui::SetNextWindowSize(ImVec2(windowWidth - rightPanelWidth - leftPanelWidth, bottomPanelHeight), ImGuiCond_Always);
     ImGui::Begin("OutPut", nullptr, ImGuiWindowFlags_ResizeFromAnySide | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoScrollbar);
-    ImGui::Text("FPS: %.1f", 1.0f / deltaTime);
+    ImGui::TextWrapped("FPS: %.1f", 1.0f / deltaTime);
 	
     camera.ImGuiOutPut();
     if (currentMode == mode::NOISE_HEIGHTMAP) {
         noiseGenSys.ImGuiOutput();
+    }
+    else if (currentMode == mode::TERRAIN_GEN) {
+		terrainGenSys.ImGuiOutput();
     }
     bottomPanelHeight = ImGui::GetWindowHeight() <= windowHeight / 3 ? ImGui::GetWindowHeight() : windowHeight / 3;
     
@@ -170,69 +181,6 @@ void TerrainGenApp::ImGuiRender()
     ImGui::Render();
     ImGui_ImplGlfwGL3_RenderDrawData(ImGui::GetDrawData());
 }
-
-//void TerrainGenApp::ParametrizedImGui()
-//{
-    //if (ImGui::CollapsingHeader("Terrain Generation Settings")) {
-    //    if (ImGui::Button("Display terrain")) {
-    //        isTerrainDisplayed = !isTerrainDisplayed;
-    //    }
-    //    ImGui::Separator();
-    //    ImGui::Text("Noise configuration");
-    //    if (ImGui::Button("Continentalness")) {
-    //        SwapNoise(&terrainGen.GetContinentalnessNoise());
-    //        editedNoise = "Continentalness";
-    //        editedType = 'c';
-    //    }
-    //    ImGui::SameLine();
-    //    if (ImGui::Button("Mountainousness")) {
-    //        SwapNoise(&terrainGen.GetMountainousNoise());
-    //        editedNoise = "Mountainousness";
-    //        editedType = 'm';
-    //    }
-    //    ImGui::SameLine();
-    //    if (ImGui::Button("Peaks&Valeys")) {
-    //        SwapNoise(&terrainGen.GetPVNoise());
-    //        editedNoise = "Peaks&Valeys";
-    //        editedType = 'p';
-    //    }
-    //    if (ImGui::Button("Temperature")) {
-    //        SwapNoise(&terrainGen.GetTemperatureNoise());
-    //        editedNoise = "Temperature";
-    //        editedType = 't';
-    //    }
-    //    ImGui::SameLine();
-    //    if (ImGui::Button("Humidity")) {
-    //        SwapNoise(&terrainGen.GetHumidityNoise());
-    //        editedNoise = "Humidity";
-    //        editedType = 'h';
-    //    }
-    //    ImGui::Spacing();
-    //    
-    //    ImGui::Separator();
-    //    ImGui::Text("Vegetation settings");
-    //    if (ImGui::Button("Vegetation generation"))
-    //    {
-    //        if (!treesPositions) {
-    //            PrepareTreesDraw();
-    //        }
-    //        drawTrees = true;
-    //    }
-    //    if (ImGui::Button("Biomes settings")) {
-    //        biomeEdit = !biomeEdit;
-    //    }
-    //    if (ImGui::Button("Generate terrain"))
-    //    {
-    //        terGenPerform = true;
-    //        camera.SetPosition(glm::vec3(0.0f, heightScale/2.0f, 0.0f));
-    //    }
-    //    /*
-    //    if (ImGui::Button("erode")) {
-    //        PerformErosion();
-    //    }
-    //    */
-    //}
-//}
 
 //void TerrainGenApp::ParameterImgui()
 //{

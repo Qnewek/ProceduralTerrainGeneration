@@ -8,6 +8,7 @@
 
 #include <iostream>
 #include "glm/glm.hpp"
+#include "imgui/imgui.h"
 #include "glm/gtc/matrix_transform.hpp"
 #include "ObjLoader/tiny_obj_loader.h"
 
@@ -18,7 +19,7 @@ namespace utilities
 	//@param image - array of unsigned chars to be filled with data
 	//@param width - width of the image
 	//@param height - height of the image
-	void ConvertToGrayscaleImage(float* data, unsigned char* image, int width, int height) {
+	void ConvertToGrayscaleImage(float* data, unsigned char* image, const int& width, const int& height) {
 		for (int i = 0; i < width * height; ++i) {
 			image[i] = static_cast<unsigned char>(data[i] * 255.0f);
 		}
@@ -33,7 +34,7 @@ namespace utilities
 	//@param scale - scaling factor for generating height values
 	//@param stride - number of floats per vertex
 	//@param offset - offset in the vertex array to start with when filling the data
-	void ParseNoiseIntoVertices(float* vertices, float* map, int width, int height, float scale, unsigned int stride, unsigned int offset) {
+	void ParseNoiseIntoVertices(float* vertices, float* map, const int& width, const int& height, float scale, const unsigned int stride, unsigned int offset){
 		if (!vertices || !map) {
 			std::cout << "[ERROR] Vertices array not initialized" << std::endl;
 			return;
@@ -57,7 +58,7 @@ namespace utilities
 	//@param indices - pointer to the array of indices to be filled with index data
 	//@param width - width of the noise map (columns)
 	//@param height - height of the noise map (rows)
-	void MeshIndicesStrips(unsigned int* indices, int width, int height) {
+	void MeshIndicesStrips(unsigned int* indices, const int& width, const int& height) {
 		int index = 0;
 		for (int y = 0; y < height - 1; y++) {
 			for (int x = 0; x < width; x++) {
@@ -75,7 +76,7 @@ namespace utilities
 	//@param offSet - offset in the vertex array to start with when filling the normals
 	//@param width - width of the noise map in chunks
 	//@param height - height of the noise map in chunks
-	bool CalculateHeightMapNormals(float* vertices, unsigned int stride, unsigned int offSet, unsigned int width, unsigned int height)
+	bool CalculateHeightMapNormals(float* vertices, const unsigned int& stride, unsigned int offSet, const unsigned int& width, const unsigned int& height)
 	{
 		if (!vertices) {
 			return false;
@@ -187,22 +188,28 @@ namespace utilities
 
 	//Generates terrain map using Perlin Fractal Noise, transforming it into drawable mesh and
 	//also dealing with initialization and calculations of normals for lightning purposes
-	//@param noise - Perlin noise object
+	//@param map - noise map
 	//@param vertices - array of vertices to be filled with data
 	//@param indices - array of indices to be filled with data
+	//@param height - height of the noise map in chunks
+	//@param width - width of the noise map in chunks
 	//@param stride - number of floats per vertex
-	//@param normals - boolean value to determine if normals should be calculated
-	//@param first - boolean value to determine if indices should be generated
-	void CreateTerrainMesh(noise::SimplexNoiseClass& noise, float* vertices, unsigned int* indices, float scalingFactor, unsigned int stride, bool normals, bool first, heightMapMode mode)
+	//@param heightScale - scaling factor for generating height values
+	//@param mode - mode of coloring (grayscale or topographical)
+	//@param normalsCalculation - boolean value indicating if normals should be calculated
+	//@param indexGeneration - boolean value indicating if indices should be generated
+	//@param paint - boolean value indicating if painting should be applied
+	void MapToVertices(float* map, float* vertices, unsigned int* indices, int const height, const int width, const unsigned int stride, const float& heightScale, heightMapMode mode, bool normalsCalculation, bool indexGeneration, bool paint)
 	{
-		noise.GenerateFractalNoise();
-		ParseNoiseIntoVertices(vertices, noise.GetMap(), noise.GetWidth(), noise.GetHeight(), scalingFactor, stride, 0);
-		if (first)
-			MeshIndicesStrips(indices, noise.GetWidth(), noise.GetHeight());
-		if (normals) {
-			CalculateHeightMapNormals(vertices, stride, 3, noise.GetWidth(), noise.GetHeight());
+		ParseNoiseIntoVertices(vertices, map, width, height, heightScale, stride, 0);
+		if (indexGeneration)
+			MeshIndicesStrips(indices, width, height);
+		if (normalsCalculation) {
+			CalculateHeightMapNormals(vertices, stride, 3, width, height);
 		}
-		PaintVerticesByHeight(vertices, noise.GetWidth(), noise.GetHeight(), scalingFactor, stride, mode, 1, 6);
+		if (paint) {
+			PaintVerticesByHeight(vertices, width, height, heightScale, stride, mode, 1, 6);
+		}
 	}
 
 	//Performs erosion simulation on the terrain map, updating vertices, indices and normals
@@ -218,5 +225,79 @@ namespace utilities
 		ParseNoiseIntoVertices(vertices, erosion.GetMap(), erosion.GetWidth(), erosion.GetHeight(), scalingFactor, stride, 0);
 		CalculateHeightMapNormals(vertices, stride, 3, erosion.GetWidth(), erosion.GetHeight());
 		PaintVerticesByHeight(vertices, erosion.GetWidth(), erosion.GetHeight(), scalingFactor, stride, mode, 1, 6);
+	}
+
+	//ImGui interface for modifying noise parameters
+	//@param noise - Perlin noise object
+	//@return - boolean value indicating if the noise parameters were modified
+	bool NoiseImGui(noise::NoiseConfigParameters& noiseConfig)
+	{
+		bool regenerate = false;
+		regenerate |= ImGui::InputInt("Seed", &noiseConfig.seed);
+		regenerate |= ImGui::SliderInt("Octaves", &noiseConfig.octaves, 1, 8);
+		regenerate |= ImGui::SliderFloat("Offset x", &noiseConfig.xoffset, 0.0f, 5.0f);
+		regenerate |= ImGui::SliderFloat("Offset y", &noiseConfig.yoffset, 0.0f, 5.0f);
+		regenerate |= ImGui::SliderFloat("Scale", &noiseConfig.scale, 0.01f, 3.0f);
+		regenerate |= ImGui::SliderFloat("Constrast", &noiseConfig.constrast, 0.1f, 2.0f);
+		regenerate |= ImGui::SliderFloat("Redistribution", &noiseConfig.redistribution, 0.1f, 10.0f);
+		regenerate |= ImGui::SliderFloat("Lacunarity", &noiseConfig.lacunarity, 0.1f, 10.0f);
+		regenerate |= ImGui::SliderFloat("Persistance", &noiseConfig.persistance, 0.1f, 1.0f);
+
+		static const char* options[] = { "REFIT_ALL", "FLATTEN_NEGATIVES", "REVERT_NEGATIVES", "NOTHING" };
+		static int current_option = static_cast<int>(noiseConfig.option);
+
+		if (ImGui::BeginCombo("Negatives: ", options[current_option]))
+		{
+			for (int n = 0; n < IM_ARRAYSIZE(options); n++)
+			{
+				bool is_selected = (current_option == n);
+				if (ImGui::Selectable(options[n], is_selected)) {
+					current_option = n;
+					noiseConfig.option = static_cast<noise::Options>(n);
+					regenerate = true;
+				}
+				if (is_selected)
+					ImGui::SetItemDefaultFocus();
+			}
+			ImGui::EndCombo();
+		}
+		if (noiseConfig.option == noise::Options::REVERT_NEGATIVES)
+			regenerate |= ImGui::SliderFloat("Revert Gain", &noiseConfig.revertGain, 0.1f, 1.0f);
+
+		// Ridged noise settings
+		regenerate |= ImGui::Checkbox("Ridge", &noiseConfig.Ridge);
+		if (noiseConfig.Ridge)
+		{
+			regenerate |= ImGui::SliderFloat("Ridge Gain", &noiseConfig.RidgeGain, 0.1f, 10.0f);
+			regenerate |= ImGui::SliderFloat("Ridge Offset", &noiseConfig.RidgeOffset, 0.1f, 10.0f);
+		}
+
+		// Island settings
+		regenerate |= ImGui::Checkbox("Island", &noiseConfig.island);
+		if (noiseConfig.island)
+		{
+			static const char* islandTypes[] = { "CONE", "DIAGONAL", "EUKLIDEAN_SQUARED",
+												 "SQUARE_BUMP","HYPERBOLOID", "SQUIRCLE",
+												 "TRIG" };
+			static int current_island = static_cast<int>(noiseConfig.islandType);
+
+			if (ImGui::BeginCombo("Island type: ", islandTypes[current_island]))
+			{
+				for (int n = 0; n < IM_ARRAYSIZE(islandTypes); n++)
+				{
+					bool is_selected = (current_island == n);
+					if (ImGui::Selectable(islandTypes[n], is_selected)) {
+						current_island = n;
+						noiseConfig.islandType = static_cast<noise::IslandType>(n);
+						regenerate = true;
+					}
+					if (is_selected)
+						ImGui::SetItemDefaultFocus();
+				}
+				ImGui::EndCombo();
+			}
+			regenerate |= ImGui::SliderFloat("Mix Power", &noiseConfig.mixPower, 0.0f, 1.0f);
+		}
+		return regenerate;
 	}
 }

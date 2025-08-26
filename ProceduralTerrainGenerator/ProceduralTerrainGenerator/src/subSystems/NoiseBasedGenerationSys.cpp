@@ -8,8 +8,7 @@
 #include "glm/gtc/matrix_transform.hpp"
 
 NoiseBasedGenerationSys::NoiseBasedGenerationSys() : noise(), erosion(1, 1), vertices(nullptr), erosionVertices(nullptr), meshIndices(nullptr), 
-width(0), height(0), heightScale(1.0f), modelScale(1.0f), topoBandWidth(0.2f), topoStep(10.0f), stride(9),
-seed(0)
+width(0), height(0), heightScale(1.0f), modelScale(1.0f), topoBandWidth(0.2f), topoStep(10.0f), stride(9), seed(0)
 {
 }
 
@@ -50,45 +49,30 @@ bool NoiseBasedGenerationSys::Initialize(int _height, int _width, float _heightS
 	return true;
 }
 
-//It is assumed that the valuse were changed using UI
-bool NoiseBasedGenerationSys::Resize() {
-	if (height <= 0 || width <= 0) {
-		std::cout << "[ERROR] Invalid height or width value" << std::endl;
-		return false;
-	}
-	std::cout << "[LOG] Noise based terrain resized" << std::endl;
-	
-	newSize = true;
-	erosionDraw = false;
-	GenerateNoise();
-
-	return true;
-}
-
 bool NoiseBasedGenerationSys::GenerateNoise()
 {
-	if(width <=0 || height <= 0) {
-		std::cout << "[ERROR] Invalid height or width value" << std::endl;
-		return false;
-	}
+	bool newSize = false;
+	if(height != noise.GetHeight() || width != noise.GetWidth()) {
+		erosionDraw = false;
+		noise.SetMapSize(width, height);
 
-	noise.SetMapSize(width, height);
-	noise.SetSeed(seed);
-	noise.InitMap();
-
-	if (newSize) {
 		if(vertices) {
 			delete[] vertices;
 		}
 		if(meshIndices) {
 			delete[] meshIndices;
 		}
+
 		vertices = new float[width * height * stride];
 		meshIndices = new unsigned int[(height - 1) * width * 2]; // indices for strips
+		newSize = true;
 	}
 
-	utilities::benchmarkVoid(utilities::CreateTerrainMesh, "CreateTerrainMesh", noise, vertices, meshIndices, heightScale, stride, true, newSize, displayMode);
-	newSize = false;
+	noise.Reseed();
+	noise.InitMap();
+	noise.GenerateFractalNoise();
+	
+	utilities::MapToVertices(noise.GetMap(), vertices, meshIndices, height, width, stride, heightScale, displayMode, true, newSize, true);
 
 	mainVertexBuffer = std::make_unique<VertexBuffer>(vertices, (height * width) * stride * sizeof(float));
 	mainIndexBuffer = std::make_unique<IndexBuffer>(meshIndices, (height - 1) * width * 2);
@@ -149,12 +133,12 @@ void NoiseBasedGenerationSys::Draw(Renderer& renderer, Camera& camera, LightSour
 
 void NoiseBasedGenerationSys::ImGuiDraw()
 {
-	if(ImGui::CollapsingHeader("Heightmap settings", ImGuiTreeNodeFlags_DefaultOpen)){
+	if(ImGui::CollapsingHeader("Size settings", ImGuiTreeNodeFlags_DefaultOpen)){
 		ImGui::Text("Resize map");
 		ImGui::InputInt("Height", &height);
 		ImGui::InputInt("Width", &width);
 		if (ImGui::Button("Resize")) {
-			Resize();
+			GenerateNoise();
 		}
 	}
 	if (ImGui::CollapsingHeader("Display settings:", ImGuiTreeNodeFlags_DefaultOpen)) {
@@ -208,73 +192,8 @@ void NoiseBasedGenerationSys::ImGuiDraw()
 	//Noise settings
 	if (ImGui::CollapsingHeader("Noise Settings")) {
 		ImGui::Checkbox("Instant Update", &instantUpdate);
-		bool regenerate = false;
-		regenerate |= ImGui::InputInt("Seed", &seed);
-		regenerate |= ImGui::SliderInt("Octaves", &noise.GetConfigRef().octaves, 1, 8);
-		regenerate |= ImGui::SliderFloat("Offset x", &noise.GetConfigRef().xoffset, 0.0f, 5.0f);
-		regenerate |= ImGui::SliderFloat("Offset y", &noise.GetConfigRef().yoffset, 0.0f, 5.0f);
-		regenerate |= ImGui::SliderFloat("Scale", &noise.GetConfigRef().scale, 0.01f, 3.0f);
-		regenerate |= ImGui::SliderFloat("Constrast", &noise.GetConfigRef().constrast, 0.1f, 2.0f);
-		regenerate |= ImGui::SliderFloat("Redistribution", &noise.GetConfigRef().redistribution, 0.1f, 10.0f);
-		regenerate |= ImGui::SliderFloat("Lacunarity", &noise.GetConfigRef().lacunarity, 0.1f, 10.0f);
-		regenerate |= ImGui::SliderFloat("Persistance", &noise.GetConfigRef().persistance, 0.1f, 1.0f);
-
-		static const char* options[] = { "REFIT_ALL", "FLATTEN_NEGATIVES", "REVERT_NEGATIVES", "NOTHING" };
-		static int current_option = static_cast<int>(noise.GetConfigRef().option);
-
-		if (ImGui::BeginCombo("Negatives: ", options[current_option]))
-		{
-			for (int n = 0; n < IM_ARRAYSIZE(options); n++)
-			{
-				bool is_selected = (current_option == n);
-				if (ImGui::Selectable(options[n], is_selected)) {
-					current_option = n;
-					noise.GetConfigRef().option = static_cast<noise::Options>(n);
-					regenerate = true;
-				}
-				if (is_selected)
-					ImGui::SetItemDefaultFocus();
-			}
-			ImGui::EndCombo();
-		}
-		if (noise.GetConfigRef().option == noise::Options::REVERT_NEGATIVES)
-			regenerate |= ImGui::SliderFloat("Revert Gain", &noise.GetConfigRef().revertGain, 0.1f, 1.0f);
-
-		// Ridged noise settings
-		regenerate |= ImGui::Checkbox("Ridge", &noise.GetConfigRef().Ridge);
-		if (noise.GetConfigRef().Ridge)
-		{
-			regenerate |= ImGui::SliderFloat("Ridge Gain", &noise.GetConfigRef().RidgeGain, 0.1f, 10.0f);
-			regenerate |= ImGui::SliderFloat("Ridge Offset", &noise.GetConfigRef().RidgeOffset, 0.1f, 10.0f);
-		}
-
-		// Island settings
-		regenerate |= ImGui::Checkbox("Island", &noise.GetConfigRef().island);
-		if (noise.GetConfigRef().island)
-		{
-			static const char* islandTypes[] = { "CONE", "DIAGONAL", "EUKLIDEAN_SQUARED",
-												 "SQUARE_BUMP","HYPERBOLOID", "SQUIRCLE",
-												 "TRIG" };
-			static int current_island = static_cast<int>(noise.GetConfigRef().islandType);
-
-			if (ImGui::BeginCombo("Island type: ", islandTypes[current_island]))
-			{
-				for (int n = 0; n < IM_ARRAYSIZE(islandTypes); n++)
-				{
-					bool is_selected = (current_island == n);
-					if (ImGui::Selectable(islandTypes[n], is_selected)) {
-						current_island = n;
-						noise.GetConfigRef().islandType = static_cast<noise::IslandType>(n);
-						regenerate = true;
-					}
-					if (is_selected)
-						ImGui::SetItemDefaultFocus();
-				}
-				ImGui::EndCombo();
-			}
-			regenerate |= ImGui::SliderFloat("Mix Power", &noise.GetConfigRef().mixPower, 0.0f, 1.0f);
-		}
-		if (instantUpdate && regenerate) {
+	
+		if (instantUpdate && utilities::NoiseImGui(noise.GetConfigRef())) {
 			GenerateNoise();
 		}
 		else if (!instantUpdate) {
@@ -317,12 +236,13 @@ void NoiseBasedGenerationSys::ErosionImGui()
 void NoiseBasedGenerationSys::ImGuiOutput()
 {
 	if (noise.GetHeight() * noise.GetWidth() > 500 * 500) {
-		ImGui::TextColored(
-			ImVec4(1.0f, 0.4f, 0.4f, 1.0f),
+		ImGui::PushStyleColor(ImGuiCol_Text, (1.0f, 0.0f, 0.0f, 1.0f));
+		ImGui::TextWrapped(
 			"Warning!\n"
 			"It is highly recommended to set a smaller map size while adjusting settings,"
 			"due to high complexity of the algorithm for large maps!"
 		);
+		ImGui::PopStyleColor();
 	}
 }
 

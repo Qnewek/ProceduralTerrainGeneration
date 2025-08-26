@@ -16,6 +16,7 @@ namespace noise
 		: config(NoiseConfigParameters()), width(1), height(1),
 		heightMap(nullptr)
 	{
+		SimplexNoise::reseed(config.seed);
 	}
 	SimplexNoiseClass::~SimplexNoiseClass()
 	{
@@ -74,6 +75,10 @@ namespace noise
 		if (width > 0 && height > 0 && (width != this->width || height != this->height)) {
 			this->width = width;
 			this->height = height;
+			if (heightMap) {
+				delete[] heightMap;
+				heightMap = nullptr;
+			}
 		}
 	}
 

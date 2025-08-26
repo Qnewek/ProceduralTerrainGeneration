@@ -38,7 +38,7 @@ public:
 	bool GenerateBiomes();
 	bool GenerateVegetation();
 
-	bool SetSize(int width, int height);
+	bool SetSize(int _width, int _height);
 	void SetSeed(int _seed) { this->seed = _seed; };
 	bool SetSeeLevel(float seeLevel);
 	void SetContinentalnessNoiseConfig(noise::NoiseConfigParameters config) { continentalnessNoise.SetConfig(config); };
@@ -58,16 +58,8 @@ public:
 	float* GetHeightMap() { return heightMap; };
 	float GetHeightAt(int x, int y);
 	biome::Biome& GetBiome(int id);
-	noise::NoiseConfigParameters& GetContinentalnessNoiseConfig() { return continentalnessNoise.GetConfigRef(); };
-	noise::NoiseConfigParameters& GetmountainousnessNoiseConfig() { return mountainousnessNoise.GetConfigRef(); };
-	noise::NoiseConfigParameters& GetPVNoiseConfig() { return PVNoise.GetConfigRef(); };
-	noise::NoiseConfigParameters& GetTemperatureNoiseConfig() { return biomeGen.GetTemperatureNoiseConfig(); };
-	noise::NoiseConfigParameters& GetHumidityNoiseConfig() { return biomeGen.GetHumidityNoiseConfig(); };
-	noise::SimplexNoiseClass& GetContinentalnessNoise() { return continentalnessNoise; };
-	noise::SimplexNoiseClass& GetmountainousnessNoise() { return mountainousnessNoise; };
-	noise::SimplexNoiseClass& GetPVNoise() { return PVNoise; };
-	noise::SimplexNoiseClass& GetTemperatureNoise() { return biomeGen.GetTemperatureNoise(); };
-	noise::SimplexNoiseClass& GetHumidityNoise() { return biomeGen.GetHumidityNoise(); };
+	noise::NoiseConfigParameters& GetSelectedNoiseConfig(WorldParameter p);
+	noise::SimplexNoiseClass& GetSelectedNoise(WorldParameter p);
 	std::vector<std::vector<std::pair<int, int>>> GetVegetationPoints() { return vegetationPoints; };
 
 };

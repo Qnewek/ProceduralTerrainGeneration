@@ -11,16 +11,18 @@
 class TerrainGenerationSys
 {
 private:
-	float* terrainVertices;
+	float* terrainVertices, *noiseVertices;
 	float heightScale, modelScale;
 	unsigned int* terrainIndices;
-	unsigned int stride, width, height;
-	bool newSize = true;
+	unsigned int stride;
+	int width, height;
+	bool wireFrame = false;
 
 	//OpenGl objects
 	VertexBufferLayout layout;
 	std::unique_ptr<VertexArray> mainVAO;
 	std::unique_ptr<VertexBuffer> mainVertexBuffer;
+	std::unique_ptr<VertexBuffer> noiseVertexBuffer;
 	std::unique_ptr<IndexBuffer> mainIndexBuffer;
 	std::unique_ptr<Shader> mainShader;
 
@@ -34,5 +36,6 @@ public:
 
 	void Draw(Renderer& renderer, Camera& camera, LightSource& light);
 	void ImGuiDraw();
+	void ImGuiOutput();
 };
 
