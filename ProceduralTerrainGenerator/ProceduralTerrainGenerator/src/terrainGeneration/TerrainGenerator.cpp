@@ -68,13 +68,13 @@ bool TerrainGenerator::GenerateTerrain()
 {
 	if (!GenerateHeightMap())
 	{
-		std::cout << "[ERROR] HeightMap couldnt be generated" << std::endl;
+		std::cout << "[ERROR] HeightMap couldnt be generated\n";
 		return false;
 	}
 
 	if (!GenerateBiomes())
 	{
-		std::cout << "[ERROR] Biomes couldnt be generated" << std::endl;
+		std::cout << "[ERROR] Biomes couldnt be generated\n";
 		return false;
 	}
 	return true;
@@ -82,8 +82,8 @@ bool TerrainGenerator::GenerateTerrain()
 
 bool TerrainGenerator::GenerateHeightMap()
 {
-	if (!InitMap()) {
-		std::cout << "[ERROR] HeightMap not initialized" << std::endl;
+	if (!heightMap) {
+		std::cout << "[ERROR] HeightMap not initialized, please set a size of the map!\n";
 		return false;
 	}
 
@@ -99,33 +99,31 @@ bool TerrainGenerator::GenerateHeightMap()
 	PVNoise.Reseed();
 	PVNoise.GenerateFractalNoise();
 
-	std::cout << "[LOG] Evaluating heightMap..." << std::endl;
-
 	float continentalness = 0.0f;
-	float mountainous = 0.0f;
+	float mountainousness = 0.0f;
 	float PV = 0.0f;
 	float elevation = 0.0f;
 
 	for (int y = 0; y < height; y++) {
 		for (int x = 0; x < width; x++) {
 			continentalness = continentalnessNoise.GetVal(x, y);
-			mountainous = mountainousnessSpline(mountainousnessNoise.GetVal(x, y));
+			//TODO: Build a proper logic for terrain generation
+			/*mountainousness = mountainousnessSpline(mountainousnessNoise.GetVal(x, y));
 			PV = PVSpline(PVNoise.GetVal(x, y));
 
 			if (continentalness >= -0.2 && continentalness <= 0.0)
-				mountainous *= 0.0;
+				mountainousness *= 0.0;
 			else if (continentalness > 0.0)
-				mountainous *= continentalness;
+				mountainousness *= continentalness;
 			else
-				mountainous *= -(continentalness + 0.2) / 25;
+				mountainousness *= -(continentalness + 0.2) / 25;
 
-			mountainous -= mountainous * PV;
-			elevation = continentalnessSpline(continentalness) + mountainous - (PV * 20.0f);
-			heightMap[y * width + x] = elevation / 255.0f;
+			mountainousness -= mountainousness * PV;
+			elevation = continentalnessSpline(continentalness) + mountainousness - (PV * 20.0f);*/
+			heightMap[y * width + x] = continentalness;
 		}
 	}
-
-	std::cout << "[LOG] HeightMap succesfully evaluated " << std::endl;
+	std::cout << "[LOG] HeightMap of size: " << height << "x" << width << " succesfully evaluated\n";
 	return true;
 }
 
@@ -145,7 +143,7 @@ bool TerrainGenerator::GenerateBiomes()
 bool TerrainGenerator::GenerateVegetation()
 {
 	if (!biomeMap) {
-		std::cout << "[ERROR] BiomeMap or BiomeMapPerChunk not initialized" << std::endl;
+		std::cout << "[ERROR] BiomeMap or BiomeMapPerChunk not initialized\n";
 		return false;
 	}
 
@@ -171,19 +169,23 @@ bool TerrainGenerator::GenerateVegetation()
 	return true;
 }
 
-bool TerrainGenerator::SetSize(int width, int height)
+bool TerrainGenerator::SetSize(int _width, int _height)
 {
-	if (width <= 0 || height <= 0) {
-		std::cout << "[ERROR] Width and height must be greater than 0" << std::endl;
+	if(width == _width && height == _height)
+		return true;
+	if (_width <= 0 || _height <= 0) {
+		std::cout << "[ERROR] Width and height must be greater than 0\n";
+		return false;
 	}
 
-	this->width = width;
-	this->height = height;
+	this->width = _width;
+	this->height = _height;
 
 	if(heightMap){
 		delete[] heightMap;
-		heightMap = new float[width * height];
 	}
+
+	heightMap = new float[width * height];
 
 	this->mountainousnessNoise.SetMapSize(width, height);
 	this->continentalnessNoise.SetMapSize(width, height);
@@ -237,7 +239,7 @@ bool TerrainGenerator::SetBiomes(std::vector<biome::Biome>& biomes)
 {
 	if (!biomeGen.SetBiomes(biomes))
 	{
-		std::cout << "[ERROR] Biomes couldnt be set" << std::endl;
+		std::cout << "[ERROR] Biomes couldnt be set\n";
 		return false;
 	}
 	return true;
@@ -265,4 +267,51 @@ int TerrainGenerator::GetBiomeAt(int x, int y)
 	if (!biomeMap)
 		return -1;	
 	return biomeMap[y * width + x];
+}
+
+noise::NoiseConfigParameters& TerrainGenerator::GetSelectedNoiseConfig(WorldParameter p){
+	switch (p)
+	{
+	case WorldParameter::CONTINENTALNESS:
+		return continentalnessNoise.GetConfigRef();
+		break;
+	case WorldParameter::MOUNTAINOUSNESS:
+		return mountainousnessNoise.GetConfigRef();
+		break;
+	case WorldParameter::PV:
+		return PVNoise.GetConfigRef();
+		break;
+	case WorldParameter::HUMIDITY:
+		biomeGen.GetHumidityNoiseConfig();
+		break;
+	case WorldParameter::TEMPERATURE:
+		biomeGen.GetTemperatureNoiseConfig();
+		break;
+	default:
+		break;
+	}
+}
+
+noise::SimplexNoiseClass& TerrainGenerator::GetSelectedNoise(WorldParameter p)
+{
+	switch (p)
+	{
+	case WorldParameter::CONTINENTALNESS:
+		return continentalnessNoise;
+		break;
+	case WorldParameter::MOUNTAINOUSNESS:
+		return mountainousnessNoise;
+		break;
+	case WorldParameter::PV:
+		return PVNoise;
+		break;
+	case WorldParameter::HUMIDITY:
+		return biomeGen.GetHumidityNoise();
+		break;
+	case WorldParameter::TEMPERATURE:
+		return biomeGen.GetTemperatureNoise();
+		break;
+	default:
+		break;
+	}
 }

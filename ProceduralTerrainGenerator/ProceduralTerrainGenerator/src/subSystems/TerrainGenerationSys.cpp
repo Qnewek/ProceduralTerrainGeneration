@@ -3,9 +3,10 @@
 #include <iostream>
 
 #include "utilities.h"
+#include "imgui/imgui.h"
 
-TerrainGenerationSys::TerrainGenerationSys() : terrainVertices(nullptr), terrainIndices(nullptr),
-heightScale(1.0f), modelScale(1.0f), stride(8), width(0), height(0), terrainGen() {
+TerrainGenerationSys::TerrainGenerationSys() : terrainVertices(nullptr), terrainIndices(nullptr), noiseVertices(nullptr),
+heightScale(1.0f), modelScale(1.0f), stride(9), width(0), height(0), terrainGen() {
 
 }
 TerrainGenerationSys::~TerrainGenerationSys() {
@@ -60,21 +61,26 @@ bool TerrainGenerationSys::Initialize(unsigned int _height, unsigned int _width,
 
 }
 bool TerrainGenerationSys::GenerateTerrain() {
-	if (width <= 0 || height <= 0) {
-		std::cout << "[ERROR] Invalid height or width value" << std::endl;
-		return false;
-	}
-
-	if(newSize) {
+	if(terrainGen.GetHeight() != height || terrainGen.GetWidth() != width) {
 		if(terrainVertices) {
 			delete[] terrainVertices;
 		}
 		if(terrainIndices) {
 			delete[] terrainIndices;
 		}
-		terrainGen.SetSize(width, height);
+		if(noiseVertices) {
+			delete[] noiseVertices;
+		}
+		if (!terrainGen.SetSize(width, height)) {
+			std::cout << "[ERROR] TerrainGen size couldnt be set\n";
+			return false;
+		}
 		terrainVertices = new float[width * height * stride];
+		noiseVertices = new float[width * height * stride];
 		terrainIndices = new unsigned int[(height - 1) * width * 2]; // indices for strips probably will be changed
+
+		utilities::MeshIndicesStrips(terrainIndices, width, height);
+		mainIndexBuffer = std::make_unique<IndexBuffer>(terrainIndices, (height - 1) * width * 2);;
 	}
 
 	terrainGen.GenerateTerrain();
@@ -84,11 +90,6 @@ bool TerrainGenerationSys::GenerateTerrain() {
 	utilities::PaintVerticesByHeight(terrainVertices, width, height, heightScale, stride, utilities::heightMapMode::TOPOGRAPHICAL, 1, 6);
 
 	mainVertexBuffer = std::make_unique<VertexBuffer>(terrainVertices, width * height * stride * sizeof(float));
-	if (newSize) {
-		utilities::MeshIndicesStrips(terrainIndices, width, height);
-		mainIndexBuffer = std::make_unique<IndexBuffer>(terrainIndices, (height - 1) * width * 2);
-		newSize = false;
-	}
 	mainVAO->AddBuffer(*mainVertexBuffer, layout);
 	return true;
 }
@@ -106,5 +107,90 @@ void TerrainGenerationSys::Draw(Renderer& renderer, Camera& camera, LightSource&
 	renderer.DrawTriangleStrips(*mainVAO, *mainIndexBuffer, *mainShader, height- 1, width * 2);
 }
 void TerrainGenerationSys::ImGuiDraw() {
+	if (ImGui::CollapsingHeader("Size settings", ImGuiTreeNodeFlags_DefaultOpen)) {
+		ImGui::Text("Resize map");
+		ImGui::InputInt("Height", &height);
+		ImGui::InputInt("Width", &width);
+		if (ImGui::Button("Resize")) {
+			GenerateTerrain();
+		}
+	}
+	if (ImGui::CollapsingHeader("Display settings:", ImGuiTreeNodeFlags_DefaultOpen)) {
+		ImGui::Text("Model scale:");
+		ImGui::SliderFloat("Model scale", &modelScale, 0.1f, 5.0f);
+
+		if (ImGui::Checkbox("WireFrame", &wireFrame)) {
+			if (wireFrame) {
+				glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+				glDisable(GL_CULL_FACE);
+			}
+			else {
+				glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+				glEnable(GL_CULL_FACE);
+			}
+		}
+
+		if (ImGui::Button("Save file")) {
+			std::cout << "[LOG] Well it will work one day i promise!" << std::endl;
+		}
+	}
+	if(ImGui::CollapsingHeader("Terrain settings")) {
+		ImGui::Text("Edit component noise:");
+		bool regenerate = false, changeTerrain = false;
+		static int worldParamOption = 0;
+		const char* options[] = { "None", "Continentalness", "Mountainousness", "PV", "Humidity", "Temperature" };
+		if (ImGui::BeginCombo("Noise: ", options[worldParamOption]))
+		{
+			for (int n = 0; n < IM_ARRAYSIZE(options); n++)
+			{
+				bool is_selected = (worldParamOption == n);
+				if (ImGui::Selectable(options[n], is_selected)) {
+					worldParamOption = n;
+					regenerate = true;
+				}
+				if (is_selected)
+					ImGui::SetItemDefaultFocus();
+			}
+			ImGui::EndCombo();
+		}
+		if(worldParamOption != 0) {
+			WorldParameter param = WorldParameter::CONTINENTALNESS;
+			switch (worldParamOption) {
+			case 1:
+				param = WorldParameter::CONTINENTALNESS;
+				break;
+			case 2:
+				param = WorldParameter::MOUNTAINOUSNESS;
+				break;
+			case 3:
+				param = WorldParameter::PV;
+				break;
+			case 4:
+				param = WorldParameter::HUMIDITY;
+				break;
+			case 5:
+				param = WorldParameter::TEMPERATURE;
+				break;
+			default:
+				break;
+			}
+			if (utilities::NoiseImGui(terrainGen.GetSelectedNoiseConfig(param)) || regenerate) {
+				terrainGen.GetSelectedNoise(param).GenerateFractalNoise();
+				utilities::MapToVertices(terrainGen.GetSelectedNoise(param).GetMap(), noiseVertices, terrainIndices, height, width, stride, heightScale, utilities::heightMapMode::TOPOGRAPHICAL, true, false, true);
+				noiseVertexBuffer = std::make_unique<VertexBuffer>(noiseVertices, width * height * stride * sizeof(float));
+				mainVAO->AddBuffer(*noiseVertexBuffer, layout);
+				changeTerrain = true;
+			}
+		}
+		else {
+			if (changeTerrain) {
+				GenerateTerrain();
+			}
+			mainVAO->AddBuffer(*mainVertexBuffer, layout);
+		}
+	}
+
+}
+void TerrainGenerationSys::ImGuiOutput() {
 
 }

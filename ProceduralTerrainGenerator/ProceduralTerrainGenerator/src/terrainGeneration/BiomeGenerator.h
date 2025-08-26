@@ -12,11 +12,11 @@ struct RangedLevel {
 };
 
 enum class WorldParameter {
-	HUMIDITY,
-	TEMPERATURE,
 	CONTINENTALNESS,
 	MOUNTAINOUSNESS,
-	PV
+	PV,
+	HUMIDITY,
+	TEMPERATURE
 };
 
 class BiomeGenerator

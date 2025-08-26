@@ -16,7 +16,7 @@ class NoiseBasedGenerationSys
 		unsigned int* meshIndices;
 		unsigned int stride;
 		int width, height, seed;
-		bool wireFrame = false, erosionDraw = false, newSize = true, instantUpdate = true;
+		bool wireFrame = false, erosionDraw = false, instantUpdate = true;
 		utilities::heightMapMode displayMode = utilities::heightMapMode::GREYSCALE;
 		
 		//OpenGl objects
@@ -36,7 +36,6 @@ class NoiseBasedGenerationSys
 		~NoiseBasedGenerationSys();
 		
 		bool Initialize(int _height, int _width, float _heightScale);
-		bool Resize();
 		bool GenerateNoise();
 		bool SimulateErosion();
 

@@ -20,26 +20,16 @@ namespace utilities
         OTHER
 	};
 
-	void ConvertToGrayscaleImage(float* data, unsigned char* image, int width, int height);
-    void ParseNoiseIntoVertices(float* vertices, float* map, int width, int height, float scale, unsigned int stride, unsigned int offset);
-	void MeshIndicesStrips(unsigned int* indices, int width, int height);
-    bool CalculateHeightMapNormals(float* vertices, unsigned int stride, unsigned int offSet, unsigned int width, unsigned int height);
+	void ConvertToGrayscaleImage(float* data, unsigned char* image, const int& width, const int& height);
+    void ParseNoiseIntoVertices(float* vertices, float* map, const int& width, const int& height, float scale, const unsigned int stride, unsigned int offset);
+	void MeshIndicesStrips(unsigned int* indices, const int& width, const int& height);
+    bool CalculateHeightMapNormals(float* vertices, const unsigned int& stride, unsigned int offSet, const unsigned int& width, const unsigned int& height);
 	bool PaintVerticesByHeight(float* vertices, const int& width, const int& height, const float& heightScale, const unsigned int& stride, heightMapMode m, unsigned int heightOffSet , unsigned int colorOffset);
 
-    void CreateTerrainMesh(noise::SimplexNoiseClass& noise, float* vertices, unsigned int* indices, float scalingFactor, unsigned int stride, bool normals, bool first, heightMapMode mode);
+    void MapToVertices(float* map, float* vertices, unsigned int* indices, const int height, const int width, const unsigned int stride, const float& heightScale, heightMapMode mode, bool normalsCalculation, bool indexGeneration, bool paint);
     void PerformErosion(erosion::Erosion& erosion, float* vertices, float scalingFactor, std::optional<float*> Track, int stride, heightMapMode mode);
     
-    
-
-
-    bool CreateIndicesTiledField(unsigned int* indices, int width, int height);
-    bool CreateTiledVertices(float* vertices, int width, int height, float* map, float scalingFactor, unsigned int stride, unsigned int offset);
-    void PaintNotByTexture(float* vertices, int width, int height, unsigned int stride, unsigned int offset);
-	bool saveToObj(const std::string& dirPath, const std::string& name, float* vertices, unsigned int* indices, unsigned int stride, unsigned int indexSize, unsigned int verticesCount, bool mtl);
-    void PaintBiome(float* vertices, float* map, int width, int height, unsigned int stride, unsigned int offset);
-	void AssignBiome(float* vertices, int* biomeMap, int width, int height, unsigned int stride, unsigned int offset);
-    void AssignTexturesByBiomes(TerrainGenerator& terraGen, float* vertices, int width, int height, int texAtlasSize, unsigned int stride, unsigned int offset);
-
+    bool NoiseImGui(noise::NoiseConfigParameters& noiseConfig);
 
 
     //-----

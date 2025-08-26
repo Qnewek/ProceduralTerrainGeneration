@@ -32,10 +32,14 @@ void Camera::SetCameraConfig(glm::vec3 position, glm::vec3 front, glm::vec3 up, 
 }
 void Camera::SetScreenSize(unsigned int width, unsigned int height)
 {
-	screenWidth = width;
-	screenHeight = height;
-	xpos = width / 2.0f;
-	ypos = height / 2.0f;
+	if (width != screenWidth) {
+		screenWidth = width;
+		xpos = width / 2.0f;
+	}
+	if (height != screenHeight) {
+		screenHeight = height;
+		ypos = height / 2.0f;
+	}
 }
 void Camera::UpdateCameraVectors(CameraMovement movement) {
 	if (movement == CameraMovement::FORWARD)
