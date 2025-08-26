@@ -35,8 +35,12 @@ namespace utilities
 	//@param stride - number of floats per vertex
 	//@param offset - offset in the vertex array to start with when filling the data
 	void ParseNoiseIntoVertices(float* vertices, float* map, const int& width, const int& height, float scale, const unsigned int stride, unsigned int offset){
-		if (!vertices || !map) {
+		if (!vertices) {
 			std::cout << "[ERROR] Vertices array not initialized" << std::endl;
+			return;
+		}
+		if(!map) {
+			std::cout << "[ERROR] Noise map not initialized" << std::endl;
 			return;
 		}
 		for (int y = 0; y < height; y++)

@@ -15,7 +15,7 @@ class NoiseBasedGenerationSys
 		float heightScale, modelScale, topoStep, topoBandWidth;
 		unsigned int* meshIndices;
 		unsigned int stride;
-		int width, height, seed;
+		int width, height;
 		bool wireFrame = false, erosionDraw = false, instantUpdate = true;
 		utilities::heightMapMode displayMode = utilities::heightMapMode::GREYSCALE;
 		
@@ -36,6 +36,7 @@ class NoiseBasedGenerationSys
 		~NoiseBasedGenerationSys();
 		
 		bool Initialize(int _height, int _width, float _heightScale);
+		bool Resize();
 		bool GenerateNoise();
 		bool SimulateErosion();
 
