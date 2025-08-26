@@ -1,18 +1,14 @@
 ﻿  Trwa skanowanie źródeł pod kątem zależności modułów...
-  TerrainGenerationSys.cpp
+  TerrainGenerator.cpp
 C:\Users\dawid\source\repos\Qnewek\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\vendor\Splines\spline.h(44,9): warning C4068: nieznana pragma „GCC”
-  (kompilowanie pliku źródłowego „src/subSystems/TerrainGenerationSys.cpp”)
+  (kompilowanie pliku źródłowego „src/terrainGeneration/TerrainGenerator.cpp”)
   
 C:\Users\dawid\source\repos\Qnewek\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\vendor\Splines\spline.h(45,9): warning C4068: nieznana pragma „GCC”
-  (kompilowanie pliku źródłowego „src/subSystems/TerrainGenerationSys.cpp”)
+  (kompilowanie pliku źródłowego „src/terrainGeneration/TerrainGenerator.cpp”)
   
 C:\Users\dawid\source\repos\Qnewek\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\vendor\Splines\spline.h(681,9): warning C4068: nieznana pragma „GCC”
-  (kompilowanie pliku źródłowego „src/subSystems/TerrainGenerationSys.cpp”)
+  (kompilowanie pliku źródłowego „src/terrainGeneration/TerrainGenerator.cpp”)
   
-C:\Users\dawid\source\repos\Qnewek\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\subSystems\TerrainGenerationSys.cpp(40,72): warning C4244: "argument": konwersja z "float" do "int", możliwa utrata danych
-C:\Users\dawid\source\repos\Qnewek\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\subSystems\TerrainGenerationSys.cpp(41,65): warning C4244: "argument": konwersja z "float" do "int", możliwa utrata danych
-C:\Users\dawid\source\repos\Qnewek\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\subSystems\TerrainGenerationSys.cpp(42,64): warning C4244: "argument": konwersja z "float" do "int", możliwa utrata danych
-C:\Users\dawid\source\repos\Qnewek\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\subSystems\TerrainGenerationSys.cpp(43,64): warning C4244: "argument": konwersja z "float" do "int", możliwa utrata danych
-C:\Users\dawid\source\repos\Qnewek\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\subSystems\TerrainGenerationSys.cpp(44,67): warning C4244: "argument": konwersja z "float" do "int", możliwa utrata danych
-C:\Users\dawid\source\repos\Qnewek\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\subSystems\TerrainGenerationSys.cpp(45,67): warning C4244: "argument": konwersja z "float" do "int", możliwa utrata danych
+C:\Users\dawid\source\repos\Qnewek\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\terrainGeneration\TerrainGenerator.cpp(209,1): warning C4715: "TerrainGenerator::GetSelectedNoiseConfig”: niewszystkie ścieżki kodu zwracają wartość
+C:\Users\dawid\source\repos\Qnewek\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\terrainGeneration\TerrainGenerator.cpp(227,1): warning C4715: "TerrainGenerator::GetSelectedNoise”: niewszystkie ścieżki kodu zwracają wartość
   ProceduralTerrainGenerator.vcxproj -> C:\Users\dawid\source\repos\Qnewek\ProceduralTerrainGeneration\ProceduralTerrainGenerator\Debug\ProceduralTerrainGenerator.exe

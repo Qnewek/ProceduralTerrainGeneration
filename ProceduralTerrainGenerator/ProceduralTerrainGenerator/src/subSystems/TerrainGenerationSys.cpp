@@ -31,37 +31,16 @@ bool TerrainGenerationSys::Initialize(unsigned int _height, unsigned int _width,
 	height = _height;
 	width = _width;
 	heightScale = _heightScale;
-
-	std::vector<std::vector<double>> splines = { {-1.0, -0.7, -0.2, 0.03, 0.3, 1.0}, {0.0, 40.0 ,64.0, 66.0, 68.0, 70.0},	//Continentalness {X,Y}
-	            {-1.0, -0.78, -0.37, -0.2, 0.05, 0.45, 0.55, 1.0}, {0.0, 5.0, 10.0, 20.0, 30.0, 80.0, 100.0, 170.0},	//Mountainousness {X,Y}
-	            {-1.0, -0.85, -0.6, 0.2, 0.7, 1.0}, {1.0, 0.7, 0.4, 0.2, 0.05, 0} };
 	
-	std::vector<biome::Biome>biomes = {
-	    biome::Biome(0, "Grassplains",	{1, 2}, {1, 4}, {3, 5}, {0, 3}, 3, 1.f),
-		biome::Biome(1, "Desert",		{2, 4}, {0, 1}, {3, 5}, {0, 4}, 2, 1.f),
-		biome::Biome(2, "Snow",			{0, 1}, {0, 4}, {3, 5}, {0, 4}, 7, 1.f),
-		biome::Biome(3, "Sand",			{0, 4}, {0, 4}, {2, 3}, {0, 7}, 8, 1.f),
-		biome::Biome(4, "Mountain",		{0, 4}, {0, 4}, {4, 5}, {4, 7}, 0, 1.f),
-	    biome::Biome(5, "Ocean",		{0, 4}, {0, 4}, {0, 2}, {0, 7}, 5, 1.f)
-	};
-	
-	std::vector<std::vector<RangedLevel>> ranges = {
-	    {{-1.0f, -0.5f, 0},{-0.5f, 0.0f, 1},{0.0f, 0.5f, 2},{0.5f, 1.1f, 3}},
-	    {{-1.0f, -0.5f, 0},{-0.5f, 0.0f, 1},{0.0f, 0.5f, 2},{0.5f, 1.1f, 3}},
-	    {{-1.0f, -0.7f, 0},{-0.7f, -0.2f, 1},{ -0.2f, 0.03f, 2},{0.03f, 0.3f, 3},{0.3f, 1.1f, 4}},
-	    {{-1.0f, -0.78f, 0},{-0.78f, -0.37f, 1},{-0.37f, -0.2f, 2},{-0.2f, 0.05f, 3},{0.05f, 0.45f, 4},{0.45f, 0.55f, 5},{0.55f, 1.1f, 6}}
-	};
-	
-	terrainGen.SetSplines(splines);
-	terrainGen.SetBiomes(biomes);
-	terrainGen.SetRanges(ranges);
+	terrainGen.Initialize(width, height);
 	GenerateTerrain();
 
+	std::cout << "[LOG] TerrainGenerationSys initialized\n";
 	return true;
 
 }
 bool TerrainGenerationSys::GenerateTerrain() {
-	if(terrainGen.GetHeight() != height || terrainGen.GetWidth() != width) {
+	if(!terrainVertices || terrainGen.GetHeight() != height || terrainGen.GetWidth() != width) {
 		if(terrainVertices) {
 			delete[] terrainVertices;
 		}
@@ -71,7 +50,7 @@ bool TerrainGenerationSys::GenerateTerrain() {
 		if(noiseVertices) {
 			delete[] noiseVertices;
 		}
-		if (!terrainGen.SetSize(width, height)) {
+		if (!terrainGen.Resize(width, height)) {
 			std::cout << "[ERROR] TerrainGen size couldnt be set\n";
 			return false;
 		}
@@ -136,9 +115,9 @@ void TerrainGenerationSys::ImGuiDraw() {
 	}
 	if(ImGui::CollapsingHeader("Terrain settings")) {
 		ImGui::Text("Edit component noise:");
-		bool regenerate = false, changeTerrain = false;
+		bool regenerate = false;
 		static int worldParamOption = 0;
-		const char* options[] = { "None", "Continentalness", "Mountainousness", "PV", "Humidity", "Temperature" };
+		const char* options[] = { "None", "Continentalness", "Mountainousness", "PV" };
 		if (ImGui::BeginCombo("Noise: ", options[worldParamOption]))
 		{
 			for (int n = 0; n < IM_ARRAYSIZE(options); n++)
@@ -165,12 +144,6 @@ void TerrainGenerationSys::ImGuiDraw() {
 			case 3:
 				param = WorldParameter::PV;
 				break;
-			case 4:
-				param = WorldParameter::HUMIDITY;
-				break;
-			case 5:
-				param = WorldParameter::TEMPERATURE;
-				break;
 			default:
 				break;
 			}
@@ -185,8 +158,11 @@ void TerrainGenerationSys::ImGuiDraw() {
 		else {
 			if (changeTerrain) {
 				GenerateTerrain();
+				changeTerrain = false;
 			}
-			mainVAO->AddBuffer(*mainVertexBuffer, layout);
+			else {
+				mainVAO->AddBuffer(*mainVertexBuffer, layout);
+			}
 		}
 	}
 

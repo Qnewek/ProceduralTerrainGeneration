@@ -70,19 +70,17 @@ namespace noise
 		SimplexNoiseClass();
 		~SimplexNoiseClass();
 
+		bool Initialize(int _height, int _width);
+		bool Resize(int _height, int _width);
+
 		bool GenerateFractalNoise();
 		bool MakeMapRidged();
 		float MakeIsland(float e, int x, int y);
 
-		void InitMap();
-		void SetSeed(int seed);
-		void Reseed();
-		void SetScale(float scale);
-		void SetMapSize(unsigned int width, unsigned int height);
-		void SetConfig(NoiseConfigParameters config);
+		void SetConfig(NoiseConfigParameters config) { this->config = config; }
 
 		float* GetMap() const { return heightMap; }
-		float GetVal(int x, int y) const { return heightMap[y * width + x]; }
+		float GetVal(int x, int y);
 		unsigned int GetWidth()  const { return width; }
 		unsigned int GetHeight() const { return height; }
 		NoiseConfigParameters& GetConfigRef() { return config; }

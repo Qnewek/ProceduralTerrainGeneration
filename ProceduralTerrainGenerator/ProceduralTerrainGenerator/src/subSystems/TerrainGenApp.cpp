@@ -14,7 +14,6 @@ width(400), height(400), heightScale(255.0f),
 camera(1920, 1080, glm::vec3(0.0f, heightScale / 2.0f, 0.0f), 100.0f, 1000.0f), renderer(),
 noiseGenSys(), currentMode(mode::NOISE_HEIGHTMAP), light(glm::vec3(0.0f, 0.0f, 0.0f), 20.0f)
 {
-    std::cout << "[LOG] Hub initialized" << std::endl;
 }
 
 TerrainGenApp::~TerrainGenApp()
@@ -62,11 +61,14 @@ int TerrainGenApp::Initialize()
 
     //Logic initialization
 	camera.SetScreenSize(windowWidth - rightPanelWidth - leftPanelWidth, windowHeight - topPanelHeight - bottomPanelHeight);
-	noiseGenSys.Initialize(height, width, heightScale);
-	terrainGenSys.Initialize(height, width, heightScale);
+    if (!noiseGenSys.Initialize(height, width, heightScale))
+        return 0;
+	if(!terrainGenSys.Initialize(height, width, heightScale))
+		return 0;
     light.Initialize();
     light.SetPosition(glm::vec3(width, heightScale, height));
    
+    std::cout << "[LOG] Hub initialized" << std::endl;
     return 0;
 }
 

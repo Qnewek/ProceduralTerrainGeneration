@@ -16,7 +16,7 @@ private:
 	unsigned int* terrainIndices;
 	unsigned int stride;
 	int width, height;
-	bool wireFrame = false;
+	bool wireFrame = false, changeTerrain = false;
 
 	//OpenGl objects
 	VertexBufferLayout layout;

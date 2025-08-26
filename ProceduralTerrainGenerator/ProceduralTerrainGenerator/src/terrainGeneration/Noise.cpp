@@ -13,83 +13,48 @@
 namespace noise
 {
 	SimplexNoiseClass::SimplexNoiseClass()
-		: config(NoiseConfigParameters()), width(1), height(1),
+		: config(NoiseConfigParameters()), width(0), height(0),
 		heightMap(nullptr)
 	{
-		SimplexNoise::reseed(config.seed);
 	}
 	SimplexNoiseClass::~SimplexNoiseClass()
 	{
 		delete[] heightMap;
 	}
 
-	//Initializes the height map based on the width and height of the map
-	void SimplexNoiseClass::InitMap()
-	{
-		if (width > 0 && height > 0) {
-			if (heightMap)
-				delete[] heightMap;
-			heightMap = new float[width * height];
+	//Initialize the size of the map that the noise will be generated into
+	//@param _width - width of the map
+	//@param _height - height of the
+	bool SimplexNoiseClass::Initialize(int _height, int _width) {
+		if (heightMap) {
+			std::cout << "[ERROR] Noise map already initialized\n";
+			return false;
 		}
-		else {
-			std::cout << "[ERROR] Map size must be greater than 0" << std::endl;
-		}
+		return Resize(_height, _width);
 	}
 
-	//Sets the seed of the noise, if the seed is different than the current seed
-	//Seeding in this case is performed by shuffling permutation table of the simplex noise
-	//
-	//@param seed - seed of the noise
-	void SimplexNoiseClass::SetSeed(int seed) {
-		if (seed != this->config.seed) {
-			this->config.seed = seed;
-			SimplexNoise::reseed(seed);
+	//Resize the size og the noise map
+	//@param _width - width of the map
+	//@param _height - height of the map
+	bool SimplexNoiseClass::Resize(int _height, int _width)
+	{
+		if (_height <= 0 || _width <= 0) {
+			std::cout << "[ERROR] Noise map couldnt be resized, width and height must be greater than 0\n";
+			return false;
 		}
-	}
+		if (_width == this->width && _height == this->height) {
+			std::cout << "[LOG] Noise map is already initialized with the same size\n";
+			return false;
+		}
 
-	void SimplexNoiseClass::Reseed()
-	{
-		SimplexNoise::reseed(this->config.seed);
-	}
-		
-	//Sets the scale of the noise sampling, the higher the scale the more zoomed out the noise will be,
-	//
-	//@param scale - scale of the noise
-	void SimplexNoiseClass::SetScale(float scale)
-	{
-		if (scale > 0.0f && scale != this->config.scale) {
-			this->config.scale = scale;
+		width = _width;
+		height = _height;
+		if (heightMap) {
+			delete[] heightMap;
 		}
-		else {
-			std::cout << "[ERROR] Scale must be greater than 0" << std::endl;
-		}
-	}
-
-	//Set the size of the map in chunks that the noise will be generated intoif, its not set manually
-	//Default value for the map size is 1
-	//
-	//@param width - width of the map in chunks
-	//@param height - height of the map in chunks
-	void SimplexNoiseClass::SetMapSize(unsigned int width, unsigned int height)
-	{
-		if (width > 0 && height > 0 && (width != this->width || height != this->height)) {
-			this->width = width;
-			this->height = height;
-			if (heightMap) {
-				delete[] heightMap;
-				heightMap = nullptr;
-			}
-		}
-	}
-
-	//Set the configuration parameters of the noise
-	//
-	//@param config - configuration parameters of the noise
-	void SimplexNoiseClass::SetConfig(NoiseConfigParameters config)
-	{
-		this->config = config;
-		if (config.seed != this->config.seed)
-			SetSeed(config.seed);
+		heightMap = new float[width * height];
+		std::cout << "[LOG] Noise object has been succesfully initialized with size: " << height << "x" << width << "\n";
+		return true;
 	}
 
 	//Function generating perlin noise based on the configuration parameters
@@ -98,10 +63,11 @@ namespace noise
 	//@return float* - 2D height map of the noise
 	bool SimplexNoiseClass::GenerateFractalNoise()
 	{
-		if (heightMap == nullptr) {
-			std::cout << "[ERROR] Height map not initialized" << std::endl;
+		if (!heightMap) {
+			std::cout << "[ERROR] Noise object not initialized!" << std::endl;
 			return false;
 		}
+		SimplexNoise::reseed(this->config.seed);
 
 		float amplitude;
 		float frequency;
@@ -241,5 +207,17 @@ namespace noise
 			distance = 1 - (cos(nx * (std::_Pi_val / 2)) * cos(ny * (std::_Pi_val / 2)));
 		}
 		return std::lerp(e, 1 - distance, config.mixPower);
+	}
+	float SimplexNoiseClass::GetVal(int x, int y)
+	{
+		if(!heightMap) {
+			std::cout << "[ERROR] Noise object not initialized!" << std::endl;
+			return -1.0f;
+		}
+		if(x < 0 || x >= width || y < 0 || y >= height) {
+			std::cout << "[ERROR] Coordinates out of bounds!" << std::endl;
+			return -1.0f;
+		}
+		return heightMap[y * width + x];
 	}
 }

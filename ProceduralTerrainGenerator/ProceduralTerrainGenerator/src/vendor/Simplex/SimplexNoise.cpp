@@ -71,6 +71,7 @@ static inline int32_t fastfloor(float fp) {
  * A vector-valued noise over 3D accesses it 96 times, and a
  * float-valued 4D noise 64 times. We want this to fit in the cache!
  */
+static int seed = 0;
 static uint8_t perm[256] = {
 	160, 151, 91, 137, 15, 90, 13, 131, 95, 201, 53, 96, 233, 194, 225, 7, 36, 140, 30, 103, 142, 69, 99, 8, 240, 37, 10, 21, 6,
 	190, 148, 247, 234, 120, 0, 75, 26, 197, 252, 62, 203, 219, 35, 117, 32, 11, 57, 33, 177, 237, 88, 56, 149, 174, 87, 125, 20,
@@ -101,11 +102,12 @@ static uint8_t originalPerm[256] = {
 *
 * @note This function can be called anytime before generating noise to shuffle the permutation table
 */
-void SimplexNoise::reseed(int seed) {
+void SimplexNoise::reseed(int _seed) {
 	std::copy(std::begin(originalPerm), std::end(originalPerm), std::begin(perm));
 	
-	if (seed == 0) return;
+	if (seed == _seed) return;
 
+	seed = _seed;
 	std::mt19937 generator(seed);
 	std::shuffle(std::begin(perm), std::end(perm), generator);
 }

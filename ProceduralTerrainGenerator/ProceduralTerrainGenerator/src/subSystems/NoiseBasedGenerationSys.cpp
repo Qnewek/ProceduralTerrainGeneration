@@ -8,7 +8,7 @@
 #include "glm/gtc/matrix_transform.hpp"
 
 NoiseBasedGenerationSys::NoiseBasedGenerationSys() : noise(), erosion(1, 1), vertices(nullptr), erosionVertices(nullptr), meshIndices(nullptr), 
-width(0), height(0), heightScale(1.0f), modelScale(1.0f), topoBandWidth(0.2f), topoStep(10.0f), stride(9), seed(0)
+width(0), height(0), heightScale(1.0f), modelScale(1.0f), topoBandWidth(0.2f), topoStep(10.0f), stride(9)
 {
 }
 
@@ -38,41 +38,45 @@ bool NoiseBasedGenerationSys::Initialize(int _height, int _width, float _heightS
 
 	this->height = _height;
 	this->width = _width;
-	this->seed = noise.GetConfigRef().seed;
 	this->heightScale = _heightScale;
+	noise.Initialize(height, width);
 
 	if(!GenerateNoise()) {
 		std::cout << "[ERROR] Invalid height or width value" << std::endl;
 		return false;
 	}
 
+	std::cout << "[LOG] NoiseBasedGenerationSys initialized\n";
 	return true;
 }
 
-bool NoiseBasedGenerationSys::GenerateNoise()
+bool NoiseBasedGenerationSys::Resize()
 {
-	bool newSize = false;
-	if(height != noise.GetHeight() || width != noise.GetWidth()) {
+	if (!vertices || height != noise.GetHeight() || width != noise.GetWidth()) {
 		erosionDraw = false;
-		noise.SetMapSize(width, height);
+		noise.Resize(width, height);
 
-		if(vertices) {
+		if (vertices) {
 			delete[] vertices;
 		}
-		if(meshIndices) {
+		if (meshIndices) {
 			delete[] meshIndices;
 		}
 
 		vertices = new float[width * height * stride];
 		meshIndices = new unsigned int[(height - 1) * width * 2]; // indices for strips
-		newSize = true;
+		return  true;
 	}
+	return false;
+}
 
-	noise.Reseed();
-	noise.InitMap();
-	noise.GenerateFractalNoise();
-	
-	utilities::MapToVertices(noise.GetMap(), vertices, meshIndices, height, width, stride, heightScale, displayMode, true, newSize, true);
+bool NoiseBasedGenerationSys::GenerateNoise()
+{
+	bool resized = Resize();
+	if (!noise.GenerateFractalNoise()) {
+		return false;
+	}
+	utilities::MapToVertices(noise.GetMap(), vertices, meshIndices, height, width, stride, heightScale, displayMode, true, resized, true);
 
 	mainVertexBuffer = std::make_unique<VertexBuffer>(vertices, (height * width) * stride * sizeof(float));
 	mainIndexBuffer = std::make_unique<IndexBuffer>(meshIndices, (height - 1) * width * 2);
