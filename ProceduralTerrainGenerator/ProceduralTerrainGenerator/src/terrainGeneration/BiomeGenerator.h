@@ -11,10 +11,10 @@ struct RangedLevel {
 	int level;
 };
 
-enum class WorldParameter {
+enum class BiomeParameter {
 	CONTINENTALNESS,
 	MOUNTAINOUSNESS,
-	PV,
+	WEIRDNESS,
 	HUMIDITY,
 	TEMPERATURE
 };
@@ -27,9 +27,9 @@ public:
 
 	bool Initialize(int _height, int _width);
 	bool Resize(int _height, int _width);
-	bool Biomify(float* heightMap, noise::SimplexNoiseClass& continenatlnes, noise::SimplexNoiseClass& mountainousness);
+	bool Biomify(float* heightMap, noise::SimplexNoiseClass& continenatlness, noise::SimplexNoiseClass& mountainousness);
 	int DetermineBiome(const int& temperature, const int& humidity, const int& continentalness, const int& mountainousness);
-	int DetermineLevel(WorldParameter p, float value);
+	int DetermineLevel(BiomeParameter p, float value);
 	bool GenerateComponentNoises();
 
 	bool SetRanges(std::vector<std::vector<RangedLevel>>& ranges);

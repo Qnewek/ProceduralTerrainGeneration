@@ -2,28 +2,39 @@
 
 #include <vector>
 #include <utility>
+#include <iostream>
 
 #include "Noise.h"
-#include "BiomeGenerator.h"
-
 #include "Splines/spline.h"
 
 class TerrainGenerator
 {
+public:
+	enum class WorldGenParameter {
+		CONTINENTALNESS,
+		MOUNTAINOUSNESS,
+		WEIRDNESS
+	};
+	//TODO: Different mothodes for valvulating height
+	enum class EvaluationMethod {
+		LINEAR_COMBINE,
+		SPLINE_COMBINE,
+		C
+	};
 private:
 	float* heightMap;
+	int resolution;
 	int seed, width, height;
-
-	//std::vector<std::vector<std::pair<int,int>>> vegetationPoints;
 
 	noise::SimplexNoiseClass continentalnessNoise;
 	noise::SimplexNoiseClass mountainousnessNoise;
-	noise::SimplexNoiseClass PVNoise;
+	noise::SimplexNoiseClass weirdnessNoise;
 
 	tk::spline continentalnessSpline;
 	tk::spline mountainousnessSpline;
-	tk::spline PVSpline;
+	tk::spline weirdnessSpline;
 
+	EvaluationMethod evalMethod = EvaluationMethod::LINEAR_COMBINE;
 public:
 	TerrainGenerator();
 	~TerrainGenerator();
@@ -33,16 +44,19 @@ public:
 	bool GenerateTerrain();
 	bool GenerateNoises();
 
+	void SetResolution();
 	void SetContinentalnessNoiseConfig(noise::NoiseConfigParameters config) { continentalnessNoise.SetConfig(config); };
 	void SetMountainousnessNoiseConfig(noise::NoiseConfigParameters config) { mountainousnessNoise.SetConfig(config); };
-	void SetPVNoiseConfig(noise::NoiseConfigParameters config) { PVNoise.SetConfig(config); };
+	void SetPVNoiseConfig(noise::NoiseConfigParameters config) { weirdnessNoise.SetConfig(config); };
 	bool SetSplines(std::vector<std::vector<double>> splines);
-	bool SetSpline(WorldParameter p, std::vector<std::vector<double>>  spline);
+	bool SetSpline(WorldGenParameter p, std::vector<std::vector<double>>  spline);
 
 	int GetWidth(){ return width; };
 	int GetHeight(){ return height; };
 	float* GetHeightMap() const { return heightMap; }
 	float GetHeightAt(int x, int y);
-	noise::NoiseConfigParameters& GetSelectedNoiseConfig(WorldParameter p);
-	noise::SimplexNoiseClass& GetSelectedNoise(WorldParameter p);
+	int& GetResolitionRef() { return resolution; };
+	noise::NoiseConfigParameters& GetSelectedNoiseConfig(WorldGenParameter p);
+	noise::SimplexNoiseClass& GetSelectedNoise(WorldGenParameter p);
+	EvaluationMethod& GetEvaluationMethod() { return evalMethod; };
 };

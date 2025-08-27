@@ -93,6 +93,9 @@
     <ClCompile Include="src\subSystems\TerrainGenerationSys.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="src\terrainGeneration\VegetationGenerator.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <None Include="src\vendor\glm\detail\func_common.inl">
@@ -1472,6 +1475,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="src\subSystems\TerrainGenerationSys.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\terrainGeneration\VegetationGenerator.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

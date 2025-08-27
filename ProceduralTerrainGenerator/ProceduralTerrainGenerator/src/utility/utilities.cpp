@@ -241,6 +241,7 @@ namespace utilities
 		regenerate |= ImGui::SliderInt("Octaves", &noiseConfig.octaves, 1, 8);
 		regenerate |= ImGui::SliderFloat("Offset x", &noiseConfig.xoffset, 0.0f, 5.0f);
 		regenerate |= ImGui::SliderFloat("Offset y", &noiseConfig.yoffset, 0.0f, 5.0f);
+		regenerate |= ImGui::SliderInt("Resolution", &noiseConfig.resolution, 100, 1000);
 		regenerate |= ImGui::SliderFloat("Scale", &noiseConfig.scale, 0.01f, 3.0f);
 		regenerate |= ImGui::SliderFloat("Constrast", &noiseConfig.constrast, 0.1f, 2.0f);
 		regenerate |= ImGui::SliderFloat("Redistribution", &noiseConfig.redistribution, 0.1f, 10.0f);

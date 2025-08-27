@@ -27,6 +27,7 @@ private:
 	std::unique_ptr<Shader> mainShader;
 
 	TerrainGenerator terrainGen;
+	TerrainGenerator::EvaluationMethod evaluatingMode = TerrainGenerator::EvaluationMethod::LINEAR_COMBINE;
 public:
 	TerrainGenerationSys();
 	~TerrainGenerationSys();
