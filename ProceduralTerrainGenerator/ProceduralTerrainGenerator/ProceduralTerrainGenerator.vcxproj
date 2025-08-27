@@ -161,6 +161,7 @@
     <ClCompile Include="src\opengl\VertexArray.cpp" />
     <ClCompile Include="src\opengl\VertexBuffer.cpp" />
     <ClCompile Include="src\subSystems\TerrainGenerationSys.cpp" />
+    <ClCompile Include="src\terrainGeneration\VegetationGenerator.cpp" />
   </ItemGroup>
   <ItemGroup>
     <None Include="res\shaders\Light_source_fragment.shader" />
@@ -628,6 +629,7 @@
     <ClInclude Include="src\opengl\VertexArray.h" />
     <ClInclude Include="src\opengl\VertexBuffer.h" />
     <ClInclude Include="src\subSystems\TerrainGenerationSys.h" />
+    <ClInclude Include="src\terrainGeneration\VegetationGenerator.h" />
   </ItemGroup>
   <ItemGroup>
     <Image Include="res\textures\Basic_biome_texture_palette.jpg" />

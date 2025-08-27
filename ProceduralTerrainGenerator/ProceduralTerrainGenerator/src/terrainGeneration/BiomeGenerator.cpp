@@ -92,7 +92,7 @@ bool BiomeGenerator::Resize(int _height, int _width)
 
 
 
-bool BiomeGenerator::Biomify(float* heightMap, noise::SimplexNoiseClass& continenatlnes, noise::SimplexNoiseClass& mountainousness)
+bool BiomeGenerator::Biomify(float* heightMap, noise::SimplexNoiseClass& continenatlness, noise::SimplexNoiseClass& mountainousness)
 {
 	if (!heightMap || !biomeMap) {
 		std::cout << "[ERROR] HeightMap or biomeMap not initialized" << std::endl;
@@ -107,10 +107,10 @@ bool BiomeGenerator::Biomify(float* heightMap, noise::SimplexNoiseClass& contine
 				biomeMap[y * width + x] = 5;
 				continue;
 			}
-			H = DetermineLevel(WorldParameter::HUMIDITY, humidityNoise.GetVal(x, y));
-			T = DetermineLevel(WorldParameter::TEMPERATURE, temperatureNoise.GetVal(x, y));
-			C = DetermineLevel(WorldParameter::CONTINENTALNESS, continenatlnes.GetVal(x, y));
-			M = DetermineLevel(WorldParameter::MOUNTAINOUSNESS, mountainousness.GetVal(x, y));
+			H = DetermineLevel(BiomeParameter::HUMIDITY, humidityNoise.GetVal(x, y));
+			T = DetermineLevel(BiomeParameter::TEMPERATURE, temperatureNoise.GetVal(x, y));
+			C = DetermineLevel(BiomeParameter::CONTINENTALNESS, continenatlness.GetVal(x, y));
+			M = DetermineLevel(BiomeParameter::MOUNTAINOUSNESS, mountainousness.GetVal(x, y));
 
 			biomeMap[y * width + x] = DetermineBiome(H, T, C, M);
 		}
@@ -130,32 +130,32 @@ int BiomeGenerator::DetermineBiome(const int& temperature, const int& humidity, 
 	return 0;
 }
 
-int BiomeGenerator::DetermineLevel(WorldParameter p, float value)
+int BiomeGenerator::DetermineLevel(BiomeParameter p, float value)
 {
 	switch (p)
 	{
-	case WorldParameter::HUMIDITY:
+	case BiomeParameter::HUMIDITY:
 		for (const auto& it : humidityLevels) {
 			if (value >= it.min && value < it.max) {
 				return it.level;
 			}
 		}
 		break;
-	case WorldParameter::TEMPERATURE:
+	case BiomeParameter::TEMPERATURE:
 		for (const auto& it : temperatureLevels) {
 			if (value >= it.min && value < it.max) {
 				return it.level;
 			}
 		}
 		break;
-	case WorldParameter::CONTINENTALNESS:
+	case BiomeParameter::CONTINENTALNESS:
 		for (const auto& it : continentalnessLevels) {
 			if (value >= it.min && value < it.max) {
 				return it.level;
 			}
 		}
 		break;
-	case WorldParameter::MOUNTAINOUSNESS:
+	case BiomeParameter::MOUNTAINOUSNESS:
 		for (const auto& it : mountainousnessLevels) {
 			if (value >= it.min && value < it.max) {
 				return it.level;

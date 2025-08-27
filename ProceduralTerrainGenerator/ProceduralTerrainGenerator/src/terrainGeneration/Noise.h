@@ -26,24 +26,18 @@ namespace noise
 
 	struct NoiseConfigParameters {
 		//Point offset
-		float xoffset;
-		float yoffset;
+		float xoffset, yoffset;
+		int resolution;
 		int seed;
 
 		//Fractal noise generation
-		float scale;
 		int octaves;
-		float constrast;
-		float redistribution;
-		float lacunarity;
-		float persistance;
+		float scale, constrast,	redistribution,	lacunarity,	persistance,revertGain;
 		Options option;
-		float revertGain;
 
 		//Ridge
 		bool Ridge;
-		float RidgeGain;
-		float RidgeOffset;
+		float RidgeGain, RidgeOffset;
 
 		//Island
 		bool island;
@@ -53,12 +47,12 @@ namespace noise
 		//Symmetrical or sth
 		bool symmetrical;
 
-		NoiseConfigParameters(int seed = 345, float xoffset = 0.0f, float yoffset = 0.0f, float scale = 1.0f, int octaves = 8,
+		NoiseConfigParameters(int seed = 345, int res = 500, float xoffset = 0.0f, float yoffset = 0.0f, float scale = 1.0f, int octaves = 8,
 			float constrast = 1.0f, float redistribution = 1.0f, float lacunarity = 2.0f,
 			float persistance = 0.5f, float scaleDown = 1.0f, Options option = Options::REVERT_NEGATIVES, float revertGain = 0.5f, bool Ridge = false,
 			float RidgeGain = 1.0f, float RidgeOffset = 1.0f, bool island = false, float mixPower = 0.5f,
 			IslandType islandType = IslandType::CONE, bool symmetrical = false):
-			seed(seed), xoffset(xoffset), yoffset(yoffset), scale(scale), octaves(octaves), constrast(constrast),
+			seed(seed), resolution(res), xoffset(xoffset), yoffset(yoffset), scale(scale), octaves(octaves), constrast(constrast),
 			redistribution(redistribution), lacunarity(lacunarity), persistance(persistance), option(option), revertGain(revertGain),
 			Ridge(Ridge), RidgeGain(RidgeGain), RidgeOffset(RidgeOffset), island(island), islandType(islandType), mixPower(mixPower), 
 			symmetrical(symmetrical){}

@@ -88,8 +88,8 @@ namespace noise
 				{
 					if (this->config.symmetrical) {
 						float TAU = 2 * std::_Pi_val;
-						float anglex = TAU * (x / (float)width);
-						float angley = TAU * (y / (float)height);
+						float anglex = TAU * (x / (float)config.resolution);
+						float angley = TAU * (y / (float)config.resolution);
 
 						elevation += SimplexNoise::noise(std::cosf(anglex) / TAU * config.scale * frequency + config.xoffset, 
 														 std::sinf(anglex) / TAU * config.scale * frequency + config.xoffset,
@@ -97,8 +97,8 @@ namespace noise
 														 std::sinf(angley) / TAU * config.scale * frequency + config.yoffset)  * amplitude;
 					}
 					else {
-						vec.x = (x / (float)width  * config.scale + config.xoffset) * frequency;
-						vec.y = (y / (float)height * config.scale + config.yoffset) * frequency;
+						vec.x = (x / (float)config.resolution * config.scale + config.xoffset) * frequency;
+						vec.y = (y / (float)config.resolution * config.scale + config.yoffset) * frequency;
 
 						elevation += SimplexNoise::noise(vec.x, vec.y) * amplitude;
 					}
@@ -110,13 +110,7 @@ namespace noise
 				elevation *= config.constrast;
 				elevation /= divider;
 
-				//Clipping values to be in range -1.0f and 1.0f
-				if (elevation < -1.0f) {
-					elevation = -1.0f;
-				}
-				else if (elevation > 1.0f) {
-					elevation = 1.0f;
-				}
+				elevation = std::clamp(elevation, -1.0f, 1.0f);
 
 				//Dealing with negatives
 				if (config.option == Options::REFIT_ALL) {
@@ -212,11 +206,11 @@ namespace noise
 	{
 		if(!heightMap) {
 			std::cout << "[ERROR] Noise object not initialized!" << std::endl;
-			return -1.0f;
+			return -2.0f;
 		}
 		if(x < 0 || x >= width || y < 0 || y >= height) {
 			std::cout << "[ERROR] Coordinates out of bounds!" << std::endl;
-			return -1.0f;
+			return -2.0f;
 		}
 		return heightMap[y * width + x];
 	}

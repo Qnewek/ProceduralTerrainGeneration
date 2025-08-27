@@ -118,9 +118,9 @@ void Camera::ImGuiDraw() {
 	if (ImGui::CollapsingHeader("Camera settings", ImGuiTreeNodeFlags_DefaultOpen)) {
 		ImGui::DragFloat3("Position", glm::value_ptr(position), 1.0f);
 		ImGui::SliderFloat("Camera speed", &initSpeed, 0.1f, 200.0f);
-		ImGui::SliderFloat("Camera FOV", &fov, 1.0f, 120.0f);
+		ImGui::SliderFloat("Camera FOV", &fov, 1.0f, 300.0f);
 		ImGui::SliderFloat("Camera sensitivity", &sensitivity, 0.01f, 1.0f);
-		ImGui::SliderFloat("Render distance", &viewDist.y, 1.0f, 1000.0f);
+		ImGui::SliderFloat("Render distance", &viewDist.y, 1.0f, 5000.0f);
 	}
 }
 

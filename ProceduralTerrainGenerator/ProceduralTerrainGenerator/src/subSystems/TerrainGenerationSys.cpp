@@ -114,17 +114,35 @@ void TerrainGenerationSys::ImGuiDraw() {
 		}
 	}
 	if(ImGui::CollapsingHeader("Terrain settings")) {
-		ImGui::Text("Edit component noise:");
 		bool regenerate = false;
-		static int worldParamOption = 0;
-		const char* options[] = { "None", "Continentalness", "Mountainousness", "PV" };
-		if (ImGui::BeginCombo("Noise: ", options[worldParamOption]))
+		ImGui::Text("Evaluating method");
+		static int evaluatingOption = 0;
+		const char* methodOptions[] = { "Linear", "Spline" };
+		if (ImGui::BeginCombo("Method: ", methodOptions[evaluatingOption]))
 		{
-			for (int n = 0; n < IM_ARRAYSIZE(options); n++)
+			for (int n = 0; n < IM_ARRAYSIZE(methodOptions); n++)
 			{
-				bool is_selected = (worldParamOption == n);
-				if (ImGui::Selectable(options[n], is_selected)) {
-					worldParamOption = n;
+				bool is_selected = (evaluatingOption == n);
+				if (ImGui::Selectable(methodOptions[n], is_selected)) {
+					evaluatingOption = n;
+					terrainGen.GetEvaluationMethod() = static_cast<TerrainGenerator::EvaluationMethod>(evaluatingOption);
+					changeTerrain = true;
+				}
+				if (is_selected)
+					ImGui::SetItemDefaultFocus();
+			}
+			ImGui::EndCombo();
+		}
+		ImGui::Text("Edit component noise:");
+		static int editedNoise = 0;
+		const char* noiseOptions[] = { "None", "Continentalness", "Mountainousness", "WEIRDNESS" };
+		if (ImGui::BeginCombo("Noise: ", noiseOptions[editedNoise]))
+		{
+			for (int n = 0; n < IM_ARRAYSIZE(noiseOptions); n++)
+			{
+				bool is_selected = (editedNoise == n);
+				if (ImGui::Selectable(noiseOptions[n], is_selected)) {
+					editedNoise = n;
 					regenerate = true;
 				}
 				if (is_selected)
@@ -132,17 +150,17 @@ void TerrainGenerationSys::ImGuiDraw() {
 			}
 			ImGui::EndCombo();
 		}
-		if(worldParamOption != 0) {
-			WorldParameter param = WorldParameter::CONTINENTALNESS;
-			switch (worldParamOption) {
+		if(editedNoise != 0) {
+			TerrainGenerator::WorldGenParameter param = TerrainGenerator::WorldGenParameter::CONTINENTALNESS;
+			switch (editedNoise) {
 			case 1:
-				param = WorldParameter::CONTINENTALNESS;
+				param = TerrainGenerator::WorldGenParameter::CONTINENTALNESS;
 				break;
 			case 2:
-				param = WorldParameter::MOUNTAINOUSNESS;
+				param = TerrainGenerator::WorldGenParameter::MOUNTAINOUSNESS;
 				break;
 			case 3:
-				param = WorldParameter::PV;
+				param = TerrainGenerator::WorldGenParameter::WEIRDNESS;
 				break;
 			default:
 				break;
@@ -163,6 +181,11 @@ void TerrainGenerationSys::ImGuiDraw() {
 			else {
 				mainVAO->AddBuffer(*mainVertexBuffer, layout);
 			}
+		}
+		ImGui::SliderInt("Sampling resolution", &terrainGen.GetResolitionRef(), 100, 1000);
+		if (ImGui::Button("Change resolution")) {
+			terrainGen.SetResolution();
+			GenerateTerrain();
 		}
 	}
 
