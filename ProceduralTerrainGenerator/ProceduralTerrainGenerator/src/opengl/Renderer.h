@@ -20,7 +20,7 @@ bool GLLogCall(const char* function, const char* file, int line);
 class Renderer
 {
 public:
-	void Draw(const VertexArray& va, const IndexBuffer& ib, const Shader& shader) const;
+	void DrawTriangles(const VertexArray& va, const IndexBuffer& ib, const Shader& shader) const;
 	void DrawTriangleStrips(const VertexArray& va, const IndexBuffer& ib, const Shader& shader, int numStrips, int numVertPerStrip) const;
 	void Clear(glm::vec3 color) const;
 };

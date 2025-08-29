@@ -3,6 +3,8 @@
 #include "glm/glm.hpp"
 #include <GL/glew.h>
 #include <GLFW/glfw3.h>
+#include "Shader.h"
+#include <memory>
 
 enum class CameraMovement
 {
@@ -32,6 +34,7 @@ public:
 
 	void EnableMouseControl(GLFWwindow* window);
 	void DisableMouseControl(GLFWwindow* window);
+	void SetUniforms(Shader& shader);
 
 	void SetCameraConfig(glm::vec3 position, glm::vec3 front, glm::vec3 up, float yaw, float pitch, float speed, float sensitivity, float fov);
 	void SetViewDist(glm::vec2 value) { viewDist = value; }

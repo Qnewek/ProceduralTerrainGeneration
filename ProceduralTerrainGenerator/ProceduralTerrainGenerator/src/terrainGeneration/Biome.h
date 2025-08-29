@@ -20,41 +20,33 @@ namespace biome {
 	{
 	public:
 		Biome();
-		Biome(int id, std::string name);
-		Biome(int id, std::string name, vec2 temperatureLevel, vec2 humidityLevel, vec2 continentalnessLevel, vec2 mountainousnessLevel, int texOffset, int vegetationLevel);
+		Biome(int _id, std::string _name);
+		Biome(int _id, std::string _name, vec2 _temperatureLevel, vec2 _humidityLevel, vec2 _continentalnessLevel, vec2 _mountainousnessLevel, vec2 _weirdnessLevel, glm::vec3 _color, int _vegetationLevel);
 		Biome(const Biome& b) = default;
 		~Biome();
 
 		bool IsSpecified() const;
-		bool VerifyBiome(const int& T, const int& H, const int& C, const int& M) const;
+		bool VerifyBiome(const int& T, const int& H, const int& C, const int& M, const int& W) const;
 		
 		int GetId() const { return id; };
 		int GetVegetationLevel() const { return vegetationLevel; };
-		int GetTexOffset() const { return texOffset; };
-		int& GetIdRef() { return id; }
-		int& GetVegetationLevelRef() { return vegetationLevel; }
-		int& GetTexOffsetRef() { return texOffset; }
+		std::string GetName() const { return name; };
 		vec2 GetTemperatureLevel() const { return temperatureLevel; };
 		vec2 GetHumidityLevel() const { return humidityLevel; };
 		vec2 GetContinentalnessLevel() const { return continentalnessLevel; };
 		vec2 GetMountainousnessLevel() const { return mountainousnessLevel; };
-		vec2& GetTemperatureLevelRef() { return temperatureLevel; }
-		vec2& GetHumidityLevelRef() { return humidityLevel; }
-		vec2& GetContinentalnessLevelRef() { return continentalnessLevel; }
-		vec2& GetMountainousnessLevelRef() { return mountainousnessLevel; }
-		std::vector<vec2>& GetTreeTypesRef() { return treeTypes; }
-		std::string GetName() const { return name; };
-		std::string& GetNameRef() { return name; }
+		glm::vec3 GetColor() const { return color; };
 		
 		void SetTemperatureLevel(vec2 temperatureLevel) { this->temperatureLevel = temperatureLevel; }
 		void SetHumidityLevel(vec2 humidityLevel) { this->humidityLevel = humidityLevel; }
 		void SetContinentalnessLevel(vec2 continentalnessLevel) { this->continentalnessLevel = continentalnessLevel; }
 		void SetMountainousnessLevel(vec2 mountainousnessLevel) { this->mountainousnessLevel = mountainousnessLevel; }
+		void SetWeirdnessLevel(vec2 weirdnessLevel) { this->weirdnessLevel = weirdnessLevel; }
 
 	private:
-		int id, texOffset, vegetationLevel;
+		int id, vegetationLevel;
 		std::string name;
-		vec2 temperatureLevel,humidityLevel, continentalnessLevel, mountainousnessLevel;
-		std::vector<vec2> treeTypes = {{0,100}};
+		vec2 temperatureLevel,humidityLevel, continentalnessLevel, mountainousnessLevel, weirdnessLevel;
+		glm::vec3 color = glm::vec3(0.0f, 0.0f, 0.0f);
 	};
 }

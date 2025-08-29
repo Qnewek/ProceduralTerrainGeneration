@@ -22,21 +22,20 @@ struct Light {
     vec3 specular;
 };
 
-  
-uniform vec3 viewPos;
+uniform bool lightOn;
+uniform bool flatten;
+//uniform vec3 viewPos;
 uniform Material material;
 uniform Light light;
-uniform float step;
-uniform float bandWidth;
 
 void main()
 {
-    vec3 baseColor = Color;
-
-    float modHeight = mod(Height, step);
-    if (modHeight < bandWidth) {
-        baseColor *= 0.5;
+    if(!lightOn){
+        FragColor = vec4(Color, 1.0);
+        return;
     }
+
+    vec3 baseColor = Color;
     
     vec3 ambient;
     vec3 diffuse;
@@ -47,12 +46,12 @@ void main()
     float diff = max(dot(norm, lightDir), 0.0);
     diffuse = light.diffuse * diff * baseColor.rgb;
 
-    vec3 viewDir = normalize(viewPos - FragPos);
-    vec3 reflectDir = reflect(-lightDir, norm);  
-    float spec = pow(max(dot(viewDir, reflectDir), 0.0), material.shininess);
-    vec3 specular = light.specular * spec * baseColor.rgb;  
+    //vec3 viewDir = normalize(viewPos - FragPos);
+    //vec3 reflectDir = reflect(-lightDir, norm);  
+    //float spec = pow(max(dot(viewDir, reflectDir), 0.0), material.shininess);
+    //vec3 specular = light.specular * spec * baseColor.rgb;  
 
-    vec3 result = ambient + diffuse + specular;
+    vec3 result = ambient + diffuse;// + specular;
 
     FragColor = vec4(result, 1.0);
 }

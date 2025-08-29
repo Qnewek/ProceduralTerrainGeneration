@@ -82,12 +82,16 @@ namespace erosion {
 		int GetWidth() { return width; }
 		int GetHeight() { return height; }
 		float* GetMap() { return map; }
+		void DontChangeMap() { changeMap = false; }
+		void ChangeMap() { changeMap = true; }
 
 	private:
 		float* map;
 
 		int width, height;
 		int dropletCount = 20000;
+
+		bool changeMap = true;
 
 		ErosionConfig config;
 	};

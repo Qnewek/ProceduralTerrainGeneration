@@ -30,6 +30,8 @@ public:
 	void SetMVP(const glm::mat4& model, const glm::mat4& view, const glm::mat4& projection);
 	void SetViewPos(const glm::vec3& viewPos);
 	void SetModel(const glm::mat4& model);
+	void SetView(const glm::mat4& view);
+	void SetProjection(const glm::mat4& projection);
 
 	unsigned int GetRendererID() const { return m_RendererID; }
 private:

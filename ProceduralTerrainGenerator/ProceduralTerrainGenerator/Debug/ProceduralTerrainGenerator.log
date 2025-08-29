@@ -19,7 +19,7 @@ C:\Users\dawid\source\repos\Qnewek\ProceduralTerrainGeneration\ProceduralTerrain
 C:\Users\dawid\source\repos\Qnewek\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\vendor\Splines\spline.h(681,9): warning C4068: nieznana pragma „GCC”
   (kompilowanie pliku źródłowego „src/subSystems/NoiseBasedGenerationSys.cpp”)
   
-C:\Users\dawid\source\repos\Qnewek\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\subSystems\NoiseBasedGenerationSys.cpp(243,40): warning C4244: "argument": konwersja z "float" do "ImU32", możliwa utrata danych
+C:\Users\dawid\source\repos\Qnewek\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\subSystems\NoiseBasedGenerationSys.cpp(207,40): warning C4244: "argument": konwersja z "float" do "ImU32", możliwa utrata danych
   TerrainGenApp.cpp
 C:\Users\dawid\source\repos\Qnewek\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\vendor\Splines\spline.h(44,9): warning C4068: nieznana pragma „GCC”
   (kompilowanie pliku źródłowego „src/subSystems/TerrainGenApp.cpp”)
@@ -54,43 +54,5 @@ C:\Users\dawid\source\repos\Qnewek\ProceduralTerrainGeneration\ProceduralTerrain
 C:\Users\dawid\source\repos\Qnewek\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\vendor\Splines\spline.h(681,9): warning C4068: nieznana pragma „GCC”
   (kompilowanie pliku źródłowego „src/subSystems/TerrainGenerationSys.cpp”)
   
-  TerrainGenerator.cpp
-C:\Users\dawid\source\repos\Qnewek\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\vendor\Splines\spline.h(44,9): warning C4068: nieznana pragma „GCC”
-  (kompilowanie pliku źródłowego „src/terrainGeneration/TerrainGenerator.cpp”)
-  
-C:\Users\dawid\source\repos\Qnewek\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\vendor\Splines\spline.h(45,9): warning C4068: nieznana pragma „GCC”
-  (kompilowanie pliku źródłowego „src/terrainGeneration/TerrainGenerator.cpp”)
-  
-C:\Users\dawid\source\repos\Qnewek\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\vendor\Splines\spline.h(681,9): warning C4068: nieznana pragma „GCC”
-  (kompilowanie pliku źródłowego „src/terrainGeneration/TerrainGenerator.cpp”)
-  
-C:\Users\dawid\source\repos\Qnewek\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\terrainGeneration\TerrainGenerator.cpp(4,80): warning C4244: "inicjowanie": konwersja z "float" do "int", możliwa utrata danych
-C:\Users\dawid\source\repos\Qnewek\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\terrainGeneration\TerrainGenerator.cpp(121,44): warning C4244: "=": konwersja z "double" do "float", możliwa utrata danych
-C:\Users\dawid\source\repos\Qnewek\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\terrainGeneration\TerrainGenerator.cpp(122,44): warning C4244: "=": konwersja z "double" do "float", możliwa utrata danych
-C:\Users\dawid\source\repos\Qnewek\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\terrainGeneration\TerrainGenerator.cpp(123,32): warning C4244: "=": konwersja z "double" do "float", możliwa utrata danych
-  LightSource.cpp
-C:\Users\dawid\source\repos\Qnewek\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\vendor\Splines\spline.h(44,9): warning C4068: nieznana pragma „GCC”
-  (kompilowanie pliku źródłowego „src/utility/LightSource.cpp”)
-  
-C:\Users\dawid\source\repos\Qnewek\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\vendor\Splines\spline.h(45,9): warning C4068: nieznana pragma „GCC”
-  (kompilowanie pliku źródłowego „src/utility/LightSource.cpp”)
-  
-C:\Users\dawid\source\repos\Qnewek\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\vendor\Splines\spline.h(681,9): warning C4068: nieznana pragma „GCC”
-  (kompilowanie pliku źródłowego „src/utility/LightSource.cpp”)
-  
-  utilities.cpp
-C:\Users\dawid\source\repos\Qnewek\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\vendor\Splines\spline.h(44,9): warning C4068: nieznana pragma „GCC”
-  (kompilowanie pliku źródłowego „src/utility/utilities.cpp”)
-  
-C:\Users\dawid\source\repos\Qnewek\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\vendor\Splines\spline.h(45,9): warning C4068: nieznana pragma „GCC”
-  (kompilowanie pliku źródłowego „src/utility/utilities.cpp”)
-  
-C:\Users\dawid\source\repos\Qnewek\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\vendor\Splines\spline.h(681,9): warning C4068: nieznana pragma „GCC”
-  (kompilowanie pliku źródłowego „src/utility/utilities.cpp”)
-  
-C:\Users\dawid\source\repos\Qnewek\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\utility\utilities.cpp(91,21): warning C4018: "<": niezgodność typu ze znakiem/bez znaku
-C:\Users\dawid\source\repos\Qnewek\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\utility\utilities.cpp(92,22): warning C4018: "<": niezgodność typu ze znakiem/bez znaku
   Generowanie kodu...
-C:\Users\dawid\source\repos\Qnewek\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\terrainGeneration\TerrainGenerator.cpp(201,1): warning C4715: "TerrainGenerator::GetSelectedNoiseConfig”: niewszystkie ścieżki kodu zwracają wartość
-C:\Users\dawid\source\repos\Qnewek\ProceduralTerrainGeneration\ProceduralTerrainGenerator\ProceduralTerrainGenerator\src\terrainGeneration\TerrainGenerator.cpp(219,1): warning C4715: "TerrainGenerator::GetSelectedNoise”: niewszystkie ścieżki kodu zwracają wartość
   ProceduralTerrainGenerator.vcxproj -> C:\Users\dawid\source\repos\Qnewek\ProceduralTerrainGeneration\ProceduralTerrainGenerator\Debug\ProceduralTerrainGenerator.exe

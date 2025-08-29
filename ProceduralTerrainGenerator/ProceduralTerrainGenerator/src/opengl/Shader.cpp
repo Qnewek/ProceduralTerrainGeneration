@@ -142,6 +142,18 @@ void Shader::SetModel(const glm::mat4& model) {
 	this->SetUniformMat4f("model", model);
 }
 
+void Shader::SetView(const glm::mat4& view)
+{
+    this->Bind();
+	this->SetUniformMat4f("view", view);
+}
+
+void Shader::SetProjection(const glm::mat4& projection)
+{
+    this->Bind();
+	this->SetUniformMat4f("projection", projection);
+}
+
 int Shader::GetUniformLocation(const std::string& name)
 {
 	if(m_UniformLocationCache.find(name) != m_UniformLocationCache.end())

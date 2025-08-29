@@ -15,7 +15,7 @@ bool GLLogCall(const char* function, const char* file, int line) {
 }
 
 
-void Renderer::Draw(const VertexArray& va, const IndexBuffer& ib, const Shader& shader) const {
+void Renderer::DrawTriangles(const VertexArray& va, const IndexBuffer& ib, const Shader& shader) const {
 	shader.Bind();
 	va.Bind();
 	ib.Bind();
