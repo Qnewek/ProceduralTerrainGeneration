@@ -5,6 +5,7 @@
 #include <math.h>
 #include <fstream>
 #include <sstream>
+#include <GL/glew.h>
 
 #include <iostream>
 #include "glm/glm.hpp"
@@ -19,14 +20,13 @@ namespace utilities
 	//@param image - array of unsigned chars to be filled with data
 	//@param width - width of the image
 	//@param height - height of the image
-	void ConvertToGrayscaleImage(float* data, unsigned char* image, const int& width, const int& height) {
+	void ConvertToGrayscaleImage(float* data, unsigned char* image, const int& width, const int& height, int dataOffset, int stride) {
 		for (int i = 0; i < width * height; ++i) {
-			image[i] = static_cast<unsigned char>(data[i] * 255.0f);
+			image[i] = static_cast<unsigned char>(data[i * stride + dataOffset] * 255.0f);
 		}
 	}
 
 	//Parses noise map into vertices for openGL to draw as a mesh, stride is the number of floats per vertex
-	//
 	//@param vertices - array of vertices to be filled with data
 	//@param map - noise map
 	//@param width - width of the noise map in chunks
@@ -184,8 +184,54 @@ namespace utilities
 			}
 			std::cout << "[LOG] Topographical painting applied" << std::endl;
 		}
+		else if(m == heightMapMode::MONOCOLOR) {
+			glm::vec3 monoColor = glm::vec3(0.6f, 0.6f, 0.6f);
+			for (int y = 0; y < height; y++) {
+				for (int x = 0; x < width; x++) {
+					vertices[(y * width + x) * stride + colorOffset] = monoColor.r;
+					vertices[(y * width + x) * stride + colorOffset + 1] = monoColor.g;
+					vertices[(y * width + x) * stride + colorOffset + 2] = monoColor.b;
+				}
+			}
+			std::cout << "[LOG] Monocolor painting applied" << std::endl;
+		}
 		else {
 			std::cout << "[LOG] Painting mode not recognized" << std::endl;
+		}
+		return true;
+	}
+
+
+	//Paints vertices based on their biome, using the biome generator to determine the color
+	//@param vertices - array of vertices to be filled with data
+	//@param biomeGen - biome generator object
+	//@param width - width of the noise
+	//@param height - height of the noise map
+	//@param stride - number of floats per vertex
+	//@param colorOffset - offset in the vertex array to start with when filling the color data
+	bool PaintVerticesByBiome(float* vertices, BiomeGenerator& biomeGen, const int& width, const int& height, const unsigned int& stride, unsigned int colorOffset)
+	{
+		if (!vertices) {
+			std::cout << "[ERROR] Vertices array not initialized!" << std::endl;
+			return false;
+		}
+		if (!biomeGen.IsGenerated()) {
+			std::cout << "[ERROR] Biome map not generated!" << std::endl;
+			return false;
+		}
+
+		for (int y = 0; y < height; y++) {
+			for (int x = 0; x < width; x++) {
+				int id = biomeGen.GetBiomeAt(x, y);
+				if (id < 0) {
+					std::cout << "[ERROR] Biome not found!\n";
+					return false;
+				}
+				glm::vec3 color = biomeGen.GetBiome(id).GetColor();
+				vertices[(y * width + x) * stride + colorOffset] = color.r;
+				vertices[(y * width + x) * stride + colorOffset + 1] = color.g;
+				vertices[(y * width + x) * stride + colorOffset + 2] = color.b;
+			}
 		}
 		return true;
 	}
@@ -236,64 +282,30 @@ namespace utilities
 	//@return - boolean value indicating if the noise parameters were modified
 	bool NoiseImGui(noise::NoiseConfigParameters& noiseConfig)
 	{
-		bool regenerate = false;
-		regenerate |= ImGui::InputInt("Seed", &noiseConfig.seed);
-		regenerate |= ImGui::SliderInt("Octaves", &noiseConfig.octaves, 1, 8);
-		regenerate |= ImGui::SliderFloat("Offset x", &noiseConfig.xoffset, 0.0f, 5.0f);
-		regenerate |= ImGui::SliderFloat("Offset y", &noiseConfig.yoffset, 0.0f, 5.0f);
-		regenerate |= ImGui::SliderInt("Resolution", &noiseConfig.resolution, 100, 1000);
-		regenerate |= ImGui::SliderFloat("Scale", &noiseConfig.scale, 0.01f, 3.0f);
-		regenerate |= ImGui::SliderFloat("Constrast", &noiseConfig.constrast, 0.1f, 2.0f);
-		regenerate |= ImGui::SliderFloat("Redistribution", &noiseConfig.redistribution, 0.1f, 10.0f);
-		regenerate |= ImGui::SliderFloat("Lacunarity", &noiseConfig.lacunarity, 0.1f, 10.0f);
-		regenerate |= ImGui::SliderFloat("Persistance", &noiseConfig.persistance, 0.1f, 1.0f);
+		if (ImGui::CollapsingHeader("Noise Settings")) {
+			bool regenerate = false;
+			regenerate |= ImGui::InputInt("Seed", &noiseConfig.seed);
+			regenerate |= ImGui::SliderInt("Octaves", &noiseConfig.octaves, 1, 8);
+			regenerate |= ImGui::SliderFloat("Offset x", &noiseConfig.xoffset, 0.0f, 5.0f);
+			regenerate |= ImGui::SliderFloat("Offset y", &noiseConfig.yoffset, 0.0f, 5.0f);
+			regenerate |= ImGui::SliderInt("Resolution", &noiseConfig.resolution, 100, 1000);
+			regenerate |= ImGui::SliderFloat("Scale", &noiseConfig.scale, 0.01f, 3.0f);
+			regenerate |= ImGui::SliderFloat("Constrast", &noiseConfig.constrast, 0.1f, 2.0f);
+			regenerate |= ImGui::SliderFloat("Redistribution", &noiseConfig.redistribution, 0.1f, 10.0f);
+			regenerate |= ImGui::SliderFloat("Lacunarity", &noiseConfig.lacunarity, 0.1f, 10.0f);
+			regenerate |= ImGui::SliderFloat("Persistance", &noiseConfig.persistance, 0.1f, 1.0f);
 
-		static const char* options[] = { "REFIT_ALL", "FLATTEN_NEGATIVES", "REVERT_NEGATIVES", "NOTHING" };
-		static int current_option = static_cast<int>(noiseConfig.option);
+			static const char* options[] = { "REFIT_ALL", "FLATTEN_NEGATIVES", "REVERT_NEGATIVES", "NOTHING" };
+			static int current_option = static_cast<int>(noiseConfig.option);
 
-		if (ImGui::BeginCombo("Negatives: ", options[current_option]))
-		{
-			for (int n = 0; n < IM_ARRAYSIZE(options); n++)
+			if (ImGui::BeginCombo("Negatives: ", options[current_option]))
 			{
-				bool is_selected = (current_option == n);
-				if (ImGui::Selectable(options[n], is_selected)) {
-					current_option = n;
-					noiseConfig.option = static_cast<noise::Options>(n);
-					regenerate = true;
-				}
-				if (is_selected)
-					ImGui::SetItemDefaultFocus();
-			}
-			ImGui::EndCombo();
-		}
-		if (noiseConfig.option == noise::Options::REVERT_NEGATIVES)
-			regenerate |= ImGui::SliderFloat("Revert Gain", &noiseConfig.revertGain, 0.1f, 1.0f);
-
-		// Ridged noise settings
-		regenerate |= ImGui::Checkbox("Ridge", &noiseConfig.Ridge);
-		if (noiseConfig.Ridge)
-		{
-			regenerate |= ImGui::SliderFloat("Ridge Gain", &noiseConfig.RidgeGain, 0.1f, 10.0f);
-			regenerate |= ImGui::SliderFloat("Ridge Offset", &noiseConfig.RidgeOffset, 0.1f, 10.0f);
-		}
-
-		// Island settings
-		regenerate |= ImGui::Checkbox("Island", &noiseConfig.island);
-		if (noiseConfig.island)
-		{
-			static const char* islandTypes[] = { "CONE", "DIAGONAL", "EUKLIDEAN_SQUARED",
-												 "SQUARE_BUMP","HYPERBOLOID", "SQUIRCLE",
-												 "TRIG" };
-			static int current_island = static_cast<int>(noiseConfig.islandType);
-
-			if (ImGui::BeginCombo("Island type: ", islandTypes[current_island]))
-			{
-				for (int n = 0; n < IM_ARRAYSIZE(islandTypes); n++)
+				for (int n = 0; n < IM_ARRAYSIZE(options); n++)
 				{
-					bool is_selected = (current_island == n);
-					if (ImGui::Selectable(islandTypes[n], is_selected)) {
-						current_island = n;
-						noiseConfig.islandType = static_cast<noise::IslandType>(n);
+					bool is_selected = (current_option == n);
+					if (ImGui::Selectable(options[n], is_selected)) {
+						current_option = n;
+						noiseConfig.option = static_cast<noise::Options>(n);
 						regenerate = true;
 					}
 					if (is_selected)
@@ -301,8 +313,114 @@ namespace utilities
 				}
 				ImGui::EndCombo();
 			}
-			regenerate |= ImGui::SliderFloat("Mix Power", &noiseConfig.mixPower, 0.0f, 1.0f);
+			if (noiseConfig.option == noise::Options::REVERT_NEGATIVES)
+				regenerate |= ImGui::SliderFloat("Revert Gain", &noiseConfig.revertGain, 0.1f, 1.0f);
+
+			// Ridged noise settings
+			regenerate |= ImGui::Checkbox("Ridge", &noiseConfig.Ridge);
+			if (noiseConfig.Ridge)
+			{
+				regenerate |= ImGui::SliderFloat("Ridge Gain", &noiseConfig.RidgeGain, 0.1f, 10.0f);
+				regenerate |= ImGui::SliderFloat("Ridge Offset", &noiseConfig.RidgeOffset, 0.1f, 10.0f);
+			}
+
+			// Island settings
+			regenerate |= ImGui::Checkbox("Island", &noiseConfig.island);
+			if (noiseConfig.island)
+			{
+				static const char* islandTypes[] = { "CONE", "DIAGONAL", "EUKLIDEAN_SQUARED",
+													 "SQUARE_BUMP","HYPERBOLOID", "SQUIRCLE",
+													 "TRIG" };
+				static int current_island = static_cast<int>(noiseConfig.islandType);
+
+				if (ImGui::BeginCombo("Island type: ", islandTypes[current_island]))
+				{
+					for (int n = 0; n < IM_ARRAYSIZE(islandTypes); n++)
+					{
+						bool is_selected = (current_island == n);
+						if (ImGui::Selectable(islandTypes[n], is_selected)) {
+							current_island = n;
+							noiseConfig.islandType = static_cast<noise::IslandType>(n);
+							regenerate = true;
+						}
+						if (is_selected)
+							ImGui::SetItemDefaultFocus();
+					}
+					ImGui::EndCombo();
+				}
+				regenerate |= ImGui::SliderFloat("Mix Power", &noiseConfig.mixPower, 0.0f, 1.0f);
+			}
+			return regenerate;
 		}
-		return regenerate;
+	}
+	//ImGui interface for modifying map size
+	//@param height - height of the noise map in chunks
+	//@param width - width of the noise map in chunks
+	bool MapSizeImGui(int& height, int& width)
+	{
+		if (ImGui::CollapsingHeader("Size settings", ImGuiTreeNodeFlags_DefaultOpen)) {
+			ImGui::Text("Resize map");
+			ImGui::InputInt("Height", &height);
+			ImGui::InputInt("Width", &width);
+			if (ImGui::Button("Resize")) {
+				return true;
+			}
+		}
+		return false;
+	}
+	bool DisplayModeImGui(float& modelScale, float& topoStep, float& topoBandWidth, float& heightScale, heightMapMode& m, bool& wireFrame, bool& map2d)
+	{
+		if (ImGui::CollapsingHeader("Display settings:", ImGuiTreeNodeFlags_DefaultOpen)) {
+			ImGui::Text("Model scale:");
+			ImGui::SliderFloat("Model scale", &modelScale, 0.1f, 5.0f);
+			ImGui::Text("Isopleth:");
+			ImGui::SliderFloat("Step", &topoStep, 1.0f, heightScale);
+			ImGui::SliderFloat("Band width", &topoBandWidth, 0.1f, 1.0f);
+
+			static const char* displayOptions[] = { "GREYSCALE", "TOPOGRAPHICAL", "MONOCOLOR" };
+			int currentDisplayOption = static_cast<int>(m);
+			bool paint = false;
+
+			if (ImGui::BeginCombo("Mode", displayOptions[currentDisplayOption]))
+			{
+				for (int n = 0; n < IM_ARRAYSIZE(displayOptions); n++)
+				{
+					bool is_selected = (currentDisplayOption == n);
+					if (ImGui::Selectable(displayOptions[n], is_selected)) {
+						currentDisplayOption = n;
+						m = static_cast<utilities::heightMapMode>(n);
+						paint = true;
+					}
+					if (is_selected)
+						ImGui::SetItemDefaultFocus();
+				}
+				ImGui::EndCombo();
+			}
+			if (ImGui::Checkbox("WireFrame", &wireFrame)) {
+				if (wireFrame) {
+					glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+					glDisable(GL_CULL_FACE);
+				}
+				else {
+					glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+					glEnable(GL_CULL_FACE);
+				}
+			}
+
+			ImGui::Checkbox("2D map", &map2d);
+			return paint;
+		}
+	}
+	bool SavingImGui()
+	{
+		if (ImGui::CollapsingHeader("Saving")) {
+			if (ImGui::Button("Save heightMap as an image")) {
+				std::cout << "[LOG] Well it will work one day i promise!" << std::endl;
+			}
+			if (ImGui::Button("Save heightMap as an 3d object")) {
+				std::cout << "[LOG] Well it will work one day i promise!" << std::endl;
+			}
+		}
+		return true;
 	}
 }

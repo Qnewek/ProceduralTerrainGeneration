@@ -103,9 +103,12 @@ bool NoiseBasedGenerationSys::SimulateErosion()
 		}
 		erosionVertices = new float[height * width * stride];
 		erosion.Resize(width, height);
+		erosion.SetMap(noise.GetMap());
 	}
 
 	erosion.SetMap(noise.GetMap());
+	erosion.DontChangeMap();
+
 	utilities::benchmarkVoid(utilities::PerformErosion, "PerformErosion", erosion, erosionVertices, heightScale, std::nullopt, stride, displayMode);
 	erosionVertexBuffer = std::make_unique<VertexBuffer>(erosionVertices, (height * width) * stride * sizeof(float));
 	erosionVAO->AddBuffer(*erosionVertexBuffer, layout);
@@ -119,92 +122,52 @@ void NoiseBasedGenerationSys::Draw(Renderer& renderer, Camera& camera, LightSour
 {
 	glm::mat4 model = glm::mat4(1.0f);
 	model = glm::scale(model, glm::vec3(modelScale, modelScale, modelScale));
-	mainShader->SetMaterialUniforms(glm::vec3(0.6f, 0.6f, 0.6f), glm::vec3(0.6f, 0.6f, 0.6f), glm::vec3(0.1f, 0.1f, 0.1f), 1.0f);
-	mainShader->SetLightUniforms(light.GetPosition(), light.GetAmbient(), light.GetDiffuse(), light.GetSpecular());
-	mainShader->SetViewPos(camera.GetPosition());
-	mainShader->SetUniform1f("step", topoStep);
+	light.SetLightUniforms(*mainShader);
+	camera.SetUniforms(*mainShader);
+	mainShader->SetModel(model);
+	mainShader->SetUniform1i("flatten", map2d);
+	mainShader->SetUniform1i("size", height / 2);
 	mainShader->SetUniform1f("bandWidth", topoBandWidth);
-	mainShader->SetMVP(model, *camera.GetViewMatrix(), *camera.GetProjectionMatrix());
+	mainShader->SetUniform1i("flatten", map2d);
 
 	renderer.DrawTriangleStrips(*mainVAO, *mainIndexBuffer, *mainShader, noise.GetHeight() - 1, noise.GetWidth() * 2);
 
 	if (erosionDraw) {
 		model = glm::translate(model, glm::vec3(width + 1.0f, 0.0f, 0.0f));
-		mainShader->SetMVP(model, *camera.GetViewMatrix(), *camera.GetProjectionMatrix());
+		mainShader->SetModel(model);
 		renderer.DrawTriangleStrips(*erosionVAO, *mainIndexBuffer, *mainShader, erosion.GetHeight() - 1, erosion.GetWidth() * 2);
 	}
 }
 
 void NoiseBasedGenerationSys::ImGuiDraw()
 {
-	if(ImGui::CollapsingHeader("Size settings", ImGuiTreeNodeFlags_DefaultOpen)){
-		ImGui::Text("Resize map");
-		ImGui::InputInt("Height", &height);
-		ImGui::InputInt("Width", &width);
-		if (ImGui::Button("Resize")) {
-			GenerateNoise();
+	if(utilities::MapSizeImGui(width, height)) {
+		GenerateNoise();
+	}
+	if (utilities::DisplayModeImGui(modelScale, topoStep, topoBandWidth, heightScale, displayMode, wireFrame, map2d)) {
+		utilities::PaintVerticesByHeight(vertices, width, height, heightScale, stride, displayMode, 1, 6);
+		mainVertexBuffer->UpdateData(vertices, (height * width) * stride * sizeof(float));
+		mainVAO->AddBuffer(*mainVertexBuffer, layout);
+		if (erosionDraw) {
+			utilities::PaintVerticesByHeight(erosionVertices, width, height, heightScale, stride, displayMode, 1, 6);
+			erosionVertexBuffer->UpdateData(erosionVertices, (height * width) * stride * sizeof(float));
+			erosionVAO->AddBuffer(*erosionVertexBuffer, layout);
 		}
 	}
-	if (ImGui::CollapsingHeader("Display settings:", ImGuiTreeNodeFlags_DefaultOpen)) {
-		ImGui::Text("Model scale:");
-		ImGui::SliderFloat("Model scale", &modelScale, 0.1f, 5.0f);
-		ImGui::Text("Isopleth:");
-		ImGui::SliderFloat("Step", &topoStep, 1.0f, heightScale);
-		ImGui::SliderFloat("Band width", &topoBandWidth, 0.1f, 1.0f);
-
-		static const char* displayOptions[] = { "GREYSCALE", "TOPOGRAPHICAL", "OTHER" };
-		static int currentDisplayOption = static_cast<int>(displayMode);
-		bool paint = false;
-
-		if (ImGui::BeginCombo("Mode", displayOptions[currentDisplayOption]))
-		{
-			for (int n = 0; n < IM_ARRAYSIZE(displayOptions); n++)
-			{
-				bool is_selected = (currentDisplayOption == n);
-				if (ImGui::Selectable(displayOptions[n], is_selected)) {
-					currentDisplayOption = n;
-					displayMode = static_cast<utilities::heightMapMode>(n);
-					paint = true;
-				}
-				if (is_selected)
-					ImGui::SetItemDefaultFocus();
-			}
-			ImGui::EndCombo();
-		}
-
-		if (paint) {
-			utilities::PaintVerticesByHeight(vertices, width, height, heightScale, stride, displayMode, 1, 6);
-			mainVertexBuffer->UpdateData(vertices, (height * width) * stride * sizeof(float));
-			mainVAO->AddBuffer(*mainVertexBuffer, layout);
-		}
-
-		if (ImGui::Checkbox("WireFrame", &wireFrame)) {
-			if (wireFrame) {
-				glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
-				glDisable(GL_CULL_FACE);
-			}
-			else {
-				glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
-				glEnable(GL_CULL_FACE);
-			}
-		}
-
-		if (ImGui::Button("Save file")) {
-			std::cout << "[LOG] Well it will work one day i promise!" << std::endl;
-		}
-	}
-	//Noise settings
-	if (ImGui::CollapsingHeader("Noise Settings")) {
-		ImGui::Checkbox("Instant Update", &instantUpdate);
+	utilities::SavingImGui();
 	
-		if (instantUpdate && utilities::NoiseImGui(noise.GetConfigRef())) {
+	ImGui::Checkbox("Instant Update", &instantUpdate);
+	if (!instantUpdate) {
+		if (ImGui::Button("Generate new noise")) {
 			GenerateNoise();
+			erosionDraw = false;
+			erosion.ChangeMap();
 		}
-		else if (!instantUpdate) {
-			if (ImGui::Button("Generate new noise")) {
-				GenerateNoise();
-			}
-		}
+	}
+	else if(utilities::NoiseImGui(noise.GetConfigRef())){
+		GenerateNoise();
+		erosionDraw = false;
+		erosion.ChangeMap();
 	}
 	ErosionImGui();
 }
@@ -233,6 +196,7 @@ void NoiseBasedGenerationSys::ErosionImGui()
 		ImGui::SameLine();
 		if (ImGui::Button("Reset")) {
 			erosionDraw = false;
+			erosion.ChangeMap();
 		}
 	}
 }

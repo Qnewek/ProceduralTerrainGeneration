@@ -15,18 +15,18 @@ TerrainGenerator::~TerrainGenerator()
 bool TerrainGenerator::Initialize(int _width, int _height)
 {
 	//Basic values for noises
-	continentalnessNoise.GetConfigRef().seed = 3;
+	continentalnessNoise.GetConfigRef().seed = 623;
 	continentalnessNoise.GetConfigRef().constrast = 1.5f;
 	continentalnessNoise.GetConfigRef().octaves = 7;
 	continentalnessNoise.GetConfigRef().scale = 0.5f;
 	continentalnessNoise.GetConfigRef().option = noise::Options::NOTHING;
 
-	mountainousnessNoise.GetConfigRef().seed = 9;
+	mountainousnessNoise.GetConfigRef().seed = 262;
 	mountainousnessNoise.GetConfigRef().constrast = 1.5f;
 	mountainousnessNoise.GetConfigRef().scale = 0.3f;
 	mountainousnessNoise.GetConfigRef().option = noise::Options::NOTHING;
 
-	weirdnessNoise.GetConfigRef().seed = 456;
+	weirdnessNoise.GetConfigRef().seed = 192;
 	weirdnessNoise.GetConfigRef().constrast = 1.5f;
 	weirdnessNoise.GetConfigRef().RidgeGain = 3.0f;
 	weirdnessNoise.GetConfigRef().scale = 0.2f;

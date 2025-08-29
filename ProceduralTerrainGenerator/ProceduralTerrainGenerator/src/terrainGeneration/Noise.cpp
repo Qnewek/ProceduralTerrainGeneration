@@ -204,7 +204,7 @@ namespace noise
 	}
 	float SimplexNoiseClass::GetVal(int x, int y)
 	{
-		if(!heightMap) {
+		if(!heightMap || height <= 0 || width <= 0) {
 			std::cout << "[ERROR] Noise object not initialized!" << std::endl;
 			return -2.0f;
 		}

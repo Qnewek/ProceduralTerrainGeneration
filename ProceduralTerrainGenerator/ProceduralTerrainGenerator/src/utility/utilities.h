@@ -10,6 +10,7 @@
 #include "Noise.h"
 #include "Erosion.h"
 #include "TerrainGenerator.h"
+#include "BiomeGenerator.h"
 
 namespace utilities
 {
@@ -17,20 +18,24 @@ namespace utilities
     {
         GREYSCALE,
         TOPOGRAPHICAL,
-        OTHER
+        MONOCOLOR
 	};
 
-	void ConvertToGrayscaleImage(float* data, unsigned char* image, const int& width, const int& height);
+	void ConvertToGrayscaleImage(float* data, unsigned char* image, const int& width, const int& height, int dataOffset, int stride);
     void ParseNoiseIntoVertices(float* vertices, float* map, const int& width, const int& height, float scale, const unsigned int stride, unsigned int offset);
 	void MeshIndicesStrips(unsigned int* indices, const int& width, const int& height);
     bool CalculateHeightMapNormals(float* vertices, const unsigned int& stride, unsigned int offSet, const unsigned int& width, const unsigned int& height);
 	bool PaintVerticesByHeight(float* vertices, const int& width, const int& height, const float& heightScale, const unsigned int& stride, heightMapMode m, unsigned int heightOffSet , unsigned int colorOffset);
+	bool PaintVerticesByBiome(float* vertices, BiomeGenerator& biomeGen, const int& width, const int& height, const unsigned int& stride, unsigned int colorOffset);
 
     void MapToVertices(float* map, float* vertices, unsigned int* indices, const int height, const int width, const unsigned int stride, const float& heightScale, heightMapMode mode, bool normalsCalculation, bool indexGeneration, bool paint);
     void PerformErosion(erosion::Erosion& erosion, float* vertices, float scalingFactor, std::optional<float*> Track, int stride, heightMapMode mode);
     
+    //ImGui interface functions
     bool NoiseImGui(noise::NoiseConfigParameters& noiseConfig);
-
+	bool MapSizeImGui(int& height, int& width);
+    bool DisplayModeImGui(float& modelSclae, float& topoStep, float& topoBandWidth, float& heightScale, heightMapMode& m, bool& wireFrame, bool& map2d);
+	bool SavingImGui();
 
     //-----
 	//Other

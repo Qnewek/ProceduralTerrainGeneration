@@ -8,15 +8,26 @@ out vec3 Normal;
 out vec3 Color;
 out float Height;
 
+uniform bool flatten;
+uniform int size;
 uniform mat4 model;
 uniform mat4 view;
 uniform mat4 projection;
 
 void main()
 {
-    FragPos = (view * model * vec4(aPos, 1.0)).xyz;
-    gl_Position = projection * view * model * vec4(aPos, 1.0);
-    Normal = aNormal;
-    Color = aColor;
-    Height = aPos.y;
+    if(flatten){
+        FragPos = vec3(aPos.z/size, aPos.x/size, 0.0f);
+        gl_Position = vec4(FragPos, 1.0);
+        Normal = aNormal;
+        Color = aColor;
+        Height = 0.0f;
+    }
+    else{
+        FragPos = (view * model * vec4(aPos, 1.0)).xyz;
+        gl_Position = projection * view * model * vec4(aPos, 1.0);
+        Normal = aNormal;
+        Color = aColor;
+        Height = aPos.y;
+    }
 }

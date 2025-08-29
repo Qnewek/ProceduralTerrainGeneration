@@ -77,6 +77,10 @@ namespace erosion {
 	//@param _map - pointer to the map to be eroded
 	void Erosion::SetMap(float* _map)
 	{
+		if(!changeMap) {
+			return;
+		}
+
 		delete[] map;
 		this->map = new float[width * height];
 

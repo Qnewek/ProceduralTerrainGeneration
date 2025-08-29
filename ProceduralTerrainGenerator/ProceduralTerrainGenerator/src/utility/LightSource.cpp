@@ -69,16 +69,23 @@ void LightSource::Draw(Renderer& renderer, glm::mat4& view, glm::mat4& projectio
 	model = glm::scale(model, glm::vec3(size));
 	m_Shader->SetUniformMat4f("model", model);
 
-	renderer.Draw(*m_VAO, *m_IndexBuffer, *m_Shader);
+	renderer.DrawTriangles(*m_VAO, *m_IndexBuffer, *m_Shader);
 	m_Shader->Unbind();
 }
 
 void LightSource::ImGuiDraw() {
 	if (ImGui::CollapsingHeader("Light parameters:")) {
-		ImGui::DragFloat3("Position", (float*)&lightPos, 0.1f);
-		ImGui::DragFloat("Size", &size, 0.01f, 0.01f, 10.0f);
+		ImGui::DragFloat3("Light source position", (float*)&lightPos, 1.0f);
+		ImGui::DragFloat("Light size", &size, 0.01f, 0.01f, 10.0f);
 		ImGui::ColorEdit3("Ambient", (float*)&ambient);
 		ImGui::ColorEdit3("Diffuse", (float*)&diffuse);
 		ImGui::ColorEdit3("Specular", (float*)&specular);
+		ImGui::Checkbox("Light On/Off", &lightOn);
 	}
+}
+
+void LightSource::SetLightUniforms(Shader& shader)
+{
+	shader.SetLightUniforms(lightPos, ambient, diffuse, specular);
+	shader.SetUniform1i("lightOn", lightOn);
 }

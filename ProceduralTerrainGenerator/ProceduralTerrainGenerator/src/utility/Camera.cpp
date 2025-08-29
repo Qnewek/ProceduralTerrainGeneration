@@ -116,7 +116,7 @@ void Camera::RotateCamera(GLFWwindow* window) {
 
 void Camera::ImGuiDraw() {
 	if (ImGui::CollapsingHeader("Camera settings", ImGuiTreeNodeFlags_DefaultOpen)) {
-		ImGui::DragFloat3("Position", glm::value_ptr(position), 1.0f);
+		ImGui::DragFloat3("Camera position", glm::value_ptr(position), 1.0f);
 		ImGui::SliderFloat("Camera speed", &initSpeed, 0.1f, 200.0f);
 		ImGui::SliderFloat("Camera FOV", &fov, 1.0f, 300.0f);
 		ImGui::SliderFloat("Camera sensitivity", &sensitivity, 0.01f, 1.0f);
@@ -149,4 +149,11 @@ void Camera::EnableMouseControl(GLFWwindow* window) {
 void Camera::DisableMouseControl(GLFWwindow* window) {
 	glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
 	mouseControl = false;
+}
+
+void Camera::SetUniforms(Shader& shader)
+{
+	shader.SetProjection(*GetProjectionMatrix());
+	shader.SetView(*GetViewMatrix());
+	shader.SetViewPos(position);
 }

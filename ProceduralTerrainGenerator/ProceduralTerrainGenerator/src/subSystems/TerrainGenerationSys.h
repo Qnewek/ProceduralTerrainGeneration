@@ -4,7 +4,9 @@
 #include "glm/glm.hpp"
 #include "glm/gtc/matrix_transform.hpp"
 
+#include "utilities.h"
 #include "TerrainGenerator.h"
+#include "BiomeGenerator.h"
 #include "Camera.h"
 #include "LightSource.h"
 
@@ -17,6 +19,8 @@ private:
 	unsigned int stride;
 	int width, height;
 	bool wireFrame = false, changeTerrain = false;
+	bool biomesGeneration = false, map2d = false;
+	utilities::heightMapMode displayMode = utilities::heightMapMode::TOPOGRAPHICAL;
 
 	//OpenGl objects
 	VertexBufferLayout layout;
@@ -26,6 +30,7 @@ private:
 	std::unique_ptr<IndexBuffer> mainIndexBuffer;
 	std::unique_ptr<Shader> mainShader;
 
+	BiomeGenerator biomeGen;
 	TerrainGenerator terrainGen;
 	TerrainGenerator::EvaluationMethod evaluatingMode = TerrainGenerator::EvaluationMethod::LINEAR_COMBINE;
 public:
@@ -34,6 +39,8 @@ public:
 	
 	bool Initialize(unsigned int _height, unsigned int _width, float _heightScale);
 	bool GenerateTerrain();
+	bool GenerateBiomes();
+	void UpdateVertex();
 
 	void Draw(Renderer& renderer, Camera& camera, LightSource& light);
 	void ImGuiDraw();
