@@ -60,6 +60,8 @@ void LightSource::Initialize() {
 }
 
 void LightSource::Draw(Renderer& renderer, glm::mat4& view, glm::mat4& projection) {
+	if(!lightOn)
+		return;
 	m_Shader->Bind();
 	m_Shader->SetUniformMat4f("view", view);
 	m_Shader->SetUniformMat4f("projection", projection);

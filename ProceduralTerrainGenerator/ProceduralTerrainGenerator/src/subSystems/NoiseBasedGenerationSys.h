@@ -41,7 +41,8 @@ class NoiseBasedGenerationSys
 		bool SimulateErosion();
 
 		void Draw(Renderer& renderer, Camera& camera, LightSource& light);
-		void ImGuiDraw();
+		void ImGuiRightPanel();
+		void ImGuiLeftPanel();
 		void ErosionImGui();
 		void ImGuiOutput();
 };

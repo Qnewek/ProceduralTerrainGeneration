@@ -86,14 +86,14 @@ protected:
 public:
     // default constructor: set boundary condition to be zero curvature
     // at both ends, i.e. natural splines
-    spline(): m_type(linear),
+    spline(): m_type(cspline),
         m_left(second_deriv), m_right(second_deriv),
         m_left_value(0.0), m_right_value(0.0), m_made_monotonic(false)
     {
         ;
     }
     spline(const std::vector<double>& X, const std::vector<double>& Y,
-           spline_type type = linear,
+           spline_type type = cspline,
            bool make_monotonic = false,
            bd_type left  = second_deriv, double left_value  = 0.0,
            bd_type right = second_deriv, double right_value = 0.0

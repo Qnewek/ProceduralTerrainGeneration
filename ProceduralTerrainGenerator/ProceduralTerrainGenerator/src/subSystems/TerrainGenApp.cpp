@@ -4,6 +4,7 @@
 #include "imgui/imgui.h"
 #include "imgui/imgui_impl_glfw.h"
 #include "imgui/imgui_impl_opengl3.h"
+#include "ImPlot/implot.h"
 #include "glm/glm.hpp"
 #include "glm/gtc/matrix_transform.hpp"
 
@@ -59,6 +60,7 @@ int TerrainGenApp::Initialize()
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
     ImGui::StyleColorsDark();
+	ImPlot::CreateContext();
     
 	ImGui_ImplGlfw_InitForOpenGL(window, true);
 	ImGui_ImplOpenGL3_Init("#version 330");
@@ -102,6 +104,7 @@ void TerrainGenApp::Start()
     ImGui_ImplOpenGL3_Shutdown();
     ImGui_ImplGlfw_Shutdown();
     ImGui::DestroyContext();
+	ImPlot::DestroyContext();
 
     glfwDestroyWindow(window);
     glfwTerminate();
@@ -138,12 +141,20 @@ void TerrainGenApp::ImGuiRender()
     ImGui::SetNextWindowSize(ImVec2(leftPanelWidth, windowHeight - 60), ImGuiCond_Always);
     ImGui::Begin("Main tools", nullptr, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_None);
     leftPanelWidth = ImGui::GetWindowWidth() <= windowWidth / 2 ? ImGui::GetWindowWidth() : windowWidth / 2;
-    if (ImGui::CollapsingHeader("A few words...")) {
+    if (ImGui::CollapsingHeader("A few words...", ImGuiTreeNodeFlags_DefaultOpen)) {
         ImGui::TextWrapped("Hi Dear User!\n"
             "I am more than happy to be able to introduce my Procedural Generation App to you.\n"
             "It a project ive been working on for some time now because the field it covers extremely interests me and it was the topic of my thesis.\n"
             "I hope you will find it a bit interesting and fun to play with "
             "and feel free to contact me if you have any questions or suggestions.\n");
+    }
+    camera.ImGuiDraw();
+    light.ImGuiDraw();
+    if (currentMode == mode::NOISE_HEIGHTMAP) {
+        noiseGenSys.ImGuiLeftPanel();
+    }
+    else if (currentMode == mode::TERRAIN_GEN) {
+        terrainGenSys.ImGuiLeftPanel();
     }
 
     ImGui::End();
@@ -154,13 +165,11 @@ void TerrainGenApp::ImGuiRender()
     ImGui::Begin("Tools", nullptr, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_None);
     rightPanelWidth = ImGui::GetWindowWidth() <= windowWidth/2 ? ImGui::GetWindowWidth() : windowWidth/2;
 
-	camera.ImGuiDraw();
-	light.ImGuiDraw();
     if (currentMode == mode::NOISE_HEIGHTMAP) {
-        noiseGenSys.ImGuiDraw();
+        noiseGenSys.ImGuiRightPanel();
     }
     else if(currentMode == mode::TERRAIN_GEN) {
-		terrainGenSys.ImGuiDraw();
+		terrainGenSys.ImGuiRightPanel();
 	}
     ImGui::End();
 
