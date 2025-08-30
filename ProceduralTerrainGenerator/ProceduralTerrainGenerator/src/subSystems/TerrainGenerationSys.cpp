@@ -103,12 +103,15 @@ void TerrainGenerationSys::ImGuiDraw() {
 	if(utilities::MapSizeImGui(height, width)) {
 		GenerateTerrain();
 	}
+
 	if (utilities::DisplayModeImGui(modelScale, topoStep, topoBandWidth, heightScale, displayMode, wireFrame, map2d)) {
 		utilities::PaintVerticesByHeight(terrainVertices, width, height, heightScale, stride, displayMode, 1, 6);
 		UpdateVertex();
 		biomesGeneration = false;
 	}
+
 	utilities::SavingImGui();
+
 	if (ImGui::CollapsingHeader("Terrain settings")) {
 		bool regenerate = false;
 		ImGui::Text("Evaluating method");

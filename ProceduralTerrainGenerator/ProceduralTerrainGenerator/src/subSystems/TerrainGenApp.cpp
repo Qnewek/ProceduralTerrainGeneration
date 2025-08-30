@@ -2,7 +2,8 @@
 #include <iostream>
 
 #include "imgui/imgui.h"
-#include "imgui/imgui_impl_glfw_gl3.h"
+#include "imgui/imgui_impl_glfw.h"
+#include "imgui/imgui_impl_opengl3.h"
 #include "glm/glm.hpp"
 #include "glm/gtc/matrix_transform.hpp"
 
@@ -55,9 +56,12 @@ int TerrainGenApp::Initialize()
 	glDepthFunc(GL_LEQUAL);
     glEnable(GL_CULL_FACE);
 
+    IMGUI_CHECKVERSION();
     ImGui::CreateContext();
-    ImGui_ImplGlfwGL3_Init(window, true);
     ImGui::StyleColorsDark();
+    
+	ImGui_ImplGlfw_InitForOpenGL(window, true);
+	ImGui_ImplOpenGL3_Init("#version 330");
 
     //Logic initialization
 	camera.SetScreenSize(windowWidth - rightPanelWidth - leftPanelWidth, windowHeight - topPanelHeight - bottomPanelHeight);
@@ -85,12 +89,21 @@ void TerrainGenApp::Start()
         ImGuiRender();
 
         camera.SetScreenSize(windowWidth - rightPanelWidth - leftPanelWidth, windowHeight - topPanelHeight - bottomPanelHeight);
-        glfwSwapBuffers(window);
+        
         glfwPollEvents();
+        if (glfwGetWindowAttrib(window, GLFW_ICONIFIED) != 0)
+        {
+            ImGui_ImplGlfw_Sleep(10);
+            continue;
+        }
+        glfwSwapBuffers(window);
     }
 
-    ImGui_ImplGlfwGL3_Shutdown();
+    ImGui_ImplOpenGL3_Shutdown();
+    ImGui_ImplGlfw_Shutdown();
     ImGui::DestroyContext();
+
+    glfwDestroyWindow(window);
     glfwTerminate();
 }
 
@@ -116,10 +129,29 @@ void TerrainGenApp::Draw()
 
 void TerrainGenApp::ImGuiRender()
 {
-    ImGui_ImplGlfwGL3_NewFrame();
+    ImGui_ImplOpenGL3_NewFrame();
+    ImGui_ImplGlfw_NewFrame();
+    ImGui::NewFrame();
+
+    //Left panel
+    ImGui::SetNextWindowPos(ImVec2(0, 0), ImGuiCond_Always);
+    ImGui::SetNextWindowSize(ImVec2(leftPanelWidth, windowHeight - 60), ImGuiCond_Always);
+    ImGui::Begin("Main tools", nullptr, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_None);
+    leftPanelWidth = ImGui::GetWindowWidth() <= windowWidth / 2 ? ImGui::GetWindowWidth() : windowWidth / 2;
+    if (ImGui::CollapsingHeader("A few words...")) {
+        ImGui::TextWrapped("Hi Dear User!\n"
+            "I am more than happy to be able to introduce my Procedural Generation App to you.\n"
+            "It a project ive been working on for some time now because the field it covers extremely interests me and it was the topic of my thesis.\n"
+            "I hope you will find it a bit interesting and fun to play with "
+            "and feel free to contact me if you have any questions or suggestions.\n");
+    }
+
+    ImGui::End();
+
+	//Right panel
     ImGui::SetNextWindowPos(ImVec2(windowWidth - rightPanelWidth, 0), ImGuiCond_Always);
     ImGui::SetNextWindowSize(ImVec2(rightPanelWidth, windowHeight-60), ImGuiCond_Always);
-    ImGui::Begin("Tools", nullptr, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_ResizeFromAnySide);
+    ImGui::Begin("Tools", nullptr, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_None);
     rightPanelWidth = ImGui::GetWindowWidth() <= windowWidth/2 ? ImGui::GetWindowWidth() : windowWidth/2;
 
 	camera.ImGuiDraw();
@@ -130,24 +162,9 @@ void TerrainGenApp::ImGuiRender()
     else if(currentMode == mode::TERRAIN_GEN) {
 		terrainGenSys.ImGuiDraw();
 	}
-
-    ImGui::Separator();
     ImGui::End();
 
-    ImGui::SetNextWindowPos(ImVec2(0, 0), ImGuiCond_Always);
-    ImGui::SetNextWindowSize(ImVec2(leftPanelWidth, windowHeight-60), ImGuiCond_Always);
-    ImGui::Begin("IDK", nullptr, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_ResizeFromAnySide);
-    leftPanelWidth = ImGui::GetWindowWidth() <= windowWidth/2 ? ImGui::GetWindowWidth() : windowWidth/2;
-    if (ImGui::CollapsingHeader("A few words...")) {
-		ImGui::TextWrapped("Hi Dear User!\n"
-			"I am more than happy to be able to introduce my Procedural Generation App to you.\n"
-			"It a project ive been working on for some time now because the field it covers extremely interests me and it was the topic of my thesis.\n"
-			"I hope you will find it a bit interesting and fun to play with "
-			"and feel free to contact me if you have any questions or suggestions.\n");
-    }
-
-    ImGui::End();
-
+	//Top panel
     ImGui::SetNextWindowPos(ImVec2(leftPanelWidth, 0), ImGuiCond_Always);
     ImGui::SetNextWindowSize(ImVec2(windowWidth - rightPanelWidth - leftPanelWidth, topPanelHeight), ImGuiCond_Always);
 	ImGui::Begin("Mode", nullptr, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoTitleBar);
@@ -164,9 +181,10 @@ void TerrainGenApp::ImGuiRender()
     }    
     ImGui::End();
 
+	//Bottom panel
     ImGui::SetNextWindowPos(ImVec2(leftPanelWidth, windowHeight - bottomPanelHeight - 60), ImGuiCond_Always);
     ImGui::SetNextWindowSize(ImVec2(windowWidth - rightPanelWidth - leftPanelWidth, bottomPanelHeight), ImGuiCond_Always);
-    ImGui::Begin("OutPut", nullptr, ImGuiWindowFlags_ResizeFromAnySide | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoScrollbar);
+    ImGui::Begin("OutPut", nullptr, ImGuiWindowFlags_None | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoScrollbar);
     ImGui::TextWrapped("FPS: %.1f", 1.0f / deltaTime);
 	
     camera.ImGuiOutPut();
@@ -181,5 +199,5 @@ void TerrainGenApp::ImGuiRender()
     ImGui::End();
 
     ImGui::Render();
-    ImGui_ImplGlfwGL3_RenderDrawData(ImGui::GetDrawData());
+    ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 }
