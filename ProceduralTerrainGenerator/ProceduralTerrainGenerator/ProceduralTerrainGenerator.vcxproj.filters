@@ -1521,6 +1521,9 @@
     <Image Include="res\textures\texture.png">
       <Filter>Resource Files</Filter>
     </Image>
+    <Image Include="res\image\icon.png">
+      <Filter>Resource Files</Filter>
+    </Image>
   </ItemGroup>
   <ItemGroup>
     <Object Include="res\models\Tree\Tree.obj" />

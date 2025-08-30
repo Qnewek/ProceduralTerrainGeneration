@@ -1,4 +1,4 @@
-#include "TerrainGenApp.h"
+﻿#include "TerrainGenApp.h"
 #include <iostream>
 
 #include "imgui/imgui.h"
@@ -7,6 +7,7 @@
 #include "ImPlot/implot.h"
 #include "glm/glm.hpp"
 #include "glm/gtc/matrix_transform.hpp"
+#include "stb_image/stb_image.h"
 
 #include "utilities.h"
 
@@ -46,6 +47,14 @@ int TerrainGenApp::Initialize()
         glfwTerminate();
         return -1;
     }
+
+    GLFWimage images[1];
+    images[0].pixels = stbi_load("res/image/icon.png", &images[0].width, &images[0].height, nullptr, 4);
+    if (images[0].pixels) {
+        glfwSetWindowIcon(window, 1, images);
+        stbi_image_free(images[0].pixels);
+    }
+
     glfwMakeContextCurrent(window);
     glfwSwapInterval(1);
 

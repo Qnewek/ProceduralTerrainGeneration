@@ -641,6 +641,7 @@
     <ClInclude Include="src\terrainGeneration\VegetationGenerator.h" />
   </ItemGroup>
   <ItemGroup>
+    <Image Include="res\image\icon.png" />
     <Image Include="res\textures\Basic_biome_texture_palette.jpg" />
     <Image Include="res\textures\Grass.jpg" />
     <Image Include="res\textures\texture.png" />

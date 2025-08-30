@@ -273,3 +273,19 @@ int BiomeGenerator::GetBiomeAt(int x, int y)
 	return biomeMap[y * width + x];
 }
 
+noise::SimplexNoiseClass& BiomeGenerator::GetNoiseByParameter(BiomeParameter p)
+{
+	switch (p) {
+	case BiomeParameter::HUMIDITY:
+		return humidityNoise;
+		break;
+	case BiomeParameter::TEMPERATURE:
+		return temperatureNoise;
+		break;
+	default:
+		std::cout << "[ERROR] Wrong biome option!" << std::endl;
+		return temperatureNoise;
+		break;
+	}
+}
+

@@ -296,7 +296,7 @@ namespace utilities
 			regenerate |= ImGui::SliderFloat("Persistance", &noiseConfig.persistance, 0.1f, 1.0f);
 
 			static const char* options[] = { "REFIT_ALL", "FLATTEN_NEGATIVES", "REVERT_NEGATIVES", "NOTHING" };
-			static int current_option = static_cast<int>(noiseConfig.option);
+			int current_option = static_cast<int>(noiseConfig.option);
 
 			if (ImGui::BeginCombo("Negatives: ", options[current_option]))
 			{
@@ -331,7 +331,7 @@ namespace utilities
 				static const char* islandTypes[] = { "CONE", "DIAGONAL", "EUKLIDEAN_SQUARED",
 													 "SQUARE_BUMP","HYPERBOLOID", "SQUIRCLE",
 													 "TRIG" };
-				static int current_island = static_cast<int>(noiseConfig.islandType);
+				int current_island = static_cast<int>(noiseConfig.islandType);
 
 				if (ImGui::BeginCombo("Island type: ", islandTypes[current_island]))
 				{

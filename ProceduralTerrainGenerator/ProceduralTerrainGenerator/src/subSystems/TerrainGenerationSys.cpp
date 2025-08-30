@@ -69,6 +69,9 @@ bool TerrainGenerationSys::GenerateTerrain() {
 }
 bool TerrainGenerationSys::GenerateBiomes()
 {
+	if (biomeGen.IsGenerated()) {
+		return false;
+	}
 	if(!biomeGen.Biomify(terrainGen.GetSelectedNoise(TerrainGenerator::WorldGenParameter::CONTINENTALNESS), 
 		terrainGen.GetSelectedNoise(TerrainGenerator::WorldGenParameter::MOUNTAINOUSNESS), 
 		terrainGen.GetSelectedNoise(TerrainGenerator::WorldGenParameter::WEIRDNESS))) {
@@ -98,7 +101,6 @@ void TerrainGenerationSys::ImGuiRightPanel() {
 	}
 
 	if (ImGui::CollapsingHeader("Terrain settings", ImGuiTreeNodeFlags_DefaultOpen)) {
-		bool regenerate = false;
 		ImGui::Text("Evaluating method");
 		static int evaluatingOption = 0;
 		const char* methodOptions[] = { "Linear", "Spline" };
@@ -122,57 +124,10 @@ void TerrainGenerationSys::ImGuiRightPanel() {
 			terrainGen.SetResolution();
 			GenerateTerrain();
 		}
-		ImGui::Text("Edit component noise:");
-		static int editedNoise = 0;
-		const char* noiseOptions[] = { "None", "Continentalness", "Mountainousness", "WEIRDNESS" };
-		if (ImGui::BeginCombo("Noise: ", noiseOptions[editedNoise]))
-		{
-			for (int n = 0; n < IM_ARRAYSIZE(noiseOptions); n++)
-			{
-				bool is_selected = (editedNoise == n);
-				if (ImGui::Selectable(noiseOptions[n], is_selected)) {
-					editedNoise = n;
-					regenerate = true;
-					biomesGeneration = false;
-				}
-				if (is_selected)
-					ImGui::SetItemDefaultFocus();
-			}
-			ImGui::EndCombo();
-		}
-		if (editedNoise != 0) {
-			TerrainGenerator::WorldGenParameter param = TerrainGenerator::WorldGenParameter::CONTINENTALNESS;
-			switch (editedNoise) {
-			case 1:
-				param = TerrainGenerator::WorldGenParameter::CONTINENTALNESS;
-				break;
-			case 2:
-				param = TerrainGenerator::WorldGenParameter::MOUNTAINOUSNESS;
-				break;
-			case 3:
-				param = TerrainGenerator::WorldGenParameter::WEIRDNESS;
-				break;
-			default:
-				break;
-			}
-			if (utilities::NoiseImGui(terrainGen.GetSelectedNoiseConfig(param)) || regenerate) {
-				terrainGen.GetSelectedNoise(param).GenerateFractalNoise();
-				utilities::MapToVertices(terrainGen.GetSelectedNoise(param).GetMap(), noiseVertices, terrainIndices, height, width, stride, heightScale, displayMode, true, false, true);
-				UpdateVertex(noiseVertexBuffer, noiseVertices);
-				changeTerrain = true;
-			}
-		}
-		else {
+		NoiseEditor();
+		if (!editNoise) {
 			SplineEditor();
-			BiomesImGui();
-			if (changeTerrain) {
-				GenerateTerrain();
-				biomeGen.Regenerate();
-				changeTerrain = false;
-			}
-			else {
-				mainVAO->AddBuffer(*mainVertexBuffer, layout);
-			}
+			BiomesEditor();
 		}
 	}
 }
@@ -191,23 +146,111 @@ void TerrainGenerationSys::ImGuiOutput() {
 
 }
 
-void TerrainGenerationSys::BiomesImGui()
+void TerrainGenerationSys::NoiseEditor()
 {
-	if (ImGui::CollapsingHeader("Biome generation settings", ImGuiTreeNodeFlags_DefaultOpen)) {
-		if (ImGui::Checkbox("Biomes generation", &biomesGeneration)) {
-			if (biomesGeneration) {
-				if (!biomeGen.IsGenerated()) {
-					GenerateBiomes();
-				}
-				utilities::PaintVerticesByBiome(terrainVertices, biomeGen, width, height, stride, 6);
-			}
-			else {
-				utilities::PaintVerticesByHeight(terrainVertices, width, height, heightScale, stride, displayMode, 1, 6);
-			}
-			UpdateVertex(mainVertexBuffer, terrainVertices);
+	static int noisePressedButton = 0;
+	ImGui::Separator();
+	if (ImGui::Checkbox("Edit component noise", &editNoise)) {
+		noisePressedButton = 0;
+		if (!editNoise) {
+			mainVAO->AddBuffer(*mainVertexBuffer, layout);
 		}
-		if (biomesGeneration) {
+	}
+	if (editNoise) {
+		bool regenerate = false;
+		if (ImGui::CollapsingHeader("Terrain noise editor", ImGuiTreeNodeFlags_DefaultOpen)) {
+			ImGui::Text("Select noise to edit:");
+			if (utilities::ImGuiButtonWrapper("Mountainousness", noisePressedButton == 1 ? true : false)) {
+				noisePressedButton = 1;
+				editedComponent = TerrainGenerator::WorldGenParameter::MOUNTAINOUSNESS;
+				regenerate = true;
+			}
+			ImGui::SameLine();
+			if (utilities::ImGuiButtonWrapper("Continentalness", noisePressedButton == 2 ? true : false)) {
+				noisePressedButton = 2;
+				editedComponent = TerrainGenerator::WorldGenParameter::CONTINENTALNESS;
+				regenerate = true;
+			}
+			ImGui::SameLine();
+			if (utilities::ImGuiButtonWrapper("Weirdness", noisePressedButton == 3 ? true : false)) {
+				noisePressedButton = 3;
+				editedComponent = TerrainGenerator::WorldGenParameter::WEIRDNESS;
+				regenerate = true;
+			}
+			if (noisePressedButton == 0) {
+				ImGui::Text("[Currently no noise is beeing changed]");
+				return;
+			}
 
+			biomesGeneration = false;
+			if (utilities::NoiseImGui(terrainGen.GetSelectedNoiseConfig(editedComponent)) || regenerate) {
+				terrainGen.GetSelectedNoise(editedComponent).GenerateFractalNoise();
+				utilities::MapToVertices(terrainGen.GetSelectedNoise(editedComponent).GetMap(), noiseVertices, terrainIndices, height, width, stride, heightScale, displayMode, true, false, true);
+				UpdateVertex(noiseVertexBuffer, noiseVertices);
+				changeTerrain = true;
+			}
+			if (ImGui::Button("Accept changes")) {
+				editNoise = false;
+				noisePressedButton = 0;
+				mainVAO->AddBuffer(*mainVertexBuffer, layout);
+			}
+			return;
+		}
+		if (changeTerrain) {
+			GenerateTerrain();
+			biomeGen.Regenerate();
+			changeTerrain = false;
+		}
+	}
+}
+
+void TerrainGenerationSys::BiomesEditor()
+{
+	ImGui::Separator();
+	if (ImGui::Checkbox("Biomes generation", &biomesGeneration)) {
+		if (biomesGeneration) {
+			GenerateBiomes();
+			utilities::PaintVerticesByBiome(terrainVertices, biomeGen, width, height, stride, 6);
+		}
+		else {
+			utilities::PaintVerticesByHeight(terrainVertices, width, height, heightScale, stride, displayMode, 1, 6);
+		}
+		UpdateVertex(mainVertexBuffer, terrainVertices);
+	}
+	static int biomeNoisePressedButton = 0;
+	if (biomesGeneration) {
+		if (ImGui::CollapsingHeader("Biome generation settings", ImGuiTreeNodeFlags_DefaultOpen)) {
+			bool regenerate = false;
+			ImGui::Text("Select noise to edit:");
+			if (utilities::ImGuiButtonWrapper("Temperature", biomeNoisePressedButton == 1 ? true : false)) {
+				biomeNoisePressedButton = 1;
+				editedBiomeComponent = BiomeParameter::TEMPERATURE;
+				regenerate = true;
+			}
+			ImGui::SameLine();
+			if (utilities::ImGuiButtonWrapper("Humidity", biomeNoisePressedButton == 2 ? true : false)) {
+				biomeNoisePressedButton = 2;
+				editedBiomeComponent = BiomeParameter::HUMIDITY;
+				regenerate = true;
+			}
+			if (biomeNoisePressedButton == 0) {
+				ImGui::Text("[Currently no noise is beeing changed]");
+				return;
+			}
+
+			if (utilities::NoiseImGui(biomeGen.GetNoiseByParameter(editedBiomeComponent).GetConfigRef()) || regenerate) {
+				biomeGen.GetNoiseByParameter(editedBiomeComponent).GenerateFractalNoise();
+				utilities::MapToVertices(biomeGen.GetNoiseByParameter(editedBiomeComponent).GetMap(), noiseVertices, terrainIndices, height, width, stride, heightScale, displayMode, true, false, true);
+				UpdateVertex(noiseVertexBuffer, noiseVertices);
+				biomeGen.Regenerate();
+			}
+			if (ImGui::Button("Accept changes")) {
+				biomeNoisePressedButton = 0;
+				GenerateBiomes();
+				utilities::PaintVerticesByBiome(terrainVertices, biomeGen, width, height, stride, 6);
+				UpdateVertex(mainVertexBuffer, terrainVertices);
+			}
+			return;
 		}
 	}
 }
@@ -215,38 +258,38 @@ void TerrainGenerationSys::BiomesImGui()
 void TerrainGenerationSys::SplineEditor()
 {
 	static int splinePressedButton = 0;
-	if (ImGui::CollapsingHeader("Spline editor", ImGuiTreeNodeFlags_DefaultOpen)) {
-		if(ImGui::Checkbox("Edit spline", &editSpline)) {
-			splinePressedButton = 0;
-		}
-		if (editSpline) {
-
-			ImGui::Text("Select spline to edit:");	
-			if(utilities::ImGuiButtonWrapper("Mountainousness", splinePressedButton == 1 ? true : false)) {
+	ImGui::Separator();
+	if (ImGui::Checkbox("Edit spline", &editSpline)) {
+		splinePressedButton = 0;
+	}
+	if (editSpline) {
+		if (ImGui::CollapsingHeader("Spline editor", ImGuiTreeNodeFlags_DefaultOpen)) {
+			ImGui::Text("Select spline to edit:");
+			if (utilities::ImGuiButtonWrapper("Mountainousness", splinePressedButton == 1 ? true : false)) {
 				splinePressedButton = 1;
-				editedSpline = TerrainGenerator::WorldGenParameter::MOUNTAINOUSNESS;
-				splinePlotPoints = terrainGen.GetSplinePoints(editedSpline);
+				editedComponent = TerrainGenerator::WorldGenParameter::MOUNTAINOUSNESS;
+				splinePlotPoints = terrainGen.GetSplinePoints(editedComponent);
 			}
 			ImGui::SameLine();
 			if (utilities::ImGuiButtonWrapper("Continentalness", splinePressedButton == 2 ? true : false)) {
 				splinePressedButton = 2;
-				editedSpline = TerrainGenerator::WorldGenParameter::CONTINENTALNESS;
-				splinePlotPoints = terrainGen.GetSplinePoints(editedSpline);
+				editedComponent = TerrainGenerator::WorldGenParameter::CONTINENTALNESS;
+				splinePlotPoints = terrainGen.GetSplinePoints(editedComponent);
 			}
 			ImGui::SameLine();
 			if (utilities::ImGuiButtonWrapper("Weirdness", splinePressedButton == 3 ? true : false)) {
 				splinePressedButton = 3;
-				editedSpline = TerrainGenerator::WorldGenParameter::WEIRDNESS;
-				splinePlotPoints = terrainGen.GetSplinePoints(editedSpline);
+				editedComponent = TerrainGenerator::WorldGenParameter::WEIRDNESS;
+				splinePlotPoints = terrainGen.GetSplinePoints(editedComponent);
 			}
 
-			if(splinePressedButton == 0) {
+			if (splinePressedButton == 0) {
 				ImGui::Text("[Currently no spline is beeing changed]");
 				return;
 			}
 
 			static int dragging = -1;
-			if(splinePlotPoints.size() != 2 || splinePlotPoints[0].size() != splinePlotPoints[1].size()) {
+			if (splinePlotPoints.size() != 2 || splinePlotPoints[0].size() != splinePlotPoints[1].size()) {
 				std::cout << "[ERROR] Spline points not set correctly\n";
 				return;
 			}
@@ -309,7 +352,7 @@ void TerrainGenerationSys::SplineEditor()
 				ImPlot::EndPlot();
 			}
 			if (ImGui::Button("Set new spline points")) {
-				terrainGen.SetSpline(editedSpline, splinePlotPoints);
+				terrainGen.SetSpline(editedComponent, splinePlotPoints);
 				changeTerrain = true;
 			}
 		}
