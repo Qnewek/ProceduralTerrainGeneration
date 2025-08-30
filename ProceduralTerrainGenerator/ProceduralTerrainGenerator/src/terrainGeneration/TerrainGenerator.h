@@ -59,4 +59,5 @@ public:
 	noise::NoiseConfigParameters& GetSelectedNoiseConfig(WorldGenParameter p);
 	noise::SimplexNoiseClass& GetSelectedNoise(WorldGenParameter p);
 	EvaluationMethod& GetEvaluationMethod() { return evalMethod; };
+	std::vector<std::vector<double>> GetSplinePoints(WorldGenParameter p);
 };

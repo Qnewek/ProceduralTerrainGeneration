@@ -282,7 +282,7 @@ namespace utilities
 	//@return - boolean value indicating if the noise parameters were modified
 	bool NoiseImGui(noise::NoiseConfigParameters& noiseConfig)
 	{
-		if (ImGui::CollapsingHeader("Noise Settings")) {
+		if (ImGui::CollapsingHeader("Noise Settings", ImGuiTreeNodeFlags_DefaultOpen)) {
 			bool regenerate = false;
 			regenerate |= ImGui::InputInt("Seed", &noiseConfig.seed);
 			regenerate |= ImGui::SliderInt("Octaves", &noiseConfig.octaves, 1, 8);
@@ -422,5 +422,20 @@ namespace utilities
 			}
 		}
 		return true;
+	}
+	bool ImGuiButtonWrapper(const char* label, bool disabled)
+	{
+		if (disabled) {
+			ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.1f, 0.8f, 0.1f, 1.0f));       
+			ImGui::BeginDisabled();
+		}
+
+		bool clicked = ImGui::Button(label);
+
+		if (disabled) {
+			ImGui::PopStyleColor(1);
+			ImGui::EndDisabled();
+		}
+		return clicked;
 	}
 }

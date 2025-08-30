@@ -126,6 +126,7 @@ void NoiseBasedGenerationSys::Draw(Renderer& renderer, Camera& camera, LightSour
 	mainShader->SetModel(model);
 	mainShader->SetUniform1i("flatten", map2d);
 	mainShader->SetUniform1i("size", height / 2);
+	mainShader->SetUniform1f("step", topoStep);
 	mainShader->SetUniform1f("bandWidth", topoBandWidth);
 	mainShader->SetUniform1i("flatten", map2d);
 
@@ -138,11 +139,32 @@ void NoiseBasedGenerationSys::Draw(Renderer& renderer, Camera& camera, LightSour
 	}
 }
 
-void NoiseBasedGenerationSys::ImGuiDraw()
+void NoiseBasedGenerationSys::ImGuiRightPanel()
 {
 	if(utilities::MapSizeImGui(width, height)) {
 		GenerateNoise();
 	}
+	
+	bool regen = utilities::NoiseImGui(noise.GetConfigRef());
+	ImGui::Checkbox("Instant Update", &instantUpdate);
+	if (!instantUpdate) {
+		if (ImGui::Button("Generate new noise")) {
+			GenerateNoise();
+			erosionDraw = false;
+			erosion.ChangeMap();
+		}
+	}
+	else if(regen){
+		GenerateNoise();
+		erosionDraw = false;
+		erosion.ChangeMap();
+	}
+	ErosionImGui();
+	utilities::SavingImGui();
+}
+
+void NoiseBasedGenerationSys::ImGuiLeftPanel()
+{
 	if (utilities::DisplayModeImGui(modelScale, topoStep, topoBandWidth, heightScale, displayMode, wireFrame, map2d)) {
 		utilities::PaintVerticesByHeight(vertices, width, height, heightScale, stride, displayMode, 1, 6);
 		mainVertexBuffer->UpdateData(vertices, (height * width) * stride * sizeof(float));
@@ -153,22 +175,6 @@ void NoiseBasedGenerationSys::ImGuiDraw()
 			erosionVAO->AddBuffer(*erosionVertexBuffer, layout);
 		}
 	}
-	utilities::SavingImGui();
-	
-	ImGui::Checkbox("Instant Update", &instantUpdate);
-	if (!instantUpdate) {
-		if (ImGui::Button("Generate new noise")) {
-			GenerateNoise();
-			erosionDraw = false;
-			erosion.ChangeMap();
-		}
-	}
-	else if(utilities::NoiseImGui(noise.GetConfigRef())){
-		GenerateNoise();
-		erosionDraw = false;
-		erosion.ChangeMap();
-	}
-	ErosionImGui();
 }
 
 void NoiseBasedGenerationSys::ErosionImGui()

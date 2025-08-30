@@ -36,6 +36,7 @@ namespace utilities
 	bool MapSizeImGui(int& height, int& width);
     bool DisplayModeImGui(float& modelSclae, float& topoStep, float& topoBandWidth, float& heightScale, heightMapMode& m, bool& wireFrame, bool& map2d);
 	bool SavingImGui();
+	bool ImGuiButtonWrapper(const char* label, bool disabled);
 
     //-----
 	//Other

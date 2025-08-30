@@ -149,9 +149,9 @@ bool TerrainGenerator::SetSplines(std::vector<std::vector<double>> splines)
 {
 	if (splines.size() <= 5)
 		return false;
-	continentalnessSpline.set_points(splines[0], splines[1]);
-	mountainousnessSpline.set_points(splines[2], splines[3]);
-	weirdnessSpline.set_points(splines[4], splines[5]);
+	continentalnessSpline.set_points(splines[0], splines[1], tk::spline::linear);
+	mountainousnessSpline.set_points(splines[2], splines[3], tk::spline::linear);
+	weirdnessSpline.set_points(splines[4], splines[5], tk::spline::linear);
 
 	return true;
 }
@@ -161,13 +161,13 @@ bool TerrainGenerator::SetSpline(WorldGenParameter p, std::vector<std::vector<do
 	switch (p)
 	{
 	case WorldGenParameter::CONTINENTALNESS:
-		continentalnessSpline.set_points(spline[0], spline[1]);
+		continentalnessSpline.set_points(spline[0], spline[1], tk::spline::cspline);
 		break;
 	case WorldGenParameter::MOUNTAINOUSNESS :
-		mountainousnessSpline.set_points(spline[0], spline[1]);
+		mountainousnessSpline.set_points(spline[0], spline[1], tk::spline::cspline);
 		break;
 	case WorldGenParameter::WEIRDNESS:
-		weirdnessSpline.set_points(spline[0], spline[1]);
+		weirdnessSpline.set_points(spline[0], spline[1], tk::spline::cspline);
 		break;
 	default:
 		return false;
@@ -216,4 +216,26 @@ noise::SimplexNoiseClass& TerrainGenerator::GetSelectedNoise(WorldGenParameter p
 	default:
 		break;
 	}
+}
+
+std::vector<std::vector<double>> TerrainGenerator::GetSplinePoints(WorldGenParameter p)
+{
+	switch (p)
+	{
+	case TerrainGenerator::WorldGenParameter::CONTINENTALNESS: {
+		return { continentalnessSpline.get_x(), continentalnessSpline.get_y()};
+		break;
+	}
+	case TerrainGenerator::WorldGenParameter::MOUNTAINOUSNESS: {
+		return { mountainousnessSpline.get_x(), mountainousnessSpline.get_y() };
+		break;
+	}
+	case TerrainGenerator::WorldGenParameter::WEIRDNESS: {
+		return { weirdnessSpline.get_x(), weirdnessSpline.get_y() };
+		break;
+	}
+	default:
+		break;
+	}
+	return {};
 }
