@@ -59,5 +59,6 @@ public:
 	noise::NoiseConfigParameters& GetHumidityNoiseConfig() { return humidityNoise.GetConfigRef(); };
 	noise::SimplexNoiseClass& GetTemperatureNoise() { return temperatureNoise; };
 	noise::SimplexNoiseClass& GetHumidityNoise() { return humidityNoise; };
+	noise::SimplexNoiseClass& GetNoiseByParameter(BiomeParameter p);
 
 };

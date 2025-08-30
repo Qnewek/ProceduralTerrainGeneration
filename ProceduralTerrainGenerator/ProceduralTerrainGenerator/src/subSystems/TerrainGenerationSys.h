@@ -20,7 +20,7 @@ private:
 	int width, height;
 	bool wireFrame = false, changeTerrain = false;
 	bool biomesGeneration = false, map2d = false;
-	bool editSpline = false;
+	bool editNoise = false, editSpline = false;
 
 	//OpenGl objects
 	VertexBufferLayout layout;
@@ -30,11 +30,12 @@ private:
 	std::unique_ptr<IndexBuffer> mainIndexBuffer;
 	std::unique_ptr<Shader> mainShader;
 
-	BiomeGenerator biomeGen;
 	TerrainGenerator terrainGen;
 	TerrainGenerator::EvaluationMethod evaluatingMode = TerrainGenerator::EvaluationMethod::LINEAR_COMBINE;
-	TerrainGenerator::WorldGenParameter editedSpline = TerrainGenerator::WorldGenParameter::CONTINENTALNESS;
+	TerrainGenerator::WorldGenParameter editedComponent = TerrainGenerator::WorldGenParameter::CONTINENTALNESS;
 	utilities::heightMapMode displayMode = utilities::heightMapMode::TOPOGRAPHICAL;
+	BiomeGenerator biomeGen;
+	BiomeParameter editedBiomeComponent = BiomeParameter::TEMPERATURE;
 
 	struct Point {
 		float x, y;
@@ -57,7 +58,8 @@ public:
 	void ImGuiRightPanel();
 	void ImGuiLeftPanel();
 	void ImGuiOutput();
-	void BiomesImGui();
+	void NoiseEditor();
+	void BiomesEditor();
 	void SplineEditor();
 };
 
