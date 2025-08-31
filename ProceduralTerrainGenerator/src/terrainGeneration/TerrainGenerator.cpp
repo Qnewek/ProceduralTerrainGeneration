@@ -1,7 +1,7 @@
 #include "TerrainGenerator.h"
 
 
-TerrainGenerator::TerrainGenerator() : width(0), height(0), seed(0), resolution(1.0f), heightMap(nullptr),
+TerrainGenerator::TerrainGenerator() : width(0), height(0), seed(0), resolution(500.0f), heightMap(nullptr),
 continentalnessNoise(), mountainousnessNoise(), weirdnessNoise(), continentalnessSpline(), mountainousnessSpline(), weirdnessSpline()
 {
 }

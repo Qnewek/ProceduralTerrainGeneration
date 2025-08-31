@@ -103,10 +103,8 @@ static uint8_t originalPerm[256] = {
 * @note This function can be called anytime before generating noise to shuffle the permutation table
 */
 void SimplexNoise::reseed(int _seed) {
-	std::copy(std::begin(originalPerm), std::end(originalPerm), std::begin(perm));
-	
 	if (seed == _seed) return;
-
+	std::copy(std::begin(originalPerm), std::end(originalPerm), std::begin(perm));
 	seed = _seed;
 	std::mt19937 generator(seed);
 	std::shuffle(std::begin(perm), std::end(perm), generator);

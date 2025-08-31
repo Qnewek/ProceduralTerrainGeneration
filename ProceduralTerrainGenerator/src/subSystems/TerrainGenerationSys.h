@@ -57,7 +57,7 @@ public:
 	void Draw(Renderer& renderer, Camera& camera, LightSource& light);
 	void ImGuiRightPanel();
 	void ImGuiLeftPanel();
-	void ImGuiOutput();
+	void ImGuiOutput(glm::vec3 pos);
 	void NoiseEditor();
 	void BiomesEditor();
 	void SplineEditor();

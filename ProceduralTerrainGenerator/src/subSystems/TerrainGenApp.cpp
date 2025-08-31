@@ -210,7 +210,7 @@ void TerrainGenApp::ImGuiRender()
         noiseGenSys.ImGuiOutput();
     }
     else if (currentMode == mode::TERRAIN_GEN) {
-		terrainGenSys.ImGuiOutput();
+		terrainGenSys.ImGuiOutput(camera.GetPosition());
     }
     bottomPanelHeight = ImGui::GetWindowHeight() <= windowHeight / 3 ? ImGui::GetWindowHeight() : windowHeight / 3;
     
