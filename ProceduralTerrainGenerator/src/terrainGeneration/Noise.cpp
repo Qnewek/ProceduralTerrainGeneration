@@ -67,83 +67,90 @@ namespace noise
 			std::cout << "[ERROR] Noise object not initialized!" << std::endl;
 			return false;
 		}
-		SimplexNoise::reseed(this->config.seed);
-
-		float amplitude;
-		float frequency;
-		float elevation;
-		float divider;
-		glm::vec2 vec = glm::vec2(0.0f, 0.0f);
 
 		for (int y = 0; y < height; y++)
 		{
 			for (int x = 0; x < width; x++)
 			{
-				divider = 0.0f;
-				amplitude = 1.0f;
-				frequency = 1.0f;
-				elevation = 0.0f;
-
-				for (int i = 0; i < config.octaves; i++)
-				{
-					if (this->config.symmetrical) {
-						float TAU = 2 * std::_Pi_val;
-						float anglex = TAU * (x / (float)config.resolution);
-						float angley = TAU * (y / (float)config.resolution);
-
-						elevation += SimplexNoise::noise(std::cosf(anglex) / TAU * config.scale * frequency + config.xoffset, 
-														 std::sinf(anglex) / TAU * config.scale * frequency + config.xoffset,
-														 std::cosf(angley) / TAU * config.scale * frequency + config.yoffset,
-														 std::sinf(angley) / TAU * config.scale * frequency + config.yoffset)  * amplitude;
-					}
-					else {
-						vec.x = (x / (float)config.resolution * config.scale + config.xoffset) * frequency;
-						vec.y = (y / (float)config.resolution * config.scale + config.yoffset) * frequency;
-
-						elevation += SimplexNoise::noise(vec.x, vec.y) * amplitude;
-					}
-					divider += amplitude;
-					amplitude *= config.persistance;
-					frequency *= config.lacunarity;
-				}
-
-				elevation *= config.constrast;
-				elevation /= divider;
-
-				elevation = std::clamp(elevation, -1.0f, 1.0f);
-
-				//Dealing with negatives
-				if (config.option == Options::REFIT_ALL) {
-					elevation = (elevation + 1.0f) / 2.0f;
-				}
-				else if (elevation < 0.0f && config.option != Options::NOTHING)
-				{
-					if (config.option == Options::FLATTEN_NEGATIVES)
-					{
-						elevation = 0.0f;
-					}
-					else if (config.option == Options::REVERT_NEGATIVES)
-					{
-						elevation = -(elevation * config.revertGain);
-					}
-				}
-				//Make Ridge noise
-				if (config.Ridge)
-					elevation = Ridge(elevation, config.RidgeOffset, config.RidgeGain);
-				
-				//Make island
-				if (config.island) {
-					elevation = std::fabsf(MakeIsland(elevation, x, y));
-				}
-
-				//Redistribute the noise
-				elevation = std::pow(elevation, config.redistribution);
-
-				heightMap[y * width + x] = elevation;
+				heightMap[y * width + x] = PointNoise(x,y);
 			}
 		}
 		std::cout << "[LOG] Noise successfully generated" << std::endl;
 		return true;
+	}
+
+	float SimplexNoiseClass::PointNoise(float x, float y)
+	{
+		SimplexNoise::reseed(this->config.seed);
+		float amplitude = 1.0f;
+		float frequency = 1.0f;
+		float elevation = 0.0f;
+		float divider = 0.0f;
+		glm::vec2 vec = glm::vec2(x, y);
+
+		for (int i = 0; i < config.octaves; i++)
+		{
+			if (this->config.symmetrical) {
+				float TAU = 2 * std::_Pi_val;
+				float anglex = TAU * (x / (float)config.resolution);
+				float angley = TAU * (y / (float)config.resolution);
+
+				elevation += SimplexNoise::noise(std::cosf(anglex) / TAU * config.scale * frequency + config.xoffset,
+					std::sinf(anglex) / TAU * config.scale * frequency + config.xoffset,
+					std::cosf(angley) / TAU * config.scale * frequency + config.yoffset,
+					std::sinf(angley) / TAU * config.scale * frequency + config.yoffset) * amplitude;
+			}
+			else {
+				vec.x = (x / (float)config.resolution * config.scale + config.xoffset) * frequency;
+				vec.y = (y / (float)config.resolution * config.scale + config.yoffset) * frequency;
+
+				elevation += SimplexNoise::noise(vec.x, vec.y) * amplitude;
+			}
+			divider += amplitude;
+			amplitude *= config.persistance;
+			frequency *= config.lacunarity;
+		}
+
+		elevation *= config.constrast;
+		elevation /= divider;
+
+		elevation = std::clamp(elevation, -1.0f, 1.0f);
+
+		//Dealing with negatives
+		if (config.option == Options::REFIT_ALL) {
+			elevation = (elevation + 1.0f) / 2.0f;
+		}
+		else if (elevation < 0.0f && config.option != Options::NOTHING)
+		{
+			if (config.option == Options::FLATTEN_NEGATIVES)
+			{
+				elevation = 0.0f;
+			}
+			else if (config.option == Options::REVERT_NEGATIVES)
+			{
+				elevation = -(elevation * config.revertGain);
+			}
+		}
+		//Make Ridge noise
+		if (config.Ridge)
+			elevation = Ridge(elevation, config.RidgeOffset, config.RidgeGain);
+
+		//Make island
+		if (config.island) {
+			elevation = std::fabsf(MakeIsland(elevation, x, y));
+		}
+
+		//Redistribute the noise
+		if (config.option != Options::NOTHING) {
+			elevation = std::pow(elevation, config.redistribution);
+		}
+		else {
+			if (elevation < 0.0f)
+				elevation = -std::pow(-elevation, config.redistribution);
+			else
+				elevation = std::pow(elevation, config.redistribution);
+		}
+		return elevation;
 	}
 
 	//Function generating Ridge noise based on the configuration parameters

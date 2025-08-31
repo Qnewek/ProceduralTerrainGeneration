@@ -32,11 +32,13 @@ bool BiomeGenerator::Initialize(int _height, int _width)
 		return false;
 	}
 
+	humidityNoise.GetConfigRef().octaves = 4;
 	temperatureNoise.GetConfigRef().seed = 123;
 	temperatureNoise.GetConfigRef().option = noise::Options::NOTHING;
 	temperatureNoise.GetConfigRef().scale = 0.5f;
 	temperatureNoise.GetConfigRef().constrast = 1.5f;
 
+	humidityNoise.GetConfigRef().octaves = 4;
 	humidityNoise.GetConfigRef().seed = 321;
 	humidityNoise.GetConfigRef().option = noise::Options::NOTHING;
 	humidityNoise.GetConfigRef().scale = 0.3f;
@@ -44,7 +46,7 @@ bool BiomeGenerator::Initialize(int _height, int _width)
 
 	std::vector<biome::Biome>b = {
 		biome::Biome(0, "Grassplains",	{1, 2}, {1, 4}, {3, 5}, {0, 3}, {0, 1}, glm::vec3(0.2f, 0.8f, 0.2f), 1.0f),
-		biome::Biome(1, "Desert",		{2, 4}, {0, 1}, {3, 5}, {0, 4}, {0, 1}, glm::vec3(0.95f, 0.85f, 0.2f), 1.0f),
+		biome::Biome(1, "Desert",		{2, 4}, {0, 1}, {3, 5}, {0, 4}, {0, 1}, glm::vec3(0.95f, 0.1f, 0.1f), 1.0f),
 		biome::Biome(2, "Snow",			{0, 1}, {0, 4}, {3, 5}, {0, 4}, {0, 1}, glm::vec3(0.95f, 0.95f, 0.95f), 1.0f),
 		biome::Biome(3, "Sand",			{0, 4}, {0, 4}, {2, 3}, {0, 7}, {0, 1}, glm::vec3(0.93f, 0.82f, 0.55f), 1.0f),
 		biome::Biome(4, "Mountain",		{0, 4}, {0, 4}, {4, 5}, {4, 7}, {0, 1}, glm::vec3(0.5f, 0.5f, 0.5f), 1.0f),

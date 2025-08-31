@@ -119,7 +119,7 @@ void TerrainGenerationSys::ImGuiRightPanel() {
 			}
 			ImGui::EndCombo();
 		}
-		ImGui::SliderInt("Sampling resolution", &terrainGen.GetResolitionRef(), 100, 1000);
+		ImGui::SliderInt("Sampling resolution", &terrainGen.GetResolitionRef(), 10, 1000);
 		if (ImGui::Button("Change resolution")) {
 			terrainGen.SetResolution();
 			GenerateTerrain();
@@ -128,6 +128,11 @@ void TerrainGenerationSys::ImGuiRightPanel() {
 		if (!editNoise) {
 			SplineEditor();
 			BiomesEditor();
+			if (changeTerrain) {
+				GenerateTerrain();
+				biomeGen.Regenerate();
+				changeTerrain = false;
+			}
 		}
 	}
 }
@@ -142,8 +147,14 @@ void TerrainGenerationSys::ImGuiLeftPanel() {
 	}
 	utilities::SavingImGui();
 }
-void TerrainGenerationSys::ImGuiOutput() {
-
+void TerrainGenerationSys::ImGuiOutput(glm::vec3 pos) {
+	if(biomesGeneration && biomeGen.IsGenerated()) {
+		int posX = static_cast<int>(pos.x) + width/2;
+		int posZ = static_cast<int>(pos.z) + height/2;
+		if (posX >= 0 && posX < width && posZ >= 0 && posZ < height) {
+			ImGui::Text("Biome at camera position: %s", biomeGen.GetBiome(biomeGen.GetBiomeAt(posX, posZ)).GetName().c_str());
+		}
+	}
 }
 
 void TerrainGenerationSys::NoiseEditor()
@@ -157,25 +168,25 @@ void TerrainGenerationSys::NoiseEditor()
 		}
 	}
 	if (editNoise) {
-		bool regenerate = false;
+		bool changedNoise = false;
 		if (ImGui::CollapsingHeader("Terrain noise editor", ImGuiTreeNodeFlags_DefaultOpen)) {
 			ImGui::Text("Select noise to edit:");
 			if (utilities::ImGuiButtonWrapper("Mountainousness", noisePressedButton == 1 ? true : false)) {
 				noisePressedButton = 1;
 				editedComponent = TerrainGenerator::WorldGenParameter::MOUNTAINOUSNESS;
-				regenerate = true;
+				changedNoise = true;
 			}
 			ImGui::SameLine();
 			if (utilities::ImGuiButtonWrapper("Continentalness", noisePressedButton == 2 ? true : false)) {
 				noisePressedButton = 2;
 				editedComponent = TerrainGenerator::WorldGenParameter::CONTINENTALNESS;
-				regenerate = true;
+				changedNoise = true;
 			}
 			ImGui::SameLine();
 			if (utilities::ImGuiButtonWrapper("Weirdness", noisePressedButton == 3 ? true : false)) {
 				noisePressedButton = 3;
 				editedComponent = TerrainGenerator::WorldGenParameter::WEIRDNESS;
-				regenerate = true;
+				changedNoise = true;
 			}
 			if (noisePressedButton == 0) {
 				ImGui::Text("[Currently no noise is beeing changed]");
@@ -183,8 +194,11 @@ void TerrainGenerationSys::NoiseEditor()
 			}
 
 			biomesGeneration = false;
-			if (utilities::NoiseImGui(terrainGen.GetSelectedNoiseConfig(editedComponent)) || regenerate) {
+			if (utilities::NoiseImGui(terrainGen.GetSelectedNoiseConfig(editedComponent))) {
 				terrainGen.GetSelectedNoise(editedComponent).GenerateFractalNoise();
+				changedNoise = true;
+			}
+			if (changedNoise) {
 				utilities::MapToVertices(terrainGen.GetSelectedNoise(editedComponent).GetMap(), noiseVertices, terrainIndices, height, width, stride, heightScale, displayMode, true, false, true);
 				UpdateVertex(noiseVertexBuffer, noiseVertices);
 				changeTerrain = true;
@@ -194,13 +208,41 @@ void TerrainGenerationSys::NoiseEditor()
 				noisePressedButton = 0;
 				mainVAO->AddBuffer(*mainVertexBuffer, layout);
 			}
-			return;
 		}
-		if (changeTerrain) {
-			GenerateTerrain();
-			biomeGen.Regenerate();
-			changeTerrain = false;
+	}
+}
+
+void ShowHorizontalSegments_Draggable() {
+	static std::vector<std::string> labels = { "A", "B", "C", "D" };
+	static std::vector<float> boundaries = { -1.0f, -0.3f, 0.2f, 0.7f, 1.0f };
+	// boundaries.size() = labels.size() + 1
+
+	if (ImPlot::BeginPlot("Segment Bar", ImVec2(-1, 80), ImPlotFlags_NoLegend)) {
+		ImPlot::SetupAxes("X", "", ImPlotAxisFlags_NoDecorations, ImPlotAxisFlags_NoDecorations);
+		ImPlot::SetupAxisLimits(ImAxis_X1, -1, 1, ImGuiCond_Always);
+		ImPlot::SetupAxisLimits(ImAxis_Y1, 0, 1, ImGuiCond_Always);
+
+		for (size_t i = 0; i < labels.size(); i++) {
+			double xs[4] = { boundaries[i], boundaries[i + 1], boundaries[i + 1], boundaries[i] };
+			double ys[4] = { 0, 0, 1, 1 };
+
+			ImPlot::PlotShaded(labels[i].c_str(), xs, ys, 4);
+			ImPlot::PlotLine(labels[i].c_str(), xs, ys, 4);
+
+			double mid = 0.5 * (boundaries[i] + boundaries[i + 1]);
+			ImPlot::Annotation(mid, 0.5, ImVec4(1, 1, 1, 1), ImVec2(0, 0), true, "%s", labels[i].c_str());
 		}
+
+		for (size_t i = 1; i < boundaries.size() - 1; i++) {
+			double tmp = boundaries[i];
+			if (ImPlot::DragLineX((int)i, &tmp, ImVec4(1, 0, 0, 1), 1.5f)) {
+				boundaries[i] = (float)tmp;
+			}
+
+			ImPlot::Annotation(boundaries[i], 1.02, ImVec4(0, 0.5f, 1, 1), ImVec2(0, 0), true, "%.2f", boundaries[i]);
+		}
+
+		ImPlot::EndPlot();
 	}
 }
 
@@ -238,8 +280,12 @@ void TerrainGenerationSys::BiomesEditor()
 				return;
 			}
 
-			if (utilities::NoiseImGui(biomeGen.GetNoiseByParameter(editedBiomeComponent).GetConfigRef()) || regenerate) {
+			if (utilities::NoiseImGui(biomeGen.GetNoiseByParameter(editedBiomeComponent).GetConfigRef())) {
 				biomeGen.GetNoiseByParameter(editedBiomeComponent).GenerateFractalNoise();
+				regenerate = true;
+			}
+
+			if (regenerate) {
 				utilities::MapToVertices(biomeGen.GetNoiseByParameter(editedBiomeComponent).GetMap(), noiseVertices, terrainIndices, height, width, stride, heightScale, displayMode, true, false, true);
 				UpdateVertex(noiseVertexBuffer, noiseVertices);
 				biomeGen.Regenerate();
@@ -250,9 +296,9 @@ void TerrainGenerationSys::BiomesEditor()
 				utilities::PaintVerticesByBiome(terrainVertices, biomeGen, width, height, stride, 6);
 				UpdateVertex(mainVertexBuffer, terrainVertices);
 			}
-			return;
 		}
 	}
+	ShowHorizontalSegments_Draggable();
 }
 
 void TerrainGenerationSys::SplineEditor()
