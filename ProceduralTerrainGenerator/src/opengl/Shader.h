@@ -13,6 +13,7 @@ private:
 public:
 	Shader(const std::string& vertexFilepath, const std::string& fragmentFilepath);
 	Shader(const std::string& filepath);
+	Shader(const std::string& vertexFilepath, const std::string& fragmentFilepath, const std::string& tessControlFilepath, const std::string& tessEvaluationFilepath);
 	~Shader();
 
 	void Bind() const;
@@ -37,6 +38,7 @@ public:
 private:
 	std::string ParseShader(const std::string& filepath);
 	unsigned int CompileShader(unsigned int type, const std::string& source);
-	unsigned int CreateShader(const std::string& vertexShader, const std::string& fragmentShader);
+	unsigned int CreateShader_vert_frag(const std::string& vertexShader, const std::string& fragmentShader);
+	unsigned int CreateShader_vert_frag_tess(const std::string& vertexShader, const std::string& fragmentShader, const std::string& tessControlShader, const std::string& tessEvaluationShader);
 	int GetUniformLocation(const std::string& name);
 };

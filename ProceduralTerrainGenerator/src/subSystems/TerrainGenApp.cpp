@@ -13,7 +13,7 @@
 
 TerrainGenApp::TerrainGenApp() : window(nullptr), windowWidth(0), windowHeight(0), deltaTime(0.0f), lastFrame(0.0f),
 rightPanelWidth(400.0f),topPanelHeight(30.0f), bottomPanelHeight(200.0f), leftPanelWidth(400.0f),
-width(400), height(400), heightScale(255.0f),
+width(500), height(500), heightScale(256.0f),
 camera(1920, 1080, glm::vec3(0.0f, heightScale / 2.0f, 0.0f), 100.0f, 1000.0f), renderer(),
 noiseGenSys(), currentMode(mode::NOISE_HEIGHTMAP), light(glm::vec3(0.0f, 0.0f, 0.0f), 20.0f)
 {
@@ -30,8 +30,8 @@ int TerrainGenApp::Initialize()
     if (!glfwInit())
         return -1;
 
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 5);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 	glfwWindowHint(GLFW_MAXIMIZED, GLFW_TRUE);
     
@@ -64,7 +64,8 @@ int TerrainGenApp::Initialize()
 
     glEnable(GL_DEPTH_TEST);
 	glDepthFunc(GL_LEQUAL);
-    glEnable(GL_CULL_FACE);
+ //   glEnable(GL_CULL_FACE);
+	//glCullFace(GL_CW);
 
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
@@ -72,9 +73,10 @@ int TerrainGenApp::Initialize()
 	ImPlot::CreateContext();
     
 	ImGui_ImplGlfw_InitForOpenGL(window, true);
-	ImGui_ImplOpenGL3_Init("#version 330");
+	ImGui_ImplOpenGL3_Init("#version 450");
 
     //Logic initialization
+	renderer.SetPatches(4);
 	camera.SetScreenSize(windowWidth - rightPanelWidth - leftPanelWidth, windowHeight - topPanelHeight - bottomPanelHeight);
     if (!noiseGenSys.Initialize(height, width, heightScale))
         return 0;

@@ -6,8 +6,8 @@
 #include "glm/glm.hpp"
 #include "glm/gtc/matrix_transform.hpp"
 
-NoiseBasedGenerationSys::NoiseBasedGenerationSys() : noise(), erosion(1, 1), vertices(nullptr), erosionVertices(nullptr), meshIndices(nullptr), 
-width(0), height(0), heightScale(1.0f), modelScale(1.0f), topoBandWidth(0.2f), topoStep(10.0f), stride(9)
+NoiseBasedGenerationSys::NoiseBasedGenerationSys() : noise(), erosion(1, 1), vertices(nullptr),
+width(0), height(0), heightScale(1.0f), modelScale(1.0f), topoBandWidth(0.2f), topoStep(10.0f), stride(5), mapResolution(40)
 {
 }
 
@@ -17,28 +17,25 @@ NoiseBasedGenerationSys::~NoiseBasedGenerationSys()
 		delete[] vertices;
 		vertices = nullptr;
 	}
-	if (meshIndices) {
-		delete[] meshIndices;
-		meshIndices = nullptr;
-	}
-	if(erosionVertices) {
-		delete[] erosionVertices;
-		erosionVertices = nullptr;
-	}
 }
 
 bool NoiseBasedGenerationSys::Initialize(int _height, int _width, float _heightScale)
 {
-	erosionVAO = std::make_unique<VertexArray>();
 	mainVAO = std::make_unique<VertexArray>();
 	layout.Push<float>(3);
-	layout.Push<float>(3);
-	layout.Push<float>(3);
+	layout.Push<float>(2);
+	mainShader = std::make_unique<Shader>("res/shaders/HeightMapShaders/HeightMap_vertex.shader", "res/shaders/HeightMapShaders/HeightMap_fragment.shader", "res/shaders/HeightMapShaders/HeightMap_tesscontrol.shader", "res/shaders/HeightMapShaders/HeightMap_tesseval.shader");
+	mainShader->Bind();
+	mainShader->SetUniform1i("displayMode", static_cast<int>(displayMode));
 
 	this->height = _height;
 	this->width = _width;
 	this->heightScale = _heightScale;
 	noise.Initialize(height, width);
+	vertices = new float[mapResolution * mapResolution * stride * 4];
+	utilities::GenerateVerticesForResolution(vertices, height, width, mapResolution, stride, 0, 3);
+	mainVertexBuffer = std::make_unique<VertexBuffer>(vertices, (mapResolution * mapResolution) * stride * 4 * sizeof(float));
+	mainVAO->AddBuffer(*mainVertexBuffer, layout);
 
 	if(!GenerateNoise()) {
 		std::cout << "[ERROR] Invalid height or width value" << std::endl;
@@ -58,12 +55,8 @@ bool NoiseBasedGenerationSys::Resize()
 		if (vertices) {
 			delete[] vertices;
 		}
-		if (meshIndices) {
-			delete[] meshIndices;
-		}
 
-		vertices = new float[width * height * stride];
-		meshIndices = new unsigned int[(height - 1) * width * 2]; // indices for strips
+		vertices = new float[mapResolution * mapResolution * stride * 4];
 		return  true;
 	}
 	return false;
@@ -71,17 +64,12 @@ bool NoiseBasedGenerationSys::Resize()
 
 bool NoiseBasedGenerationSys::GenerateNoise()
 {
-	bool resized = Resize();
+	Resize();
 	if (!noise.GenerateFractalNoise()) {
 		return false;
 	}
-	utilities::MapToVertices(noise.GetMap(), vertices, meshIndices, height, width, stride, heightScale, displayMode, true, resized, true);
 
-	mainVertexBuffer = std::make_unique<VertexBuffer>(vertices, (height * width) * stride * sizeof(float));
-	mainIndexBuffer = std::make_unique<IndexBuffer>(meshIndices, (height - 1) * width * 2);
-	mainShader = std::make_unique<Shader>("res/shaders/HeightMap_vertex.shader", "res/shaders/HeightMap_fragment.shader");
-	mainVAO->AddBuffer(*mainVertexBuffer, layout);
-
+	terrainTexture = std::make_unique<TextureClass>(noise.GetMap(), width, height);
 	std::cout << "[LOG] Noise based terrain initialized" << std::endl;
 	return true;
 }
@@ -96,22 +84,15 @@ bool NoiseBasedGenerationSys::SimulateErosion()
 		std::cout << "[ERROR] Noise map not initialized" << std::endl;
 		return false;
 	}
-	if(height != erosion.GetHeight() || width != erosion.GetWidth() || !erosionVertices) {
-		if(erosionVertices) {
-			delete[] erosionVertices;
-		}
-		erosionVertices = new float[height * width * stride];
+	if(height != erosion.GetHeight() || width != erosion.GetWidth()) {
 		erosion.Resize(width, height);
-		erosion.SetMap(noise.GetMap());
 	}
 
 	erosion.SetMap(noise.GetMap());
+	erosion.Erode(std::nullopt);
 	erosion.DontChangeMap();
-
-	utilities::benchmarkVoid(utilities::PerformErosion, "PerformErosion", erosion, erosionVertices, heightScale, std::nullopt, stride, displayMode);
-	erosionVertexBuffer = std::make_unique<VertexBuffer>(erosionVertices, (height * width) * stride * sizeof(float));
-	erosionVAO->AddBuffer(*erosionVertexBuffer, layout);
 	erosionDraw = true;
+	erosionTexture = std::make_unique<TextureClass>(erosion.GetMap(), width, height);
 
 	std::cout << "[LOG] Erosion simulated successfully" << std::endl;
 	return true;
@@ -124,18 +105,22 @@ void NoiseBasedGenerationSys::Draw(Renderer& renderer, Camera& camera, LightSour
 	light.SetLightUniforms(*mainShader);
 	camera.SetUniforms(*mainShader);
 	mainShader->SetModel(model);
-	mainShader->SetUniform1i("flatten", map2d);
-	mainShader->SetUniform1i("size", height / 2);
 	mainShader->SetUniform1f("step", topoStep);
 	mainShader->SetUniform1f("bandWidth", topoBandWidth);
+	mainShader->SetUniform1i("size", height / 2);
 	mainShader->SetUniform1i("flatten", map2d);
+	mainShader->SetUniform1i("heightMap", 0);
+	mainShader->SetUniform1f("heightScale", heightScale);
 
-	renderer.DrawTriangleStrips(*mainVAO, *mainIndexBuffer, *mainShader, noise.GetHeight() - 1, noise.GetWidth() * 2);
+	terrainTexture->Bind(0);
+	renderer.DrawPatches(*mainVAO, *mainShader, mapResolution * mapResolution, 4);
 
 	if (erosionDraw) {
 		model = glm::translate(model, glm::vec3(width + 1.0f, 0.0f, 0.0f));
 		mainShader->SetModel(model);
-		renderer.DrawTriangleStrips(*erosionVAO, *mainIndexBuffer, *mainShader, erosion.GetHeight() - 1, erosion.GetWidth() * 2);
+		erosionTexture->Bind(1);
+		mainShader->SetUniform1i("heightMap", 1);
+		renderer.DrawPatches(*mainVAO, *mainShader, mapResolution * mapResolution, 4);
 	}
 }
 
@@ -166,14 +151,8 @@ void NoiseBasedGenerationSys::ImGuiRightPanel()
 void NoiseBasedGenerationSys::ImGuiLeftPanel()
 {
 	if (utilities::DisplayModeImGui(modelScale, topoStep, topoBandWidth, heightScale, displayMode, wireFrame, map2d)) {
-		utilities::PaintVerticesByHeight(vertices, width, height, heightScale, stride, displayMode, 1, 6);
-		mainVertexBuffer->UpdateData(vertices, (height * width) * stride * sizeof(float));
-		mainVAO->AddBuffer(*mainVertexBuffer, layout);
-		if (erosionDraw) {
-			utilities::PaintVerticesByHeight(erosionVertices, width, height, heightScale, stride, displayMode, 1, 6);
-			erosionVertexBuffer->UpdateData(erosionVertices, (height * width) * stride * sizeof(float));
-			erosionVAO->AddBuffer(*erosionVertexBuffer, layout);
-		}
+		mainShader->Bind();
+		mainShader->SetUniform1i("displayMode", static_cast<int>(displayMode));
 	}
 }
 

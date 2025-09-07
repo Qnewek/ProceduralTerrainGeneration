@@ -11,10 +11,9 @@ class NoiseBasedGenerationSys
 {
 	private:
 		//Config
-		float* vertices, *erosionVertices;
+		float* vertices;
 		float heightScale, modelScale, topoStep, topoBandWidth;
-		unsigned int* meshIndices;
-		unsigned int stride;
+		unsigned int stride, mapResolution;
 		int width, height;
 		bool wireFrame = false, erosionDraw = false, instantUpdate = true, map2d = false;
 		utilities::heightMapMode displayMode = utilities::heightMapMode::GREYSCALE;
@@ -22,11 +21,10 @@ class NoiseBasedGenerationSys
 		//OpenGl objects
 		VertexBufferLayout layout;
 		std::unique_ptr<VertexArray> mainVAO;
-		std::unique_ptr<VertexArray> erosionVAO;
-		std::unique_ptr<VertexBuffer> mainVertexBuffer;
-		std::unique_ptr<VertexBuffer> erosionVertexBuffer;
-		std::unique_ptr<IndexBuffer> mainIndexBuffer;
 		std::unique_ptr<Shader> mainShader;
+		std::unique_ptr<VertexBuffer> mainVertexBuffer;
+		std::unique_ptr<TextureClass> terrainTexture;
+		std::unique_ptr<TextureClass> erosionTexture;
 
 		//Perlin Noise object
 		noise::SimplexNoiseClass noise;
