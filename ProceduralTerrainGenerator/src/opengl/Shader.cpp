@@ -12,13 +12,22 @@ Shader::Shader(const std::string& vertexFilepath, const std::string& fragmentFil
 {
 	std::string vertexShader = ParseShader(vertexFilepath);
 	std::string fragmentShader = ParseShader(fragmentFilepath);
-	m_RendererID = CreateShader(vertexShader, fragmentShader);
+	m_RendererID = CreateShader_vert_frag(vertexShader, fragmentShader);
 }
 
 Shader::Shader(const std::string& filepath) {
 	std::string vertexShader = ParseShader(filepath + ".vert");
 	std::string fragmentShader = ParseShader(filepath + ".frag");
-	m_RendererID = CreateShader(vertexShader, fragmentShader);
+	m_RendererID = CreateShader_vert_frag(vertexShader, fragmentShader);
+}
+
+Shader::Shader(const std::string& vertexFilepath, const std::string& fragmentFilepath, const std::string& tessControlFilepath, const std::string& tessEvaluationFilepath)
+{
+    std::string vertexShader = ParseShader(vertexFilepath);
+    std::string fragmentShader = ParseShader(fragmentFilepath);
+    std::string tessControlShader = ParseShader(tessControlFilepath);
+    std::string tessEvaluationShader = ParseShader(tessEvaluationFilepath);
+	m_RendererID = CreateShader_vert_frag_tess(vertexShader, fragmentShader, tessControlShader, tessEvaluationShader);
 }
 
 Shader::~Shader()
@@ -59,7 +68,7 @@ std::string Shader::ParseShader(const std::string& filepath) {
     return shaderStream.str();
 }
 
-unsigned int Shader::CreateShader(const std::string& vertexShader, const std::string& fragmentShader) {
+unsigned int Shader::CreateShader_vert_frag(const std::string& vertexShader, const std::string& fragmentShader) {
     unsigned int program = glCreateProgram();
     unsigned int vs = CompileShader(GL_VERTEX_SHADER, vertexShader);
     unsigned int fs = CompileShader(GL_FRAGMENT_SHADER, fragmentShader);
@@ -73,6 +82,29 @@ unsigned int Shader::CreateShader(const std::string& vertexShader, const std::st
     glDeleteShader(fs);
 
     return program;
+}
+
+unsigned int Shader::CreateShader_vert_frag_tess(const std::string& vertexShader, const std::string& fragmentShader, const std::string& tessControlShader, const std::string& tessEvaluationShader)
+{
+    unsigned int program = glCreateProgram();
+    unsigned int vs = CompileShader(GL_VERTEX_SHADER, vertexShader);
+    unsigned int fs = CompileShader(GL_FRAGMENT_SHADER, fragmentShader);
+	unsigned int tcs = CompileShader(GL_TESS_CONTROL_SHADER, tessControlShader);
+	unsigned int tes = CompileShader(GL_TESS_EVALUATION_SHADER, tessEvaluationShader);
+
+    glAttachShader(program, vs);
+    glAttachShader(program, fs);
+	glAttachShader(program, tcs);
+	glAttachShader(program, tes);
+    glLinkProgram(program);
+    glValidateProgram(program);
+
+    glDeleteShader(vs);
+    glDeleteShader(fs);
+	glDeleteShader(tcs);
+	glDeleteShader(tes);
+
+    return program;;
 }
 
 void Shader::Bind() const

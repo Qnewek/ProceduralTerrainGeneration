@@ -21,9 +21,10 @@ namespace utilities
         MONOCOLOR
 	};
 
-	void ConvertToGrayscaleImage(float* data, unsigned char* image, const int& width, const int& height, int dataOffset, int stride);
+	void ConvertToGrayscaleImage(float* data, unsigned char* image, const int& width, const int& height);
     void ParseNoiseIntoVertices(float* vertices, float* map, const int& width, const int& height, float scale, const unsigned int stride, unsigned int offset);
-	void MeshIndicesStrips(unsigned int* indices, const int& width, const int& height);
+	void GenerateVerticesForResolution(float* vertices, const int& height, const int& width, int resolution, const unsigned int& stride, unsigned int posOffset, unsigned int texOffset);
+    void MeshIndicesStrips(unsigned int* indices, const int& width, const int& height);
     bool CalculateHeightMapNormals(float* vertices, const unsigned int& stride, unsigned int offSet, const unsigned int& width, const unsigned int& height);
 	bool PaintVerticesByHeight(float* vertices, const int& width, const int& height, const float& heightScale, const unsigned int& stride, heightMapMode m, unsigned int heightOffSet , unsigned int colorOffset);
 	bool PaintVerticesByBiome(float* vertices, BiomeGenerator& biomeGen, const int& width, const int& height, const unsigned int& stride, unsigned int colorOffset);

@@ -1,8 +1,8 @@
-#version 330 core
+#version 450 core
 
-in vec3 FragPos;  
-in vec3 Normal;  
-in vec3 Color;
+in vec3 FragPos;
+in vec3 aColor;
+in vec3 aNormal;
 in float Height;
 
 out vec4 FragColor;
@@ -23,16 +23,14 @@ struct Light {
 };
 
 uniform bool lightOn;
-//uniform vec3 viewPos;
 uniform Material material;
 uniform Light light;
 uniform float step;
 uniform float bandWidth;
 
 void main()
-{
-    vec3 baseColor = Color;
-
+{ 
+    vec3 baseColor = aColor;
     float modHeight = mod(Height, step);
     if (modHeight < bandWidth && Height >= step) {
         baseColor *= 0.5;
@@ -45,7 +43,7 @@ void main()
 
     vec3 ambient;
     vec3 diffuse;
-    vec3 norm = Normal;
+    vec3 norm = aNormal;
     vec3 lightDir = normalize(light.position - FragPos);
 
     ambient = light.ambient * baseColor.rgb;
@@ -61,4 +59,3 @@ void main()
 
     FragColor = vec4(result, 1.0);
 }
-    

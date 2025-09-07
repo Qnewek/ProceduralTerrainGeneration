@@ -1,8 +1,10 @@
 #pragma once
 
-#include "Renderer.h"
+#include <GL/glew.h>
+#include <string>
+#include <iostream>
 
-class Texture
+class TextureClass
 {
 	private:
 	unsigned int m_RendererID;
@@ -10,10 +12,11 @@ class Texture
 	unsigned char* m_LocalBuffer;
 	int m_Width, m_Height, m_BPP;
 public:
-	Texture();
-	Texture(const std::string& path);
-	Texture(unsigned int width, unsigned int height, unsigned char* image);
-	~Texture();
+	TextureClass();
+	TextureClass(const std::string& path);
+	TextureClass(unsigned int width, unsigned int height, unsigned char* image);
+	TextureClass(float* data, unsigned int width, unsigned int height);
+	~TextureClass();
 
 	void Bind(unsigned int slot = 0) const;
 	void Unbind() const;

@@ -20,9 +20,9 @@ namespace utilities
 	//@param image - array of unsigned chars to be filled with data
 	//@param width - width of the image
 	//@param height - height of the image
-	void ConvertToGrayscaleImage(float* data, unsigned char* image, const int& width, const int& height, int dataOffset, int stride) {
-		for (int i = 0; i < width * height; ++i) {
-			image[i] = static_cast<unsigned char>(data[i * stride + dataOffset] * 255.0f);
+	void ConvertToGrayscaleImage(float* data, unsigned char* image, const int& width, const int& height) {
+		for (int i = 0; i < width * height; i++) {
+			image[i] = static_cast<unsigned char>(data[i] * 255.0f);
 		}
 	}
 
@@ -50,6 +50,39 @@ namespace utilities
 				vertices[((y * width) + x) * stride + offset] = -width / 2.0f + x;
 				vertices[((y * width) + x) * stride + offset + 1] = map[y * width + x] * scale;
 				vertices[((y * width) + x) * stride + offset + 2] = -height / 2.0f + y;
+			}
+		}
+	}
+
+	void GenerateVerticesForResolution(float* vertices, const int& height, const int& width, int resolution, const unsigned int& stride, unsigned int posOffset, unsigned int texOffset){
+		for (int i = 0; i < resolution; i++)
+		{
+			for (int j = 0; j < resolution; j++)
+			{
+				//Bottom left
+				vertices[(i * resolution + j) * 4 * stride + (stride * 0) + posOffset + 0] = -width / 2.0f + (i) * (float)width / (float)(resolution);
+				vertices[(i * resolution + j) * 4 * stride + (stride * 0) + posOffset + 1] = 0.0f;
+				vertices[(i * resolution + j) * 4 * stride + (stride * 0) + posOffset + 2] = -height / 2.0f + (j) * (float)height / (float)(resolution);
+				vertices[(i * resolution + j) * 4 * stride + (stride * 0) + texOffset + 0] = (float)(i) / (float)(resolution);
+				vertices[(i * resolution + j) * 4 * stride + (stride * 0) + texOffset + 1] = (float)(j) / (float)(resolution);
+				//Bottom right
+				vertices[(i * resolution + j) * 4 * stride + (stride * 1) + posOffset + 0] = -width / 2.0f + (i + 1) * (float)width / (float)(resolution);
+				vertices[(i * resolution + j) * 4 * stride + (stride * 1) + posOffset + 1] = 0.0f;
+				vertices[(i * resolution + j) * 4 * stride + (stride * 1) + posOffset + 2] = -height / 2.0f + (j) * (float)height / (float)(resolution);
+				vertices[(i * resolution + j) * 4 * stride + (stride * 1) + texOffset + 0] = (float)(i + 1) / (float)(resolution);
+				vertices[(i * resolution + j) * 4 * stride + (stride * 1) + texOffset + 1] = (float)(j) / (float)(resolution);
+				//Top left
+				vertices[(i * resolution + j) * 4 * stride + (stride * 2) + posOffset + 0] = -width / 2.0f + (i) * (float)width / (float)(resolution);
+				vertices[(i * resolution + j) * 4 * stride + (stride * 2) + posOffset + 1] = 0.0f;
+				vertices[(i * resolution + j) * 4 * stride + (stride * 2) + posOffset + 2] = -height / 2.0f + (j+1) * (float)height / (float)(resolution);
+				vertices[(i * resolution + j) * 4 * stride + (stride * 2) + texOffset + 0] = (float)(i) / (float)(resolution);
+				vertices[(i * resolution + j) * 4 * stride + (stride * 2) + texOffset + 1] = (float)(j + 1) / (float)(resolution);
+				//Top right
+				vertices[(i * resolution + j) * 4 * stride + (stride * 3) + posOffset + 0] = -width / 2.0f + (i + 1) * (float)width / (float)(resolution);
+				vertices[(i * resolution + j) * 4 * stride + (stride * 3) + posOffset + 1] = 0.0f;
+				vertices[(i * resolution + j) * 4 * stride + (stride * 3) + posOffset + 2] = -height / 2.0f + (j + 1) * (float)height / (float)(resolution);
+				vertices[(i * resolution + j) * 4 * stride + (stride * 3) + texOffset + 0] = (float)(i + 1) / (float)(resolution);
+				vertices[(i * resolution + j) * 4 * stride + (stride * 3) + texOffset + 1] = (float)(j + 1) / (float)(resolution);
 			}
 		}
 	}
@@ -403,7 +436,7 @@ namespace utilities
 				}
 				else {
 					glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
-					glEnable(GL_CULL_FACE);
+					//glEnable(GL_CULL_FACE);
 				}
 			}
 

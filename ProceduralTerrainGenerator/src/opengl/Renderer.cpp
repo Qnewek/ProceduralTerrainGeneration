@@ -20,7 +20,7 @@ void Renderer::DrawTriangles(const VertexArray& va, const IndexBuffer& ib, const
 	va.Bind();
 	ib.Bind();
 
-	GLCALL(glDrawElements(GL_TRIANGLES, ib.GetCount(), GL_UNSIGNED_INT, nullptr));
+	glDrawElements(GL_TRIANGLES, ib.GetCount(), GL_UNSIGNED_INT, nullptr);
 }
 void Renderer::DrawTriangleStrips(const VertexArray& va, const IndexBuffer& ib, const Shader& shader, int numStrips, int numVertPerStrip) const {
     shader.Bind();
@@ -28,10 +28,16 @@ void Renderer::DrawTriangleStrips(const VertexArray& va, const IndexBuffer& ib, 
     ib.Bind();
 
     for(unsigned int i = 0; i < numStrips; i++) {
-        GLCALL(glDrawElements(GL_TRIANGLE_STRIP, numVertPerStrip, GL_UNSIGNED_INT, (void*)(sizeof(unsigned) * (numVertPerStrip) * i)));
+       glDrawElements(GL_TRIANGLE_STRIP, numVertPerStrip, GL_UNSIGNED_INT, (void*)(sizeof(unsigned) * (numVertPerStrip) * i));
 	}
 }
 
+void Renderer::DrawPatches(const VertexArray& va, const Shader& shader, int numPatches, int numPatchPts) const
+{
+    shader.Bind();
+    va.Bind();
+	GLCALL(glDrawArrays(GL_PATCHES, 0, numPatches * numPatchPts));
+}
 
 void Renderer::Clear(glm::vec3 color) const {
 	glClearColor(color.x, color.y, color.z, 1.0f);
