@@ -7,7 +7,7 @@
 #include "glm/gtc/matrix_transform.hpp"
 
 NoiseBasedGenerationSys::NoiseBasedGenerationSys() : noise(), erosion(1, 1), vertices(nullptr),
-width(0), height(0), heightScale(1.0f), modelScale(1.0f), topoBandWidth(0.2f), topoStep(10.0f), stride(5), mapResolution(40)
+width(0), height(0), heightScale(1.0f), modelScale(1.0f), topoBandWidth(0.2f), topoStep(10.0f), stride(5), mapResolution(100)
 {
 }
 
