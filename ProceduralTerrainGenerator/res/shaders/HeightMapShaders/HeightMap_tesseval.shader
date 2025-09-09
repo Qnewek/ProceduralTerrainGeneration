@@ -31,7 +31,7 @@ void main()
     vec2 t1 = (t11 - t10) * u + t10;
     vec2 texCoord = (t1 - t0) * v + t0;
 
-    Height =  texture(heightMap, texCoord).x * heightScale;
+    Height =  texture(heightMap, texCoord).r * heightScale;
 
     //Normal (gradient)
     float texel = 1.0 / float(textureSize(heightMap, 0).x);

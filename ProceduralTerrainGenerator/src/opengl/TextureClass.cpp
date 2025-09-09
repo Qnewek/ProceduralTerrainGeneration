@@ -47,11 +47,8 @@ TextureClass::TextureClass(unsigned int height, unsigned int width, unsigned cha
 	glBindTexture(GL_TEXTURE_2D, 0);
 }
 
-TextureClass::TextureClass(float* data, unsigned int width, unsigned int height): m_RendererID(0), m_FilePath(""), m_Height(height), m_Width(width), m_BPP(0)
+TextureClass::TextureClass(float* data, unsigned int width, unsigned int height): m_RendererID(0), m_FilePath(""), m_Height(height), m_Width(width), m_BPP(0), m_LocalBuffer(nullptr)
 {
-	m_LocalBuffer = new unsigned char[m_Width * m_Height];
-	utilities::ConvertToGrayscaleImage(data, m_LocalBuffer, m_Width, m_Height);
-
 	glGenTextures(1, &m_RendererID);
 	glBindTexture(GL_TEXTURE_2D, m_RendererID);
 
@@ -60,10 +57,9 @@ TextureClass::TextureClass(float* data, unsigned int width, unsigned int height)
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_RED, m_Height, m_Width, 0, GL_RED, GL_UNSIGNED_BYTE, m_LocalBuffer);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_R32F, m_Width, m_Height, 0, GL_RED, GL_FLOAT, data);
 	glGenerateMipmap(GL_TEXTURE_2D);
 	glBindTexture(GL_TEXTURE_2D, 0);
-	delete[] m_LocalBuffer;
 }
 
 TextureClass::~TextureClass()
