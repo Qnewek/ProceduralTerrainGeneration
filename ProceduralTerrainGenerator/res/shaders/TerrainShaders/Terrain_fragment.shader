@@ -1,8 +1,8 @@
 #version 450 core
 
-in vec3 FragPos;  
-in vec3 Normal;  
-in vec3 Color;
+in vec3 FragPos;
+in vec3 aColor;
+in vec3 aNormal;
 in float Height;
 
 out vec4 FragColor;
@@ -23,23 +23,21 @@ struct Light {
 };
 
 uniform bool lightOn;
-uniform bool flatten;
-//uniform vec3 viewPos;
 uniform Material material;
 uniform Light light;
 
 void main()
-{
+{ 
+    vec3 baseColor = aColor;
+
     if(!lightOn){
-        FragColor = vec4(Color, 1.0);
+        FragColor = vec4(baseColor, 1.0);
         return;
     }
 
-    vec3 baseColor = Color;
-    
     vec3 ambient;
     vec3 diffuse;
-    vec3 norm = Normal;
+    vec3 norm = aNormal;
     vec3 lightDir = normalize(light.position - FragPos);
 
     ambient = light.ambient * baseColor.rgb;
@@ -55,4 +53,3 @@ void main()
 
     FragColor = vec4(result, 1.0);
 }
-    

@@ -62,6 +62,19 @@ TextureClass::TextureClass(float* data, unsigned int width, unsigned int height)
 	glBindTexture(GL_TEXTURE_2D, 0);
 }
 
+TextureClass::TextureClass(std::vector<glm::vec3> colorData, unsigned int width, unsigned int height) : m_RendererID(0), m_FilePath(""), m_Height(height), m_Width(width), m_BPP(0), m_LocalBuffer(nullptr)
+{
+	glGenTextures(1, &m_RendererID);
+	glBindTexture(GL_TEXTURE_2D, m_RendererID);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB32F, m_Width, m_Height, 0, GL_RGB, GL_FLOAT, colorData.data());
+	glGenerateMipmap(GL_TEXTURE_2D);
+	glBindTexture(GL_TEXTURE_2D, 0);
+}
+
 TextureClass::~TextureClass()
 {
 	glDeleteTextures(1, &m_RendererID);
