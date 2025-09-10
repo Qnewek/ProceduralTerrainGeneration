@@ -242,31 +242,27 @@ namespace utilities
 	//@param height - height of the noise map
 	//@param stride - number of floats per vertex
 	//@param colorOffset - offset in the vertex array to start with when filling the color data
-	bool PaintVerticesByBiome(float* vertices, BiomeGenerator& biomeGen, const int& width, const int& height, const unsigned int& stride, unsigned int colorOffset)
+	std::vector<glm::vec3> GetBiomeColorMap(BiomeGenerator& biomeGen, const int& width, const int& height)
 	{
-		if (!vertices) {
-			std::cout << "[ERROR] Vertices array not initialized!" << std::endl;
-			return false;
-		}
 		if (!biomeGen.IsGenerated()) {
 			std::cout << "[ERROR] Biome map not generated!" << std::endl;
-			return false;
+			return {};
 		}
+
+		std::vector<glm::vec3> colors(width * height);
 
 		for (int y = 0; y < height; y++) {
 			for (int x = 0; x < width; x++) {
 				int id = biomeGen.GetBiomeAt(x, y);
 				if (id < 0) {
 					std::cout << "[ERROR] Biome not found!\n";
-					return false;
+					return {};
 				}
 				glm::vec3 color = biomeGen.GetBiome(id).GetColor();
-				vertices[(y * width + x) * stride + colorOffset] = color.r;
-				vertices[(y * width + x) * stride + colorOffset + 1] = color.g;
-				vertices[(y * width + x) * stride + colorOffset + 2] = color.b;
+				colors[y * width + x] = color;
 			}
 		}
-		return true;
+		return colors;
 	}
 
 	//Generates terrain map using Perlin Fractal Noise, transforming it into drawable mesh and
@@ -410,7 +406,7 @@ namespace utilities
 			ImGui::SliderFloat("Step", &topoStep, 1.0f, heightScale);
 			ImGui::SliderFloat("Band width", &topoBandWidth, 0.1f, 1.0f);
 
-			static const char* displayOptions[] = { "GREYSCALE", "TOPOGRAPHICAL", "MONOCOLOR" };
+			static const char* displayOptions[] = { "GREYSCALE", "TOPOGRAPHICAL", "MONOCOLOR", "BIOMES"};
 			int currentDisplayOption = static_cast<int>(m);
 			bool paint = false;
 

@@ -1,8 +1,10 @@
 #pragma once
 
 #include <GL/glew.h>
+#include <glm/glm.hpp>
 #include <string>
 #include <iostream>
+#include <vector>
 
 class TextureClass
 {
@@ -16,6 +18,7 @@ public:
 	TextureClass(const std::string& path);
 	TextureClass(unsigned int width, unsigned int height, unsigned char* image);
 	TextureClass(float* data, unsigned int width, unsigned int height);
+	TextureClass(std::vector<glm::vec3> colorData, unsigned int width, unsigned int height);
 	~TextureClass();
 
 	void Bind(unsigned int slot = 0) const;

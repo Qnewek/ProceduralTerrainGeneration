@@ -57,6 +57,7 @@ bool NoiseBasedGenerationSys::Resize()
 		}
 
 		vertices = new float[mapResolution * mapResolution * stride * 4];
+		utilities::GenerateVerticesForResolution(vertices, height, width, mapResolution, stride, 0, 3);
 		return  true;
 	}
 	return false;
@@ -151,6 +152,9 @@ void NoiseBasedGenerationSys::ImGuiRightPanel()
 void NoiseBasedGenerationSys::ImGuiLeftPanel()
 {
 	if (utilities::DisplayModeImGui(modelScale, topoStep, topoBandWidth, heightScale, displayMode, wireFrame, map2d)) {
+		if(displayMode == utilities::heightMapMode::BIOMES) {
+			displayMode = utilities::heightMapMode::GREYSCALE;
+		}
 		mainShader->Bind();
 		mainShader->SetUniform1i("displayMode", static_cast<int>(displayMode));
 	}

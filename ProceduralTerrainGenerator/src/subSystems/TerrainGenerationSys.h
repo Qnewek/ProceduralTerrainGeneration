@@ -13,11 +13,10 @@
 class TerrainGenerationSys
 {
 private:
-	float* terrainVertices, *noiseVertices;
+	float* terrainVertices;
 	float heightScale, modelScale;
-	unsigned int* terrainIndices;
 	unsigned int stride;
-	int width, height;
+	int width, height, mapResolution;
 	bool wireFrame = false, changeTerrain = false;
 	bool biomesGeneration = false, map2d = false;
 	bool editNoise = false, editSpline = false;
@@ -26,9 +25,10 @@ private:
 	VertexBufferLayout layout;
 	std::unique_ptr<VertexArray> mainVAO;
 	std::unique_ptr<VertexBuffer> mainVertexBuffer;
-	std::unique_ptr<VertexBuffer> noiseVertexBuffer;
-	std::unique_ptr<IndexBuffer> mainIndexBuffer;
 	std::unique_ptr<Shader> mainShader;
+	std::unique_ptr<TextureClass> terrainTxt;
+	std::unique_ptr<TextureClass> noiseTxt;
+	std::unique_ptr<TextureClass> biomeTxt;
 
 	TerrainGenerator terrainGen;
 	TerrainGenerator::EvaluationMethod evaluatingMode = TerrainGenerator::EvaluationMethod::LINEAR_COMBINE;
@@ -50,9 +50,9 @@ public:
 	~TerrainGenerationSys();
 	
 	bool Initialize(unsigned int _height, unsigned int _width, float _heightScale);
+	bool Resize();
 	bool GenerateTerrain();
 	bool GenerateBiomes();
-	void UpdateVertex(std::unique_ptr<VertexBuffer>& vb, float* v);
 
 	void Draw(Renderer& renderer, Camera& camera, LightSource& light);
 	void ImGuiRightPanel();
