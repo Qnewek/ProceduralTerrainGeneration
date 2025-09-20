@@ -397,7 +397,7 @@ namespace utilities
 		}
 		return false;
 	}
-	bool DisplayModeImGui(float& modelScale, float& topoStep, float& topoBandWidth, float& heightScale, heightMapMode& m, bool& wireFrame, bool& map2d)
+	bool DisplayModeImGui(float& modelScale, float& topoStep, float& topoBandWidth, float& heightScale, heightMapMode& m, bool& wireFrame, bool& map2d, bool& infGen)
 	{
 		if (ImGui::CollapsingHeader("Display settings:", ImGuiTreeNodeFlags_DefaultOpen)) {
 			ImGui::Text("Model scale:");
@@ -408,7 +408,7 @@ namespace utilities
 
 			static const char* displayOptions[] = { "GREYSCALE", "TOPOGRAPHICAL", "MONOCOLOR", "BIOMES"};
 			int currentDisplayOption = static_cast<int>(m);
-			bool paint = false;
+			bool change = false;
 
 			if (ImGui::BeginCombo("Mode", displayOptions[currentDisplayOption]))
 			{
@@ -418,7 +418,7 @@ namespace utilities
 					if (ImGui::Selectable(displayOptions[n], is_selected)) {
 						currentDisplayOption = n;
 						m = static_cast<utilities::heightMapMode>(n);
-						paint = true;
+						change = true;
 					}
 					if (is_selected)
 						ImGui::SetItemDefaultFocus();
@@ -437,7 +437,14 @@ namespace utilities
 			}
 
 			ImGui::Checkbox("2D map", &map2d);
-			return paint;
+			if (ImGuiButtonWrapper("Partial generation", !infGen)) {
+				infGen = !infGen;
+			}
+			ImGui::SameLine();
+			if(ImGuiButtonWrapper("Infinite generation", infGen)) {
+				infGen = !infGen;
+			}
+			return change;
 		}
 	}
 	bool SavingImGui()

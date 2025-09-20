@@ -83,7 +83,7 @@ void TerrainGenerator::SetResolution()
 	GenerateNoises();
 }
 
-bool TerrainGenerator::GenerateTerrain()
+bool TerrainGenerator::GenerateTerrain(float originx, float originy)
 {
 	if (!heightMap) {
 		std::cout << "[ERROR] HeightMap not initialized, please set a size of the map!\n";
@@ -97,9 +97,9 @@ bool TerrainGenerator::GenerateTerrain()
 
 	for (int y = 0; y < height; y++) {
 		for (int x = 0; x < width; x++) {
-			continentalness = continentalnessNoise.GetVal(x, y);
-			mountainousness = mountainousnessNoise.GetVal(x, y);
-			weirdness = weirdnessNoise.GetVal(x, y);
+			continentalness = continentalnessNoise.PointNoise(x + originx, y + originy);
+			mountainousness = mountainousnessNoise.PointNoise(x + originx, y + originy);
+			weirdness = weirdnessNoise.PointNoise(x + originx, y + originy);
 			if (continentalness < -1.0f || mountainousness < -1.0f || weirdness < -1.0f) {
 				std::cout << "[ERROR] Couldnt get value for component noise!\n";
 				return false;
@@ -138,7 +138,7 @@ bool TerrainGenerator::GenerateTerrain()
 
 bool TerrainGenerator::GenerateNoises()
 {
-	if (!continentalnessNoise.GenerateFractalNoise() || !mountainousnessNoise.GenerateFractalNoise() || !weirdnessNoise.GenerateFractalNoise()) {
+	if (!continentalnessNoise.GenerateFractalNoise(0.0f,0.0f) || !mountainousnessNoise.GenerateFractalNoise(0.0f, 0.0f) || !weirdnessNoise.GenerateFractalNoise(0.0f, 0.0f)) {
 		std::cout << "[ERROR] Could not generate noises\n";
 		return false;
 	}

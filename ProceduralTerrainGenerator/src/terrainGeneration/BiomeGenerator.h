@@ -5,12 +5,6 @@
 
 #include "Biome.h"
 
-struct RangedLevel {
-	float min;
-	float max;
-	int level;
-};
-
 enum class BiomeParameter {
 	CONTINENTALNESS,
 	MOUNTAINOUSNESS,
@@ -27,11 +21,7 @@ private:
 	bool isGenerated = false;
 
 	std::unordered_map<int, biome::Biome> biomes;
-	std::vector<RangedLevel> continentalnessLevels;
-	std::vector<RangedLevel> humidityLevels;
-	std::vector<RangedLevel> temperatureLevels;
-	std::vector<RangedLevel> mountainousnessLevels;
-	std::vector<RangedLevel> weirdnessLevels;
+	std::vector<std::vector<float>> biomesLevels;
 
 	noise::SimplexNoiseClass temperatureNoise;
 	noise::SimplexNoiseClass humidityNoise;
@@ -48,8 +38,8 @@ public:
 	int DetermineLevel(BiomeParameter p, float value);
 	bool GenerateComponentNoises();
 
-	bool SetRanges(std::vector<std::vector<RangedLevel>>& ranges);
-	bool SetRange(BiomeParameter p, std::vector<RangedLevel> range);
+	bool SetRanges(std::vector<std::vector<float>>& ranges);
+	bool SetRange(BiomeParameter p, std::vector<float> range);
 	bool SetBiomes(std::vector<biome::Biome>& b);
 
 	biome::Biome& GetBiome(int id) { return biomes[id]; };
@@ -57,8 +47,6 @@ public:
 	int GetBiomeAt(int x, int y);
 	noise::NoiseConfigParameters& GetTemperatureNoiseConfig() { return temperatureNoise.GetConfigRef(); };
 	noise::NoiseConfigParameters& GetHumidityNoiseConfig() { return humidityNoise.GetConfigRef(); };
-	noise::SimplexNoiseClass& GetTemperatureNoise() { return temperatureNoise; };
-	noise::SimplexNoiseClass& GetHumidityNoise() { return humidityNoise; };
 	noise::SimplexNoiseClass& GetNoiseByParameter(BiomeParameter p);
-
+	std::vector<float>& GetLevelsByParameter(BiomeParameter p);
 };

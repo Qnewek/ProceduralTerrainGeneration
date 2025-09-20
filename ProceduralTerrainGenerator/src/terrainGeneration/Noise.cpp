@@ -59,9 +59,7 @@ namespace noise
 
 	//Function generating perlin noise based on the configuration parameters
 	//Return a 2D height map of the noise in range for one configuration
-	//
-	//@return float* - 2D height map of the noise
-	bool SimplexNoiseClass::GenerateFractalNoise()
+	bool SimplexNoiseClass::GenerateFractalNoise(float originx, float originy)
 	{
 		if (!heightMap) {
 			std::cout << "[ERROR] Noise object not initialized!" << std::endl;
@@ -72,7 +70,7 @@ namespace noise
 		{
 			for (int x = 0; x < width; x++)
 			{
-				heightMap[y * width + x] = PointNoise(x,y);
+				heightMap[y * width + x] = PointNoise(x + originx,y + originy);
 			}
 		}
 		std::cout << "[LOG] Noise successfully generated" << std::endl;

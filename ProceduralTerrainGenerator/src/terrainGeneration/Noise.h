@@ -67,7 +67,7 @@ namespace noise
 		bool Initialize(int _height, int _width);
 		bool Resize(int _height, int _width);
 
-		bool GenerateFractalNoise();
+		bool GenerateFractalNoise(float originx, float originy);
 		float PointNoise(float x, float y);
 		bool MakeMapRidged();
 		float MakeIsland(float e, int x, int y);

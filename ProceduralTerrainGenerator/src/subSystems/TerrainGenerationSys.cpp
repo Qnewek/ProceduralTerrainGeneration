@@ -1,11 +1,12 @@
 #include "TerrainGenerationSys.h"
 
 #include <iostream>
+#include <algorithm>
 
 #include "imgui/imgui.h"
 #include "ImPlot/implot.h"
 
-TerrainGenerationSys::TerrainGenerationSys() : terrainVertices(nullptr), mapResolution(20),
+TerrainGenerationSys::TerrainGenerationSys() : terrainVertices(nullptr), mapResolution(50),
 heightScale(1.0f), modelScale(1.0f), stride(5), width(0), height(0), terrainGen(), biomeGen() {
 
 }
@@ -29,33 +30,28 @@ bool TerrainGenerationSys::Initialize(unsigned int _height, unsigned int _width,
 	heightScale = _heightScale;
 	
 	terrainVertices = new float[mapResolution * mapResolution * stride * 4];
-	utilities::GenerateVerticesForResolution(terrainVertices, height, width, mapResolution, stride, 0, 3);
+	utilities::GenerateVerticesForResolution(terrainVertices, width*4, height*4, mapResolution, stride, 0, 3);
 	mainVertexBuffer = std::make_unique<VertexBuffer>(terrainVertices, (mapResolution * mapResolution) * stride * 4 * sizeof(float));
 	mainVAO->AddBuffer(*mainVertexBuffer, layout);
 	terrainGen.Initialize(width, height);
 	biomeGen.Initialize(width, height);
-	GenerateTerrain();
+	GenerateTerrain(0.0f, 0.0f);
 
 	std::cout << "[LOG] TerrainGenerationSys initialized\n";
 	return true;
 
 }
 bool TerrainGenerationSys::Resize() {
-	if (!terrainVertices || terrainGen.GetHeight() != height || terrainGen.GetWidth() != width) {
-		if (terrainVertices) {
-			delete[] terrainVertices;
-		}
+	if (terrainGen.GetHeight() != height || terrainGen.GetWidth() != width) {
 		terrainGen.Resize(width, height);
-		terrainVertices = new float[mapResolution * mapResolution * stride * 4];
-		utilities::GenerateVerticesForResolution(terrainVertices, height, width, mapResolution, stride, 0, 3);
 		return  true;
 	}
 	return false;
 }
-bool TerrainGenerationSys::GenerateTerrain() {
+bool TerrainGenerationSys::GenerateTerrain(float originx, float originy) {
 	Resize();
 
-	if (!terrainGen.GenerateTerrain()) {
+	if (!terrainGen.GenerateTerrain(originx, originy)) {
 		return false;
 	}
 
@@ -78,6 +74,13 @@ bool TerrainGenerationSys::GenerateBiomes()
 	return true;
 }
 void TerrainGenerationSys::Draw(Renderer& renderer, Camera& camera, LightSource& light) {
+	if (infiniteGeneration) {
+		if (oldCamPos.x != camera.GetPosition().x || oldCamPos.z != camera.GetPosition().z) {
+			GenerateTerrain(camera.GetPosition().x, camera.GetPosition().z);
+			oldCamPos = camera.GetPosition();
+		}
+		camera.CameraAnchor(true);
+	}
 	glm::mat4 model = glm::mat4(1.0f);
 	model = glm::scale(model, glm::vec3(modelScale, modelScale, modelScale));
 	light.SetLightUniforms(*mainShader);
@@ -98,7 +101,7 @@ void TerrainGenerationSys::Draw(Renderer& renderer, Camera& camera, LightSource&
 }
 void TerrainGenerationSys::ImGuiRightPanel() {
 	if(utilities::MapSizeImGui(height, width)) {
-		GenerateTerrain();
+		GenerateTerrain(0.0f, 0.0f);
 	}
 
 	if (ImGui::CollapsingHeader("Terrain settings", ImGuiTreeNodeFlags_DefaultOpen)) {
@@ -123,14 +126,14 @@ void TerrainGenerationSys::ImGuiRightPanel() {
 		ImGui::SliderInt("Sampling resolution", &terrainGen.GetResolitionRef(), 10, 1000);
 		if (ImGui::Button("Change resolution")) {
 			terrainGen.SetResolution();
-			GenerateTerrain();
+			GenerateTerrain(0.0f, 0.0f);
 		}
 		NoiseEditor();
 		if (!editNoise) {
 			SplineEditor();
 			BiomesEditor();
 			if (changeTerrain) {
-				GenerateTerrain();
+				GenerateTerrain(0.0f, 0.0f);
 				biomeGen.Regenerate();
 				changeTerrain = false;
 			}
@@ -141,7 +144,7 @@ void TerrainGenerationSys::ImGuiLeftPanel() {
 	// Trash variables for function call
 		float topoStep = 0.1f, topoBandWidth = 0.05f;
 	//
-	if (utilities::DisplayModeImGui(modelScale, topoStep, topoBandWidth, heightScale, displayMode, wireFrame, map2d)) {
+	if (utilities::DisplayModeImGui(modelScale, topoStep, topoBandWidth, heightScale, displayMode, wireFrame, map2d, infiniteGeneration)) {
 		if(!biomesGeneration && displayMode == utilities::heightMapMode::BIOMES) {
 			displayMode = utilities::heightMapMode::TOPOGRAPHICAL;
 		}
@@ -195,50 +198,17 @@ void TerrainGenerationSys::NoiseEditor()
 
 			biomesGeneration = false;
 			if (utilities::NoiseImGui(terrainGen.GetSelectedNoiseConfig(editedComponent))) {
-				terrainGen.GetSelectedNoise(editedComponent).GenerateFractalNoise();
+				terrainGen.GetSelectedNoise(editedComponent).GenerateFractalNoise(0.0f, 0.0f);
 				changeTerrain = true;
 				noiseTxt = std::make_unique<TextureClass>(terrainGen.GetSelectedNoise(editedComponent).GetMap(), terrainGen.GetSelectedNoise(editedComponent).GetWidth(), terrainGen.GetSelectedNoise(editedComponent).GetHeight());
 			}
 			if (ImGui::Button("Accept changes")) {
 				editNoise = false;
 				noisePressedButton = 0;
-				GenerateTerrain();
+				GenerateTerrain(0.0f, 0.0f);
 				mainShader->SetUniform1i("heightMap", 0);
 			}
 		}
-	}
-}
-
-void ShowHorizontalSegments_Draggable() {
-	static std::vector<std::string> labels = { "A", "B", "C", "D" };
-	static std::vector<float> boundaries = { -1.0f, -0.3f, 0.2f, 0.7f, 1.0f };
-
-	if (ImPlot::BeginPlot("Tmp segment Bar", ImVec2(-1, 80), ImPlotFlags_NoLegend)) {
-		ImPlot::SetupAxes("X", "", ImPlotAxisFlags_NoDecorations, ImPlotAxisFlags_NoDecorations);
-		ImPlot::SetupAxisLimits(ImAxis_X1, -1, 1, ImGuiCond_Always);
-		ImPlot::SetupAxisLimits(ImAxis_Y1, 0, 1, ImGuiCond_Always);
-
-		for (size_t i = 0; i < labels.size(); i++) {
-			double xs[4] = { boundaries[i], boundaries[i + 1], boundaries[i + 1], boundaries[i] };
-			double ys[4] = { 0, 0, 1, 1 };
-
-			ImPlot::PlotShaded(labels[i].c_str(), xs, ys, 4);
-			ImPlot::PlotLine(labels[i].c_str(), xs, ys, 4);
-
-			double mid = 0.5 * (boundaries[i] + boundaries[i + 1]);
-			ImPlot::Annotation(mid, 0.5, ImVec4(1, 1, 1, 1), ImVec2(0, 0), true, "%s", labels[i].c_str());
-		}
-
-		for (size_t i = 1; i < boundaries.size() - 1; i++) {
-			double tmp = boundaries[i];
-			if (ImPlot::DragLineX((int)i, &tmp, ImVec4(1, 0, 0, 1), 1.5f)) {
-				boundaries[i] = (float)tmp;
-			}
-
-			ImPlot::Annotation(boundaries[i], 1.02, ImVec4(0, 0.5f, 1, 1), ImVec2(0, 0), true, "%.2f", boundaries[i]);
-		}
-
-		ImPlot::EndPlot();
 	}
 }
 
@@ -255,43 +225,48 @@ void TerrainGenerationSys::BiomesEditor()
 		}
 		mainShader->SetUniform1i("displayMode", static_cast<int>(displayMode));
 	}
-	static int biomeNoisePressedButton = 0;
 	if (biomesGeneration) {
 		if (ImGui::CollapsingHeader("Biome generation settings", ImGuiTreeNodeFlags_DefaultOpen)) {
-			ImGui::Text("Select noise to edit:");
-			if (utilities::ImGuiButtonWrapper("Temperature", biomeNoisePressedButton == 1 ? true : false)) {
-				biomeNoisePressedButton = 1;
-				editedBiomeComponent = BiomeParameter::TEMPERATURE;
-				noiseTxt = std::make_unique<TextureClass>(biomeGen.GetNoiseByParameter(editedBiomeComponent).GetMap(), biomeGen.GetNoiseByParameter(editedBiomeComponent).GetWidth(), biomeGen.GetNoiseByParameter(editedBiomeComponent).GetHeight());
-			}
-			ImGui::SameLine();
-			if (utilities::ImGuiButtonWrapper("Humidity", biomeNoisePressedButton == 2 ? true : false)) {
-				biomeNoisePressedButton = 2;
-				editedBiomeComponent = BiomeParameter::HUMIDITY;
-				noiseTxt = std::make_unique<TextureClass>(biomeGen.GetNoiseByParameter(editedBiomeComponent).GetMap(), biomeGen.GetNoiseByParameter(editedBiomeComponent).GetWidth(), biomeGen.GetNoiseByParameter(editedBiomeComponent).GetHeight());
-
-			}
-			if (biomeNoisePressedButton == 0) {
-				ImGui::Text("[Currently no noise is beeing changed]");
-				return;
-			}
-
-			mainShader->SetUniform1i("heightMap", 1);
-
-			if (utilities::NoiseImGui(biomeGen.GetNoiseByParameter(editedBiomeComponent).GetConfigRef())) {
-				biomeGen.GetNoiseByParameter(editedBiomeComponent).GenerateFractalNoise();
-				biomeGen.Regenerate();
-				noiseTxt = std::make_unique<TextureClass>(biomeGen.GetNoiseByParameter(editedBiomeComponent).GetMap(), biomeGen.GetNoiseByParameter(editedBiomeComponent).GetWidth(), biomeGen.GetNoiseByParameter(editedBiomeComponent).GetHeight());
-			}
-
-			if (ImGui::Button("Accept changes")) {
-				biomeNoisePressedButton = 0;
-				GenerateBiomes();
-				mainShader->SetUniform1i("heightMap", 0);
-			}
+			BiomeNoisesEditor();
+			NoisesLevelsForBiomes();
 		}
 	}
-	ShowHorizontalSegments_Draggable();
+}
+
+void TerrainGenerationSys::BiomeNoisesEditor()
+{
+	static int biomeNoisePressedButton = 0;
+	ImGui::Text("Select noise to edit:");
+	if (utilities::ImGuiButtonWrapper("Temperature", biomeNoisePressedButton == 1 ? true : false)) {
+		biomeNoisePressedButton = 1;
+		editedBiomeComponent = BiomeParameter::TEMPERATURE;
+		noiseTxt = std::make_unique<TextureClass>(biomeGen.GetNoiseByParameter(editedBiomeComponent).GetMap(), biomeGen.GetNoiseByParameter(editedBiomeComponent).GetWidth(), biomeGen.GetNoiseByParameter(editedBiomeComponent).GetHeight());
+	}
+	ImGui::SameLine();
+	if (utilities::ImGuiButtonWrapper("Humidity", biomeNoisePressedButton == 2 ? true : false)) {
+		biomeNoisePressedButton = 2;
+		editedBiomeComponent = BiomeParameter::HUMIDITY;
+		noiseTxt = std::make_unique<TextureClass>(biomeGen.GetNoiseByParameter(editedBiomeComponent).GetMap(), biomeGen.GetNoiseByParameter(editedBiomeComponent).GetWidth(), biomeGen.GetNoiseByParameter(editedBiomeComponent).GetHeight());
+
+	}
+	if (biomeNoisePressedButton == 0) {
+		ImGui::Text("[Currently no noise is beeing changed]");
+		return;
+	}
+
+	mainShader->SetUniform1i("heightMap", 1);
+
+	if (utilities::NoiseImGui(biomeGen.GetNoiseByParameter(editedBiomeComponent).GetConfigRef())) {
+		biomeGen.GetNoiseByParameter(editedBiomeComponent).GenerateFractalNoise(0.0f, 0.0f);
+		biomeGen.Regenerate();
+		noiseTxt = std::make_unique<TextureClass>(biomeGen.GetNoiseByParameter(editedBiomeComponent).GetMap(), biomeGen.GetNoiseByParameter(editedBiomeComponent).GetWidth(), biomeGen.GetNoiseByParameter(editedBiomeComponent).GetHeight());
+	}
+
+	if (ImGui::Button("Accept changes")) {
+		biomeNoisePressedButton = 0;
+		GenerateBiomes();
+		mainShader->SetUniform1i("heightMap", 0);
+	}
 }
 
 void TerrainGenerationSys::SplineEditor()
@@ -395,5 +370,53 @@ void TerrainGenerationSys::SplineEditor()
 				changeTerrain = true;
 			}
 		}
+	}
+}
+void TerrainGenerationSys::NoisesLevelsForBiomes() {
+	if (ImGui::CollapsingHeader("Spline editor", ImGuiTreeNodeFlags_DefaultOpen)) {
+		SegmentDrag(biomeGen.GetLevelsByParameter(BiomeParameter::TEMPERATURE), "Temperature levels");
+		SegmentDrag(biomeGen.GetLevelsByParameter(BiomeParameter::HUMIDITY), "Humidity levels");
+		SegmentDrag(biomeGen.GetLevelsByParameter(BiomeParameter::CONTINENTALNESS), "Continentalness levels");
+		SegmentDrag(biomeGen.GetLevelsByParameter(BiomeParameter::MOUNTAINOUSNESS), "Mountainousness levels");
+		SegmentDrag(biomeGen.GetLevelsByParameter(BiomeParameter::WEIRDNESS), "Weirdness levels");
+	}
+}
+
+void TerrainGenerationSys::SegmentDrag(std::vector<float>& boundaries, std::string s)
+{
+	if (ImPlot::BeginPlot(s.c_str(), ImVec2(-1, 80), ImPlotFlags_NoLegend)) {
+		ImPlot::SetupAxes("Value", "", ImPlotAxisFlags_NoDecorations, ImPlotAxisFlags_NoDecorations);
+		ImPlot::SetupAxisLimits(ImAxis_X1, -1, 1, ImGuiCond_Always);
+		ImPlot::SetupAxisLimits(ImAxis_Y1, 0, 1, ImGuiCond_Always);
+
+		for (size_t i = 0; i < boundaries.size()-1; i++) {
+			double xs[4] = { boundaries[i], boundaries[i + 1], boundaries[i + 1], boundaries[i] };
+			double ys[4] = { 0, 0, 1, 1 };
+
+			ImPlot::PlotShaded(std::to_string(i).c_str(), xs, ys, 4);
+			ImPlot::PlotLine(std::to_string(i).c_str(), xs, ys, 4);
+
+			double mid = 0.5 * (boundaries[i] + boundaries[i + 1]);
+			ImPlot::Annotation(mid, 0.5, ImVec4(1, 1, 1, 1), ImVec2(0, 0), true, "%c", '0' + i);
+		}
+
+		for (size_t i = 1; i < boundaries.size() - 1; i++) {
+			double tmp = boundaries[i];
+			if (ImPlot::DragLineX((int)i, &tmp, ImVec4(1, 0, 0, 1), 1.5f)) {
+				boundaries[i] = std::clamp((float)tmp, -1.0f, 1.0f);			
+			}
+			if (boundaries[i] > boundaries[i + 1]) {
+				boundaries[i + 1] = boundaries[i];
+			}
+			int j = i - 1;
+			while(j > 0 && boundaries[j] > boundaries[i]) {
+				boundaries[j] = boundaries[i];
+				j--;
+			}
+
+			ImPlot::Annotation(boundaries[i], 1.02, ImVec4(0, 0.5f, 1, 1), ImVec2(0, 0), true, "%.2f", boundaries[i]);
+		}
+
+		ImPlot::EndPlot();
 	}
 }

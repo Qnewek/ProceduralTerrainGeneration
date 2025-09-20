@@ -8,7 +8,7 @@
 
 #include <iostream>
 
-LightSource::LightSource(glm::vec3 lightPos, float _size) : lightPos(lightPos), size(_size), ambient(0.2f, 0.2f, 0.2f), diffuse(0.5f, 0.5f, 0.5f), specular(1.0f, 1.0f, 1.0f)
+LightSource::LightSource(glm::vec3 lightPos, float _size) : lightPos(lightPos), size(_size), ambient(0.7f, 0.7f, 0.7f), diffuse(0.9f, 0.9f, 0.9f), specular(1.0f, 1.0f, 1.0f)
 {
 }
 

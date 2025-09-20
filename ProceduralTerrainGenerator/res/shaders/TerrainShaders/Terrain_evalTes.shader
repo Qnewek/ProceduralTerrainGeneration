@@ -59,14 +59,6 @@ void main()
     vec4 p1 = (p11 - p10) * u + p10;
     vec4 p = (p1 - p0) * v + p0 + normal * Height;
 
-    if (flatten){
-        FragPos = vec3(p.z/size, p.x/size, 0.0f);
-        gl_Position = vec4(p.z/size, p.x/size, 0.0f, 1.0f);
-    }
-    else{
-        FragPos = (projection * view * model * p).xyz;
-        gl_Position = projection * view * model * p;
-    }
 
     if(displayMode == 0){
         aColor = vec3(Height/heightScale);
@@ -85,5 +77,13 @@ void main()
     }
     else if(displayMode == 3){
         aColor = texture(biomeMap, texCoord).rgb;
+    }
+    if (flatten){
+        FragPos = vec3(p.z/size, p.x/size, 0.0f);
+        gl_Position = vec4(p.z/size, p.x/size, 0.0f, 1.0f);
+    }
+    else{
+        FragPos = (projection * view * model * p).xyz;
+        gl_Position = projection * view * model * p;
     }
 }
