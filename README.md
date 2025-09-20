@@ -14,7 +14,7 @@ A tool created in order to play with **procedural terrain generation** method by
   
 
 - **Erosion Simulation**
-    Apply natural erosion algorithm on previously generated or loaded map, in order to create realistic terrain shapes and features in real world created by hydraulic erosion (water flowing downhill). Algorithm is based on [this essay](http://www.firespark.de/resources/downloads/implementation%20of%20a%20methode%20for%20hydraulic%20erosion.pdf).
+    Apply natural erosion algorithm on previously generated or loaded map, in order to create realistic terrain shapes and features in real world created by hydraulic erosion (water flowing downhill). Algorithm is based on [this work](http://www.firespark.de/resources/downloads/implementation%20of%20a%20methode%20for%20hydraulic%20erosion.pdf).
 
 - **Terrain Gneration with Noise-based parameters**
     Generating terrain using multiple generated noises as parameters:
