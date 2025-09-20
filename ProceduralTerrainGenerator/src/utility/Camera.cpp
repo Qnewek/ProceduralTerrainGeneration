@@ -133,7 +133,12 @@ void Camera::ImGuiOutPut()
 
 glm::mat4* Camera::GetViewMatrix() {
 	view = glm::mat4(1.0f);
-	view = glm::lookAt(position, position + front, up);
+	if (anchor) {
+		view = glm::lookAt(glm::vec3(0.0f, position.y, 0.0f), glm::vec3(0.0f, position.y, 0.0f) + front, up);
+	}
+	else {
+		view = glm::lookAt(position, position + front, up);
+	}
 	return &view;
 }
 glm::mat4* Camera::GetProjectionMatrix() {

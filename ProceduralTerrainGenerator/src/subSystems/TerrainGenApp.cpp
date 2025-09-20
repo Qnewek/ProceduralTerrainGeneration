@@ -13,7 +13,7 @@
 
 TerrainGenApp::TerrainGenApp() : window(nullptr), windowWidth(0), windowHeight(0), deltaTime(0.0f), lastFrame(0.0f),
 rightPanelWidth(400.0f),topPanelHeight(30.0f), bottomPanelHeight(200.0f), leftPanelWidth(400.0f),
-width(500), height(500), heightScale(256.0f),
+width(250), height(250), heightScale(256.0f),
 camera(1920, 1080, glm::vec3(0.0f, heightScale / 2.0f, 0.0f), 100.0f, 1000.0f), renderer(),
 noiseGenSys(), currentMode(mode::NOISE_HEIGHTMAP), light(glm::vec3(0.0f, 0.0f, 0.0f), 20.0f)
 {
@@ -83,7 +83,7 @@ int TerrainGenApp::Initialize()
 	if(!terrainGenSys.Initialize(height, width, heightScale))
 		return 0;
     light.Initialize();
-    light.SetPosition(glm::vec3(width, heightScale, height));
+    light.SetPosition(glm::vec3(0.0f, 2000.0f, 0.0f));
    
     std::cout << "[LOG] Hub initialized" << std::endl;
     return 0;
@@ -97,7 +97,8 @@ void TerrainGenApp::Start()
         deltaTime = currentFrame - lastFrame;
         lastFrame = currentFrame;
 
-		camera.SteerCamera(window, deltaTime, true);
+		camera.CameraAnchor(false);
+        camera.SteerCamera(window, deltaTime, true);
 		Draw();
         ImGuiRender();
 

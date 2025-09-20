@@ -7,7 +7,7 @@
 #include "glm/gtc/matrix_transform.hpp"
 
 NoiseBasedGenerationSys::NoiseBasedGenerationSys() : noise(), erosion(1, 1), vertices(nullptr),
-width(0), height(0), heightScale(1.0f), modelScale(1.0f), topoBandWidth(0.2f), topoStep(10.0f), stride(5), mapResolution(100)
+width(0), height(0), heightScale(1.0f), modelScale(1.0f), topoBandWidth(0.2f), topoStep(10.0f), stride(5), mapResolution(50)
 {
 }
 
@@ -33,11 +33,11 @@ bool NoiseBasedGenerationSys::Initialize(int _height, int _width, float _heightS
 	this->heightScale = _heightScale;
 	noise.Initialize(height, width);
 	vertices = new float[mapResolution * mapResolution * stride * 4];
-	utilities::GenerateVerticesForResolution(vertices, height, width, mapResolution, stride, 0, 3);
+	utilities::GenerateVerticesForResolution(vertices, height*4, width*4, mapResolution, stride, 0, 3);
 	mainVertexBuffer = std::make_unique<VertexBuffer>(vertices, (mapResolution * mapResolution) * stride * 4 * sizeof(float));
 	mainVAO->AddBuffer(*mainVertexBuffer, layout);
 
-	if(!GenerateNoise()) {
+	if(!GenerateNoise(0.0f, 0.0f)) {
 		std::cout << "[ERROR] Invalid height or width value" << std::endl;
 		return false;
 	}
@@ -48,25 +48,18 @@ bool NoiseBasedGenerationSys::Initialize(int _height, int _width, float _heightS
 
 bool NoiseBasedGenerationSys::Resize()
 {
-	if (!vertices || height != noise.GetHeight() || width != noise.GetWidth()) {
+	if (height != noise.GetHeight() || width != noise.GetWidth()) {
 		erosionDraw = false;
 		noise.Resize(width, height);
-
-		if (vertices) {
-			delete[] vertices;
-		}
-
-		vertices = new float[mapResolution * mapResolution * stride * 4];
-		utilities::GenerateVerticesForResolution(vertices, height, width, mapResolution, stride, 0, 3);
 		return  true;
 	}
 	return false;
 }
 
-bool NoiseBasedGenerationSys::GenerateNoise()
+bool NoiseBasedGenerationSys::GenerateNoise(float originx, float originy)
 {
 	Resize();
-	if (!noise.GenerateFractalNoise()) {
+	if (!noise.GenerateFractalNoise(originx, originy)) {
 		return false;
 	}
 
@@ -101,6 +94,13 @@ bool NoiseBasedGenerationSys::SimulateErosion()
 
 void NoiseBasedGenerationSys::Draw(Renderer& renderer, Camera& camera, LightSource& light)
 {
+	if (infiniteGeneration) {
+		if(oldCamPos.x != camera.GetPosition().x || oldCamPos.z != camera.GetPosition().z) {
+			GenerateNoise(camera.GetPosition().x, camera.GetPosition().z);
+			oldCamPos = camera.GetPosition();
+		}
+		camera.CameraAnchor(true);
+	}
 	glm::mat4 model = glm::mat4(1.0f);
 	model = glm::scale(model, glm::vec3(modelScale, modelScale, modelScale));
 	light.SetLightUniforms(*mainShader);
@@ -128,20 +128,20 @@ void NoiseBasedGenerationSys::Draw(Renderer& renderer, Camera& camera, LightSour
 void NoiseBasedGenerationSys::ImGuiRightPanel()
 {
 	if(utilities::MapSizeImGui(width, height)) {
-		GenerateNoise();
+		GenerateNoise(0.0f, 0.0f);
 	}
 	
 	bool regen = utilities::NoiseImGui(noise.GetConfigRef());
 	ImGui::Checkbox("Instant Update", &instantUpdate);
 	if (!instantUpdate) {
 		if (ImGui::Button("Generate new noise")) {
-			GenerateNoise();
+			GenerateNoise(0.0f, 0.0f);
 			erosionDraw = false;
 			erosion.ChangeMap();
 		}
 	}
 	else if(regen){
-		GenerateNoise();
+		GenerateNoise(0.0f, 0.0f);
 		erosionDraw = false;
 		erosion.ChangeMap();
 	}
@@ -151,7 +151,7 @@ void NoiseBasedGenerationSys::ImGuiRightPanel()
 
 void NoiseBasedGenerationSys::ImGuiLeftPanel()
 {
-	if (utilities::DisplayModeImGui(modelScale, topoStep, topoBandWidth, heightScale, displayMode, wireFrame, map2d)) {
+	if (utilities::DisplayModeImGui(modelScale, topoStep, topoBandWidth, heightScale, displayMode, wireFrame, map2d, infiniteGeneration)) {
 		if(displayMode == utilities::heightMapMode::BIOMES) {
 			displayMode = utilities::heightMapMode::GREYSCALE;
 		}

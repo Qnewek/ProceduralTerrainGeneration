@@ -41,7 +41,7 @@ public:
 
 	bool Initialize(int _width, int _height);
 	bool Resize(int _width, int _height);
-	bool GenerateTerrain();
+	bool GenerateTerrain(float originx, float originy);
 	bool GenerateNoises();
 
 	void SetResolution();

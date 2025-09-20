@@ -19,7 +19,8 @@ private:
 	int width, height, mapResolution;
 	bool wireFrame = false, changeTerrain = false;
 	bool biomesGeneration = false, map2d = false;
-	bool editNoise = false, editSpline = false;
+	bool editNoise = false, editSpline = false, infiniteGeneration = false;
+	glm::vec3 oldCamPos = glm::vec3(0.0f);
 
 	//OpenGl objects
 	VertexBufferLayout layout;
@@ -51,7 +52,7 @@ public:
 	
 	bool Initialize(unsigned int _height, unsigned int _width, float _heightScale);
 	bool Resize();
-	bool GenerateTerrain();
+	bool GenerateTerrain(float originx, float originy);
 	bool GenerateBiomes();
 
 	void Draw(Renderer& renderer, Camera& camera, LightSource& light);
@@ -60,6 +61,9 @@ public:
 	void ImGuiOutput(glm::vec3 pos);
 	void NoiseEditor();
 	void BiomesEditor();
+	void BiomeNoisesEditor();
 	void SplineEditor();
+	void NoisesLevelsForBiomes();
+	void SegmentDrag(std::vector<float>& boundaries, std::string s);
 };
 

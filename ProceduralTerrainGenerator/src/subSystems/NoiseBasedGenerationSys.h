@@ -15,8 +15,9 @@ class NoiseBasedGenerationSys
 		float heightScale, modelScale, topoStep, topoBandWidth;
 		unsigned int stride, mapResolution;
 		int width, height;
-		bool wireFrame = false, erosionDraw = false, instantUpdate = true, map2d = false;
+		bool wireFrame = false, erosionDraw = false, instantUpdate = true, map2d = false, infiniteGeneration = false;
 		utilities::heightMapMode displayMode = utilities::heightMapMode::GREYSCALE;
+		glm::vec3 oldCamPos = glm::vec3(0.0f, 0.0f, 0.0f);
 		
 		//OpenGl objects
 		VertexBufferLayout layout;
@@ -35,7 +36,7 @@ class NoiseBasedGenerationSys
 		
 		bool Initialize(int _height, int _width, float _heightScale);
 		bool Resize();
-		bool GenerateNoise();
+		bool GenerateNoise(float originx, float originy);
 		bool SimulateErosion();
 
 		void Draw(Renderer& renderer, Camera& camera, LightSource& light);

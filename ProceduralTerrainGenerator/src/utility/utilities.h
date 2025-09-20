@@ -36,7 +36,7 @@ namespace utilities
     //ImGui interface functions
     bool NoiseImGui(noise::NoiseConfigParameters& noiseConfig);
 	bool MapSizeImGui(int& height, int& width);
-    bool DisplayModeImGui(float& modelSclae, float& topoStep, float& topoBandWidth, float& heightScale, heightMapMode& m, bool& wireFrame, bool& map2d);
+    bool DisplayModeImGui(float& modelSclae, float& topoStep, float& topoBandWidth, float& heightScale, heightMapMode& m, bool& wireFrame, bool& map2d, bool& infGen);
 	bool SavingImGui();
 	bool ImGuiButtonWrapper(const char* label, bool disabled);
 

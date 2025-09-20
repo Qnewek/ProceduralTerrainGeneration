@@ -19,6 +19,17 @@ enum class CameraMovement
 
 class Camera
 {
+private:
+	unsigned int screenWidth, screenHeight;
+	float yaw, pitch, xpos, ypos;
+	float initSpeed, speed, sensitivity, fov;
+	bool mouseControl, anchor = false;
+
+	glm::vec3 position, front, up, right;
+	glm::vec2 viewDist;
+	glm::mat4 view, projection;
+
+	void UpdateCameraVectors(CameraMovement movement);
 public:
 	Camera(const unsigned int ScreenWidth, const unsigned int ScreenHeight, glm::vec3 _position, float cameraSpeed, float renderDistance);
 	~Camera();
@@ -52,16 +63,5 @@ public:
 	float& GetFovRef()  { return fov; }
 	float& GetSensitivityRef() { return sensitivity; }
 	glm::vec2& GetViewDist() { return viewDist; }
-
-private:
-	unsigned int screenWidth, screenHeight;
-	float yaw, pitch, xpos, ypos;
-	float initSpeed, speed, sensitivity, fov;
-	bool mouseControl;
-
-	glm::vec3 position, front, up, right;
-	glm::vec2 viewDist;
-	glm::mat4 view, projection;
-
-	void UpdateCameraVectors(CameraMovement movement);
+	void CameraAnchor(bool b) { anchor = b; }
 };
