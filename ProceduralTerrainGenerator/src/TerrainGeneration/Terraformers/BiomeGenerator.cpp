@@ -1,36 +1,16 @@
 #include "BiomeGenerator.h"
 #include <iostream>
 
-BiomeGenerator::BiomeGenerator() : temperatureNoise(), humidityNoise(), biomeMap(nullptr), height(0), width(0), biomesLevels(5)
+BiomeGenerator::BiomeGenerator() : temperatureNoise(), humidityNoise(), biomesLevels(5)
 {
 }
 
 BiomeGenerator::~BiomeGenerator()
 {
-	if (biomeMap) {
-		delete[] biomeMap;
-	}
 }
 
 bool BiomeGenerator::Initialize(int _height, int _width)
 {
-	if (biomeMap) {
-		std::cout << "[ERROR] BiomeMap already initialized" << std::endl;
-		return false;
-	}
-
-	if (!temperatureNoise.Initialize(_height, _width)) {
-		std::cout << "[ERROR] Temperature noise couldnt be initialized\n";
-		return false;
-	}
-	if (!humidityNoise.Initialize(_height, _width)) {
-		std::cout << "[ERROR] Humidity noise couldnt be initialized\n";
-		return false;
-	}
-
-	if(!Resize(_height, _width)) {
-		return false;
-	}
 
 	humidityNoise.GetConfigRef().octaves = 4;
 	temperatureNoise.GetConfigRef().seed = 123;
@@ -68,70 +48,20 @@ bool BiomeGenerator::Initialize(int _height, int _width)
 	if (!SetRanges(r)) {
 		return false;
 	}
-	//Calculating component noises with basic configuration
-	if (GenerateComponentNoises()) {
-		return false;
-	}
 
 	return true;
 }
 
-bool BiomeGenerator::Resize(int _height, int _width)
-{
-	if (_height <= 0 || _width <= 0) {
-		std::cout << "[ERROR] Biome map couldnt be resized, width and height must be greater than 0\n";
-		return false;
-	}
-	if (_width == this->width && _height == this->height) {
-		std::cout << "[ERROR] Biome map is already initialized with the same size\n";
-		return false;
-	}
-
-	width = _width;
-	height = _height;
-	if (biomeMap) {
-		delete[] biomeMap;
-	}
-	biomeMap = new int[width * height];
-	temperatureNoise.Resize(height, width);
-	humidityNoise.Resize(height, width);
-
-	std::cout << "[LOG] BiomeGenerator has been succesfully initialized with size: " << height << "x" << width << "\n";
-	isGenerated = false;
-	return true;
-}
-
-
-
-bool BiomeGenerator::Biomify(noise::SimplexNoiseClass& continenatlness, noise::SimplexNoiseClass& mountainousness, noise::SimplexNoiseClass& weirdness)
-{
-	if(!biomeMap) {
-		std::cout << "[ERROR] BiomeMap not initialized\n";
-		return false;
-	}
-	if( continenatlness.GetHeight() != height || continenatlness.GetWidth() != width ||
-		mountainousness.GetHeight() != height || mountainousness.GetWidth() != width ||
-		weirdness.GetHeight() != height || weirdness.GetWidth() != width) {
-		std::cout << "[ERROR] One of the component noises has invalid size\n";
-		return false;
-	}
-
+int BiomeGenerator::GetVal(float x, float y, float continentalness, float mountainousness, float weirdness)
+{	
 	int T, H, C, M, W;
+	H = DetermineLevel(BiomeParameter::HUMIDITY, humidityNoise.GetVal(x, y));
+	T = DetermineLevel(BiomeParameter::TEMPERATURE, temperatureNoise.GetVal(x, y));
+	C = DetermineLevel(BiomeParameter::CONTINENTALNESS, continentalness);
+	M = DetermineLevel(BiomeParameter::MOUNTAINOUSNESS, mountainousness);
+	W = DetermineLevel(BiomeParameter::WEIRDNESS, weirdness); 
 
-	for (int y = 0; y < height; y++) {
-		for (int x = 0; x < width; x++) {
-			H = DetermineLevel(BiomeParameter::HUMIDITY, humidityNoise.GetVal(x, y));
-			T = DetermineLevel(BiomeParameter::TEMPERATURE, temperatureNoise.GetVal(x, y));
-			C = DetermineLevel(BiomeParameter::CONTINENTALNESS, continenatlness.GetVal(x, y));
-			M = DetermineLevel(BiomeParameter::MOUNTAINOUSNESS, mountainousness.GetVal(x, y));
-			W = DetermineLevel(BiomeParameter::WEIRDNESS, weirdness.GetVal(x, y)); 
-
-			biomeMap[y * width + x] = DetermineBiome(H, T, C, M, W);
-		}
-	}
-	std::cout << "[LOG] BiomeMap succesfully evaluated" << std::endl;
-	isGenerated = true;
-	return true;
+	return DetermineBiome(H, T, C, M, W);;
 }
 
 
@@ -188,19 +118,6 @@ int BiomeGenerator::DetermineLevel(BiomeParameter p, float value)
 	std::cout << "[ERROR] Level not found for value: " << value << std::endl;
 	return -2;
 }
-
-bool BiomeGenerator::GenerateComponentNoises()
-{
-	if (!temperatureNoise.GenerateFractalNoise(0.0f, 0.0f)) {
-		return false;
-	}
-	if (!humidityNoise.GenerateFractalNoise(0.0f, 0.0f)) {
-		return false;
-	}
-
-	return true;
-}
-
 
 bool BiomeGenerator::SetRanges(std::vector<std::vector<float>>& ranges)
 {
@@ -262,20 +179,6 @@ bool BiomeGenerator::SetBiomes(std::vector<biome::Biome>& b)
 	}
 
 	return true;
-}
-
-int BiomeGenerator::GetBiomeAt(int x, int y)
-{
-	if (!biomeMap || width == 0 || height == 0) {
-		std::cout << "[ERROR] BiomeMap has not been initialized!\n";
-		return -1;
-	}
-	if( x < 0 || x >= width || y < 0 || y >= height) {
-		std::cout << "[ERROR] Coordinates out of bounds!" << std::endl;
-		return -1;
-	}
-	
-	return biomeMap[y * width + x];
 }
 
 noise::SimplexNoiseClass& BiomeGenerator::GetNoiseByParameter(BiomeParameter p)

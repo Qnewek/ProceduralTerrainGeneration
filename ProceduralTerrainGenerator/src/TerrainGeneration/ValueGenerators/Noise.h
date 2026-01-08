@@ -5,6 +5,8 @@
 #include <cstdint>
 #include <vector>
 
+#include "HeightGenerator.h"
+
 namespace noise
 {
 	enum class Options {
@@ -58,24 +60,24 @@ namespace noise
 			symmetrical(symmetrical){}
 	};
 
-	class SimplexNoiseClass
+	class SimplexNoiseClass : public HeightGenerator
 	{
 	public:
 		SimplexNoiseClass();
 		~SimplexNoiseClass();
 
-		bool Initialize(int _height, int _width);
+		bool Initialize() override { return true; }
+		bool InitializeMap(int _height, int _width);
 		bool Resize(int _height, int _width);
 
-		bool GenerateFractalNoise(float originx, float originy);
-		float PointNoise(float x, float y);
-		bool MakeMapRidged();
+		bool GenerateFractalNoiseMap(float originx, float originy);
+		float GetVal(float x, float y) override;
 		float MakeIsland(float e, int x, int y);
+		float Ridge(float h, float offset, float gain);
 
 		void SetConfig(NoiseConfigParameters config) { this->config = config; }
 
 		float* GetMap() const { return heightMap; }
-		float GetVal(int x, int y);
 		unsigned int GetWidth()  const { return width; }
 		unsigned int GetHeight() const { return height; }
 		NoiseConfigParameters& GetConfigRef() { return config; }
@@ -84,7 +86,5 @@ namespace noise
 		NoiseConfigParameters config;
 		float* heightMap;
 		unsigned int width, height;
-
-		float Ridge(float h, float offset, float gain);
 	};
 }

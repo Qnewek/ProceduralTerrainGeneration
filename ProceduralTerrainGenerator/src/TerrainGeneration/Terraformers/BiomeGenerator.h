@@ -3,7 +3,7 @@
 #include <unordered_map>
 #include <vector>
 
-#include "Biome.h"
+#include "TerrainObjects/Biome.h"
 
 enum class BiomeParameter {
 	CONTINENTALNESS,
@@ -16,10 +16,6 @@ enum class BiomeParameter {
 class BiomeGenerator
 {
 private:
-	int* biomeMap;
-	int height, width;
-	bool isGenerated = false;
-
 	std::unordered_map<int, biome::Biome> biomes;
 	std::vector<std::vector<float>> biomesLevels;
 
@@ -30,10 +26,7 @@ public:
 	~BiomeGenerator();
 
 	bool Initialize(int _height, int _width);
-	bool Resize(int _height, int _width);
-	bool IsGenerated() const { return isGenerated; };
-	void Regenerate() { isGenerated = false; };
-	bool Biomify(noise::SimplexNoiseClass& continenatlness, noise::SimplexNoiseClass& mountainousness, noise::SimplexNoiseClass& weirdness);
+	int GetVal(float x, float y, float continentalness, float mountainousness, float weirdness);
 	int DetermineBiome(const int& temperature, const int& humidity, const int& continentalness, const int& mountainousness, const int& weirdness);
 	int DetermineLevel(BiomeParameter p, float value);
 	bool GenerateComponentNoises();

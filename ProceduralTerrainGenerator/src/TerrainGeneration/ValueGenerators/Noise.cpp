@@ -25,7 +25,7 @@ namespace noise
 	//Initialize the size of the map that the noise will be generated into
 	//@param _width - width of the map
 	//@param _height - height of the
-	bool SimplexNoiseClass::Initialize(int _height, int _width) {
+	bool SimplexNoiseClass::InitializeMap(int _height, int _width) {
 		if (heightMap) {
 			std::cout << "[ERROR] Noise map already initialized\n";
 			return false;
@@ -59,7 +59,7 @@ namespace noise
 
 	//Function generating perlin noise based on the configuration parameters
 	//Return a 2D height map of the noise in range for one configuration
-	bool SimplexNoiseClass::GenerateFractalNoise(float originx, float originy)
+	bool SimplexNoiseClass::GenerateFractalNoiseMap(float originx, float originy)
 	{
 		if (!heightMap) {
 			std::cout << "[ERROR] Noise object not initialized!" << std::endl;
@@ -70,15 +70,14 @@ namespace noise
 		{
 			for (int x = 0; x < width; x++)
 			{
-				heightMap[y * width + x] = PointNoise(x + originx,y + originy);
+				heightMap[y * width + x] = GetVal(x + originx,y + originy);
 			}
 		}
 		std::cout << "[LOG] Noise successfully generated" << std::endl;
 		return true;
 	}
 
-	float SimplexNoiseClass::PointNoise(float x, float y)
-	{
+	float SimplexNoiseClass::GetVal(float x, float y){
 		SimplexNoise::reseed(this->config.seed);
 		float amplitude = 1.0f;
 		float frequency = 1.0f;
@@ -161,22 +160,6 @@ namespace noise
 		return offset - abs((gain * abs(h)) - gain + 1.0f);
 	}
 
-	//Function generating Ridged noise based on the configuration parameters
-	//
-	bool SimplexNoiseClass::MakeMapRidged()
-	{
-		if (!this->heightMap)
-			return false;
-
-		for (int y = 0; y < height; y++)
-		{
-			for (int x = 0; x < width; x++)
-			{
-				heightMap[y * width + x] = Ridge(heightMap[y * width + x], config.RidgeOffset, config.RidgeGain);
-			}
-		}
-	}
-
 	//Function generating island noise based on the configuration parameters
 	//
 	//@param e - elevation value
@@ -206,17 +189,5 @@ namespace noise
 			distance = 1 - (cos(nx * (std::_Pi_val / 2)) * cos(ny * (std::_Pi_val / 2)));
 		}
 		return std::lerp(e, 1 - distance, config.mixPower);
-	}
-	float SimplexNoiseClass::GetVal(int x, int y)
-	{
-		if(!heightMap || height <= 0 || width <= 0) {
-			std::cout << "[ERROR] Noise object not initialized!" << std::endl;
-			return -2.0f;
-		}
-		if(x < 0 || x >= width || y < 0 || y >= height) {
-			std::cout << "[ERROR] Coordinates out of bounds!" << std::endl;
-			return -2.0f;
-		}
-		return heightMap[y * width + x];
 	}
 }

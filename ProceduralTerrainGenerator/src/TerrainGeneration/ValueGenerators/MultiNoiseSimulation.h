@@ -1,5 +1,3 @@
-#pragma once
-
 #include <vector>
 #include <utility>
 #include <iostream>
@@ -7,7 +5,8 @@
 #include "Noise.h"
 #include "Splines/spline.h"
 
-class TerrainGenerator
+
+class MultiNoiseSimulation : public HeightGenerator
 {
 public:
 	enum class WorldGenParameter {
@@ -15,16 +14,14 @@ public:
 		MOUNTAINOUSNESS,
 		WEIRDNESS
 	};
-	//TODO: Different mothodes for valvulating height
 	enum class EvaluationMethod {
 		LINEAR_COMBINE,
 		SPLINE_COMBINE,
 		C
 	};
 private:
-	float* heightMap;
 	int resolution;
-	int seed, width, height;
+	int seed;
 
 	noise::SimplexNoiseClass continentalnessNoise;
 	noise::SimplexNoiseClass mountainousnessNoise;
@@ -36,13 +33,11 @@ private:
 
 	EvaluationMethod evalMethod = EvaluationMethod::LINEAR_COMBINE;
 public:
-	TerrainGenerator();
-	~TerrainGenerator();
+	MultiNoiseSimulation();
+	~MultiNoiseSimulation() = default;
 
-	bool Initialize(int _width, int _height);
-	bool Resize(int _width, int _height);
-	bool GenerateTerrain(float originx, float originy);
-	bool GenerateNoises();
+	bool Initialize() override;
+	float GetVal(float x, float y) override;
 
 	void SetResolution();
 	void SetContinentalnessNoiseConfig(noise::NoiseConfigParameters config) { continentalnessNoise.SetConfig(config); };
@@ -51,10 +46,6 @@ public:
 	bool SetSplines(std::vector<std::vector<double>> splines);
 	bool SetSpline(WorldGenParameter p, std::vector<std::vector<double>>  spline);
 
-	int GetWidth(){ return width; };
-	int GetHeight(){ return height; };
-	float* GetHeightMap() const { return heightMap; }
-	float GetHeightAt(int x, int y);
 	int& GetResolitionRef() { return resolution; };
 	noise::NoiseConfigParameters& GetSelectedNoiseConfig(WorldGenParameter p);
 	noise::SimplexNoiseClass& GetSelectedNoise(WorldGenParameter p);
