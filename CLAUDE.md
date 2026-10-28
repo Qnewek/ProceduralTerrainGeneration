@@ -17,7 +17,7 @@ Plan napraw i rozwoju: `docs/ROADMAP.md` (ID zadań `B*`, `A*`, `F*` są tam zde
   ```
   "C:\Program Files\Microsoft Visual Studio\2022\Community\MSBuild\Current\Bin\MSBuild.exe" ProceduralTerrainGenerator.sln /p:Configuration=Debug /p:Platform=x86 /m
   ```
-  Stan na 2026-10-27: kompiluje się bez błędów, z ostrzeżeniami C4715 (brak `return`).
+  Stan na 2026-10-28: kompiluje się bez błędów i bez C4715.
 - Working directory przy uruchomieniu musi być `ProceduralTerrainGenerator/` — ścieżki do `res/...` są względne.
 - Brak testów automatycznych i CI. Weryfikacja = build + ręczne uruchomienie.
 - Kompilowane pliki w vcxproj używają prefiksu `Src\...` (wielka litera), git śledzi `src/...`.
@@ -87,7 +87,6 @@ Wartości szumów są w [-1, 1]. Konwencja indeksowania: `map[y * width + x]`.
   Przeplatanie szumów o różnych seedach = tasowanie tablicy przy każdym pikselu (B8). Nie jest thread-safe —
   nie zrównoleglaj generowania bez naprawienia tego.
 - `BiomeGenerator::Biomify` przekazuje (H, T) do `DetermineBiome(temperature, humidity, ...)` — zamienione (B2).
-- `NoiseImGui` / `DisplayModeImGui` nie zwracają wartości gdy nagłówek jest zwinięty — UB (B3).
 - Uniform `heightMap` w shaderze terenu jest przełączany między jednostką tekstury 0 (teren) i 1 (podgląd szumu).
 - `FragPos` w TES jest w clip space, a pozycja światła w world space — oświetlenie jest błędne (B6).
 - MSBuild nie znosi ścieżek > 260 znaków — testowy clean build rób w krótkiej ścieżce (np. `%TEMP%\ptg_cc`), nie w scratchpadzie.
