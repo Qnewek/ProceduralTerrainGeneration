@@ -381,6 +381,7 @@ namespace utilities
 			}
 			return regenerate;
 		}
+		return false;
 	}
 	//ImGui interface for modifying map size
 	//@param height - height of the noise map in chunks
@@ -446,6 +447,7 @@ namespace utilities
 			}
 			return change;
 		}
+		return false;
 	}
 	bool SavingImGui()
 	{

@@ -184,37 +184,20 @@ float TerrainGenerator::GetHeightAt(int x, int y)
 }
 
 noise::NoiseConfigParameters& TerrainGenerator::GetSelectedNoiseConfig(WorldGenParameter p){
-	switch (p)
-	{
-	case WorldGenParameter::CONTINENTALNESS:
-		return continentalnessNoise.GetConfigRef();
-		break;
-	case WorldGenParameter::MOUNTAINOUSNESS:
-		return mountainousnessNoise.GetConfigRef();
-		break;
-	case WorldGenParameter::WEIRDNESS:
-		return weirdnessNoise.GetConfigRef();
-		break;
-	default:
-		break;
-	}
+	return GetSelectedNoise(p).GetConfigRef();
 }
 
 noise::SimplexNoiseClass& TerrainGenerator::GetSelectedNoise(WorldGenParameter p)
 {
 	switch (p)
 	{
-	case WorldGenParameter::CONTINENTALNESS:
-		return continentalnessNoise;
-		break;
 	case WorldGenParameter::MOUNTAINOUSNESS:
 		return mountainousnessNoise;
-		break;
 	case WorldGenParameter::WEIRDNESS:
 		return weirdnessNoise;
-		break;
+	case WorldGenParameter::CONTINENTALNESS:
 	default:
-		break;
+		return continentalnessNoise;
 	}
 }
 

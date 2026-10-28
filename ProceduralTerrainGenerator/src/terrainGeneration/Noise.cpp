@@ -175,6 +175,7 @@ namespace noise
 				heightMap[y * width + x] = Ridge(heightMap[y * width + x], config.RidgeOffset, config.RidgeGain);
 			}
 		}
+		return true;
 	}
 
 	//Function generating island noise based on the configuration parameters

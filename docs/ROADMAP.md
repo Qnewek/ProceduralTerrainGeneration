@@ -14,7 +14,7 @@ biomy, roślinność i kolejne feature'y.**
 |----|-------|---------|--------|
 | B1 | `BiomeGenerator.cpp:72` | `if (GenerateComponentNoises()) return false;` — odwrócony warunek | `Initialize` zwraca `false` po sukcesie (maskowane, bo nikt nie sprawdza wyniku) |
 | B2 | `BiomeGenerator.cpp:129` | `DetermineBiome(H, T, ...)` przy sygnaturze `(temperature, humidity, ...)` | Temperatura i wilgotność zamienione — tabela biomów działa na złych osiach |
-| B3 | `utilities.cpp:312, 400`, `TerrainGenerator.cpp:186, 203`, `Noise.cpp:166` | Brak `return` na części ścieżek (C4715) | UB — `NoiseImGui`/`DisplayModeImGui` zwracają śmieci przy zwiniętym nagłówku, mogą wyzwalać regenerację |
+| ~~B3~~ ✅ | `utilities.cpp:312, 400`, `TerrainGenerator.cpp:186, 203`, `Noise.cpp:166` | Brak `return` na części ścieżek (C4715) | **Zrobione 2026-10-28:** brakujące `return` dodane, `GetSelectedNoiseConfig` deleguje do `GetSelectedNoise`. Build bez C4715; test ręczny — zwinięte nagłówki nie wyzwalają regeneracji |
 | B4 | `NoiseBasedGenerationSys.cpp:195` | `PushStyleColor(..., (1.0f, 0.0f, 0.0f, 1.0f))` — operator przecinka | Kolor = `ImU32(1)`, ostrzeżenie praktycznie niewidoczne |
 | B5 | `TerrainGenerator.cpp:66`, `NoiseBasedGenerationSys.cpp:53,130`, `TerrainGenerationSys.cpp:33`, shadery (`size = height/2`) | Niespójna kolejność `width/height` między API | Mapy niekwadratowe są obrócone/ucięte/niespójne |
 | B6 | `Terrain_evalTes.shader`, `HeightMap_tesseval.shader` | `FragPos` liczony w clip space, światło w world space; normalna liczona z kroku w UV (`texel`) vs wysokość w jednostkach świata; normalna nie przechodzi przez `model` | Oświetlenie jest fizycznie błędne, normalne „spłaszczone” |
