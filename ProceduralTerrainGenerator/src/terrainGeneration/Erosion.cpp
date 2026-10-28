@@ -20,12 +20,12 @@ namespace erosion {
 		}
 
 		ListNode* deleteNode(ListNode* prev) {
-			ListNode* next = this->next;
+			ListNode* nextNode = this->next;
 			if (prev != nullptr) {
-				prev->next = next;
+				prev->next = nextNode;
 			}
 			delete this;
-			return next;
+			return nextNode;
 		}
 
 		void deleteAll() {
@@ -52,25 +52,25 @@ namespace erosion {
 
 	//Set the configuration of the erosion
 	//@param config - ErosionConfig struct containing all the parameters of the erosion
-	void Erosion::SetConfig(ErosionConfig config)
+	void Erosion::SetConfig(ErosionConfig _config)
 	{
-		this->config = config;
+		config = _config;
 	}
 
 	//Set the number of droplets to be simulated
 	//@param dropletCount - number of droplets to be simulated
-	void Erosion::SetDropletCount(int dropletCount)
+	void Erosion::SetDropletCount(int _dropletCount)
 	{
-		this->dropletCount = dropletCount;
+		dropletCount = _dropletCount;
 	}
 	
 	//Resizes the map to the new dimensions
 	//@param width - new width of the map
 	//@param height - new height of the map
-	void Erosion::Resize(int width, int height)
+	void Erosion::Resize(int _width, int _height)
 	{
-		this->width = width;
-		this->height = height;
+		width = _width;
+		height = _height;
 	}
 
 	//Set the heightsMap to be eroded

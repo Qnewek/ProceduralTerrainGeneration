@@ -180,7 +180,7 @@ int BiomeGenerator::DetermineLevel(BiomeParameter p, float value)
 		return -1;
 		break;
 	}
-	for (int i = 0; i < levels->size(); i++) {
+	for (int i = 0; i < (int)levels->size(); i++) {
 		if (value < (*levels)[i]) {
 			return i - 1;
 		}

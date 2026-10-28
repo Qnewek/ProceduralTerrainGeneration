@@ -49,7 +49,7 @@ namespace noise
 
 		NoiseConfigParameters(int seed = 345, int res = 500, float xoffset = 0.0f, float yoffset = 0.0f, float scale = 1.0f, int octaves = 8,
 			float constrast = 1.0f, float redistribution = 1.0f, float lacunarity = 2.0f,
-			float persistance = 0.5f, float scaleDown = 1.0f, Options option = Options::REVERT_NEGATIVES, float revertGain = 0.5f, bool Ridge = false,
+			float persistance = 0.5f, float /*scaleDown*/ = 1.0f, Options option = Options::REVERT_NEGATIVES, float revertGain = 0.5f, bool Ridge = false,
 			float RidgeGain = 1.0f, float RidgeOffset = 1.0f, bool island = false, float mixPower = 0.5f,
 			IslandType islandType = IslandType::CONE, bool symmetrical = false):
 			seed(seed), resolution(res), xoffset(xoffset), yoffset(yoffset), scale(scale), octaves(octaves), constrast(constrast),
@@ -72,18 +72,18 @@ namespace noise
 		bool MakeMapRidged();
 		float MakeIsland(float e, int x, int y);
 
-		void SetConfig(NoiseConfigParameters config) { this->config = config; }
+		void SetConfig(NoiseConfigParameters _config) { config = _config; }
 
 		float* GetMap() const { return heightMap; }
 		float GetVal(int x, int y);
-		unsigned int GetWidth()  const { return width; }
-		unsigned int GetHeight() const { return height; }
+		int GetWidth()  const { return width; }
+		int GetHeight() const { return height; }
 		NoiseConfigParameters& GetConfigRef() { return config; }
 
 	private:
 		NoiseConfigParameters config;
 		float* heightMap;
-		unsigned int width, height;
+		int width, height;
 
 		float Ridge(float h, float offset, float gain);
 	};

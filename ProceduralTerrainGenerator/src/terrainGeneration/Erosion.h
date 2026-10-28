@@ -111,8 +111,8 @@ namespace erosion {
 		float GetCapacity() { return capacity; }
 
 		//Setters and calculation functions
-		void SetPosition(vec2 position) { this->position = position; }
-		void SetDirection(vec2 direction) { this->direction = direction; }
+		void SetPosition(vec2 _position) { position = _position; }
+		void SetDirection(vec2 _direction) { direction = _direction; }
 		void AdjustDirection(vec2 gradient, float inertia);
 		void AdjustPosition();
 		void AdjustVelocity(float elevationDifference, float gravity);

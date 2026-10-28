@@ -41,6 +41,10 @@ private:
 	//Window Layout variables
 	int windowWidth, windowHeight;
 	float rightPanelWidth, topPanelHeight, bottomPanelHeight, leftPanelWidth;
+
+	//Size of the 3D viewport between the ImGui panels, in pixels
+	int ViewportWidth() const { return static_cast<int>(windowWidth - rightPanelWidth - leftPanelWidth); }
+	int ViewportHeight() const { return static_cast<int>(windowHeight - topPanelHeight - bottomPanelHeight); }
 	GLFWwindow* window;
 	Renderer renderer;
 	Camera camera;

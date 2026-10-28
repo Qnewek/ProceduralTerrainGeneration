@@ -5,6 +5,7 @@
 
 #include <algorithm>
 #include <random>
+#include <numbers>
 
 #include "Simplex/SimplexNoise.h"
 
@@ -89,7 +90,7 @@ namespace noise
 		for (int i = 0; i < config.octaves; i++)
 		{
 			if (this->config.symmetrical) {
-				float TAU = 2 * std::_Pi_val;
+				float TAU = 2.0f * std::numbers::pi_v<float>;
 				float anglex = TAU * (x / (float)config.resolution);
 				float angley = TAU * (y / (float)config.resolution);
 
@@ -135,7 +136,7 @@ namespace noise
 
 		//Make island
 		if (config.island) {
-			elevation = std::fabsf(MakeIsland(elevation, x, y));
+			elevation = std::fabsf(MakeIsland(elevation, static_cast<int>(x), static_cast<int>(y)));
 		}
 
 		//Redistribute the noise
@@ -198,13 +199,13 @@ namespace noise
 			distance = 1 - ((1-(nx * nx))*(1-(ny * ny)));
 		}
 		else if (config.islandType == IslandType::HYPERBOLOID) {
-			distance = sqrt((nx * nx) + (ny * ny) + (0.5 * 0.5));
+			distance = std::sqrtf((nx * nx) + (ny * ny) + (0.5f * 0.5f));
 		}
 		else if (config.islandType == IslandType::SQUIRCLE) {
 			distance = sqrt(std::powf(nx,4) + std::powf(ny,4));
 		}
 		else if (config.islandType == IslandType::TRIG) {
-			distance = 1 - (cos(nx * (std::_Pi_val / 2)) * cos(ny * (std::_Pi_val / 2)));
+			distance = 1 - (std::cos(nx * (std::numbers::pi_v<float> / 2)) * std::cos(ny * (std::numbers::pi_v<float> / 2)));
 		}
 		return std::lerp(e, 1 - distance, config.mixPower);
 	}

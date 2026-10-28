@@ -118,9 +118,9 @@ bool TerrainGenerator::GenerateTerrain(float originx, float originy)
 			//TODO: Different algorithms for height evaluation
 			case TerrainGenerator::EvaluationMethod::SPLINE_COMBINE:
 			{
-				continentalness = continentalnessSpline(continentalness);
-				mountainousness = mountainousnessSpline(mountainousness);
-				weirdness = weirdnessSpline(weirdness);
+				continentalness = static_cast<float>(continentalnessSpline(continentalness));
+				mountainousness = static_cast<float>(mountainousnessSpline(mountainousness));
+				weirdness = static_cast<float>(weirdnessSpline(weirdness));
 				elevation = continentalness * mountainousness * weirdness;
 				break;
 			}

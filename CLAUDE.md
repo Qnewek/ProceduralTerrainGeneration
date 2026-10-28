@@ -17,7 +17,8 @@ Plan napraw i rozwoju: `docs/ROADMAP.md` (ID zadań `B*`, `A*`, `F*` są tam zde
   ```
   "C:\Program Files\Microsoft Visual Studio\2022\Community\MSBuild\Current\Bin\MSBuild.exe" ProceduralTerrainGenerator.sln /p:Configuration=Debug /p:Platform=x86 /m
   ```
-  Stan na 2026-10-28: kompiluje się bez błędów i bez C4715.
+  Stan na 2026-10-28: `/W4 /WX` — każde ostrzeżenie kompilatora w `src/` (poza vendor) przerywa build.
+  Zostają 2 ostrzeżenia linkera z binarek GLEW/GLFW (LNK4099 brak PDB, LNK4098 konflikt CRT) — do A8.
 - Working directory przy uruchomieniu musi być `ProceduralTerrainGenerator/` — ścieżki do `res/...` są względne.
 - Brak testów automatycznych i CI. Weryfikacja = build + ręczne uruchomienie.
 - **Wielkość liter ścieżek = dokładnie taka jak w gicie** (`git ls-files`): `src/opengl`, `src/subSystems`,
@@ -26,6 +27,7 @@ Plan napraw i rozwoju: `docs/ROADMAP.md` (ID zadań `B*`, `A*`, `F*` są tam zde
   Windows i git (`core.ignorecase=true`) nie wyłapią rozjazdu — wyjdzie dopiero na Linuksie/CI.
   VS pokazuje w Solution Explorerze nazwy z `.vcxproj`, nie z dysku.
 - Dodając nowy `.cpp`/`.h` trzeba go ręcznie dopisać do `.vcxproj` (i `.filters`).
+  Nowy `.cpp` z `src/vendor/` musi dostać `<WarningLevel>TurnOffAllWarnings</WarningLevel>`, inaczej `/WX` go wywali.
 
 ## Struktura
 
@@ -78,7 +80,8 @@ Wartości szumów są w [-1, 1]. Konwencja indeksowania: `map[y * width + x]`.
 - Surowe `new[]/delete[]` dla map (do zastąpienia `std::vector`, patrz A2). OpenGL obiekty w `std::unique_ptr`.
 - Konfiguracje edytowane przez UI przez referencje (`GetConfigRef()`), UI = immediate-mode bezpośrednio
   w klasach subsystemów (`ImGuiLeftPanel/RightPanel/Output`).
-- Includy względem katalogów z `AdditionalIncludeDirectories` (np. `#include "Noise.h"`, `"imgui/imgui.h"`).
+- Includy względem katalogów z `AdditionalIncludeDirectories` (własne: `#include "Noise.h"`) albo
+  `ExternalIncludePath` (`src/vendor`, GLFW, GLEW: `"imgui/imgui.h"`) — te drugie są kompilowane z `/external:W0`.
 - Komentarze po angielsku, w stylu `//@param`.
 
 ## Pułapki — przeczytaj zanim zaczniesz zmieniać
