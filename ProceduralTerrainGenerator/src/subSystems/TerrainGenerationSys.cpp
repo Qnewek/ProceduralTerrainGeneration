@@ -2,6 +2,7 @@
 
 #include <iostream>
 #include <algorithm>
+#include <chrono>
 
 #include "imgui/imgui.h"
 #include "ImPlot/implot.h"
@@ -51,9 +52,11 @@ bool TerrainGenerationSys::Resize() {
 bool TerrainGenerationSys::GenerateTerrain(float originx, float originy) {
 	Resize();
 
+	auto start = std::chrono::steady_clock::now();
 	if (!terrainGen.GenerateTerrain(originx, originy)) {
 		return false;
 	}
+	lastGenerationMs = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count();
 
 	terrainTxt = std::make_unique<TextureClass>(terrainGen.GetHeightMap(), width, height);
 
@@ -154,6 +157,7 @@ void TerrainGenerationSys::ImGuiLeftPanel() {
 	utilities::SavingImGui();
 }
 void TerrainGenerationSys::ImGuiOutput(glm::vec3 pos) {
+	ImGui::Text("Terrain generation: %.1f ms (%dx%d)", lastGenerationMs, terrainGen.GetWidth(), terrainGen.GetHeight());
 	if(biomesGeneration && biomeGen.IsGenerated()) {
 		int posX = static_cast<int>(pos.x) + width/2;
 		int posZ = static_cast<int>(pos.z) + height/2;

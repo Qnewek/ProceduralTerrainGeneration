@@ -23,6 +23,18 @@ namespace noise
 		delete[] heightMap;
 	}
 
+	//Rebuilds the permutation table if the seed changed since the last call.
+	//Replaces the global SimplexNoise::reseed, which reshuffled a shared table on every sample
+	//whenever noises with different seeds were evaluated alternately (B8)
+	void SimplexNoiseClass::UpdatePermutation()
+	{
+		if (permReady && permSeed == config.seed)
+			return;
+		SimplexNoise::makePermutation(config.seed, perm.data());
+		permSeed = config.seed;
+		permReady = true;
+	}
+
 	//Initialize the size of the map that the noise will be generated into
 	//@param _width - width of the map
 	//@param _height - height of the
@@ -80,7 +92,7 @@ namespace noise
 
 	float SimplexNoiseClass::PointNoise(float x, float y)
 	{
-		SimplexNoise::reseed(this->config.seed);
+		UpdatePermutation();
 		float amplitude = 1.0f;
 		float frequency = 1.0f;
 		float elevation = 0.0f;
@@ -94,7 +106,7 @@ namespace noise
 				float anglex = TAU * (x / (float)config.resolution);
 				float angley = TAU * (y / (float)config.resolution);
 
-				elevation += SimplexNoise::noise(std::cosf(anglex) / TAU * config.scale * frequency + config.xoffset,
+				elevation += SimplexNoise::noise(perm.data(), std::cosf(anglex) / TAU * config.scale * frequency + config.xoffset,
 					std::sinf(anglex) / TAU * config.scale * frequency + config.xoffset,
 					std::cosf(angley) / TAU * config.scale * frequency + config.yoffset,
 					std::sinf(angley) / TAU * config.scale * frequency + config.yoffset) * amplitude;
@@ -103,7 +115,7 @@ namespace noise
 				vec.x = (x / (float)config.resolution * config.scale + config.xoffset) * frequency;
 				vec.y = (y / (float)config.resolution * config.scale + config.yoffset) * frequency;
 
-				elevation += SimplexNoise::noise(vec.x, vec.y) * amplitude;
+				elevation += SimplexNoise::noise(perm.data(), vec.x, vec.y) * amplitude;
 			}
 			divider += amplitude;
 			amplitude *= config.persistance;

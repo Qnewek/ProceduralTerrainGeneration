@@ -1,5 +1,6 @@
 #include "NoiseBasedGenerationSys.h"
 
+#include <chrono>
 #include <iostream>
 
 #include "imgui/imgui.h"
@@ -59,9 +60,11 @@ bool NoiseBasedGenerationSys::Resize()
 bool NoiseBasedGenerationSys::GenerateNoise(float originx, float originy)
 {
 	Resize();
+	auto start = std::chrono::steady_clock::now();
 	if (!noise.GenerateFractalNoise(originx, originy)) {
 		return false;
 	}
+	lastGenerationMs = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count();
 
 	terrainTexture = std::make_unique<TextureClass>(noise.GetMap(), width, height);
 	std::cout << "[LOG] Noise based terrain initialized" << std::endl;
@@ -191,6 +194,7 @@ void NoiseBasedGenerationSys::ErosionImGui()
 
 void NoiseBasedGenerationSys::ImGuiOutput()
 {
+	ImGui::Text("Noise generation: %.1f ms (%dx%d)", lastGenerationMs, noise.GetWidth(), noise.GetHeight());
 	if (noise.GetHeight() * noise.GetWidth() > 500 * 500) {
 		ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.0f, 0.0f, 1.0f));
 		ImGui::TextWrapped(
