@@ -46,6 +46,12 @@ private:
 		{0.0, 0.0, 0.0}
 	};
 
+	//Editor UI state (0 = nothing selected)
+	int noisePressedButton = 0;
+	int biomeNoisePressedButton = 0;
+	int splinePressedButton = 0;
+	int splineDraggedPoint = -1;
+
 public:
 	TerrainGenerationSys();
 	~TerrainGenerationSys();

@@ -106,7 +106,7 @@ void TerrainGenerationSys::ImGuiRightPanel() {
 
 	if (ImGui::CollapsingHeader("Terrain settings", ImGuiTreeNodeFlags_DefaultOpen)) {
 		ImGui::Text("Evaluating method");
-		static int evaluatingOption = 0;
+		int evaluatingOption = static_cast<int>(terrainGen.GetEvaluationMethod());
 		const char* methodOptions[] = { "Linear", "Spline" };
 		if (ImGui::BeginCombo("Method: ", methodOptions[evaluatingOption]))
 		{
@@ -165,7 +165,6 @@ void TerrainGenerationSys::ImGuiOutput(glm::vec3 pos) {
 
 void TerrainGenerationSys::NoiseEditor()
 {
-	static int noisePressedButton = 0;
 	ImGui::Separator();
 	if (ImGui::Checkbox("Edit component noise", &editNoise)) {
 		noisePressedButton = 0;
@@ -235,7 +234,6 @@ void TerrainGenerationSys::BiomesEditor()
 
 void TerrainGenerationSys::BiomeNoisesEditor()
 {
-	static int biomeNoisePressedButton = 0;
 	ImGui::Text("Select noise to edit:");
 	if (utilities::ImGuiButtonWrapper("Temperature", biomeNoisePressedButton == 1 ? true : false)) {
 		biomeNoisePressedButton = 1;
@@ -271,10 +269,10 @@ void TerrainGenerationSys::BiomeNoisesEditor()
 
 void TerrainGenerationSys::SplineEditor()
 {
-	static int splinePressedButton = 0;
 	ImGui::Separator();
 	if (ImGui::Checkbox("Edit spline", &editSpline)) {
 		splinePressedButton = 0;
+		splineDraggedPoint = -1;
 	}
 	if (editSpline) {
 		if (ImGui::CollapsingHeader("Spline editor", ImGuiTreeNodeFlags_DefaultOpen)) {
@@ -302,7 +300,6 @@ void TerrainGenerationSys::SplineEditor()
 				return;
 			}
 
-			static int dragging = -1;
 			if (splinePlotPoints.size() != 2 || splinePlotPoints[0].size() != splinePlotPoints[1].size()) {
 				std::cout << "[ERROR] Spline points not set correctly\n";
 				return;
@@ -325,36 +322,36 @@ void TerrainGenerationSys::SplineEditor()
 				ImPlot::PlotScatter("Spline points", xs.data(), ys.data(), (int)splinePlotPoints[0].size());
 
 				ImPlotPoint mouse = ImPlot::GetPlotMousePos();
-				if (dragging == -1 && ImPlot::IsPlotHovered() && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
+				if (splineDraggedPoint == -1 && ImPlot::IsPlotHovered() && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
 					for (int i = 0; i < (int)splinePlotPoints[0].size(); ++i) {
 						double dx = (double)mouse.x - splinePlotPoints[0][i];
 						double dy = (double)mouse.y - splinePlotPoints[1][i];
 						if (dx * dx + dy * dy <= pick_radius * pick_radius) {
-							dragging = i;
+							splineDraggedPoint = i;
 							break;
 						}
 					}
 				}
 
-				if (dragging != -1) {
+				if (splineDraggedPoint != -1) {
 					if (ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
-						if (dragging == 0 || dragging == (int)splinePlotPoints[0].size() - 1) {
-							splinePlotPoints[1][dragging] = std::clamp((double)mouse.y, ymin, ymax);
+						if (splineDraggedPoint == 0 || splineDraggedPoint == (int)splinePlotPoints[0].size() - 1) {
+							splinePlotPoints[1][splineDraggedPoint] = std::clamp((double)mouse.y, ymin, ymax);
 						}
 						else {
-							double xmin_drag = splinePlotPoints[0][dragging - 1] + 0.01;
-							double xmax_drag = splinePlotPoints[0][dragging + 1] - 0.01;
+							double xmin_drag = splinePlotPoints[0][splineDraggedPoint - 1] + 0.01;
+							double xmax_drag = splinePlotPoints[0][splineDraggedPoint + 1] - 0.01;
 
-							splinePlotPoints[0][dragging] = std::clamp((double)mouse.x, xmin_drag, xmax_drag);
-							splinePlotPoints[1][dragging] = std::clamp((double)mouse.y, ymin, ymax);
+							splinePlotPoints[0][splineDraggedPoint] = std::clamp((double)mouse.x, xmin_drag, xmax_drag);
+							splinePlotPoints[1][splineDraggedPoint] = std::clamp((double)mouse.y, ymin, ymax);
 						}
 					}
 					else {
-						dragging = -1;
+						splineDraggedPoint = -1;
 					}
 				}
 
-				if (dragging == -1 && ImPlot::IsPlotHovered()) {
+				if (splineDraggedPoint == -1 && ImPlot::IsPlotHovered()) {
 					for (int i = 0; i < splinePlotPoints[0].size(); i++) {
 						double dx = (double)mouse.x - splinePlotPoints[0][i], dy = (double)mouse.y - splinePlotPoints[1][i];
 						if (dx * dx + dy * dy <= pick_radius * pick_radius) {
@@ -373,7 +370,7 @@ void TerrainGenerationSys::SplineEditor()
 	}
 }
 void TerrainGenerationSys::NoisesLevelsForBiomes() {
-	if (ImGui::CollapsingHeader("Spline editor", ImGuiTreeNodeFlags_DefaultOpen)) {
+	if (ImGui::CollapsingHeader("Biome levels editor", ImGuiTreeNodeFlags_DefaultOpen)) {
 		SegmentDrag(biomeGen.GetLevelsByParameter(BiomeParameter::TEMPERATURE), "Temperature levels");
 		SegmentDrag(biomeGen.GetLevelsByParameter(BiomeParameter::HUMIDITY), "Humidity levels");
 		SegmentDrag(biomeGen.GetLevelsByParameter(BiomeParameter::CONTINENTALNESS), "Continentalness levels");
@@ -397,7 +394,7 @@ void TerrainGenerationSys::SegmentDrag(std::vector<float>& boundaries, std::stri
 			ImPlot::PlotLine(std::to_string(i).c_str(), xs, ys, 4);
 
 			double mid = 0.5 * (boundaries[i] + boundaries[i + 1]);
-			ImPlot::Annotation(mid, 0.5, ImVec4(1, 1, 1, 1), ImVec2(0, 0), true, "%c", '0' + i);
+			ImPlot::Annotation(mid, 0.5, ImVec4(1, 1, 1, 1), ImVec2(0, 0), true, "%d", static_cast<int>(i));
 		}
 
 		for (size_t i = 1; i < boundaries.size() - 1; i++) {
@@ -408,7 +405,8 @@ void TerrainGenerationSys::SegmentDrag(std::vector<float>& boundaries, std::stri
 			if (boundaries[i] > boundaries[i + 1]) {
 				boundaries[i + 1] = boundaries[i];
 			}
-			int j = i - 1;
+			//Boundary 0 is the fixed lower bound (-1), dragged values are clamped to it
+			int j = static_cast<int>(i) - 1;
 			while(j > 0 && boundaries[j] > boundaries[i]) {
 				boundaries[j] = boundaries[i];
 				j--;
