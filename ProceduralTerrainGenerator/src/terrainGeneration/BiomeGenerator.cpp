@@ -69,7 +69,7 @@ bool BiomeGenerator::Initialize(int _height, int _width)
 		return false;
 	}
 	//Calculating component noises with basic configuration
-	if (GenerateComponentNoises()) {
+	if (!GenerateComponentNoises()) {
 		return false;
 	}
 
