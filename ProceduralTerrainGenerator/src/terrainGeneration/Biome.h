@@ -20,7 +20,7 @@ namespace biome {
 	public:
 		Biome();
 		Biome(int _id, std::string _name);
-		Biome(int _id, std::string _name, glm::vec2 _temperatureLevel, glm::vec2 _humidityLevel, glm::vec2 _continentalnessLevel, glm::vec2 _mountainousnessLevel, glm::vec2 _weirdnessLevel, glm::vec3 _color, int _vegetationLevel);
+		Biome(int _id, std::string _name, glm::vec2 _temperatureLevel, glm::vec2 _humidityLevel, glm::vec2 _continentalnessLevel, glm::vec2 _mountainousnessLevel, glm::vec2 _weirdnessLevel, glm::vec3 _color, float _vegetationLevel);
 		Biome(const Biome& b) = default;
 		~Biome();
 
@@ -36,11 +36,11 @@ namespace biome {
 		glm::vec2 GetMountainousnessLevel() const { return mountainousnessLevel; };
 		glm::vec3 GetColor() const { return color; };
 		
-		void SetTemperatureLevel(glm::vec2 temperatureLevel) { this->temperatureLevel = temperatureLevel; }
-		void SetHumidityLevel(glm::vec2 humidityLevel) { this->humidityLevel = humidityLevel; }
-		void SetContinentalnessLevel(glm::vec2 continentalnessLevel) { this->continentalnessLevel = continentalnessLevel; }
-		void SetMountainousnessLevel(glm::vec2 mountainousnessLevel) { this->mountainousnessLevel = mountainousnessLevel; }
-		void SetWeirdnessLevel(glm::vec2 weirdnessLevel) { this->weirdnessLevel = weirdnessLevel; }
+		void SetTemperatureLevel(glm::vec2 _temperatureLevel) { temperatureLevel = _temperatureLevel; }
+		void SetHumidityLevel(glm::vec2 _humidityLevel) { humidityLevel = _humidityLevel; }
+		void SetContinentalnessLevel(glm::vec2 _continentalnessLevel) { continentalnessLevel = _continentalnessLevel; }
+		void SetMountainousnessLevel(glm::vec2 _mountainousnessLevel) { mountainousnessLevel = _mountainousnessLevel; }
+		void SetWeirdnessLevel(glm::vec2 _weirdnessLevel) { weirdnessLevel = _weirdnessLevel; }
 
 	};
 }

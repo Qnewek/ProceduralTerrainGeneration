@@ -121,8 +121,8 @@ namespace utilities
 		glm::vec3 tmp(0.0f, 0.0f, 0.0f);
 		glm::vec3 vx(0.0f, 0.0f, 0.0f);
 		glm::vec3 vz(0.0f, 0.0f, 0.0f);
-		for (int z = 0; z < height; z++) {
-			for (int x = 0; x < width; x++) {
+		for (unsigned int z = 0; z < height; z++) {
+			for (unsigned int x = 0; x < width; x++) {
 				//Vertical vector
 				if (height == 1) {
 					vz = glm::vec3(0.0f, 0.0f, 0.0f);
@@ -202,7 +202,6 @@ namespace utilities
 			std::cout << "[LOG] Greyscale painting applied" << std::endl;
 		}
 		else if (m == heightMapMode::TOPOGRAPHICAL) {
-			float bandWidth = 0.2f;
 			for (int y = 0; y < height; y++) {
 				for (int x = 0; x < width; x++) {
 					float h = vertices[(y * width + x) * stride + heightOffSet];
