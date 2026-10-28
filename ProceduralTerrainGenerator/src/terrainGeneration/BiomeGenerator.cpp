@@ -126,7 +126,7 @@ bool BiomeGenerator::Biomify(noise::SimplexNoiseClass& continenatlness, noise::S
 			M = DetermineLevel(BiomeParameter::MOUNTAINOUSNESS, mountainousness.GetVal(x, y));
 			W = DetermineLevel(BiomeParameter::WEIRDNESS, weirdness.GetVal(x, y)); 
 
-			biomeMap[y * width + x] = DetermineBiome(H, T, C, M, W);
+			biomeMap[y * width + x] = DetermineBiome(T, H, C, M, W);
 		}
 	}
 	std::cout << "[LOG] BiomeMap succesfully evaluated" << std::endl;
