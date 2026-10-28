@@ -24,11 +24,13 @@ TerrainGenApp::~TerrainGenApp()
 }
 
 
-int TerrainGenApp::Initialize()
+bool TerrainGenApp::Initialize()
 {
 	//Window & OpenGL initialization
-    if (!glfwInit())
-        return -1;
+    if (!glfwInit()) {
+        std::cout << "[ERROR] Failed to initialize GLFW" << std::endl;
+        return false;
+    }
 
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 5);
@@ -44,8 +46,9 @@ int TerrainGenApp::Initialize()
 
     if (!window)
     {
+        std::cout << "[ERROR] Failed to create GLFW window" << std::endl;
         glfwTerminate();
-        return -1;
+        return false;
     }
 
     GLFWimage images[1];
@@ -59,7 +62,10 @@ int TerrainGenApp::Initialize()
     glfwSwapInterval(1);
 
     if (glewInit() != GLEW_OK) {
-        std::cout << "error" << std::endl;
+        std::cout << "[ERROR] Failed to initialize GLEW" << std::endl;
+        glfwDestroyWindow(window);
+        glfwTerminate();
+        return false;
     }
 
     glEnable(GL_DEPTH_TEST);
@@ -78,15 +84,19 @@ int TerrainGenApp::Initialize()
     //Logic initialization
 	renderer.SetPatches(4);
 	camera.SetScreenSize(windowWidth - rightPanelWidth - leftPanelWidth, windowHeight - topPanelHeight - bottomPanelHeight);
-    if (!noiseGenSys.Initialize(height, width, heightScale))
-        return 0;
-	if(!terrainGenSys.Initialize(height, width, heightScale))
-		return 0;
+    if (!noiseGenSys.Initialize(height, width, heightScale)) {
+        std::cout << "[ERROR] Failed to initialize NoiseBasedGenerationSys" << std::endl;
+        return false;
+    }
+	if (!terrainGenSys.Initialize(height, width, heightScale)) {
+		std::cout << "[ERROR] Failed to initialize TerrainGenerationSys" << std::endl;
+		return false;
+	}
     light.Initialize();
     light.SetPosition(glm::vec3(0.0f, 2000.0f, 0.0f));
-   
+
     std::cout << "[LOG] Hub initialized" << std::endl;
-    return 0;
+    return true;
 }
 
 void TerrainGenApp::Start()
@@ -115,8 +125,8 @@ void TerrainGenApp::Start()
 
     ImGui_ImplOpenGL3_Shutdown();
     ImGui_ImplGlfw_Shutdown();
-    ImGui::DestroyContext();
 	ImPlot::DestroyContext();
+    ImGui::DestroyContext();
 
     glfwDestroyWindow(window);
     glfwTerminate();

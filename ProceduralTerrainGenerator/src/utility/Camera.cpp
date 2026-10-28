@@ -17,16 +17,17 @@ Camera::Camera(const unsigned int ScreenWidth, const unsigned int ScreenHeight, 
 Camera::~Camera() {
 
 }
-void Camera::SetCameraConfig(glm::vec3 position, glm::vec3 front, glm::vec3 up, float yaw, float pitch, float speed, float sensitivity, float fov)
+void Camera::SetCameraConfig(glm::vec3 _position, glm::vec3 _front, glm::vec3 _up, float _yaw, float _pitch, float _speed, float _sensitivity, float _fov)
 {
-	position = position;
-	front = front;
-	up = up;
-	yaw = yaw;
-	pitch = pitch;
-	initSpeed = speed;
-	sensitivity = sensitivity;
-	fov = fov;
+	position = _position;
+	front = _front;
+	up = _up;
+	yaw = _yaw;
+	pitch = _pitch;
+	initSpeed = _speed;
+	speed = _speed;
+	sensitivity = _sensitivity;
+	fov = _fov;
 	right = glm::normalize(glm::cross(front, up));
 	up = glm::normalize(glm::cross(right, front));
 }
@@ -118,7 +119,7 @@ void Camera::ImGuiDraw() {
 	if (ImGui::CollapsingHeader("Camera settings", ImGuiTreeNodeFlags_DefaultOpen)) {
 		ImGui::DragFloat3("Camera position", glm::value_ptr(position), 1.0f);
 		ImGui::SliderFloat("Camera speed", &initSpeed, 0.1f, 200.0f);
-		ImGui::SliderFloat("Camera FOV", &fov, 1.0f, 300.0f);
+		ImGui::SliderFloat("Camera FOV", &fov, 1.0f, 120.0f);
 		ImGui::SliderFloat("Camera sensitivity", &sensitivity, 0.01f, 1.0f);
 		ImGui::SliderFloat("Render distance", &viewDist.y, 1.0f, 5000.0f);
 	}
