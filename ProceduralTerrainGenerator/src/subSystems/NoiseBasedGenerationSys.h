@@ -16,6 +16,7 @@ class NoiseBasedGenerationSys
 		unsigned int stride, mapResolution;
 		int width, height;
 		bool wireFrame = false, erosionDraw = false, instantUpdate = true, map2d = false, infiniteGeneration = false;
+		double lastGenerationMs = 0.0;
 		utilities::heightMapMode displayMode = utilities::heightMapMode::GREYSCALE;
 		glm::vec3 oldCamPos = glm::vec3(0.0f, 0.0f, 0.0f);
 		

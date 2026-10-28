@@ -2,6 +2,7 @@
 
 #include "glm/glm.hpp"
 
+#include <array>
 #include <cstdint>
 #include <vector>
 
@@ -85,6 +86,12 @@ namespace noise
 		float* heightMap;
 		int width, height;
 
+		//Permutation table owned by this noise, rebuilt only when config.seed changes
+		std::array<uint8_t, 256> perm{};
+		int permSeed = 0;
+		bool permReady = false;
+
+		void UpdatePermutation();
 		float Ridge(float h, float offset, float gain);
 	};
 }

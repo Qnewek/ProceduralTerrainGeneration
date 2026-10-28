@@ -21,6 +21,7 @@ private:
 	bool biomesGeneration = false, map2d = false;
 	bool editNoise = false, editSpline = false, infiniteGeneration = false;
 	glm::vec3 oldCamPos = glm::vec3(0.0f);
+	double lastGenerationMs = 0.0;
 
 	//OpenGl objects
 	VertexBufferLayout layout;
