@@ -89,7 +89,6 @@ Wartości szumów są w [-1, 1]. Konwencja indeksowania: `map[y * width + x]`.
 - `SimplexNoise` (vendor) ma **globalną** tablicę permutacji; `PointNoise` woła `reseed(seed)` przy każdej próbce.
   Przeplatanie szumów o różnych seedach = tasowanie tablicy przy każdym pikselu (B8). Nie jest thread-safe —
   nie zrównoleglaj generowania bez naprawienia tego.
-- `BiomeGenerator::Biomify` przekazuje (H, T) do `DetermineBiome(temperature, humidity, ...)` — zamienione (B2).
 - Uniform `heightMap` w shaderze terenu jest przełączany między jednostką tekstury 0 (teren) i 1 (podgląd szumu).
 - `FragPos` w TES jest w clip space, a pozycja światła w world space — oświetlenie jest błędne (B6).
 - MSBuild nie znosi ścieżek > 260 znaków — testowy clean build rób w krótkiej ścieżce (np. `%TEMP%\ptg_cc`), nie w scratchpadzie.
