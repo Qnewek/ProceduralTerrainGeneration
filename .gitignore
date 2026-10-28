@@ -36,10 +36,13 @@ bld/
 ./ProceduralTerrainGenerator/vs/
 .vs/
 *.pdb
-*.sln
-*.vcxproj
-*.filters
 *.user
+
+# ImGui window layout, rewritten on every run
+imgui.ini
+
+# Prebuilt dependency libs live in Release/Win32/x64 subfolders - keep them tracked
+!Dependencies/*/lib/**
 # Uncomment if you have tasks that create the project's static files in wwwroot
 #wwwroot/
 
