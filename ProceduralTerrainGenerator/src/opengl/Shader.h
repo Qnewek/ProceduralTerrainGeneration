@@ -38,6 +38,8 @@ public:
 private:
 	std::string ParseShader(const std::string& filepath);
 	unsigned int CompileShader(unsigned int type, const std::string& source);
+	static const char* ShaderTypeName(unsigned int type);
+	bool CheckLinkStatus(unsigned int program);
 	unsigned int CreateShader_vert_frag(const std::string& vertexShader, const std::string& fragmentShader);
 	unsigned int CreateShader_vert_frag_tess(const std::string& vertexShader, const std::string& fragmentShader, const std::string& tessControlShader, const std::string& tessEvaluationShader);
 	int GetUniformLocation(const std::string& name);

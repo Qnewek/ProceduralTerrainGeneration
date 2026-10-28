@@ -19,7 +19,7 @@ public:
 	TerrainGenApp();
 	~TerrainGenApp();
 
-	int Initialize();
+	bool Initialize();
 	void Start();
 
 private:

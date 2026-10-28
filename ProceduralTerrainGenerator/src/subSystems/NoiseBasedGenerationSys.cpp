@@ -192,7 +192,7 @@ void NoiseBasedGenerationSys::ErosionImGui()
 void NoiseBasedGenerationSys::ImGuiOutput()
 {
 	if (noise.GetHeight() * noise.GetWidth() > 500 * 500) {
-		ImGui::PushStyleColor(ImGuiCol_Text, (1.0f, 0.0f, 0.0f, 1.0f));
+		ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.0f, 0.0f, 1.0f));
 		ImGui::TextWrapped(
 			"Warning!\n"
 			"It is highly recommended to set a smaller map size while adjusting settings,"
