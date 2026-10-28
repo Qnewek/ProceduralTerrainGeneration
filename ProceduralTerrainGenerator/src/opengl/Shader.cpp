@@ -7,6 +7,18 @@
 
 #include "Renderer.h"
 
+const char* Shader::ShaderTypeName(unsigned int type)
+{
+    switch (type) {
+    case GL_VERTEX_SHADER:          return "vertex";
+    case GL_FRAGMENT_SHADER:        return "fragment";
+    case GL_TESS_CONTROL_SHADER:    return "tessellation control";
+    case GL_TESS_EVALUATION_SHADER: return "tessellation evaluation";
+    default:                        return "unknown";
+    }
+}
+
+
 Shader::Shader(const std::string& vertexFilepath, const std::string& fragmentFilepath)
 	: m_VertexFilePath(vertexFilepath), m_FragmentFilePath(fragmentFilepath), m_RendererID(0)
 {
@@ -44,17 +56,35 @@ unsigned int Shader::CompileShader(unsigned int type, const std::string& source)
     int result;
     glGetShaderiv(id, GL_COMPILE_STATUS, &result);
     if (result == GL_FALSE) {
-        int length;
+        int length = 0;
         glGetShaderiv(id, GL_INFO_LOG_LENGTH, &length);
-        char* message = (char*)malloc(length * sizeof(char));
-        glGetShaderInfoLog(id, length, &length, message);
-        std::cout << "Failed to compile " << (type == GL_VERTEX_SHADER ? "vertex" : "fragment") << " shader!" << std::endl;
+        std::string message(length, '\0');
+        glGetShaderInfoLog(id, length, &length, message.data());
+        std::cout << "[ERROR] Failed to compile " << ShaderTypeName(type) << " shader!" << std::endl;
         std::cout << message << std::endl;
         glDeleteShader(id);
         return 0;
     }
 
     return id;
+}
+
+//Checks link status of the program and prints the info log on failure
+//@return - true if the program linked successfully
+bool Shader::CheckLinkStatus(unsigned int program)
+{
+    int result;
+    glGetProgramiv(program, GL_LINK_STATUS, &result);
+    if (result == GL_FALSE) {
+        int length = 0;
+        glGetProgramiv(program, GL_INFO_LOG_LENGTH, &length);
+        std::string message(length, '\0');
+        glGetProgramInfoLog(program, length, &length, message.data());
+        std::cout << "[ERROR] Failed to link shader program!" << std::endl;
+        std::cout << message << std::endl;
+        return false;
+    }
+    return true;
 }
 
 std::string Shader::ParseShader(const std::string& filepath) {
@@ -76,6 +106,7 @@ unsigned int Shader::CreateShader_vert_frag(const std::string& vertexShader, con
     glAttachShader(program, vs);
     glAttachShader(program, fs);
     glLinkProgram(program);
+    CheckLinkStatus(program);
     glValidateProgram(program);
 
     glDeleteShader(vs);
@@ -97,6 +128,7 @@ unsigned int Shader::CreateShader_vert_frag_tess(const std::string& vertexShader
 	glAttachShader(program, tcs);
 	glAttachShader(program, tes);
     glLinkProgram(program);
+    CheckLinkStatus(program);
     glValidateProgram(program);
 
     glDeleteShader(vs);

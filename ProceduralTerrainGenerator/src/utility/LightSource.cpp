@@ -49,7 +49,7 @@ void LightSource::Initialize() {
 	m_VAO = std::make_unique<VertexArray>();
 	m_VertexBuffer = std::make_unique<VertexBuffer>(cubeVertices, 24 * sizeof(float));
 	m_IndexBuffer = std::make_unique<IndexBuffer>(cubeIndices, 36);
-	m_Shader = std::make_unique<Shader>("res/shaders/Light_source_vertex.shader", "res/shaders/Light_source_fragment.shader");
+	m_Shader = std::make_unique<Shader>("res/shaders/light_source_vertex.shader", "res/shaders/light_source_fragment.shader");
 
 
 	VertexBufferLayout layout;
