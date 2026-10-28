@@ -9,7 +9,7 @@ Camera::Camera(const unsigned int ScreenWidth, const unsigned int ScreenHeight, 
 	up(glm::vec3(0.0f, 1.0f, 0.0f)), front(glm::vec3(0.0f, 0.0f, 1.0f)), right(), yaw(90.0f), pitch(0.0f),
 	speed(cameraSpeed), sensitivity(0.1f), fov(45.0f), mouseControl(false), initSpeed(cameraSpeed),
 	view(glm::mat4(1.0f)), projection(glm::mat4(1.0f)), viewDist(glm::vec2(0.1f, renderDistance)),
-	ypos(ScreenHeight / 2.0), xpos(ScreenWidth / 2.0)
+	ypos(ScreenHeight / 2.0f), xpos(ScreenWidth / 2.0f)
 {
 	right = glm::normalize(glm::cross(front, up));
 	up = glm::normalize(glm::cross(right, front));

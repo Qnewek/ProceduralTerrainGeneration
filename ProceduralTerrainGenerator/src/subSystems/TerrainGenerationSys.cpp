@@ -352,7 +352,7 @@ void TerrainGenerationSys::SplineEditor()
 				}
 
 				if (splineDraggedPoint == -1 && ImPlot::IsPlotHovered()) {
-					for (int i = 0; i < splinePlotPoints[0].size(); i++) {
+					for (int i = 0; i < (int)splinePlotPoints[0].size(); i++) {
 						double dx = (double)mouse.x - splinePlotPoints[0][i], dy = (double)mouse.y - splinePlotPoints[1][i];
 						if (dx * dx + dy * dy <= pick_radius * pick_radius) {
 							ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);

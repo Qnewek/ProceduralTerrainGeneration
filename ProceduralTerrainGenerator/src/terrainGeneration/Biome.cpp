@@ -9,7 +9,7 @@ namespace biome{
 	{
 	}
 
-	Biome::Biome(int _id, std::string _name, glm::vec2 _temperatureLevel, glm::vec2 _humidityLevel, glm::vec2 _continentalnessLevel, glm::vec2 _mountainousnessLevel, glm::vec2 _weirdnessLevel, glm::vec3 _color, int _vegetationLevel) : id(_id), name(_name),
+	Biome::Biome(int _id, std::string _name, glm::vec2 _temperatureLevel, glm::vec2 _humidityLevel, glm::vec2 _continentalnessLevel, glm::vec2 _mountainousnessLevel, glm::vec2 _weirdnessLevel, glm::vec3 _color, float _vegetationLevel) : id(_id), name(_name),
 		temperatureLevel(_temperatureLevel), humidityLevel(_humidityLevel), continentalnessLevel(_continentalnessLevel), mountainousnessLevel(_mountainousnessLevel), weirdnessLevel(_weirdnessLevel), color(_color), vegetationLevel(_vegetationLevel)
 	{
 		isSpecified = true;

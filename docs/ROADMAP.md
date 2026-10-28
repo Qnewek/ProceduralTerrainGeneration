@@ -80,7 +80,9 @@ Cel: świeży clone buduje się, brak UB, oczywiste bugi poprawione.
    kody błędów, kolejność `DestroyContext`, wielkość liter ścieżek, sprawdzanie `GL_LINK_STATUS`).
 3. **B2** zamiana argumentów H/T + przegląd tabeli biomów.
 4. **B12** unikalne ID w ImGui (`"Spline editor##levels"`), stan edytorów jako pola klasy zamiast `static`.
-5. Włącz `/W4` i `/WX` dla kodu własnego (bez vendor), napraw ostrzeżenia.
+5. ~~Włącz `/W4` i `/WX` dla kodu własnego (bez vendor), napraw ostrzeżenia.~~ ✅ 2026-10-28: vendor + GLFW/GLEW jako
+   `ExternalIncludePath` z `/external:W0`, `.cpp` z vendor bez ostrzeżeń; 70 ostrzeżeń naprawionych (m.in. `SimplexNoiseClass`
+   ma teraz `int width/height` jak reszta klas). Zostają LNK4099/LNK4098 z binarek bibliotek → A8.
 6. `imgui.ini` do `.gitignore` (`git rm --cached`), uzupełnij README (build, sterowanie, screenshoty).
 
 **Kryterium ukończenia:** clone → otwarcie `.sln` → build Debug/Release Win32 bez ostrzeżeń w `src/` (poza vendor). x64 — w Fazie 1 (A8).

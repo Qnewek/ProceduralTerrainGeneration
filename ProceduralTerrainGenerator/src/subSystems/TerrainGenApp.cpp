@@ -83,7 +83,7 @@ bool TerrainGenApp::Initialize()
 
     //Logic initialization
 	renderer.SetPatches(4);
-	camera.SetScreenSize(windowWidth - rightPanelWidth - leftPanelWidth, windowHeight - topPanelHeight - bottomPanelHeight);
+	camera.SetScreenSize(ViewportWidth(), ViewportHeight());
     if (!noiseGenSys.Initialize(height, width, heightScale)) {
         std::cout << "[ERROR] Failed to initialize NoiseBasedGenerationSys" << std::endl;
         return false;
@@ -112,7 +112,7 @@ void TerrainGenApp::Start()
 		Draw();
         ImGuiRender();
 
-        camera.SetScreenSize(windowWidth - rightPanelWidth - leftPanelWidth, windowHeight - topPanelHeight - bottomPanelHeight);
+        camera.SetScreenSize(ViewportWidth(), ViewportHeight());
         
         glfwPollEvents();
         if (glfwGetWindowAttrib(window, GLFW_ICONIFIED) != 0)
@@ -136,8 +136,8 @@ void TerrainGenApp::Start()
 void TerrainGenApp::Draw()
 {
     glEnable(GL_SCISSOR_TEST);
-    glViewport(leftPanelWidth, bottomPanelHeight, windowWidth - rightPanelWidth - leftPanelWidth, windowHeight - topPanelHeight - bottomPanelHeight);
-    glScissor(leftPanelWidth, bottomPanelHeight, windowWidth - rightPanelWidth - leftPanelWidth, windowHeight - topPanelHeight - bottomPanelHeight);
+    glViewport(static_cast<int>(leftPanelWidth), static_cast<int>(bottomPanelHeight), ViewportWidth(), ViewportHeight());
+    glScissor(static_cast<int>(leftPanelWidth), static_cast<int>(bottomPanelHeight), ViewportWidth(), ViewportHeight());
     renderer.Clear(glm::vec3(0.0f, 0.0f, 0.0f));
 
     light.Draw(renderer, *camera.GetViewMatrix(), *camera.GetProjectionMatrix());
@@ -160,7 +160,7 @@ void TerrainGenApp::ImGuiRender()
 
     //Left panel
     ImGui::SetNextWindowPos(ImVec2(0, 0), ImGuiCond_Always);
-    ImGui::SetNextWindowSize(ImVec2(leftPanelWidth, windowHeight - 60), ImGuiCond_Always);
+    ImGui::SetNextWindowSize(ImVec2(leftPanelWidth, static_cast<float>(windowHeight - 60)), ImGuiCond_Always);
     ImGui::Begin("Main tools", nullptr, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_None);
     leftPanelWidth = ImGui::GetWindowWidth() <= windowWidth / 2 ? ImGui::GetWindowWidth() : windowWidth / 2;
     if (ImGui::CollapsingHeader("A few words...", ImGuiTreeNodeFlags_DefaultOpen)) {
@@ -183,7 +183,7 @@ void TerrainGenApp::ImGuiRender()
 
 	//Right panel
     ImGui::SetNextWindowPos(ImVec2(windowWidth - rightPanelWidth, 0), ImGuiCond_Always);
-    ImGui::SetNextWindowSize(ImVec2(rightPanelWidth, windowHeight-60), ImGuiCond_Always);
+    ImGui::SetNextWindowSize(ImVec2(rightPanelWidth, static_cast<float>(windowHeight - 60)), ImGuiCond_Always);
     ImGui::Begin("Tools", nullptr, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_None);
     rightPanelWidth = ImGui::GetWindowWidth() <= windowWidth/2 ? ImGui::GetWindowWidth() : windowWidth/2;
 
