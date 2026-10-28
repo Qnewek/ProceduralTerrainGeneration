@@ -20,8 +20,11 @@ Plan napraw i rozwoju: `docs/ROADMAP.md` (ID zadań `B*`, `A*`, `F*` są tam zde
   Stan na 2026-10-28: kompiluje się bez błędów i bez C4715.
 - Working directory przy uruchomieniu musi być `ProceduralTerrainGenerator/` — ścieżki do `res/...` są względne.
 - Brak testów automatycznych i CI. Weryfikacja = build + ręczne uruchomienie.
-- Kompilowane pliki w vcxproj używają prefiksu `Src\...` (wielka litera), git śledzi `src/...`.
-  Na Windows to bez znaczenia, ale nie zmieniaj wielkości liter katalogów bez aktualizacji vcxproj.
+- **Wielkość liter ścieżek = dokładnie taka jak w gicie** (`git ls-files`): `src/opengl`, `src/subSystems`,
+  `src/terrainGeneration`, `src/utility`, `src/vendor`, `res/shaders`, `res/textures`, `light_source_*.shader`.
+  Dotyczy kodu (`#include`, `"res/..."`), wpisów w `.vcxproj`/`.filters` i nazw katalogów na dysku.
+  Windows i git (`core.ignorecase=true`) nie wyłapią rozjazdu — wyjdzie dopiero na Linuksie/CI.
+  VS pokazuje w Solution Explorerze nazwy z `.vcxproj`, nie z dysku.
 - Dodając nowy `.cpp`/`.h` trzeba go ręcznie dopisać do `.vcxproj` (i `.filters`).
 
 ## Struktura
