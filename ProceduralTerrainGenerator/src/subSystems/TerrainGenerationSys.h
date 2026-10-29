@@ -12,7 +12,6 @@
 class TerrainGenerationSys
 {
 private:
-	int width, height;
 	bool changeTerrain = false;
 	bool biomesGeneration = false;
 	bool editNoise = false, editSpline = false, infiniteGeneration = false;
@@ -25,9 +24,8 @@ private:
 	TerrainView view;
 	TerrainRenderSettings renderSettings;
 
-	//World parameters edited by the UI; generators only read them
-	TerrainConfig terrainConfig = TerrainConfig::Default();
-	BiomeConfig biomeConfig = BiomeConfig::Default();
+	//World parameters (map size, terrain, biomes) edited by the UI; generators only read them
+	WorldConfig world;
 
 	TerrainGenerator terrainGen;
 	BiomeGenerator biomeGen;
