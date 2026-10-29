@@ -5,60 +5,35 @@
 #include <iostream>
 
 #include "Noise.h"
-#include "Splines/spline.h"
+#include "WorldConfig.h"
 
+//Combines the three component noises of a TerrainConfig into a height map.
+//Holds only results (the height map and the component noise maps), never the configuration.
 class TerrainGenerator
 {
-public:
-	enum class WorldGenParameter {
-		CONTINENTALNESS,
-		MOUNTAINOUSNESS,
-		WEIRDNESS
-	};
-	//TODO: Different mothodes for valvulating height
-	enum class EvaluationMethod {
-		LINEAR_COMBINE,
-		SPLINE_COMBINE,
-		C
-	};
 private:
 	HeightField heightMap;
-	int resolution;
-	int seed, width, height;
+	int width, height;
 
 	noise::SimplexNoiseClass continentalnessNoise;
 	noise::SimplexNoiseClass mountainousnessNoise;
 	noise::SimplexNoiseClass weirdnessNoise;
 
-	tk::spline continentalnessSpline;
-	tk::spline mountainousnessSpline;
-	tk::spline weirdnessSpline;
-
-	EvaluationMethod evalMethod = EvaluationMethod::LINEAR_COMBINE;
 public:
 	TerrainGenerator();
 	~TerrainGenerator();
 
 	bool Initialize(int _width, int _height);
+	//Reallocates the maps; component noise maps have to be regenerated afterwards (GenerateNoises)
 	bool Resize(int _width, int _height);
-	bool GenerateTerrain(float originx, float originy);
-	bool GenerateNoises();
-
-	void SetResolution();
-	void SetContinentalnessNoiseConfig(noise::NoiseConfigParameters config) { continentalnessNoise.SetConfig(config); };
-	void SetMountainousnessNoiseConfig(noise::NoiseConfigParameters config) { mountainousnessNoise.SetConfig(config); };
-	void SetPVNoiseConfig(noise::NoiseConfigParameters config) { weirdnessNoise.SetConfig(config); };
-	bool SetSplines(std::vector<std::vector<double>> splines);
-	bool SetSpline(WorldGenParameter p, std::vector<std::vector<double>>  spline);
+	bool GenerateTerrain(const TerrainConfig& config, float originx, float originy);
+	//Generates the component noise maps (origin 0, 0) used by biomes and the noise preview
+	bool GenerateNoises(const TerrainConfig& config);
 
 	int GetWidth(){ return width; };
 	int GetHeight(){ return height; };
 	float* GetHeightMap() { return heightMap.Data(); }
 	const HeightField& GetHeightField() const { return heightMap; }
 	float GetHeightAt(int x, int y);
-	int& GetResolitionRef() { return resolution; };
-	noise::NoiseConfigParameters& GetSelectedNoiseConfig(WorldGenParameter p);
 	noise::SimplexNoiseClass& GetSelectedNoise(WorldGenParameter p);
-	EvaluationMethod& GetEvaluationMethod() { return evalMethod; };
-	std::vector<std::vector<double>> GetSplinePoints(WorldGenParameter p);
 };

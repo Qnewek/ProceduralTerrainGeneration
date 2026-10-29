@@ -29,17 +29,16 @@ bool BiomeGenerator::Initialize(int _width, int _height)
 		return false;
 	}
 
-	humidityNoise.GetConfigRef().octaves = 4;
-	temperatureNoise.GetConfigRef().seed = 123;
-	temperatureNoise.GetConfigRef().option = noise::Options::NOTHING;
-	temperatureNoise.GetConfigRef().scale = 0.5f;
-	temperatureNoise.GetConfigRef().constrast = 1.5f;
+	temperatureConfig.seed = 123;
+	temperatureConfig.option = noise::Options::NOTHING;
+	temperatureConfig.scale = 0.5f;
+	temperatureConfig.constrast = 1.5f;
 
-	humidityNoise.GetConfigRef().octaves = 4;
-	humidityNoise.GetConfigRef().seed = 321;
-	humidityNoise.GetConfigRef().option = noise::Options::NOTHING;
-	humidityNoise.GetConfigRef().scale = 0.3f;
-	humidityNoise.GetConfigRef().constrast = 1.5f;
+	humidityConfig.octaves = 4;
+	humidityConfig.seed = 321;
+	humidityConfig.option = noise::Options::NOTHING;
+	humidityConfig.scale = 0.3f;
+	humidityConfig.constrast = 1.5f;
 
 	std::vector<biome::Biome>b = {
 		biome::Biome(0, "Grassplains",	{1, 2}, {1, 4}, {3, 5}, {0, 3}, {0, 1}, glm::vec3(0.2f, 0.8f, 0.2f), 1.0f),
@@ -185,10 +184,10 @@ int BiomeGenerator::DetermineLevel(BiomeParameter p, float value)
 
 bool BiomeGenerator::GenerateComponentNoises()
 {
-	if (!temperatureNoise.GenerateFractalNoise(0.0f, 0.0f)) {
+	if (!temperatureNoise.GenerateFractalNoise(temperatureConfig, 0.0f, 0.0f)) {
 		return false;
 	}
-	if (!humidityNoise.GenerateFractalNoise(0.0f, 0.0f)) {
+	if (!humidityNoise.GenerateFractalNoise(humidityConfig, 0.0f, 0.0f)) {
 		return false;
 	}
 
@@ -286,6 +285,11 @@ noise::SimplexNoiseClass& BiomeGenerator::GetNoiseByParameter(BiomeParameter p)
 		return temperatureNoise;
 		break;
 	}
+}
+
+noise::NoiseConfigParameters& BiomeGenerator::GetNoiseConfigByParameter(BiomeParameter p)
+{
+	return p == BiomeParameter::HUMIDITY ? humidityConfig : temperatureConfig;
 }
 
 std::vector<float>& BiomeGenerator::GetLevelsByParameter(BiomeParameter p)

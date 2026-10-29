@@ -48,7 +48,7 @@ bool NoiseBasedGenerationSys::GenerateNoise(float originx, float originy)
 {
 	Resize();
 	auto start = std::chrono::steady_clock::now();
-	if (!noise.GenerateFractalNoise(originx, originy)) {
+	if (!noise.GenerateFractalNoise(noiseConfig, originx, originy)) {
 		return false;
 	}
 	lastGenerationMs = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count();
@@ -106,7 +106,7 @@ void NoiseBasedGenerationSys::ImGuiRightPanel()
 		GenerateNoise(0.0f, 0.0f);
 	}
 	
-	bool regen = utilities::NoiseImGui(noise.GetConfigRef());
+	bool regen = utilities::NoiseImGui(noiseConfig);
 	ImGui::Checkbox("Instant Update", &instantUpdate);
 	if (!instantUpdate) {
 		if (ImGui::Button("Generate new noise")) {

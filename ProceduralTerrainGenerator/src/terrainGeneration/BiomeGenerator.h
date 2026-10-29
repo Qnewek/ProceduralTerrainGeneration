@@ -26,6 +26,8 @@ private:
 
 	noise::SimplexNoiseClass temperatureNoise;
 	noise::SimplexNoiseClass humidityNoise;
+	noise::NoiseConfigParameters temperatureConfig;
+	noise::NoiseConfigParameters humidityConfig;
 public:
 	BiomeGenerator();
 	~BiomeGenerator();
@@ -46,8 +48,7 @@ public:
 	biome::Biome& GetBiome(int id) { return biomes[id]; };
 	const BiomeMap& GetBiomeMap() const { return biomeMap; };
 	int GetBiomeAt(int x, int y);
-	noise::NoiseConfigParameters& GetTemperatureNoiseConfig() { return temperatureNoise.GetConfigRef(); };
-	noise::NoiseConfigParameters& GetHumidityNoiseConfig() { return humidityNoise.GetConfigRef(); };
 	noise::SimplexNoiseClass& GetNoiseByParameter(BiomeParameter p);
+	noise::NoiseConfigParameters& GetNoiseConfigByParameter(BiomeParameter p);
 	std::vector<float>& GetLevelsByParameter(BiomeParameter p);
 };

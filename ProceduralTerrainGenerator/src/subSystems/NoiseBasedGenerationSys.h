@@ -19,7 +19,8 @@ class NoiseBasedGenerationSys
 		TerrainView view;
 		TerrainRenderSettings renderSettings;
 
-		//Perlin Noise object
+		//Noise parameters edited by the UI and the noise generated from them
+		noise::NoiseConfigParameters noiseConfig;
 		noise::SimplexNoiseClass noise;
 		erosion::Erosion erosion;
 	public:
