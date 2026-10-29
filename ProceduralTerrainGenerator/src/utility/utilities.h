@@ -31,7 +31,7 @@ namespace utilities
     std::vector<glm::vec3> GetBiomeColorMap(BiomeGenerator& biomeGen, const int& width, const int& height);
 
     void MapToVertices(float* map, float* vertices, unsigned int* indices, const int height, const int width, const unsigned int stride, const float& heightScale, heightMapMode mode, bool normalsCalculation, bool indexGeneration, bool paint);
-    void PerformErosion(erosion::Erosion& erosion, float* vertices, float scalingFactor, std::optional<float*> Track, int stride, heightMapMode mode);
+    void PerformErosion(erosion::Erosion& erosion, const erosion::ErosionConfig& config, float* vertices, float scalingFactor, std::optional<float*> Track, int stride, heightMapMode mode);
     
     //ImGui interface functions
     bool NoiseImGui(noise::NoiseConfigParameters& noiseConfig);
