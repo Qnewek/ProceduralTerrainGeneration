@@ -49,14 +49,14 @@ ProceduralTerrainGenerator/
       Erosion.*                  erozja kroplowa (CPU, lista jednokierunkowa kropel)
       VegetationGenerator.*      PUSTE — stara implementacja zakomentowana
     opengl/                      cienkie wrappery: Shader, VertexArray/Buffer, IndexBuffer, TextureClass, Renderer
+      TerrainView.*              siatka + shader + tekstury (TERRAIN/OVERLAY/BIOMES), wspólny dla obu trybów
     utility/
       Camera.*                   kamera FPS (WASD, Space/Ctrl, M = mysz, Esc = zwolnij mysz)
       LightSource.*              punktowe światło + sześcian debug
       utilities.*                helpery ImGui (NoiseImGui, DisplayModeImGui...) + dużo martwego kodu CPU-mesh
     vendor/                      glm, imgui, ImPlot, SimplexNoise, tk::spline, PoissonGenerator, stb_image, tiny_obj_loader
   res/shaders/
-    TerrainShaders/              VS → TCS → TES → FS dla trybu TerrainGen
-    HeightMapShaders/            prawie identyczna kopia dla trybu Noise (+ izolinie w FS)
+    TerrainShaders/              VS → TCS → TES → FS, jedyny zestaw dla terenu (oba tryby)
 Dependencies/                    GLFW (lib vc2022), GLEW (static)
 ```
 
@@ -64,9 +64,9 @@ Dependencies/                    GLFW (lib vc2022), GLEW (static)
 
 1. CPU generuje mapę `float[width*height]` (`SimplexNoiseClass::GenerateFractalNoise` lub
    `TerrainGenerator::GenerateTerrain`, który dla każdego piksela woła `PointNoise` trzech szumów).
-2. Mapa jest wgrywana jako **nowa** tekstura `GL_R32F` (`std::make_unique<TextureClass>(...)` przy każdej zmianie).
-3. Siatka: stała siatka `mapResolution × mapResolution` (50×50) patchy-quadów o rozmiarze `width*4`
-   (`utilities::GenerateVerticesForResolution`), rysowana `GL_PATCHES` (4 wierzchołki).
+2. Subsystem przekazuje mapę do `TerrainView::SetLayer`, który tworzy **nową** teksturę `GL_R32F` przy każdej zmianie (B15).
+3. Siatka (`TerrainView`): stała siatka `mapResolution × mapResolution` (50×50) patchy-quadów o rozmiarze
+   `width * worldUnitsPerTexel` (= 4, `GetWorldWidth()`), rysowana `GL_PATCHES` (4 wierzchołki).
 4. TCS: poziom teselacji 4–64 zależnie od odległości w przestrzeni oka. TES: próbkuje `heightMap`,
    przesuwa wierzchołek o `height * heightScale`, liczy normalną z różnic skończonych, koloruje wg `displayMode`
    (0 grey, 1 topo, 2 mono, 3 biomy z `biomeMap`).
@@ -96,7 +96,9 @@ Wartości szumów są w [-1, 1]. Konwencja indeksowania: `map[y * width + x]`.
   `config.seed`. Używaj przeciążeń `SimplexNoise::noise(perm, ...)`; globalne `reseed` / `noise(x, y)` zostały
   tylko dla zgodności. Przed zrównolegleniem `PointNoise` wywołaj `UpdatePermutation()` raz przed pętlą
   (leniwa aktualizacja w środku nie jest thread-safe).
-- Uniform `heightMap` w shaderze terenu jest przełączany między jednostką tekstury 0 (teren) i 1 (podgląd szumu).
+- Uniformy terenu ustawia wyłącznie `TerrainView::Draw` — subsystemy nie dotykają shadera. Wysokość bierze się
+  z warstwy podanej w `Draw` (`heightLayer`: TERRAIN = jednostka 0, OVERLAY = 1 dla podglądu szumu / erozji).
+- Tryb „2D map” (`flatten`) w TES ignoruje macierz `model` — przesunięcia i skala nie działają w 2D (do B6).
 - `FragPos` w TES jest w clip space, a pozycja światła w world space — oświetlenie jest błędne (B6).
 - MSBuild nie znosi ścieżek > 260 znaków — testowy clean build rób w krótkiej ścieżce (np. `%TEMP%\ptg_cc`), nie w scratchpadzie.
 - Branch `lodChunked` == `master` (brak własnych commitów) — planowane chunkowanie/LOD jeszcze nie istnieje.

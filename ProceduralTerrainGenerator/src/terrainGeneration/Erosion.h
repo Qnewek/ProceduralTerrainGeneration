@@ -84,6 +84,7 @@ namespace erosion {
 		int GetWidth() { return width; }
 		int GetHeight() { return height; }
 		float* GetMap() { return map.Data(); }
+		const HeightField& GetField() const { return map; }
 		void DontChangeMap() { changeMap = false; }
 		void ChangeMap() { changeMap = true; }
 

@@ -25,10 +25,17 @@ struct Light {
 uniform bool lightOn;
 uniform Material material;
 uniform Light light;
+//Isolines: darken a band of bandWidth every step units of height (bandWidth = 0 disables them)
+uniform float step;
+uniform float bandWidth;
 
 void main()
-{ 
+{
     vec3 baseColor = aColor;
+    float modHeight = mod(Height, step);
+    if (modHeight < bandWidth && Height >= step) {
+        baseColor *= 0.5;
+    }
 
     if(!lightOn){
         FragColor = vec4(baseColor, 1.0);
