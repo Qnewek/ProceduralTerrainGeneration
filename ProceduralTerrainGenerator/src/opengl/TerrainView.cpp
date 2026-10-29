@@ -1,6 +1,7 @@
 #include "TerrainView.h"
 
 #include <algorithm>
+#include <cmath>
 #include <iostream>
 
 #include "glm/gtc/matrix_transform.hpp"
@@ -48,6 +49,40 @@ void TerrainView::BuildMesh()
 	utilities::GenerateVerticesForResolution(vertices.data(), static_cast<int>(GetWorldWidth()), static_cast<int>(GetWorldHeight()), mapResolution, stride, 0, 3);
 	vertexBuffer = std::make_unique<VertexBuffer>(vertices.data(), static_cast<unsigned int>(vertices.size() * sizeof(float)));
 	vao->AddBuffer(*vertexBuffer, layout);
+	ResetFlatViewBounds();
+}
+
+void TerrainView::ResetFlatViewBounds()
+{
+	glm::vec2 half(GetWorldWidth() / 2.0f, GetWorldHeight() / 2.0f);
+	SetFlatViewBounds(-half, half);
+}
+
+void TerrainView::SetFlatCameraUniforms(const TerrainRenderSettings& settings)
+{
+	//Bounds are given before modelScale; model = scale * translate(offset), so scaling them is enough
+	glm::vec2 min = flatMin * settings.modelScale;
+	glm::vec2 max = flatMax * settings.modelScale;
+	glm::vec2 center = (min + max) * 0.5f;
+	glm::vec2 half = (max - min) * 0.5f * 1.02f;	//small margin
+
+	//Keep the aspect ratio of the viewport
+	GLint viewport[4];
+	glGetIntegerv(GL_VIEWPORT, viewport);
+	float aspect = viewport[3] > 0 ? static_cast<float>(viewport[2]) / viewport[3] : 1.0f;
+	if (half.x < half.y * aspect) {
+		half.x = half.y * aspect;
+	}
+	else {
+		half.y = half.x / aspect;
+	}
+
+	//Camera above the highest possible point looking straight down; +X to the right, -Z up
+	float top = std::abs(settings.heightScale * settings.modelScale) + 1.0f;
+	glm::mat4 flatView = glm::lookAt(glm::vec3(center.x, top, center.y), glm::vec3(center.x, 0.0f, center.y), glm::vec3(0.0f, 0.0f, -1.0f));
+	glm::mat4 flatProjection = glm::ortho(-half.x, half.x, -half.y, half.y, 0.0f, 2.0f * top);
+	shader->SetView(flatView);
+	shader->SetProjection(flatProjection);
 }
 
 void TerrainView::SetLayer(Layer layer, const HeightField& map)
@@ -74,13 +109,16 @@ void TerrainView::Draw(Renderer& renderer, Camera& camera, LightSource& light, c
 	shader->Bind();
 	light.SetLightUniforms(*shader);
 	camera.SetUniforms(*shader);
+	if (settings.map2d) {
+		SetFlatCameraUniforms(settings);
+	}
 	shader->SetModel(model);
+	shader->SetUniformMat3f("normalMatrix", glm::transpose(glm::inverse(glm::mat3(model))));
 	shader->SetUniform1i("displayMode", static_cast<int>(settings.displayMode));
 	shader->SetUniform1f("step", settings.topoStep);
 	shader->SetUniform1f("bandWidth", settings.topoBandWidth);
-	shader->SetUniform1i("size", std::max(width, height) / 2);
-	shader->SetUniform1i("flatten", settings.map2d);
 	shader->SetUniform1f("heightScale", settings.heightScale);
+	shader->SetUniform2f("texelWorldSize", worldUnitsPerTexel, worldUnitsPerTexel);
 	shader->SetUniform1i("heightMap", static_cast<int>(heightLayer));
 	shader->SetUniform1i("biomeMap", static_cast<int>(Layer::BIOMES));
 

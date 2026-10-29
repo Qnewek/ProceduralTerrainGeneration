@@ -18,7 +18,7 @@ biomy, roślinność i kolejne feature'y.**
 | ~~B3~~ ✅ | `utilities.cpp:312, 400`, `TerrainGenerator.cpp:186, 203`, `Noise.cpp:166` | Brak `return` na części ścieżek (C4715) | **Zrobione 2026-10-28:** brakujące `return` dodane, `GetSelectedNoiseConfig` deleguje do `GetSelectedNoise`. Build bez C4715; test ręczny — zwinięte nagłówki nie wyzwalają regeneracji |
 | ~~B4~~ ✅ | `NoiseBasedGenerationSys.cpp:195` | `PushStyleColor(..., (1.0f, 0.0f, 0.0f, 1.0f))` — operator przecinka | **Zrobione 2026-10-28:** `ImVec4(1, 0, 0, 1)` |
 | ~~B5~~ ✅ | `TerrainGenerator.cpp:66`, `NoiseBasedGenerationSys.cpp:53,130`, `TerrainGenerationSys.cpp:33`, shadery (`size = height/2`) | Niespójna kolejność `width/height` między API | **Zrobione 2026-10-29:** wszędzie `(width, height)` (w tym `TextureClass`/`glTexImage2D`), TES liczy texel osobno dla x i y; checksum benchmarku bez zmian |
-| B6 | `Terrain_evalTes.shader` (od A4 jedyny TES) | `FragPos` liczony w clip space, światło w world space; normalna liczona z kroku w UV (`texel`) vs wysokość w jednostkach świata; normalna nie przechodzi przez `model`; tryb 2D (`flatten`) ignoruje `model` | Oświetlenie jest fizycznie błędne, normalne „spłaszczone”; w 2D przesunięcia/skala nie działają (np. mapa erozji nakłada się na bazową) |
+| ~~B6~~ ✅ | `Terrain_evalTes.shader` (od A4 jedyny TES) | `FragPos` liczony w clip space, światło w world space; normalna liczona z kroku w UV (`texel`) vs wysokość w jednostkach świata; normalna nie przechodzi przez `model`; tryb 2D (`flatten`) ignoruje `model` | **Zrobione 2026-10-29:** `FragPos` w world space, krok normalnej `texelWorldSize`, `normalMatrix`; tryb 2D = ortogonalna kamera z góry w `TerrainView` (cała mapa, proporcje viewportu, `modelScale`, obie mapy przy erozji) — wcześniej pokazywał ~1/16 mapy obróconej o 90° |
 | B7 | `TerrainGenerationSys::Draw`, `NoiseBasedGenerationSys::Draw` | Tryb infinite: regeneracja **całej** mapy + nowa tekstura z mipmapami przy każdym ruchu kamery, w wątku renderującym; biomy i podgląd szumów zawsze z originem (0,0); `MakeIsland` zależy od rozmiaru mapy | Spadki FPS, biomy nie pasują do terenu po przesunięciu, wyspa „jedzie” z kamerą |
 | ~~B8~~ ✅ | `Noise.cpp:82` + `vendor/Simplex/SimplexNoise.cpp:105` | `PointNoise` woła `reseed(seed)` przy każdej próbce; tablica permutacji jest globalna | **Zrobione 2026-10-28:** permutacja per instancja, `reseed` poza hot-path; teren 512² 3239 → 227 ms (14,3×), checksum bez zmian |
 | ~~B9~~ ✅ | `Erosion.cpp:45`, klasy z `new[]` | `Erosion::map` nigdy nie zwalniany; klasy z surowymi wskaźnikami mają domyślny copy-ctor | **Zrobione 2026-10-29:** wszystkie mapy w `Grid<T>` (`std::vector`), brak `new[]`/`delete[]` poza vendor |
@@ -110,10 +110,10 @@ Cel: kod gotowy na wielowątkowość/GPU, jedna ścieżka renderingu, mierzalna 
    ~~Jeden `TerrainView` (mesh + shader + tekstury) używany przez oba tryby (**A4**).~~ ✅ 2026-10-29: `opengl/TerrainView`
    (warstwy tekstur TERRAIN/OVERLAY/BIOMES + `TerrainRenderSettings`), subsystemy bez kodu GL, jeden zestaw shaderów
    `TerrainShaders/` (izolinie w FS, `bandWidth = 0` wyłącza). Przy okazji: mapa erozji przesunięta o faktyczną szerokość
-   siatki (wcześniej `width + 1` przy siatce `width * 4` — mapy nakładały się). Zostało: tryb 2D ignoruje `model` (do B6).
+   siatki (wcześniej `width + 1` przy siatce `width * 4` — mapy nakładały się). Tryb 2D ignorujący `model` naprawiony w B6.
 5. **Shadery:** jeden zestaw z preprocesorem `#include`/`#define` (prosty loader w `Shader.cpp`), hot-reload (F5);
-   poprawka **B6** — normalne w world space (krok = rozmiar texela w jednostkach świata), `FragPos = model * p`,
-   normal matrix; wspólny UBO dla kamery i światła.
+   ~~poprawka **B6** — normalne w world space (krok = rozmiar texela w jednostkach świata), `FragPos = model * p`,
+   normal matrix~~ ✅ 2026-10-29; wspólny UBO dla kamery i światła.
 6. **B15 Tekstury:** alokacja raz (`glTexStorage2D`), aktualizacja `glTexSubImage2D`; mipmapy tylko tam, gdzie potrzebne.
 7. **Wielowątkowość CPU (przejściowo):** generacja wierszami w `std::for_each(std::execution::par)` lub prosty thread-pool;
    generacja asynchroniczna z double-bufferingiem (UI nie czeka, wynik podmieniany po zakończeniu; anulowanie przestarzałych zadań po wersji configu).
