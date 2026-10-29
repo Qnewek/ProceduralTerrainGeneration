@@ -47,7 +47,7 @@ TextureClass::TextureClass(unsigned int width, unsigned int height, unsigned cha
 	glBindTexture(GL_TEXTURE_2D, 0);
 }
 
-TextureClass::TextureClass(float* data, unsigned int width, unsigned int height): m_RendererID(0), m_FilePath(""), m_Height(height), m_Width(width), m_BPP(0), m_LocalBuffer(nullptr)
+TextureClass::TextureClass(const float* data, unsigned int width, unsigned int height): m_RendererID(0), m_FilePath(""), m_Height(height), m_Width(width), m_BPP(0), m_LocalBuffer(nullptr)
 {
 	glGenTextures(1, &m_RendererID);
 	glBindTexture(GL_TEXTURE_2D, m_RendererID);
@@ -62,7 +62,7 @@ TextureClass::TextureClass(float* data, unsigned int width, unsigned int height)
 	glBindTexture(GL_TEXTURE_2D, 0);
 }
 
-TextureClass::TextureClass(std::vector<glm::vec3> colorData, unsigned int width, unsigned int height) : m_RendererID(0), m_FilePath(""), m_Height(height), m_Width(width), m_BPP(0), m_LocalBuffer(nullptr)
+TextureClass::TextureClass(const std::vector<glm::vec3>& colorData, unsigned int width, unsigned int height) : m_RendererID(0), m_FilePath(""), m_Height(height), m_Width(width), m_BPP(0), m_LocalBuffer(nullptr)
 {
 	glGenTextures(1, &m_RendererID);
 	glBindTexture(GL_TEXTURE_2D, m_RendererID);

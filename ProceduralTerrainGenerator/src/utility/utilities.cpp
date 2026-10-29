@@ -425,16 +425,7 @@ namespace utilities
 				}
 				ImGui::EndCombo();
 			}
-			if (ImGui::Checkbox("WireFrame", &wireFrame)) {
-				if (wireFrame) {
-					glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
-					glDisable(GL_CULL_FACE);
-				}
-				else {
-					glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
-					//glEnable(GL_CULL_FACE);
-				}
-			}
+			ImGui::Checkbox("WireFrame", &wireFrame);
 
 			ImGui::Checkbox("2D map", &map2d);
 			if (ImGuiButtonWrapper("Partial generation", !infGen)) {

@@ -5,11 +5,8 @@
 #include <iostream>
 
 #include "imgui/imgui.h"
-#include "glm/glm.hpp"
-#include "glm/gtc/matrix_transform.hpp"
 
-NoiseBasedGenerationSys::NoiseBasedGenerationSys() : noise(), erosion(1, 1),
-width(0), height(0), heightScale(1.0f), modelScale(1.0f), topoBandWidth(0.2f), topoStep(10.0f), stride(5), mapResolution(50)
+NoiseBasedGenerationSys::NoiseBasedGenerationSys() : noise(), erosion(1, 1), width(0), height(0)
 {
 }
 
@@ -19,18 +16,13 @@ NoiseBasedGenerationSys::~NoiseBasedGenerationSys()
 
 bool NoiseBasedGenerationSys::Initialize(int _width, int _height, float _heightScale)
 {
-	mainVAO = std::make_unique<VertexArray>();
-	layout.Push<float>(3);
-	layout.Push<float>(2);
-	mainShader = std::make_unique<Shader>("res/shaders/HeightMapShaders/HeightMap_vertex.shader", "res/shaders/HeightMapShaders/HeightMap_fragment.shader", "res/shaders/HeightMapShaders/HeightMap_tesscontrol.shader", "res/shaders/HeightMapShaders/HeightMap_tesseval.shader");
-	mainShader->Bind();
-	mainShader->SetUniform1i("displayMode", static_cast<int>(displayMode));
-
 	this->width = _width;
 	this->height = _height;
-	this->heightScale = _heightScale;
+	renderSettings.heightScale = _heightScale;
 	noise.Initialize(width, height);
-	BuildMesh();
+	if (!view.Initialize(width, height)) {
+		return false;
+	}
 
 	if(!GenerateNoise(0.0f, 0.0f)) {
 		std::cout << "[ERROR] Invalid height or width value" << std::endl;
@@ -46,19 +38,10 @@ bool NoiseBasedGenerationSys::Resize()
 	if (height != noise.GetHeight() || width != noise.GetWidth()) {
 		erosionDraw = false;
 		noise.Resize(width, height);
-		BuildMesh();
+		view.Resize(width, height);
 		return  true;
 	}
 	return false;
-}
-
-//Rebuilds the patch grid so that it spans the current map size (width * 4 along X, height * 4 along Z)
-void NoiseBasedGenerationSys::BuildMesh()
-{
-	vertices.assign(static_cast<size_t>(mapResolution) * mapResolution * stride * 4, 0.0f);
-	utilities::GenerateVerticesForResolution(vertices.data(), width * 4, height * 4, mapResolution, stride, 0, 3);
-	mainVertexBuffer = std::make_unique<VertexBuffer>(vertices.data(), static_cast<unsigned int>(vertices.size() * sizeof(float)));
-	mainVAO->AddBuffer(*mainVertexBuffer, layout);
 }
 
 bool NoiseBasedGenerationSys::GenerateNoise(float originx, float originy)
@@ -70,7 +53,7 @@ bool NoiseBasedGenerationSys::GenerateNoise(float originx, float originy)
 	}
 	lastGenerationMs = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count();
 
-	terrainTexture = std::make_unique<TextureClass>(noise.GetMap(), width, height);
+	view.SetLayer(TerrainView::Layer::TERRAIN, noise.GetField());
 	std::cout << "[LOG] Noise based terrain initialized" << std::endl;
 	return true;
 }
@@ -93,7 +76,7 @@ bool NoiseBasedGenerationSys::SimulateErosion()
 	erosion.Erode(std::nullopt);
 	erosion.DontChangeMap();
 	erosionDraw = true;
-	erosionTexture = std::make_unique<TextureClass>(erosion.GetMap(), width, height);
+	view.SetLayer(TerrainView::Layer::OVERLAY, erosion.GetField());
 
 	std::cout << "[LOG] Erosion simulated successfully" << std::endl;
 	return true;
@@ -108,27 +91,12 @@ void NoiseBasedGenerationSys::Draw(Renderer& renderer, Camera& camera, LightSour
 		}
 		camera.CameraAnchor(true);
 	}
-	glm::mat4 model = glm::mat4(1.0f);
-	model = glm::scale(model, glm::vec3(modelScale, modelScale, modelScale));
-	light.SetLightUniforms(*mainShader);
-	camera.SetUniforms(*mainShader);
-	mainShader->SetModel(model);
-	mainShader->SetUniform1f("step", topoStep);
-	mainShader->SetUniform1f("bandWidth", topoBandWidth);
-	mainShader->SetUniform1i("size", std::max(width, height) / 2);
-	mainShader->SetUniform1i("flatten", map2d);
-	mainShader->SetUniform1i("heightMap", 0);
-	mainShader->SetUniform1f("heightScale", heightScale);
-
-	terrainTexture->Bind(0);
-	renderer.DrawPatches(*mainVAO, *mainShader, mapResolution * mapResolution, 4);
+	view.Draw(renderer, camera, light, renderSettings);
 
 	if (erosionDraw) {
-		model = glm::translate(model, glm::vec3(width + 1.0f, 0.0f, 0.0f));
-		mainShader->SetModel(model);
-		erosionTexture->Bind(1);
-		mainShader->SetUniform1i("heightMap", 1);
-		renderer.DrawPatches(*mainVAO, *mainShader, mapResolution * mapResolution, 4);
+		//Eroded map next to the base one along X, separated by a 5% gap
+		float shift = view.GetWorldWidth() * 1.05f;
+		view.Draw(renderer, camera, light, renderSettings, TerrainView::Layer::OVERLAY, glm::vec3(shift, 0.0f, 0.0f));
 	}
 }
 
@@ -158,12 +126,11 @@ void NoiseBasedGenerationSys::ImGuiRightPanel()
 
 void NoiseBasedGenerationSys::ImGuiLeftPanel()
 {
-	if (utilities::DisplayModeImGui(modelScale, topoStep, topoBandWidth, heightScale, displayMode, wireFrame, map2d, infiniteGeneration)) {
-		if(displayMode == utilities::heightMapMode::BIOMES) {
-			displayMode = utilities::heightMapMode::GREYSCALE;
+	TerrainRenderSettings& s = renderSettings;
+	if (utilities::DisplayModeImGui(s.modelScale, s.topoStep, s.topoBandWidth, s.heightScale, s.displayMode, s.wireFrame, s.map2d, infiniteGeneration)) {
+		if(s.displayMode == utilities::heightMapMode::BIOMES) {
+			s.displayMode = utilities::heightMapMode::GREYSCALE;
 		}
-		mainShader->Bind();
-		mainShader->SetUniform1i("displayMode", static_cast<int>(displayMode));
 	}
 }
 
