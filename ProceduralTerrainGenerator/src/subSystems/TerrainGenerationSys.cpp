@@ -24,6 +24,7 @@ bool TerrainGenerationSys::Initialize(int _width, int _height, float _heightScal
 	terrainGen.Initialize(width, height);
 	terrainGen.GenerateNoises(terrainConfig);
 	biomeGen.Initialize(width, height);
+	biomeGen.GenerateComponentNoises(biomeConfig);
 	GenerateTerrain(0.0f, 0.0f);
 
 	std::cout << "[LOG] TerrainGenerationSys initialized\n";
@@ -35,7 +36,7 @@ bool TerrainGenerationSys::Resize() {
 		terrainGen.Resize(width, height);
 		terrainGen.GenerateNoises(terrainConfig);
 		biomeGen.Resize(width, height);
-		biomeGen.GenerateComponentNoises();
+		biomeGen.GenerateComponentNoises(biomeConfig);
 		view.Resize(width, height);
 		return  true;
 	}
@@ -59,7 +60,7 @@ bool TerrainGenerationSys::GenerateBiomes()
 	if (biomeGen.IsGenerated()) {
 		return false;
 	}
-	if(!biomeGen.Biomify(terrainGen.GetSelectedNoise(WorldGenParameter::CONTINENTALNESS), 
+	if(!biomeGen.Biomify(biomeConfig, terrainGen.GetSelectedNoise(WorldGenParameter::CONTINENTALNESS), 
 		terrainGen.GetSelectedNoise(WorldGenParameter::MOUNTAINOUSNESS), 
 		terrainGen.GetSelectedNoise(WorldGenParameter::WEIRDNESS))) {
 		std::cout << "[ERROR] Biomes couldnt be generated\n";
@@ -233,8 +234,8 @@ void TerrainGenerationSys::BiomeNoisesEditor()
 
 	showPreview = true;
 
-	if (utilities::NoiseImGui(biomeGen.GetNoiseConfigByParameter(editedBiomeComponent))) {
-		biomeGen.GetNoiseByParameter(editedBiomeComponent).GenerateFractalNoise(biomeGen.GetNoiseConfigByParameter(editedBiomeComponent), 0.0f, 0.0f);
+	if (utilities::NoiseImGui(biomeConfig.Noise(editedBiomeComponent))) {
+		biomeGen.GetNoiseByParameter(editedBiomeComponent).GenerateFractalNoise(biomeConfig.Noise(editedBiomeComponent), 0.0f, 0.0f);
 		biomeGen.Regenerate();
 		view.SetLayer(TerrainView::Layer::OVERLAY, biomeGen.GetNoiseByParameter(editedBiomeComponent).GetField());
 	}
@@ -352,11 +353,11 @@ void TerrainGenerationSys::SplineEditor()
 }
 void TerrainGenerationSys::NoisesLevelsForBiomes() {
 	if (ImGui::CollapsingHeader("Biome levels editor", ImGuiTreeNodeFlags_DefaultOpen)) {
-		SegmentDrag(biomeGen.GetLevelsByParameter(BiomeParameter::TEMPERATURE), "Temperature levels");
-		SegmentDrag(biomeGen.GetLevelsByParameter(BiomeParameter::HUMIDITY), "Humidity levels");
-		SegmentDrag(biomeGen.GetLevelsByParameter(BiomeParameter::CONTINENTALNESS), "Continentalness levels");
-		SegmentDrag(biomeGen.GetLevelsByParameter(BiomeParameter::MOUNTAINOUSNESS), "Mountainousness levels");
-		SegmentDrag(biomeGen.GetLevelsByParameter(BiomeParameter::WEIRDNESS), "Weirdness levels");
+		SegmentDrag(biomeConfig.temperatureLevels, "Temperature levels");
+		SegmentDrag(biomeConfig.humidityLevels, "Humidity levels");
+		SegmentDrag(biomeConfig.continentalnessLevels, "Continentalness levels");
+		SegmentDrag(biomeConfig.mountainousnessLevels, "Mountainousness levels");
+		SegmentDrag(biomeConfig.weirdnessLevels, "Weirdness levels");
 	}
 }
 

@@ -27,6 +27,7 @@ private:
 
 	//World parameters edited by the UI; generators only read them
 	TerrainConfig terrainConfig = TerrainConfig::Default();
+	BiomeConfig biomeConfig = BiomeConfig::Default();
 
 	TerrainGenerator terrainGen;
 	BiomeGenerator biomeGen;
