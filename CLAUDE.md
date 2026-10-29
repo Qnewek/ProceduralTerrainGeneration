@@ -108,6 +108,9 @@ Wartości szumów są w [-1, 1]. Konwencja indeksowania: `map[y * width + x]`.
   (= `worldUnitsPerTexel`) przez `normalMatrix`. Zmieniając skalę siatki, zmień `worldUnitsPerTexel`, nie shader.
 - Tryb „2D map” nie ma osobnej gałęzi w shaderze — `TerrainView` podmienia `view`/`projection` na ortogonalną
   kamerę z góry (+X w prawo, −Z w górę) kadrującą `SetFlatViewBounds` (domyślnie cała mapa).
+- Shadery obsługują `#include "plik"` (ścieżka względna do pliku zawierającego, każdy plik raz na etap; wspólne
+  w `res/shaders/common/`). F5 w oknie aplikacji przeładowuje wszystkie shadery — przy błędzie zostaje stary program,
+  a błąd idzie do konsoli. Numery linii w błędach dotyczą pliku, w którym błąd jest, ale nazwa pliku nie jest podawana.
 - MSBuild nie znosi ścieżek > 260 znaków — testowy clean build rób w krótkiej ścieżce (np. `%TEMP%\ptg_cc`), nie w scratchpadzie.
 - Branch `lodChunked` == `master` (brak własnych commitów) — planowane chunkowanie/LOD jeszcze nie istnieje.
 

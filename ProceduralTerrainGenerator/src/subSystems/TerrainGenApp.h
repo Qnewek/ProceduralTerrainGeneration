@@ -25,7 +25,9 @@ public:
 private:
 	void Draw();
 	void ImGuiRender();
-	
+	//Rebuilds all shaders from their source files (F5)
+	void ReloadShaders();
+
 private:
 	//SubSystems
 	NoiseBasedGenerationSys noiseGenSys;
@@ -33,6 +35,9 @@ private:
 
 	//Time variables
 	float deltaTime, lastFrame;
+
+	//F5 state in the previous frame, so a held key reloads shaders once
+	bool reloadKeyWasDown = false;
 
 	//Map Size variables
 	int width, height;

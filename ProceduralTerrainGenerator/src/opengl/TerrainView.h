@@ -42,6 +42,8 @@ public:
 	//Rebuilds the mesh if the map size changed
 	//@return true if the mesh was rebuilt
 	bool Resize(int _width, int _height);
+	//Rebuilds the terrain shader from its source files (hot-reload)
+	bool ReloadShader() { return shader->Reload(); }
 
 	//Size of the patch grid in world units (before modelScale)
 	float GetWorldWidth() const { return width * worldUnitsPerTexel; }

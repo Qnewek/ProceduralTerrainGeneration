@@ -20,26 +20,22 @@ const char* Shader::ShaderTypeName(unsigned int type)
 
 
 Shader::Shader(const std::string& vertexFilepath, const std::string& fragmentFilepath)
-	: m_VertexFilePath(vertexFilepath), m_FragmentFilePath(fragmentFilepath), m_RendererID(0)
+	: m_RendererID(0), m_Stages{ {GL_VERTEX_SHADER, vertexFilepath}, {GL_FRAGMENT_SHADER, fragmentFilepath} }
 {
-	std::string vertexShader = ParseShader(vertexFilepath);
-	std::string fragmentShader = ParseShader(fragmentFilepath);
-	m_RendererID = CreateShader_vert_frag(vertexShader, fragmentShader);
+	m_RendererID = BuildProgram();
 }
 
-Shader::Shader(const std::string& filepath) {
-	std::string vertexShader = ParseShader(filepath + ".vert");
-	std::string fragmentShader = ParseShader(filepath + ".frag");
-	m_RendererID = CreateShader_vert_frag(vertexShader, fragmentShader);
+Shader::Shader(const std::string& filepath)
+	: m_RendererID(0), m_Stages{ {GL_VERTEX_SHADER, filepath + ".vert"}, {GL_FRAGMENT_SHADER, filepath + ".frag"} }
+{
+	m_RendererID = BuildProgram();
 }
 
 Shader::Shader(const std::string& vertexFilepath, const std::string& fragmentFilepath, const std::string& tessControlFilepath, const std::string& tessEvaluationFilepath)
+	: m_RendererID(0), m_Stages{ {GL_VERTEX_SHADER, vertexFilepath}, {GL_TESS_CONTROL_SHADER, tessControlFilepath},
+		{GL_TESS_EVALUATION_SHADER, tessEvaluationFilepath}, {GL_FRAGMENT_SHADER, fragmentFilepath} }
 {
-    std::string vertexShader = ParseShader(vertexFilepath);
-    std::string fragmentShader = ParseShader(fragmentFilepath);
-    std::string tessControlShader = ParseShader(tessControlFilepath);
-    std::string tessEvaluationShader = ParseShader(tessEvaluationFilepath);
-	m_RendererID = CreateShader_vert_frag_tess(vertexShader, fragmentShader, tessControlShader, tessEvaluationShader);
+	m_RendererID = BuildProgram();
 }
 
 Shader::~Shader()
@@ -47,7 +43,21 @@ Shader::~Shader()
 	glDeleteProgram(m_RendererID);
 }
 
-unsigned int Shader::CompileShader(unsigned int type, const std::string& source) {
+bool Shader::Reload()
+{
+	unsigned int program = BuildProgram();
+	if (program == 0) {
+		std::cout << "[ERROR] Shader reload failed (" << m_Stages.front().second << "), keeping the previous program" << std::endl;
+		return false;
+	}
+	glDeleteProgram(m_RendererID);
+	m_RendererID = program;
+	m_UniformLocationCache.clear();
+	std::cout << "[LOG] Shader reloaded (" << m_Stages.front().second << ")" << std::endl;
+	return true;
+}
+
+unsigned int Shader::CompileShader(unsigned int type, const std::string& source, const std::string& filepath) {
     unsigned int id = glCreateShader(type);
     const char* src = source.c_str();
     GLCALL(glShaderSource(id, 1, &src, nullptr));
@@ -60,7 +70,7 @@ unsigned int Shader::CompileShader(unsigned int type, const std::string& source)
         glGetShaderiv(id, GL_INFO_LOG_LENGTH, &length);
         std::string message(length, '\0');
         glGetShaderInfoLog(id, length, &length, message.data());
-        std::cout << "[ERROR] Failed to compile " << ShaderTypeName(type) << " shader!" << std::endl;
+        std::cout << "[ERROR] Failed to compile " << ShaderTypeName(type) << " shader: " << filepath << std::endl;
         std::cout << message << std::endl;
         glDeleteShader(id);
         return 0;
@@ -87,56 +97,82 @@ bool Shader::CheckLinkStatus(unsigned int program)
     return true;
 }
 
-std::string Shader::ParseShader(const std::string& filepath) {
+//Reads a shader source and pastes the content of every #include "file" line in its place.
+//#line directives keep compiler error line numbers pointing at the original file (the file itself is not named).
+std::string Shader::ParseShader(const std::string& filepath, std::unordered_set<std::string>& included) {
     std::ifstream shaderFile(filepath);
     if (!shaderFile.is_open()) {
-        std::cerr << "Failed to open shader file: " << filepath << std::endl;
+        std::cout << "[ERROR] Failed to open shader file: " << filepath << std::endl;
         return "";
     }
-    std::stringstream shaderStream;
-    shaderStream << shaderFile.rdbuf();
-    return shaderStream.str();
+    included.insert(filepath);
+
+    std::string directory = filepath.substr(0, filepath.find_last_of("/\\") + 1);
+    std::stringstream result;
+    std::string line;
+    int lineNumber = 0;
+    while (std::getline(shaderFile, line)) {
+        lineNumber++;
+        size_t pos = line.find_first_not_of(" \t");
+        if (pos != std::string::npos && line.compare(pos, 8, "#include") == 0) {
+            size_t open = line.find('"', pos);
+            size_t close = open == std::string::npos ? std::string::npos : line.find('"', open + 1);
+            if (close == std::string::npos) {
+                std::cout << "[ERROR] Malformed #include in " << filepath << ":" << lineNumber << std::endl;
+                return "";
+            }
+            std::string includePath = directory + line.substr(open + 1, close - open - 1);
+            if (!included.count(includePath)) {
+                std::string content = ParseShader(includePath, included);
+                if (content.empty()) {
+                    return "";
+                }
+                result << "#line 1\n" << content << "\n";
+            }
+            result << "#line " << lineNumber + 1 << "\n";
+        }
+        else {
+            result << line << "\n";
+        }
+    }
+    return result.str();
 }
 
-unsigned int Shader::CreateShader_vert_frag(const std::string& vertexShader, const std::string& fragmentShader) {
-    unsigned int program = glCreateProgram();
-    unsigned int vs = CompileShader(GL_VERTEX_SHADER, vertexShader);
-    unsigned int fs = CompileShader(GL_FRAGMENT_SHADER, fragmentShader);
-
-    glAttachShader(program, vs);
-    glAttachShader(program, fs);
-    glLinkProgram(program);
-    CheckLinkStatus(program);
-    glValidateProgram(program);
-
-    glDeleteShader(vs);
-    glDeleteShader(fs);
-
-    return program;
-}
-
-unsigned int Shader::CreateShader_vert_frag_tess(const std::string& vertexShader, const std::string& fragmentShader, const std::string& tessControlShader, const std::string& tessEvaluationShader)
+unsigned int Shader::BuildProgram()
 {
-    unsigned int program = glCreateProgram();
-    unsigned int vs = CompileShader(GL_VERTEX_SHADER, vertexShader);
-    unsigned int fs = CompileShader(GL_FRAGMENT_SHADER, fragmentShader);
-	unsigned int tcs = CompileShader(GL_TESS_CONTROL_SHADER, tessControlShader);
-	unsigned int tes = CompileShader(GL_TESS_EVALUATION_SHADER, tessEvaluationShader);
+    std::vector<unsigned int> compiled;
+    bool ok = true;
+    for (const auto& [type, filepath] : m_Stages) {
+        std::unordered_set<std::string> included;
+        std::string source = ParseShader(filepath, included);
+        unsigned int id = source.empty() ? 0 : CompileShader(type, source, filepath);
+        if (id == 0) {
+            ok = false;
+            break;
+        }
+        compiled.push_back(id);
+    }
 
-    glAttachShader(program, vs);
-    glAttachShader(program, fs);
-	glAttachShader(program, tcs);
-	glAttachShader(program, tes);
-    glLinkProgram(program);
-    CheckLinkStatus(program);
-    glValidateProgram(program);
+    unsigned int program = 0;
+    if (ok) {
+        program = glCreateProgram();
+        for (unsigned int id : compiled) {
+            glAttachShader(program, id);
+        }
+        glLinkProgram(program);
+        if (CheckLinkStatus(program)) {
+            glValidateProgram(program);
+        }
+        else {
+            glDeleteProgram(program);
+            program = 0;
+        }
+    }
 
-    glDeleteShader(vs);
-    glDeleteShader(fs);
-	glDeleteShader(tcs);
-	glDeleteShader(tes);
-
-    return program;;
+    for (unsigned int id : compiled) {
+        glDeleteShader(id);
+    }
+    return program;
 }
 
 void Shader::Bind() const

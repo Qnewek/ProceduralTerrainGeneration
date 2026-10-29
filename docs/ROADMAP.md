@@ -111,9 +111,12 @@ Cel: kod gotowy na wielowątkowość/GPU, jedna ścieżka renderingu, mierzalna 
    (warstwy tekstur TERRAIN/OVERLAY/BIOMES + `TerrainRenderSettings`), subsystemy bez kodu GL, jeden zestaw shaderów
    `TerrainShaders/` (izolinie w FS, `bandWidth = 0` wyłącza). Przy okazji: mapa erozji przesunięta o faktyczną szerokość
    siatki (wcześniej `width + 1` przy siatce `width * 4` — mapy nakładały się). Tryb 2D ignorujący `model` naprawiony w B6.
-5. **Shadery:** jeden zestaw z preprocesorem `#include`/`#define` (prosty loader w `Shader.cpp`), hot-reload (F5);
-   ~~poprawka **B6** — normalne w world space (krok = rozmiar texela w jednostkach świata), `FragPos = model * p`,
-   normal matrix~~ ✅ 2026-10-29; wspólny UBO dla kamery i światła.
+5. ~~**Shadery:** jeden zestaw z preprocesorem `#include`/`#define` (prosty loader w `Shader.cpp`), hot-reload (F5);
+   poprawka **B6** — normalne w world space (krok = rozmiar texela w jednostkach świata), `FragPos = model * p`,
+   normal matrix~~ ✅ 2026-10-29 — `#include "plik"` (ścieżka względna, `#line` dla numerów błędów), `Shader::Reload()`
+   pod F5 / przyciskiem (przy błędzie zostaje stary program), wspólne `res/shaders/common/transform.glsl`.
+   `#define` bez osobnej obsługi (wystarcza natywny preprocesor GLSL). Wspólny UBO kamery/światła przeniesiony do Fazy 4
+   (przy 2 shaderach nie zyskuje nic, a komplikuje podmianę kamery w trybie 2D).
 6. **B15 Tekstury:** alokacja raz (`glTexStorage2D`), aktualizacja `glTexSubImage2D`; mipmapy tylko tam, gdzie potrzebne.
 7. **Wielowątkowość CPU (przejściowo):** generacja wierszami w `std::for_each(std::execution::par)` lub prosty thread-pool;
    generacja asynchroniczna z double-bufferingiem (UI nie czeka, wynik podmieniany po zakończeniu; anulowanie przestarzałych zadań po wersji configu).
@@ -182,6 +185,8 @@ Cel: realistyczne, płynne przejścia i biomy wpływające na kształt terenu.
    LOD: mesh → uproszczony mesh → impostor (billboard/octahedral) → brak; trawa jako osobny system (geometry/compute, wiatr w VS).
 4. **Assety:** loader glTF (cgltf) zamiast/obok tiny_obj_loader; kilka prostych modeli drzew/krzewów/skał.
 5. **UI:** per-biom tabela roślinności (gatunek, gęstość, zakres slope/height), licznik instancji, suwak dystansu.
+6. **Wspólny UBO kamery i światła** (przeniesiony z Fazy 1 pt 5): gdy dojdą shadery roślinności/wody, `view`/`projection`/
+   pozycja kamery/światło w jednym `std140` bloku ustawianym raz na klatkę; tryb 2D jako osobny bufor albo podmiana bloku.
 
 **Kryterium:** 100k+ instancji drzew i 1M+ źdźbeł trawy przy 60 FPS; roślinność zgodna z biomami i spójna między chunkami.
 
