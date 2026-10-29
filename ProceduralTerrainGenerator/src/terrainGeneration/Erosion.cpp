@@ -38,7 +38,7 @@ namespace erosion {
 		}
 	};
 
-	Erosion::Erosion(int width, int height) : width(width), height(height), map(nullptr)
+	Erosion::Erosion(int _width, int _height) : width(_width), height(_height)
 	{
 	}
 
@@ -81,10 +81,8 @@ namespace erosion {
 			return;
 		}
 
-		delete[] map;
-		this->map = new float[width * height];
-
-		std::copy(_map, _map + (width * height), this->map);
+		map.Resize(width, height);
+		std::copy(_map, _map + map.Size(), map.Data());
 	}
 
 	//Get the reference to the configuration of the erosion

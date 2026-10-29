@@ -22,7 +22,7 @@ public:
 		C
 	};
 private:
-	float* heightMap;
+	HeightField heightMap;
 	int resolution;
 	int seed, width, height;
 
@@ -53,7 +53,8 @@ public:
 
 	int GetWidth(){ return width; };
 	int GetHeight(){ return height; };
-	float* GetHeightMap() const { return heightMap; }
+	float* GetHeightMap() { return heightMap.Data(); }
+	const HeightField& GetHeightField() const { return heightMap; }
 	float GetHeightAt(int x, int y);
 	int& GetResolitionRef() { return resolution; };
 	noise::NoiseConfigParameters& GetSelectedNoiseConfig(WorldGenParameter p);

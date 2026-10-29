@@ -2,21 +2,18 @@
 
 #include <iostream>
 #include <algorithm>
+#include <chrono>
 
 #include "imgui/imgui.h"
 #include "ImPlot/implot.h"
 
-TerrainGenerationSys::TerrainGenerationSys() : terrainVertices(nullptr), mapResolution(50),
+TerrainGenerationSys::TerrainGenerationSys() : mapResolution(50),
 heightScale(1.0f), modelScale(1.0f), stride(5), width(0), height(0), terrainGen(), biomeGen() {
 
 }
 TerrainGenerationSys::~TerrainGenerationSys() {
-	if(terrainVertices) {
-		delete[] terrainVertices;
-		terrainVertices = nullptr;
-	}
 }
-bool TerrainGenerationSys::Initialize(unsigned int _height, unsigned int _width, float _heightScale) {
+bool TerrainGenerationSys::Initialize(int _width, int _height, float _heightScale) {
 	mainVAO = std::make_unique<VertexArray>();
 	mainShader = std::make_unique<Shader>("res/shaders/TerrainShaders/Terrain_vertex.shader", "res/shaders/TerrainShaders/Terrain_fragment.shader", "res/shaders/TerrainShaders/Terrain_controlTes.shader", "res/shaders/TerrainShaders/Terrain_evalTes.shader");
 	layout.Push<float>(3);
@@ -25,14 +22,11 @@ bool TerrainGenerationSys::Initialize(unsigned int _height, unsigned int _width,
 	mainShader->SetUniform1i("displayMode", static_cast<int>(displayMode));
 	mainShader->SetUniform1i("heightMap", 0);
 
-	height = _height;
 	width = _width;
+	height = _height;
 	heightScale = _heightScale;
 	
-	terrainVertices = new float[mapResolution * mapResolution * stride * 4];
-	utilities::GenerateVerticesForResolution(terrainVertices, width*4, height*4, mapResolution, stride, 0, 3);
-	mainVertexBuffer = std::make_unique<VertexBuffer>(terrainVertices, (mapResolution * mapResolution) * stride * 4 * sizeof(float));
-	mainVAO->AddBuffer(*mainVertexBuffer, layout);
+	BuildMesh();
 	terrainGen.Initialize(width, height);
 	biomeGen.Initialize(width, height);
 	GenerateTerrain(0.0f, 0.0f);
@@ -44,16 +38,29 @@ bool TerrainGenerationSys::Initialize(unsigned int _height, unsigned int _width,
 bool TerrainGenerationSys::Resize() {
 	if (terrainGen.GetHeight() != height || terrainGen.GetWidth() != width) {
 		terrainGen.Resize(width, height);
+		biomeGen.Resize(width, height);
+		biomeGen.GenerateComponentNoises();
+		BuildMesh();
 		return  true;
 	}
 	return false;
 }
+
+//Rebuilds the patch grid so that it spans the current map size (width * 4 along X, height * 4 along Z)
+void TerrainGenerationSys::BuildMesh() {
+	terrainVertices.assign(static_cast<size_t>(mapResolution) * mapResolution * stride * 4, 0.0f);
+	utilities::GenerateVerticesForResolution(terrainVertices.data(), width * 4, height * 4, mapResolution, stride, 0, 3);
+	mainVertexBuffer = std::make_unique<VertexBuffer>(terrainVertices.data(), static_cast<unsigned int>(terrainVertices.size() * sizeof(float)));
+	mainVAO->AddBuffer(*mainVertexBuffer, layout);
+}
 bool TerrainGenerationSys::GenerateTerrain(float originx, float originy) {
 	Resize();
 
+	auto start = std::chrono::steady_clock::now();
 	if (!terrainGen.GenerateTerrain(originx, originy)) {
 		return false;
 	}
+	lastGenerationMs = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count();
 
 	terrainTxt = std::make_unique<TextureClass>(terrainGen.GetHeightMap(), width, height);
 
@@ -86,7 +93,7 @@ void TerrainGenerationSys::Draw(Renderer& renderer, Camera& camera, LightSource&
 	light.SetLightUniforms(*mainShader);
 	camera.SetUniforms(*mainShader);
 	mainShader->SetModel(model);
-	mainShader->SetUniform1i("size", height / 2);
+	mainShader->SetUniform1i("size", std::max(width, height) / 2);
 	mainShader->SetUniform1i("flatten", map2d);
 	mainShader->SetUniform1f("heightScale", heightScale);
 
@@ -100,7 +107,7 @@ void TerrainGenerationSys::Draw(Renderer& renderer, Camera& camera, LightSource&
 	renderer.DrawPatches(*mainVAO, *mainShader, mapResolution * mapResolution, 4);
 }
 void TerrainGenerationSys::ImGuiRightPanel() {
-	if(utilities::MapSizeImGui(height, width)) {
+	if(utilities::MapSizeImGui(width, height)) {
 		GenerateTerrain(0.0f, 0.0f);
 	}
 
@@ -154,6 +161,7 @@ void TerrainGenerationSys::ImGuiLeftPanel() {
 	utilities::SavingImGui();
 }
 void TerrainGenerationSys::ImGuiOutput(glm::vec3 pos) {
+	ImGui::Text("Terrain generation: %.1f ms (%dx%d)", lastGenerationMs, terrainGen.GetWidth(), terrainGen.GetHeight());
 	if(biomesGeneration && biomeGen.IsGenerated()) {
 		int posX = static_cast<int>(pos.x) + width/2;
 		int posZ = static_cast<int>(pos.z) + height/2;

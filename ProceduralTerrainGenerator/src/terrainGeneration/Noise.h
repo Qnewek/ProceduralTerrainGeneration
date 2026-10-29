@@ -1,7 +1,9 @@
 #pragma once
 
 #include "glm/glm.hpp"
+#include "Grid.h"
 
+#include <array>
 #include <cstdint>
 #include <vector>
 
@@ -64,8 +66,8 @@ namespace noise
 		SimplexNoiseClass();
 		~SimplexNoiseClass();
 
-		bool Initialize(int _height, int _width);
-		bool Resize(int _height, int _width);
+		bool Initialize(int _width, int _height);
+		bool Resize(int _width, int _height);
 
 		bool GenerateFractalNoise(float originx, float originy);
 		float PointNoise(float x, float y);
@@ -74,7 +76,8 @@ namespace noise
 
 		void SetConfig(NoiseConfigParameters _config) { config = _config; }
 
-		float* GetMap() const { return heightMap; }
+		float* GetMap() { return heightMap.Data(); }
+		const HeightField& GetField() const { return heightMap; }
 		float GetVal(int x, int y);
 		int GetWidth()  const { return width; }
 		int GetHeight() const { return height; }
@@ -82,9 +85,15 @@ namespace noise
 
 	private:
 		NoiseConfigParameters config;
-		float* heightMap;
+		HeightField heightMap;
 		int width, height;
 
+		//Permutation table owned by this noise, rebuilt only when config.seed changes
+		std::array<uint8_t, 256> perm{};
+		int permSeed = 0;
+		bool permReady = false;
+
+		void UpdatePermutation();
 		float Ridge(float h, float offset, float gain);
 	};
 }
