@@ -33,6 +33,7 @@ class NoiseBasedGenerationSys
 		bool SimulateErosion();
 
 		void Draw(Renderer& renderer, Camera& camera, LightSource& light);
+		void ReloadShaders() { view.ReloadShader(); }
 		void ImGuiRightPanel();
 		void ImGuiLeftPanel();
 		void ErosionImGui();

@@ -1,8 +1,7 @@
 #version 450 core
 layout(vertices=4) out;
 
-uniform mat4 model;
-uniform mat4 view;
+#include "../common/transform.glsl"
 
 in vec2 TexCoord[];
 out vec2 TextureCoord[];
