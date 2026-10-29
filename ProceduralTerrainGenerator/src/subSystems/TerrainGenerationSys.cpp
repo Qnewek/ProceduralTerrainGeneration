@@ -355,16 +355,28 @@ void TerrainGenerationSys::SplineEditor()
 }
 void TerrainGenerationSys::NoisesLevelsForBiomes() {
 	if (ImGui::CollapsingHeader("Biome levels editor", ImGuiTreeNodeFlags_DefaultOpen)) {
-		SegmentDrag(world.biomes.temperatureLevels, "Temperature levels");
-		SegmentDrag(world.biomes.humidityLevels, "Humidity levels");
-		SegmentDrag(world.biomes.continentalnessLevels, "Continentalness levels");
-		SegmentDrag(world.biomes.mountainousnessLevels, "Mountainousness levels");
-		SegmentDrag(world.biomes.weirdnessLevels, "Weirdness levels");
+		biomeLevelsChanged |= SegmentDrag(world.biomes.temperatureLevels, "Temperature levels");
+		biomeLevelsChanged |= SegmentDrag(world.biomes.humidityLevels, "Humidity levels");
+		biomeLevelsChanged |= SegmentDrag(world.biomes.continentalnessLevels, "Continentalness levels");
+		biomeLevelsChanged |= SegmentDrag(world.biomes.mountainousnessLevels, "Mountainousness levels");
+		biomeLevelsChanged |= SegmentDrag(world.biomes.weirdnessLevels, "Weirdness levels");
+
+		//The whole biome map is regenerated, so level changes are applied on demand instead of on every drag
+		ImGui::BeginDisabled(!biomeLevelsChanged);
+		if (ImGui::Button("Apply biome levels")) {
+			biomeGen.Regenerate();
+			GenerateBiomes();
+			biomeLevelsChanged = false;
+		}
+		ImGui::EndDisabled();
 	}
 }
 
-void TerrainGenerationSys::SegmentDrag(std::vector<float>& boundaries, std::string s)
+//Plot with draggable level boundaries
+//@return true if a boundary was moved this frame
+bool TerrainGenerationSys::SegmentDrag(std::vector<float>& boundaries, std::string s)
 {
+	bool changed = false;
 	if (ImPlot::BeginPlot(s.c_str(), ImVec2(-1, 80), ImPlotFlags_NoLegend)) {
 		ImPlot::SetupAxes("Value", "", ImPlotAxisFlags_NoDecorations, ImPlotAxisFlags_NoDecorations);
 		ImPlot::SetupAxisLimits(ImAxis_X1, -1, 1, ImGuiCond_Always);
@@ -384,7 +396,8 @@ void TerrainGenerationSys::SegmentDrag(std::vector<float>& boundaries, std::stri
 		for (size_t i = 1; i < boundaries.size() - 1; i++) {
 			double tmp = boundaries[i];
 			if (ImPlot::DragLineX((int)i, &tmp, ImVec4(1, 0, 0, 1), 1.5f)) {
-				boundaries[i] = std::clamp((float)tmp, -1.0f, 1.0f);			
+				boundaries[i] = std::clamp((float)tmp, -1.0f, 1.0f);
+				changed = true;
 			}
 			if (boundaries[i] > boundaries[i + 1]) {
 				boundaries[i + 1] = boundaries[i];
@@ -401,4 +414,5 @@ void TerrainGenerationSys::SegmentDrag(std::vector<float>& boundaries, std::stri
 
 		ImPlot::EndPlot();
 	}
+	return changed;
 }

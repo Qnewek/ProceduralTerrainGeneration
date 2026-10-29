@@ -35,6 +35,7 @@ private:
 	BiomeParameter editedBiomeComponent = BiomeParameter::TEMPERATURE;
 	int samplingResolution = 500;
 	SplinePoints splinePlotPoints;	//copy of the edited spline, applied with "Set new spline points"
+	bool biomeLevelsChanged = false;	//levels dragged but not applied yet ("Apply biome levels")
 
 	//Pressed editor buttons (0 = nothing selected)
 	int noisePressedButton = 0;
@@ -60,6 +61,6 @@ public:
 	void BiomeNoisesEditor();
 	void SplineEditor();
 	void NoisesLevelsForBiomes();
-	void SegmentDrag(std::vector<float>& boundaries, std::string s);
+	bool SegmentDrag(std::vector<float>& boundaries, std::string s);
 };
 
