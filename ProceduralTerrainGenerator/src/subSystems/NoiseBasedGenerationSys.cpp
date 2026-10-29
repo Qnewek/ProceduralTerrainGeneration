@@ -91,11 +91,18 @@ void NoiseBasedGenerationSys::Draw(Renderer& renderer, Camera& camera, LightSour
 		}
 		camera.CameraAnchor(true);
 	}
-	view.Draw(renderer, camera, light, renderSettings);
-
+	//Eroded map next to the base one along X, separated by a 5% gap; the 2D view frames both
+	float shift = view.GetWorldWidth() * 1.05f;
+	glm::vec2 half(view.GetWorldWidth() / 2.0f, view.GetWorldHeight() / 2.0f);
 	if (erosionDraw) {
-		//Eroded map next to the base one along X, separated by a 5% gap
-		float shift = view.GetWorldWidth() * 1.05f;
+		view.SetFlatViewBounds(-half, glm::vec2(shift + half.x, half.y));
+	}
+	else {
+		view.ResetFlatViewBounds();
+	}
+
+	view.Draw(renderer, camera, light, renderSettings);
+	if (erosionDraw) {
 		view.Draw(renderer, camera, light, renderSettings, TerrainView::Layer::OVERLAY, glm::vec3(shift, 0.0f, 0.0f));
 	}
 }

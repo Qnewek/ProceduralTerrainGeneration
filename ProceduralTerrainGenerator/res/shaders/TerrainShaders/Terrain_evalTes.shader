@@ -10,11 +10,11 @@ out vec3 aNormal;
 
 uniform sampler2D heightMap;
 uniform sampler2D biomeMap;
-uniform bool flatten;
-uniform int size;
 uniform int displayMode;
 uniform float heightScale;
+uniform vec2 texelWorldSize;    //size of one height map texel in world units (x, z), before model
 uniform mat4 model;
+uniform mat3 normalMatrix;      //transpose(inverse(mat3(model)))
 uniform mat4 view;
 uniform mat4 projection;
 
@@ -34,17 +34,16 @@ void main()
 
     Height =  texture(heightMap, texCoord).r * heightScale;
 
-    //Normal (gradient)
+    //Normal from central differences; both the step and the height difference are in world units
     vec2 texel = 1.0 / vec2(textureSize(heightMap, 0));
     float hL = texture(heightMap, texCoord + vec2(-texel.x, 0)).r * heightScale;
     float hR = texture(heightMap, texCoord + vec2( texel.x, 0)).r * heightScale;
     float hD = texture(heightMap, texCoord + vec2(0, -texel.y)).r * heightScale;
     float hU = texture(heightMap, texCoord + vec2(0,  texel.y)).r * heightScale;
 
-    vec3 dx = vec3(2.0 * texel.x, hR - hL, 0.0);
-    vec3 dz = vec3(0.0, hU - hD, 2.0 * texel.y);
-    aNormal = normalize(cross(dz, dx));
-    //Normal
+    vec3 dx = vec3(2.0 * texelWorldSize.x, hR - hL, 0.0);
+    vec3 dz = vec3(0.0, hU - hD, 2.0 * texelWorldSize.y);
+    aNormal = normalize(normalMatrix * cross(dz, dx));
 
     vec4 p00 = gl_in[0].gl_Position;
     vec4 p01 = gl_in[1].gl_Position;
@@ -78,12 +77,8 @@ void main()
     else if(displayMode == 3){
         aColor = texture(biomeMap, texCoord).rgb;
     }
-    if (flatten){
-        FragPos = vec3(p.z/size, p.x/size, 0.0f);
-        gl_Position = vec4(p.z/size, p.x/size, 0.0f, 1.0f);
-    }
-    else{
-        FragPos = (projection * view * model * p).xyz;
-        gl_Position = projection * view * model * p;
-    }
+    //Lighting is done in world space; the 2D map mode only swaps view/projection for a top-down orthographic camera
+    vec4 worldPos = model * p;
+    FragPos = worldPos.xyz;
+    gl_Position = projection * view * worldPos;
 }

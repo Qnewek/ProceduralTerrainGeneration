@@ -104,8 +104,10 @@ Wartości szumów są w [-1, 1]. Konwencja indeksowania: `map[y * width + x]`.
   (`SplinePoints::cubic`) — zachowane z wersji sprzed A3. Benchmark sprawdza tylko LINEAR_COMBINE.
 - Uniformy terenu ustawia wyłącznie `TerrainView::Draw` — subsystemy nie dotykają shadera. Wysokość bierze się
   z warstwy podanej w `Draw` (`heightLayer`: TERRAIN = jednostka 0, OVERLAY = 1 dla podglądu szumu / erozji).
-- Tryb „2D map” (`flatten`) w TES ignoruje macierz `model` — przesunięcia i skala nie działają w 2D (do B6).
-- `FragPos` w TES jest w clip space, a pozycja światła w world space — oświetlenie jest błędne (B6).
+- Oświetlenie w world space: `FragPos = model * p`, normalna z różnic skończonych z krokiem `texelWorldSize`
+  (= `worldUnitsPerTexel`) przez `normalMatrix`. Zmieniając skalę siatki, zmień `worldUnitsPerTexel`, nie shader.
+- Tryb „2D map” nie ma osobnej gałęzi w shaderze — `TerrainView` podmienia `view`/`projection` na ortogonalną
+  kamerę z góry (+X w prawo, −Z w górę) kadrującą `SetFlatViewBounds` (domyślnie cała mapa).
 - MSBuild nie znosi ścieżek > 260 znaków — testowy clean build rób w krótkiej ścieżce (np. `%TEMP%\ptg_cc`), nie w scratchpadzie.
 - Branch `lodChunked` == `master` (brak własnych commitów) — planowane chunkowanie/LOD jeszcze nie istnieje.
 
