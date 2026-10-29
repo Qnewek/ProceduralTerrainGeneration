@@ -12,7 +12,6 @@
 class TerrainGenerationSys
 {
 private:
-	int width, height;
 	bool changeTerrain = false;
 	bool biomesGeneration = false;
 	bool editNoise = false, editSpline = false, infiniteGeneration = false;
@@ -25,20 +24,20 @@ private:
 	TerrainView view;
 	TerrainRenderSettings renderSettings;
 
+	//World parameters (map size, terrain, biomes) edited by the UI; generators only read them
+	WorldConfig world;
+
 	TerrainGenerator terrainGen;
-	TerrainGenerator::WorldGenParameter editedComponent = TerrainGenerator::WorldGenParameter::CONTINENTALNESS;
 	BiomeGenerator biomeGen;
+
+	//Editor UI state
+	WorldGenParameter editedComponent = WorldGenParameter::CONTINENTALNESS;
 	BiomeParameter editedBiomeComponent = BiomeParameter::TEMPERATURE;
+	int samplingResolution = 500;
+	SplinePoints splinePlotPoints;	//copy of the edited spline, applied with "Set new spline points"
+	bool biomeLevelsChanged = false;	//levels dragged but not applied yet ("Apply biome levels")
 
-	struct Point {
-		float x, y;
-	};
-	std::vector<std::vector<double>> splinePlotPoints = {
-		{-1.0, 0.0, 1.0},
-		{0.0, 0.0, 0.0}
-	};
-
-	//Editor UI state (0 = nothing selected)
+	//Pressed editor buttons (0 = nothing selected)
 	int noisePressedButton = 0;
 	int biomeNoisePressedButton = 0;
 	int splinePressedButton = 0;
@@ -62,6 +61,6 @@ public:
 	void BiomeNoisesEditor();
 	void SplineEditor();
 	void NoisesLevelsForBiomes();
-	void SegmentDrag(std::vector<float>& boundaries, std::string s);
+	bool SegmentDrag(std::vector<float>& boundaries, std::string s);
 };
 

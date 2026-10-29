@@ -60,6 +60,8 @@ namespace noise
 			symmetrical(symmetrical){}
 	};
 
+	//Evaluates fractal simplex noise for a given configuration and stores the last generated map.
+	//The configuration is not owned - it is passed to every call.
 	class SimplexNoiseClass
 	{
 	public:
@@ -69,31 +71,29 @@ namespace noise
 		bool Initialize(int _width, int _height);
 		bool Resize(int _width, int _height);
 
-		bool GenerateFractalNoise(float originx, float originy);
-		float PointNoise(float x, float y);
-		bool MakeMapRidged();
-		float MakeIsland(float e, int x, int y);
+		bool GenerateFractalNoise(const NoiseConfigParameters& config, float originx, float originy);
+		float PointNoise(const NoiseConfigParameters& config, float x, float y);
+		bool MakeMapRidged(const NoiseConfigParameters& config);
+		float MakeIsland(const NoiseConfigParameters& config, float e, int x, int y);
 
-		void SetConfig(NoiseConfigParameters _config) { config = _config; }
+		//Rebuilds the permutation table if the seed changed since the last call
+		void UpdatePermutation(int seed);
 
 		float* GetMap() { return heightMap.Data(); }
 		const HeightField& GetField() const { return heightMap; }
 		float GetVal(int x, int y);
 		int GetWidth()  const { return width; }
 		int GetHeight() const { return height; }
-		NoiseConfigParameters& GetConfigRef() { return config; }
 
 	private:
-		NoiseConfigParameters config;
 		HeightField heightMap;
 		int width, height;
 
-		//Permutation table owned by this noise, rebuilt only when config.seed changes
+		//Permutation table owned by this noise, rebuilt only when the seed changes
 		std::array<uint8_t, 256> perm{};
 		int permSeed = 0;
 		bool permReady = false;
 
-		void UpdatePermutation();
 		float Ridge(float h, float offset, float gain);
 	};
 }

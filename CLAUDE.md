@@ -43,6 +43,7 @@ ProceduralTerrainGenerator/
       NoiseBasedGenerationSys.*  tryb "Noise heightmap": jeden szum + erozja (podgląd obok)
       TerrainGenerationSys.*     tryb "TerrainGen": 3 szumy + splajny + biomy, edytory ImPlot
     terrainGeneration/
+      WorldConfig.h              same dane: WorldConfig (TerrainConfig + BiomeConfig), NoiseMapConfig, ErosionConfig
       Noise.*                    noise::SimplexNoiseClass + NoiseConfigParameters (fBm, ridge, island, redistribution)
       TerrainGenerator.*         continentalness/mountainousness/weirdness → heightMap (LINEAR lub SPLINE)
       BiomeGenerator.*, Biome.*  temperatura/wilgotność + 3 szumy terenu → poziomy (int) → id biomu
@@ -82,8 +83,11 @@ Wartości szumów są w [-1, 1]. Konwencja indeksowania: `map[y * width + x]`.
   `std::cout << "[ERROR] ..."`; logi `"[LOG] ..."`.
 - Mapy jako `Grid<T>` (`terrainGeneration/Grid.h`: `HeightField`, `BiomeMap`) — bez surowych `new[]/delete[]`.
   Do OpenGL przez `.Data()`. OpenGL obiekty w `std::unique_ptr`.
-- Konfiguracje edytowane przez UI przez referencje (`GetConfigRef()`), UI = immediate-mode bezpośrednio
-  w klasach subsystemów (`ImGuiLeftPanel/RightPanel/Output`).
+- Warstwy (A3): parametry świata to same dane w `WorldConfig.h`, trzymane przez subsystem (`world` / `config`).
+  Generatory (`SimplexNoiseClass`, `TerrainGenerator`, `BiomeGenerator`, `Erosion`) **nie trzymają configu** —
+  dostają `const XxxConfig&` w każdej metodzie generującej, a same przechowują tylko wyniki (mapy).
+  UI (immediate-mode w subsystemach: `ImGuiLeftPanel/RightPanel/Output`) edytuje config, subsystem woła generację
+  i przekazuje wynik do `TerrainView`. Stan edytorów (wybrany szum, wciśnięte przyciski) to nie config.
 - Includy względem katalogów z `AdditionalIncludeDirectories` (własne: `#include "Noise.h"`) albo
   `ExternalIncludePath` (`src/vendor`, GLFW, GLEW: `"imgui/imgui.h"`) — te drugie są kompilowane z `/external:W0`.
 - Komentarze po angielsku, w stylu `//@param`.
@@ -94,8 +98,10 @@ Wartości szumów są w [-1, 1]. Konwencja indeksowania: `map[y * width + x]`.
   powinny działać; zmieniając generację sprawdź też taki przypadek.
 - Każdy `SimplexNoiseClass` ma własną tablicę permutacji (`perm`), budowaną leniwie w `PointNoise` przy zmianie
   `config.seed`. Używaj przeciążeń `SimplexNoise::noise(perm, ...)`; globalne `reseed` / `noise(x, y)` zostały
-  tylko dla zgodności. Przed zrównolegleniem `PointNoise` wywołaj `UpdatePermutation()` raz przed pętlą
+  tylko dla zgodności. Przed zrównolegleniem `PointNoise` wywołaj `UpdatePermutation(config.seed)` raz przed pętlą
   (leniwa aktualizacja w środku nie jest thread-safe).
+- Splajny: domyślne są liniowe, a po „Set new spline points” edytowany splajn staje się kubiczny
+  (`SplinePoints::cubic`) — zachowane z wersji sprzed A3. Benchmark sprawdza tylko LINEAR_COMBINE.
 - Uniformy terenu ustawia wyłącznie `TerrainView::Draw` — subsystemy nie dotykają shadera. Wysokość bierze się
   z warstwy podanej w `Draw` (`heightLayer`: TERRAIN = jednostka 0, OVERLAY = 1 dla podglądu szumu / erozji).
 - Tryb „2D map” (`flatten`) w TES ignoruje macierz `model` — przesunięcia i skala nie działają w 2D (do B6).

@@ -1,7 +1,7 @@
 #include "BiomeGenerator.h"
 #include <iostream>
 
-BiomeGenerator::BiomeGenerator() : height(0), width(0), biomesLevels(5), temperatureNoise(), humidityNoise()
+BiomeGenerator::BiomeGenerator() : height(0), width(0), temperatureNoise(), humidityNoise()
 {
 }
 
@@ -29,18 +29,6 @@ bool BiomeGenerator::Initialize(int _width, int _height)
 		return false;
 	}
 
-	humidityNoise.GetConfigRef().octaves = 4;
-	temperatureNoise.GetConfigRef().seed = 123;
-	temperatureNoise.GetConfigRef().option = noise::Options::NOTHING;
-	temperatureNoise.GetConfigRef().scale = 0.5f;
-	temperatureNoise.GetConfigRef().constrast = 1.5f;
-
-	humidityNoise.GetConfigRef().octaves = 4;
-	humidityNoise.GetConfigRef().seed = 321;
-	humidityNoise.GetConfigRef().option = noise::Options::NOTHING;
-	humidityNoise.GetConfigRef().scale = 0.3f;
-	humidityNoise.GetConfigRef().constrast = 1.5f;
-
 	std::vector<biome::Biome>b = {
 		biome::Biome(0, "Grassplains",	{1, 2}, {1, 4}, {3, 5}, {0, 3}, {0, 1}, glm::vec3(0.2f, 0.8f, 0.2f), 1.0f),
 		biome::Biome(1, "Desert",		{2, 4}, {0, 1}, {3, 5}, {0, 4}, {0, 1}, glm::vec3(0.95f, 0.1f, 0.1f), 1.0f),
@@ -50,23 +38,7 @@ bool BiomeGenerator::Initialize(int _width, int _height)
 		biome::Biome(5, "Ocean",		{0, 4}, {0, 4}, {0, 2}, {0, 7}, {0, 1}, glm::vec3(0.2f, 0.4f, 0.85f), 1.0f)
 	};
 
-	//Value -1 as a lower boundry
-	std::vector<std::vector<float>> r = {
-		{-1.0f, -0.5f, 0.0f, 0.5f, 1.01f},
-		{-1.0f, -0.5f, 0.0f, 0.5f, 1.01f},
-		{-1.0f, -0.7f, -0.2f, 0.03f, 0.3f, 1.01f},
-		{-1.0f, -0.78f, -0.37f, -0.2f, 0.05f, 0.45f, 0.55f, 1.01f},
-		{-1.0f, 1.1f}
-	};
-
 	if (!SetBiomes(b)) {
-		return false;
-	}
-	if (!SetRanges(r)) {
-		return false;
-	}
-	//Calculating component noises with basic configuration
-	if (!GenerateComponentNoises()) {
 		return false;
 	}
 
@@ -97,7 +69,7 @@ bool BiomeGenerator::Resize(int _width, int _height)
 
 
 
-bool BiomeGenerator::Biomify(noise::SimplexNoiseClass& continenatlness, noise::SimplexNoiseClass& mountainousness, noise::SimplexNoiseClass& weirdness)
+bool BiomeGenerator::Biomify(const BiomeConfig& config, noise::SimplexNoiseClass& continenatlness, noise::SimplexNoiseClass& mountainousness, noise::SimplexNoiseClass& weirdness)
 {
 	if(!biomeMap) {
 		std::cout << "[ERROR] BiomeMap not initialized\n";
@@ -114,11 +86,11 @@ bool BiomeGenerator::Biomify(noise::SimplexNoiseClass& continenatlness, noise::S
 
 	for (int y = 0; y < height; y++) {
 		for (int x = 0; x < width; x++) {
-			H = DetermineLevel(BiomeParameter::HUMIDITY, humidityNoise.GetVal(x, y));
-			T = DetermineLevel(BiomeParameter::TEMPERATURE, temperatureNoise.GetVal(x, y));
-			C = DetermineLevel(BiomeParameter::CONTINENTALNESS, continenatlness.GetVal(x, y));
-			M = DetermineLevel(BiomeParameter::MOUNTAINOUSNESS, mountainousness.GetVal(x, y));
-			W = DetermineLevel(BiomeParameter::WEIRDNESS, weirdness.GetVal(x, y)); 
+			H = DetermineLevel(config.humidityLevels, humidityNoise.GetVal(x, y));
+			T = DetermineLevel(config.temperatureLevels, temperatureNoise.GetVal(x, y));
+			C = DetermineLevel(config.continentalnessLevels, continenatlness.GetVal(x, y));
+			M = DetermineLevel(config.mountainousnessLevels, mountainousness.GetVal(x, y));
+			W = DetermineLevel(config.weirdnessLevels, weirdness.GetVal(x, y));
 
 			biomeMap[y * width + x] = DetermineBiome(T, H, C, M, W);
 		}
@@ -139,43 +111,12 @@ int BiomeGenerator::DetermineBiome(const int& temperature, const int& humidity, 
 	return 0;
 }
 
-int BiomeGenerator::DetermineLevel(BiomeParameter p, float value)
+//Returns the level of value: index i such that levels[i] <= value < levels[i + 1]
+//@param levels - ascending level boundaries (see BiomeConfig)
+int BiomeGenerator::DetermineLevel(const std::vector<float>& levels, float value)
 {
-	std::vector<float> *levels;
-	switch (p)
-	{
-	case BiomeParameter::TEMPERATURE:
-	{
-		levels = &biomesLevels[0];
-		break;
-	}
-	case BiomeParameter::HUMIDITY:
-	{
-		levels = &biomesLevels[1];
-		break;
-	}
-	case BiomeParameter::CONTINENTALNESS:
-	{
-		levels = &biomesLevels[2];
-		break;
-	}
-	case BiomeParameter::MOUNTAINOUSNESS:
-	{
-		levels = &biomesLevels[3];
-		break;
-	}
-	case BiomeParameter::WEIRDNESS:
-	{
-		levels = &biomesLevels[4];
-		break;
-	}
-	default:
-		std::cout << "[ERROR] Wrong biome option!" << std::endl;
-		return -1;
-		break;
-	}
-	for (int i = 0; i < (int)levels->size(); i++) {
-		if (value < (*levels)[i]) {
+	for (int i = 0; i < (int)levels.size(); i++) {
+		if (value < levels[i]) {
 			return i - 1;
 		}
 	}
@@ -183,64 +124,15 @@ int BiomeGenerator::DetermineLevel(BiomeParameter p, float value)
 	return -2;
 }
 
-bool BiomeGenerator::GenerateComponentNoises()
+bool BiomeGenerator::GenerateComponentNoises(const BiomeConfig& config)
 {
-	if (!temperatureNoise.GenerateFractalNoise(0.0f, 0.0f)) {
+	if (!temperatureNoise.GenerateFractalNoise(config.temperature, 0.0f, 0.0f)) {
 		return false;
 	}
-	if (!humidityNoise.GenerateFractalNoise(0.0f, 0.0f)) {
-		return false;
-	}
-
-	return true;
-}
-
-
-bool BiomeGenerator::SetRanges(std::vector<std::vector<float>>& ranges)
-{
-	if (ranges.size() != 5) {
-		std::cout << "[ERROR] Ranges initialization array empty!" << std::endl;
+	if (!humidityNoise.GenerateFractalNoise(config.humidity, 0.0f, 0.0f)) {
 		return false;
 	}
 
-	biomesLevels = ranges;
-
-	return true;
-}
-
-bool BiomeGenerator::SetRange(BiomeParameter c, std::vector<float> range)
-{
-	switch (c) {
-	case BiomeParameter::TEMPERATURE:
-	{
-		biomesLevels[0] = range;
-		break;
-	}
-	case BiomeParameter::HUMIDITY:
-	{
-		biomesLevels[1] = range;
-		break;
-	}
-	case BiomeParameter::CONTINENTALNESS:
-	{
-		biomesLevels[2] = range;
-		break;
-	}
-	case BiomeParameter::MOUNTAINOUSNESS:
-	{
-		biomesLevels[3] = range;
-		break;
-	}
-	case BiomeParameter::WEIRDNESS:
-	{
-		biomesLevels[4] = range;
-		break;
-	}
-	default:
-		std::cout << "[ERROR] Wrong biome option!" << std::endl;
-		return false;
-		break;
-	}
 	return true;
 }
 
@@ -288,40 +180,4 @@ noise::SimplexNoiseClass& BiomeGenerator::GetNoiseByParameter(BiomeParameter p)
 	}
 }
 
-std::vector<float>& BiomeGenerator::GetLevelsByParameter(BiomeParameter p)
-{
-	switch (p) {
-	case BiomeParameter::TEMPERATURE:
-	{
-		return biomesLevels[0];
-		break;
-	}
-	case BiomeParameter::HUMIDITY:
-	{
-		return biomesLevels[1];
-		break;
-	}
-	case BiomeParameter::CONTINENTALNESS:
-	{
-		return biomesLevels[2];
-		break;
-	}
-	case BiomeParameter::MOUNTAINOUSNESS:
-	{
-		return biomesLevels[3];
-		break;
-	}
-	case BiomeParameter::WEIRDNESS:
-	{
-		return biomesLevels[4];
-		break;
-	}
-	default:
-	{
-		std::cout << "[ERROR] Wrong biome option!" << std::endl;
-		break;
-	}
-	}
-	return biomesLevels[0];
-}
 

@@ -50,20 +50,6 @@ namespace erosion {
 	//Configuration functions
 	//--------------------------------------------------------------------------------------
 
-	//Set the configuration of the erosion
-	//@param config - ErosionConfig struct containing all the parameters of the erosion
-	void Erosion::SetConfig(ErosionConfig _config)
-	{
-		config = _config;
-	}
-
-	//Set the number of droplets to be simulated
-	//@param dropletCount - number of droplets to be simulated
-	void Erosion::SetDropletCount(int _dropletCount)
-	{
-		dropletCount = _dropletCount;
-	}
-	
 	//Resizes the map to the new dimensions
 	//@param width - new width of the map
 	//@param height - new height of the map
@@ -85,13 +71,6 @@ namespace erosion {
 		std::copy(_map, _map + map.Size(), map.Data());
 	}
 
-	//Get the reference to the configuration of the erosion
-	//@return reference to the ErosionConfig struct
-	ErosionConfig& Erosion::GetConfigRef()
-	{
-		return config;
-	}
-
 	//--------------------------------------------------------------------------------------
 	//Simulation functions
 	//--------------------------------------------------------------------------------------
@@ -107,8 +86,9 @@ namespace erosion {
 	}
 
 	//Main simulation function
+	//@param config - erosion parameters
 	//@param Track - optional pointer to the array of vertices to store the path of the droplet (pass std::nullopt to disable)
-	void Erosion::Erode(std::optional<float*> Track)
+	void Erosion::Erode(const ErosionConfig& config, std::optional<float*> Track)
 	{
 		ListNode* dropletsHead = nullptr;
 		ListNode* dropletPrev = nullptr;
@@ -130,7 +110,7 @@ namespace erosion {
 
 		//Creatint a new droplets on a random cell on the map
 		//Initialize the droplet with initial values cofigured by the user
-		for (int i = 0; i < dropletCount; i++) {
+		for (int i = 0; i < config.dropletCount; i++) {
 			dropletCurrent->next = new ListNode({ dist(gen) * width, dist(gen) * height }, config.initialVelocity, config.initialWater, config.initialCapacity);
 			dropletCurrent = dropletCurrent->next;
 
@@ -197,7 +177,7 @@ namespace erosion {
 						}
 						else {
 							sedimentToCollect = -sedimentToCollect;
-							dropletCurrent->d->AdjustSediment(ErodeRadius(oldPosition, dropletCurrent->d->GetPosition(), sedimentToCollect));
+							dropletCurrent->d->AdjustSediment(ErodeRadius(config, oldPosition, dropletCurrent->d->GetPosition(), sedimentToCollect));
 						}
 
 					}
@@ -314,7 +294,7 @@ namespace erosion {
 		}
 	}
 
-	float Erosion::ErodeRadius(vec2 oldPos, vec2 newPos, float ammountEroded) {
+	float Erosion::ErodeRadius(const ErosionConfig& config, vec2 oldPos, vec2 newPos, float ammountEroded) {
 		//Erode the terrain in a circular radius around the droplet
 		//Its done due to the fact that no thermal erosion or sediment sliding is simulated in this project
 		//In order to perform mentioned above action we need to calculate weights of each point within the radius

@@ -35,7 +35,7 @@ biomy, roślinność i kolejne feature'y.**
 |----|---------|--------------------------------------|
 | A1 | **Generacja wyłącznie na CPU, jednowątkowo, synchronicznie w pętli renderującej** | Edycja parametrów w czasie rzeczywistym jest możliwa tylko dla małych map; każdy suwak blokuje klatkę |
 | A2 | Ręczne zarządzanie pamięcią (`new[]`/`delete[]`, raw pointers), brak rule-of-5 | Błędy B9, trudne refaktory |
-| A3 | Logika generacji, stan UI i rendering wymieszane w subsystemach (`TerrainGenerationSys` = 420 linii UI+GL+logika) | Nie da się przenieść generacji na wątek/GPU ani testować bez okna |
+| ~~A3~~ ✅ | Logika generacji, stan UI i rendering wymieszane w subsystemach (`TerrainGenerationSys` = 420 linii UI+GL+logika) | Nie da się przenieść generacji na wątek/GPU ani testować bez okna — **Zrobione 2026-10-29:** config w `WorldConfig.h`, generatory bezstanowe względem configu, GL w `TerrainView` |
 | ~~A4~~ ✅ | Duplikacja: dwa subsystemy z identycznym `Initialize/Draw/Resize`, dwa zestawy shaderów różniące się kilkoma liniami | Każdą poprawkę (np. B6) trzeba robić 2× — **Zrobione 2026-10-29:** wspólny `TerrainView`, jeden zestaw shaderów |
 | A5 | Brak modelu „świata”: mapa = jeden prostokąt `width×height` przypięty do kamery; brak chunków, LOD, cache | Infinite terrain i duże światy są niewykonalne wydajnie |
 | A6 | Biomy oparte o dyskretne poziomy `int` i pierwszy pasujący biom z `unordered_map` (kolejność nieokreślona!) | Ostre granice, niedeterministyczny wybór przy nakładaniu się zakresów, brak blendingu, trudne do konfiguracji |
@@ -98,7 +98,12 @@ Cel: kod gotowy na wielowątkowość/GPU, jedna ścieżka renderingu, mierzalna 
 3. ~~**B8 Szum:** usunąć `reseed` z hot-path.~~ ✅ 2026-10-28: tablica permutacji per instancja `SimplexNoiseClass`
    (vendor dostał przeciążenia `noise(perm, ...)`), wynik bit w bit identyczny. Teren 512²: 3239 → 227 ms (**14,3×**).
    Dalej do rozważenia: **FastNoise2** (SIMD, fBm/ridged/domain warp) — kolejne ~5–10× na CPU.
-4. **A3 Rozdzielenie warstw:** `WorldConfig` (czyste struktury), generatory bez ImGui/GL, UI tylko edytuje config.
+4. ~~**A3 Rozdzielenie warstw:** `WorldConfig` (czyste struktury), generatory bez ImGui/GL, UI tylko edytuje config.~~
+   ✅ 2026-10-29: `terrainGeneration/WorldConfig.h` — `WorldConfig` (rozmiar + `TerrainConfig` + `BiomeConfig`) dla trybu
+   TerrainGen, `NoiseMapConfig` (rozmiar + szum + `ErosionConfig`) dla trybu Noise. `SimplexNoiseClass`, `TerrainGenerator`,
+   `BiomeGenerator`, `Erosion` dostają `const Config&` i trzymają tylko wyniki; checksum benchmarku bez zmian.
+   Zostało na później: definicje biomów nadal w `BiomeGenerator` (przebudowa w A6); regeneracja nadal sterowana flagami
+   (`changeTerrain`, `Regenerate()`, `ChangeMap()`) — do zastąpienia porównaniem/wersją configu przy generacji asynchronicznej (pkt 7).
    ~~Jeden `TerrainView` (mesh + shader + tekstury) używany przez oba tryby (**A4**).~~ ✅ 2026-10-29: `opengl/TerrainView`
    (warstwy tekstur TERRAIN/OVERLAY/BIOMES + `TerrainRenderSettings`), subsystemy bez kodu GL, jeden zestaw shaderów
    `TerrainShaders/` (izolinie w FS, `bandWidth = 0` wyłącza). Przy okazji: mapa erozji przesunięta o faktyczną szerokość

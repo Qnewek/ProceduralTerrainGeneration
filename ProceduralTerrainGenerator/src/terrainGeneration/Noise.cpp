@@ -14,7 +14,7 @@
 namespace noise
 {
 	SimplexNoiseClass::SimplexNoiseClass()
-		: config(NoiseConfigParameters()), width(0), height(0)
+		: width(0), height(0)
 	{
 	}
 	SimplexNoiseClass::~SimplexNoiseClass()
@@ -24,12 +24,12 @@ namespace noise
 	//Rebuilds the permutation table if the seed changed since the last call.
 	//Replaces the global SimplexNoise::reseed, which reshuffled a shared table on every sample
 	//whenever noises with different seeds were evaluated alternately (B8)
-	void SimplexNoiseClass::UpdatePermutation()
+	void SimplexNoiseClass::UpdatePermutation(int seed)
 	{
-		if (permReady && permSeed == config.seed)
+		if (permReady && permSeed == seed)
 			return;
-		SimplexNoise::makePermutation(config.seed, perm.data());
-		permSeed = config.seed;
+		SimplexNoise::makePermutation(seed, perm.data());
+		permSeed = seed;
 		permReady = true;
 	}
 
@@ -67,7 +67,7 @@ namespace noise
 
 	//Function generating perlin noise based on the configuration parameters
 	//Return a 2D height map of the noise in range for one configuration
-	bool SimplexNoiseClass::GenerateFractalNoise(float originx, float originy)
+	bool SimplexNoiseClass::GenerateFractalNoise(const NoiseConfigParameters& config, float originx, float originy)
 	{
 		if (!heightMap) {
 			std::cout << "[ERROR] Noise object not initialized!" << std::endl;
@@ -78,16 +78,16 @@ namespace noise
 		{
 			for (int x = 0; x < width; x++)
 			{
-				heightMap[y * width + x] = PointNoise(x + originx,y + originy);
+				heightMap[y * width + x] = PointNoise(config, x + originx,y + originy);
 			}
 		}
 		std::cout << "[LOG] Noise successfully generated" << std::endl;
 		return true;
 	}
 
-	float SimplexNoiseClass::PointNoise(float x, float y)
+	float SimplexNoiseClass::PointNoise(const NoiseConfigParameters& config, float x, float y)
 	{
-		UpdatePermutation();
+		UpdatePermutation(config.seed);
 		float amplitude = 1.0f;
 		float frequency = 1.0f;
 		float elevation = 0.0f;
@@ -96,7 +96,7 @@ namespace noise
 
 		for (int i = 0; i < config.octaves; i++)
 		{
-			if (this->config.symmetrical) {
+			if (config.symmetrical) {
 				float TAU = 2.0f * std::numbers::pi_v<float>;
 				float anglex = TAU * (x / (float)config.resolution);
 				float angley = TAU * (y / (float)config.resolution);
@@ -143,7 +143,7 @@ namespace noise
 
 		//Make island
 		if (config.island) {
-			elevation = std::fabsf(MakeIsland(elevation, static_cast<int>(x), static_cast<int>(y)));
+			elevation = std::fabsf(MakeIsland(config, elevation, static_cast<int>(x), static_cast<int>(y)));
 		}
 
 		//Redistribute the noise
@@ -171,7 +171,7 @@ namespace noise
 
 	//Function generating Ridged noise based on the configuration parameters
 	//
-	bool SimplexNoiseClass::MakeMapRidged()
+	bool SimplexNoiseClass::MakeMapRidged(const NoiseConfigParameters& config)
 	{
 		if (!this->heightMap)
 			return false;
@@ -191,7 +191,7 @@ namespace noise
 	//@param e - elevation value
 	//@param x - x coordinate
 	//@param y - y coordinate
-	float SimplexNoiseClass::MakeIsland(float e, int x, int y) {
+	float SimplexNoiseClass::MakeIsland(const NoiseConfigParameters& config, float e, int x, int y) {
 		float nx = x * 2 / (float)width  -1;
 		float ny = y * 2 / (float)height -1;
 		float distance = 0;

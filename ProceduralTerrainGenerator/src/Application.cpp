@@ -48,10 +48,11 @@ static int RunBenchmark()
 		std::ostringstream sink;
 		std::streambuf* original = std::cout.rdbuf(sink.rdbuf());
 
+		const TerrainConfig config = TerrainConfig::Default();
 		TerrainGenerator gen;
 		bool ok = gen.Initialize(size, size);
-		double noisesMs = MedianMs([&] { gen.GenerateNoises(); });
-		double terrainMs = MedianMs([&] { gen.GenerateTerrain(0.0f, 0.0f); });
+		double noisesMs = MedianMs([&] { gen.GenerateNoises(config); });
+		double terrainMs = MedianMs([&] { gen.GenerateTerrain(config, 0.0f, 0.0f); });
 
 		std::cout.rdbuf(original);
 		if (!ok) {
