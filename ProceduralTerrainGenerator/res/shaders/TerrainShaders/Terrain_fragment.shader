@@ -44,7 +44,7 @@ void main()
 
     vec3 ambient;
     vec3 diffuse;
-    vec3 norm = aNormal;
+    vec3 norm = normalize(aNormal);
     vec3 lightDir = normalize(light.position - FragPos);
 
     ambient = light.ambient * baseColor.rgb;

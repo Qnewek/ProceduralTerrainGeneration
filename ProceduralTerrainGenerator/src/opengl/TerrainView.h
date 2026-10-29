@@ -20,7 +20,7 @@ struct TerrainRenderSettings {
 	float topoBandWidth = 0.2f;		//0 disables isolines
 	utilities::heightMapMode displayMode = utilities::heightMapMode::GREYSCALE;
 	bool wireFrame = false;
-	bool map2d = false;
+	bool map2d = false;		//top-down orthographic view instead of the camera
 };
 
 //Renders a height field as a tessellated patch grid. Owns the mesh, the shader and the textures,
@@ -42,10 +42,17 @@ public:
 	//Rebuilds the mesh if the map size changed
 	//@return true if the mesh was rebuilt
 	bool Resize(int _width, int _height);
+	//Rebuilds the terrain shader from its source files (hot-reload)
+	bool ReloadShader() { return shader->Reload(); }
 
 	//Size of the patch grid in world units (before modelScale)
 	float GetWorldWidth() const { return width * worldUnitsPerTexel; }
 	float GetWorldHeight() const { return height * worldUnitsPerTexel; }
+
+	//Area (XZ, world units before modelScale) framed by the 2D map view; defaults to the map itself.
+	//Set it when drawing several maps side by side so all of them fit.
+	void SetFlatViewBounds(glm::vec2 min, glm::vec2 max) { flatMin = min; flatMax = max; }
+	void ResetFlatViewBounds();
 
 	void SetLayer(Layer layer, const HeightField& map);
 	void SetBiomeColors(const std::vector<glm::vec3>& colors, int _width, int _height);
@@ -59,6 +66,10 @@ public:
 
 private:
 	void BuildMesh();
+	//Sets view/projection of a top-down orthographic camera framing the flat view bounds
+	void SetFlatCameraUniforms(const TerrainRenderSettings& settings);
+
+	glm::vec2 flatMin = glm::vec2(0.0f), flatMax = glm::vec2(0.0f);
 
 	//One map texel spans this many world units
 	static constexpr float worldUnitsPerTexel = 4.0f;
