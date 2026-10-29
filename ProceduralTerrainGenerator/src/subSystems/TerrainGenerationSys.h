@@ -1,41 +1,32 @@
 #pragma once
 
-#include "VertexBufferLayout.h"
 #include "glm/glm.hpp"
-#include "glm/gtc/matrix_transform.hpp"
 
 #include "utilities.h"
 #include "TerrainGenerator.h"
 #include "BiomeGenerator.h"
 #include "Camera.h"
 #include "LightSource.h"
+#include "TerrainView.h"
 
 class TerrainGenerationSys
 {
 private:
-	std::vector<float> terrainVertices;
-	float heightScale, modelScale;
-	unsigned int stride;
-	int width, height, mapResolution;
-	bool wireFrame = false, changeTerrain = false;
-	bool biomesGeneration = false, map2d = false;
+	int width, height;
+	bool changeTerrain = false;
+	bool biomesGeneration = false;
 	bool editNoise = false, editSpline = false, infiniteGeneration = false;
+	//true while an edited component noise (OVERLAY layer) is shown instead of the terrain
+	bool showPreview = false;
 	glm::vec3 oldCamPos = glm::vec3(0.0f);
 	double lastGenerationMs = 0.0;
 
-	//OpenGl objects
-	VertexBufferLayout layout;
-	std::unique_ptr<VertexArray> mainVAO;
-	std::unique_ptr<VertexBuffer> mainVertexBuffer;
-	std::unique_ptr<Shader> mainShader;
-	std::unique_ptr<TextureClass> terrainTxt;
-	std::unique_ptr<TextureClass> noiseTxt;
-	std::unique_ptr<TextureClass> biomeTxt;
+	//Rendering
+	TerrainView view;
+	TerrainRenderSettings renderSettings;
 
 	TerrainGenerator terrainGen;
-	TerrainGenerator::EvaluationMethod evaluatingMode = TerrainGenerator::EvaluationMethod::LINEAR_COMBINE;
 	TerrainGenerator::WorldGenParameter editedComponent = TerrainGenerator::WorldGenParameter::CONTINENTALNESS;
-	utilities::heightMapMode displayMode = utilities::heightMapMode::TOPOGRAPHICAL;
 	BiomeGenerator biomeGen;
 	BiomeParameter editedBiomeComponent = BiomeParameter::TEMPERATURE;
 
@@ -59,7 +50,6 @@ public:
 	
 	bool Initialize(int _width, int _height, float _heightScale);
 	bool Resize();
-	void BuildMesh();
 	bool GenerateTerrain(float originx, float originy);
 	bool GenerateBiomes();
 
