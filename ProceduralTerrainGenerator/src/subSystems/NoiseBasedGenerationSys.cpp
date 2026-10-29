@@ -6,7 +6,7 @@
 
 #include "imgui/imgui.h"
 
-NoiseBasedGenerationSys::NoiseBasedGenerationSys() : noise(), erosion(1, 1), width(0), height(0)
+NoiseBasedGenerationSys::NoiseBasedGenerationSys() : noise(), erosion(1, 1)
 {
 }
 
@@ -16,11 +16,11 @@ NoiseBasedGenerationSys::~NoiseBasedGenerationSys()
 
 bool NoiseBasedGenerationSys::Initialize(int _width, int _height, float _heightScale)
 {
-	this->width = _width;
-	this->height = _height;
+	config.width = _width;
+	config.height = _height;
 	renderSettings.heightScale = _heightScale;
-	noise.Initialize(width, height);
-	if (!view.Initialize(width, height)) {
+	noise.Initialize(config.width, config.height);
+	if (!view.Initialize(config.width, config.height)) {
 		return false;
 	}
 
@@ -35,10 +35,10 @@ bool NoiseBasedGenerationSys::Initialize(int _width, int _height, float _heightS
 
 bool NoiseBasedGenerationSys::Resize()
 {
-	if (height != noise.GetHeight() || width != noise.GetWidth()) {
+	if (config.height != noise.GetHeight() || config.width != noise.GetWidth()) {
 		erosionDraw = false;
-		noise.Resize(width, height);
-		view.Resize(width, height);
+		noise.Resize(config.width, config.height);
+		view.Resize(config.width, config.height);
 		return  true;
 	}
 	return false;
@@ -48,7 +48,7 @@ bool NoiseBasedGenerationSys::GenerateNoise(float originx, float originy)
 {
 	Resize();
 	auto start = std::chrono::steady_clock::now();
-	if (!noise.GenerateFractalNoise(noiseConfig, originx, originy)) {
+	if (!noise.GenerateFractalNoise(config.noise, originx, originy)) {
 		return false;
 	}
 	lastGenerationMs = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count();
@@ -60,7 +60,7 @@ bool NoiseBasedGenerationSys::GenerateNoise(float originx, float originy)
 
 bool NoiseBasedGenerationSys::SimulateErosion()
 {
-	if(width <=1 || height <= 1) {
+	if(config.width <=1 || config.height <= 1) {
 		std::cout << "[ERROR] Invalid height or width value" << std::endl;
 		return false;
 	}
@@ -68,12 +68,12 @@ bool NoiseBasedGenerationSys::SimulateErosion()
 		std::cout << "[ERROR] Noise map not initialized" << std::endl;
 		return false;
 	}
-	if(height != erosion.GetHeight() || width != erosion.GetWidth()) {
-		erosion.Resize(width, height);
+	if(config.height != erosion.GetHeight() || config.width != erosion.GetWidth()) {
+		erosion.Resize(config.width, config.height);
 	}
 
 	erosion.SetMap(noise.GetMap());
-	erosion.Erode(std::nullopt);
+	erosion.Erode(config.erosion, std::nullopt);
 	erosion.DontChangeMap();
 	erosionDraw = true;
 	view.SetLayer(TerrainView::Layer::OVERLAY, erosion.GetField());
@@ -102,11 +102,11 @@ void NoiseBasedGenerationSys::Draw(Renderer& renderer, Camera& camera, LightSour
 
 void NoiseBasedGenerationSys::ImGuiRightPanel()
 {
-	if(utilities::MapSizeImGui(width, height)) {
+	if(utilities::MapSizeImGui(config.width, config.height)) {
 		GenerateNoise(0.0f, 0.0f);
 	}
-	
-	bool regen = utilities::NoiseImGui(noiseConfig);
+
+	bool regen = utilities::NoiseImGui(config.noise);
 	ImGui::Checkbox("Instant Update", &instantUpdate);
 	if (!instantUpdate) {
 		if (ImGui::Button("Generate new noise")) {
@@ -138,19 +138,20 @@ void NoiseBasedGenerationSys::ErosionImGui()
 {
 	//Erosion settings
 	if (ImGui::CollapsingHeader("Erosion Settings")) {
-		ImGui::InputInt("Droplet count", &erosion.GetDropletCountRef());
-		ImGui::InputInt("Droplet lifetime", &erosion.GetConfigRef().dropletLifetime);
-		ImGui::InputFloat("Inertia", &erosion.GetConfigRef().inertia);
-		ImGui::InputFloat("Droplet init capacity", &erosion.GetConfigRef().initialCapacity, 0.01f, 1.0f);
-		ImGui::InputFloat("Droplet init velocity", &erosion.GetConfigRef().initialVelocity, 0.0f, 1.0f);
-		ImGui::InputFloat("Droplet init water", &erosion.GetConfigRef().initialWater, 0.0f, 1.0f);
-		ImGui::InputFloat("Erosion rate", &erosion.GetConfigRef().erosionRate, 0.0f, 1.0f);
-		ImGui::InputFloat("Deposition rate", &erosion.GetConfigRef().depositionRate, 0.0f, 1.0f);
-		ImGui::InputFloat("Evaporation rate", &erosion.GetConfigRef().evaporationRate, 0.0f, 1.0f);
-		ImGui::InputFloat("Gravity", &erosion.GetConfigRef().gravity, 0.0f, 10.0f);
-		ImGui::InputFloat("Min slope", &erosion.GetConfigRef().minSlope, 0.0f, 1.0f);
-		ImGui::InputInt("Erosion radius", &erosion.GetConfigRef().erosionRadius);
-		ImGui::InputFloat("Blur", &erosion.GetConfigRef().blur, 0.0f, 1.0f);
+		erosion::ErosionConfig& e = config.erosion;
+		ImGui::InputInt("Droplet count", &e.dropletCount);
+		ImGui::InputInt("Droplet lifetime", &e.dropletLifetime);
+		ImGui::InputFloat("Inertia", &e.inertia);
+		ImGui::InputFloat("Droplet init capacity", &e.initialCapacity, 0.01f, 1.0f);
+		ImGui::InputFloat("Droplet init velocity", &e.initialVelocity, 0.0f, 1.0f);
+		ImGui::InputFloat("Droplet init water", &e.initialWater, 0.0f, 1.0f);
+		ImGui::InputFloat("Erosion rate", &e.erosionRate, 0.0f, 1.0f);
+		ImGui::InputFloat("Deposition rate", &e.depositionRate, 0.0f, 1.0f);
+		ImGui::InputFloat("Evaporation rate", &e.evaporationRate, 0.0f, 1.0f);
+		ImGui::InputFloat("Gravity", &e.gravity, 0.0f, 10.0f);
+		ImGui::InputFloat("Min slope", &e.minSlope, 0.0f, 1.0f);
+		ImGui::InputInt("Erosion radius", &e.erosionRadius);
+		ImGui::InputFloat("Blur", &e.blur, 0.0f, 1.0f);
 
 		if (ImGui::Button("Erode map")) {
 			SimulateErosion();

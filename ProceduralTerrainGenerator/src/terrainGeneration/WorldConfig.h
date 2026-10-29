@@ -80,6 +80,43 @@ struct TerrainConfig {
 	}
 };
 
+namespace erosion {
+	//Configuration parameters for the erosion
+	//@param erosionRate: The rate at which the droplet erodes the terrain
+	//@param depositionRate: The rate at which the droplet deposits sediment
+	//@param evaporationRate: The rate at which the droplet Evaporates
+	//@param gravity: The force of gravity on the droplet
+	//@param inertia: The inertia of the droplet
+	//@param minSlope: The minimum slope for the droplet to move
+	//@param erosionRadius: The radius of the droplet
+	//@param blur: The blur of the droplet
+	//@param dropletLifetime: The lifetime of the droplet
+	//@param dropletCount: The number of simulated droplets
+	//@param initialWater: The initial amount of water in the droplet
+	//@param initialVelocity: The initial velocity of the droplet
+	//@param initialCapacity: The initial capacity of the droplet
+	struct ErosionConfig {
+		//Erosion parameters
+		float erosionRate = 0.6f;
+		float depositionRate = 0.5f;
+		float evaporationRate = 0.01f;
+
+		float gravity = 1.0f;
+		float inertia = 0.1f;
+
+		float minSlope = 0.0f;
+		int erosionRadius = 3;
+		float blur = 0.0f;
+
+		int dropletLifetime = 64;
+		int dropletCount = 20000;
+
+		float initialWater = 1.0f;
+		float initialVelocity = 1.0f;
+		float initialCapacity = 1.0f;
+	};
+}
+
 //Parameters a biome is chosen by
 enum class BiomeParameter {
 	CONTINENTALNESS,
@@ -133,4 +170,18 @@ struct BiomeConfig {
 		c.weirdnessLevels = { -1.0f, 1.1f };
 		return c;
 	}
+};
+
+//Everything the "TerrainGen" mode generates from
+struct WorldConfig {
+	int width = 0, height = 0;
+	TerrainConfig terrain = TerrainConfig::Default();
+	BiomeConfig biomes = BiomeConfig::Default();
+};
+
+//Everything the "Noise heightmap" mode generates from
+struct NoiseMapConfig {
+	int width = 0, height = 0;
+	noise::NoiseConfigParameters noise;
+	erosion::ErosionConfig erosion;
 };

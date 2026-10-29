@@ -299,8 +299,8 @@ namespace utilities
 	//@param positionsOffset - offset in the vertex array to start with when filling the data
 	//@param normalsOffset - offset in the vertex array to start with when filling the normals
 	//@param erosion - erosion object
-	void PerformErosion(erosion::Erosion& erosion, float* vertices, float scalingFactor, std::optional<float*> Track, int stride, heightMapMode mode) {
-		erosion.Erode(Track);
+	void PerformErosion(erosion::Erosion& erosion, const erosion::ErosionConfig& config, float* vertices, float scalingFactor, std::optional<float*> Track, int stride, heightMapMode mode) {
+		erosion.Erode(config, Track);
 		ParseNoiseIntoVertices(vertices, erosion.GetMap(), erosion.GetWidth(), erosion.GetHeight(), scalingFactor, stride, 0);
 		CalculateHeightMapNormals(vertices, stride, 3, erosion.GetWidth(), erosion.GetHeight());
 		PaintVerticesByHeight(vertices, erosion.GetWidth(), erosion.GetHeight(), scalingFactor, stride, mode, 1, 6);

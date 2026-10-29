@@ -9,8 +9,9 @@
 class NoiseBasedGenerationSys
 {
 	private:
-		//Config
-		int width, height;
+		//Map size, noise and erosion parameters edited by the UI; generators only read them
+		NoiseMapConfig config;
+
 		bool erosionDraw = false, instantUpdate = true, infiniteGeneration = false;
 		double lastGenerationMs = 0.0;
 		glm::vec3 oldCamPos = glm::vec3(0.0f, 0.0f, 0.0f);
@@ -19,8 +20,7 @@ class NoiseBasedGenerationSys
 		TerrainView view;
 		TerrainRenderSettings renderSettings;
 
-		//Noise parameters edited by the UI and the noise generated from them
-		noise::NoiseConfigParameters noiseConfig;
+		//Generators (hold results only)
 		noise::SimplexNoiseClass noise;
 		erosion::Erosion erosion;
 	public:
