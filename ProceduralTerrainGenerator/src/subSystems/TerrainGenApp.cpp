@@ -109,6 +109,13 @@ void TerrainGenApp::Start()
 
 		camera.CameraAnchor(false);
         camera.SteerCamera(window, deltaTime, true);
+
+        bool reloadKeyDown = glfwGetKey(window, GLFW_KEY_F5) == GLFW_PRESS;
+        if (reloadKeyDown && !reloadKeyWasDown) {
+            ReloadShaders();
+        }
+        reloadKeyWasDown = reloadKeyDown;
+
 		Draw();
         ImGuiRender();
 
@@ -150,6 +157,13 @@ void TerrainGenApp::Draw()
     }
 
     glDisable(GL_SCISSOR_TEST);
+}
+
+void TerrainGenApp::ReloadShaders()
+{
+    noiseGenSys.ReloadShaders();
+    terrainGenSys.ReloadShaders();
+    light.ReloadShader();
 }
 
 void TerrainGenApp::ImGuiRender()
@@ -209,7 +223,12 @@ void TerrainGenApp::ImGuiRender()
     if (ImGui::Button("TerrainGen"))
     {
         currentMode = mode::TERRAIN_GEN;
-    }    
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("Reload shaders (F5)"))
+    {
+        ReloadShaders();
+    }
     ImGui::End();
 
 	//Bottom panel

@@ -23,6 +23,7 @@ public:
 	void Initialize();
 	void Draw(Renderer& renderer, glm::mat4& view, glm::mat4& projection);
 	void ImGuiDraw();
+	void ReloadShader() { m_Shader->Reload(); }
 	bool IsLightOn() { return lightOn; }
 
 	void SetPosition(glm::vec3 position) { lightPos = position; }

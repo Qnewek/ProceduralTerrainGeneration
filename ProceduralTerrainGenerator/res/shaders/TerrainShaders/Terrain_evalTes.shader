@@ -13,10 +13,7 @@ uniform sampler2D biomeMap;
 uniform int displayMode;
 uniform float heightScale;
 uniform vec2 texelWorldSize;    //size of one height map texel in world units (x, z), before model
-uniform mat4 model;
-uniform mat3 normalMatrix;      //transpose(inverse(mat3(model)))
-uniform mat4 view;
-uniform mat4 projection;
+#include "../common/transform.glsl"
 
 void main()
 {
