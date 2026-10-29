@@ -25,20 +25,19 @@ private:
 	TerrainView view;
 	TerrainRenderSettings renderSettings;
 
+	//World parameters edited by the UI; generators only read them
+	TerrainConfig terrainConfig = TerrainConfig::Default();
+
 	TerrainGenerator terrainGen;
-	TerrainGenerator::WorldGenParameter editedComponent = TerrainGenerator::WorldGenParameter::CONTINENTALNESS;
 	BiomeGenerator biomeGen;
+
+	//Editor UI state
+	WorldGenParameter editedComponent = WorldGenParameter::CONTINENTALNESS;
 	BiomeParameter editedBiomeComponent = BiomeParameter::TEMPERATURE;
+	int samplingResolution = 500;
+	SplinePoints splinePlotPoints;	//copy of the edited spline, applied with "Set new spline points"
 
-	struct Point {
-		float x, y;
-	};
-	std::vector<std::vector<double>> splinePlotPoints = {
-		{-1.0, 0.0, 1.0},
-		{0.0, 0.0, 0.0}
-	};
-
-	//Editor UI state (0 = nothing selected)
+	//Pressed editor buttons (0 = nothing selected)
 	int noisePressedButton = 0;
 	int biomeNoisePressedButton = 0;
 	int splinePressedButton = 0;

@@ -1507,6 +1507,9 @@
     <ClInclude Include="src\terrainGeneration\Grid.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="src\terrainGeneration\WorldConfig.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
     <ClInclude Include="src\terrainGeneration\TerrainGenerator.h">
       <Filter>Header Files</Filter>
     </ClInclude>

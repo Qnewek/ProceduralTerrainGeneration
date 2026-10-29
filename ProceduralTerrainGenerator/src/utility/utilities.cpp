@@ -3,6 +3,7 @@
 #include "utilities.h"
 
 #include <math.h>
+#include <algorithm>
 #include <fstream>
 #include <sstream>
 #include <GL/glew.h>

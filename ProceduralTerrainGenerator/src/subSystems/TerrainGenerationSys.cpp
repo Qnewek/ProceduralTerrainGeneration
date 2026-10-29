@@ -22,6 +22,7 @@ bool TerrainGenerationSys::Initialize(int _width, int _height, float _heightScal
 		return false;
 	}
 	terrainGen.Initialize(width, height);
+	terrainGen.GenerateNoises(terrainConfig);
 	biomeGen.Initialize(width, height);
 	GenerateTerrain(0.0f, 0.0f);
 
@@ -32,6 +33,7 @@ bool TerrainGenerationSys::Initialize(int _width, int _height, float _heightScal
 bool TerrainGenerationSys::Resize() {
 	if (terrainGen.GetHeight() != height || terrainGen.GetWidth() != width) {
 		terrainGen.Resize(width, height);
+		terrainGen.GenerateNoises(terrainConfig);
 		biomeGen.Resize(width, height);
 		biomeGen.GenerateComponentNoises();
 		view.Resize(width, height);
@@ -43,7 +45,7 @@ bool TerrainGenerationSys::GenerateTerrain(float originx, float originy) {
 	Resize();
 
 	auto start = std::chrono::steady_clock::now();
-	if (!terrainGen.GenerateTerrain(originx, originy)) {
+	if (!terrainGen.GenerateTerrain(terrainConfig, originx, originy)) {
 		return false;
 	}
 	lastGenerationMs = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count();
@@ -57,9 +59,9 @@ bool TerrainGenerationSys::GenerateBiomes()
 	if (biomeGen.IsGenerated()) {
 		return false;
 	}
-	if(!biomeGen.Biomify(terrainGen.GetSelectedNoise(TerrainGenerator::WorldGenParameter::CONTINENTALNESS), 
-		terrainGen.GetSelectedNoise(TerrainGenerator::WorldGenParameter::MOUNTAINOUSNESS), 
-		terrainGen.GetSelectedNoise(TerrainGenerator::WorldGenParameter::WEIRDNESS))) {
+	if(!biomeGen.Biomify(terrainGen.GetSelectedNoise(WorldGenParameter::CONTINENTALNESS), 
+		terrainGen.GetSelectedNoise(WorldGenParameter::MOUNTAINOUSNESS), 
+		terrainGen.GetSelectedNoise(WorldGenParameter::WEIRDNESS))) {
 		std::cout << "[ERROR] Biomes couldnt be generated\n";
 		return false;
 	}
@@ -84,7 +86,7 @@ void TerrainGenerationSys::ImGuiRightPanel() {
 
 	if (ImGui::CollapsingHeader("Terrain settings", ImGuiTreeNodeFlags_DefaultOpen)) {
 		ImGui::Text("Evaluating method");
-		int evaluatingOption = static_cast<int>(terrainGen.GetEvaluationMethod());
+		int evaluatingOption = static_cast<int>(terrainConfig.method);
 		const char* methodOptions[] = { "Linear", "Spline" };
 		if (ImGui::BeginCombo("Method: ", methodOptions[evaluatingOption]))
 		{
@@ -93,7 +95,7 @@ void TerrainGenerationSys::ImGuiRightPanel() {
 				bool is_selected = (evaluatingOption == n);
 				if (ImGui::Selectable(methodOptions[n], is_selected)) {
 					evaluatingOption = n;
-					terrainGen.GetEvaluationMethod() = static_cast<TerrainGenerator::EvaluationMethod>(evaluatingOption);
+					terrainConfig.method = static_cast<EvaluationMethod>(evaluatingOption);
 					changeTerrain = true;
 				}
 				if (is_selected)
@@ -101,9 +103,12 @@ void TerrainGenerationSys::ImGuiRightPanel() {
 			}
 			ImGui::EndCombo();
 		}
-		ImGui::SliderInt("Sampling resolution", &terrainGen.GetResolitionRef(), 10, 1000);
+		ImGui::SliderInt("Sampling resolution", &samplingResolution, 10, 1000);
 		if (ImGui::Button("Change resolution")) {
-			terrainGen.SetResolution();
+			terrainConfig.continentalness.resolution = samplingResolution;
+			terrainConfig.mountainousness.resolution = samplingResolution;
+			terrainConfig.weirdness.resolution = samplingResolution;
+			terrainGen.GenerateNoises(terrainConfig);
 			GenerateTerrain(0.0f, 0.0f);
 		}
 		NoiseEditor();
@@ -150,19 +155,19 @@ void TerrainGenerationSys::NoiseEditor()
 			ImGui::Text("Select noise to edit:");
 			if (utilities::ImGuiButtonWrapper("Mountainousness", noisePressedButton == 1 ? true : false)) {
 				noisePressedButton = 1;
-				editedComponent = TerrainGenerator::WorldGenParameter::MOUNTAINOUSNESS;
+				editedComponent = WorldGenParameter::MOUNTAINOUSNESS;
 				view.SetLayer(TerrainView::Layer::OVERLAY, terrainGen.GetSelectedNoise(editedComponent).GetField());
 			}
 			ImGui::SameLine();
 			if (utilities::ImGuiButtonWrapper("Continentalness", noisePressedButton == 2 ? true : false)) {
 				noisePressedButton = 2;
-				editedComponent = TerrainGenerator::WorldGenParameter::CONTINENTALNESS;
+				editedComponent = WorldGenParameter::CONTINENTALNESS;
 				view.SetLayer(TerrainView::Layer::OVERLAY, terrainGen.GetSelectedNoise(editedComponent).GetField());
 			}
 			ImGui::SameLine();
 			if (utilities::ImGuiButtonWrapper("Weirdness", noisePressedButton == 3 ? true : false)) {
 				noisePressedButton = 3;
-				editedComponent = TerrainGenerator::WorldGenParameter::WEIRDNESS;
+				editedComponent = WorldGenParameter::WEIRDNESS;
 				view.SetLayer(TerrainView::Layer::OVERLAY, terrainGen.GetSelectedNoise(editedComponent).GetField());
 			}
 			if (noisePressedButton == 0) {
@@ -171,8 +176,8 @@ void TerrainGenerationSys::NoiseEditor()
 			}
 
 			biomesGeneration = false;
-			if (utilities::NoiseImGui(terrainGen.GetSelectedNoiseConfig(editedComponent))) {
-				terrainGen.GetSelectedNoise(editedComponent).GenerateFractalNoise(0.0f, 0.0f);
+			if (utilities::NoiseImGui(terrainConfig.Noise(editedComponent))) {
+				terrainGen.GetSelectedNoise(editedComponent).GenerateFractalNoise(terrainConfig.Noise(editedComponent), 0.0f, 0.0f);
 				changeTerrain = true;
 				view.SetLayer(TerrainView::Layer::OVERLAY, terrainGen.GetSelectedNoise(editedComponent).GetField());
 			}
@@ -228,8 +233,8 @@ void TerrainGenerationSys::BiomeNoisesEditor()
 
 	showPreview = true;
 
-	if (utilities::NoiseImGui(biomeGen.GetNoiseByParameter(editedBiomeComponent).GetConfigRef())) {
-		biomeGen.GetNoiseByParameter(editedBiomeComponent).GenerateFractalNoise(0.0f, 0.0f);
+	if (utilities::NoiseImGui(biomeGen.GetNoiseConfigByParameter(editedBiomeComponent))) {
+		biomeGen.GetNoiseByParameter(editedBiomeComponent).GenerateFractalNoise(biomeGen.GetNoiseConfigByParameter(editedBiomeComponent), 0.0f, 0.0f);
 		biomeGen.Regenerate();
 		view.SetLayer(TerrainView::Layer::OVERLAY, biomeGen.GetNoiseByParameter(editedBiomeComponent).GetField());
 	}
@@ -253,20 +258,20 @@ void TerrainGenerationSys::SplineEditor()
 			ImGui::Text("Select spline to edit:");
 			if (utilities::ImGuiButtonWrapper("Mountainousness", splinePressedButton == 1 ? true : false)) {
 				splinePressedButton = 1;
-				editedComponent = TerrainGenerator::WorldGenParameter::MOUNTAINOUSNESS;
-				splinePlotPoints = terrainGen.GetSplinePoints(editedComponent);
+				editedComponent = WorldGenParameter::MOUNTAINOUSNESS;
+				splinePlotPoints = terrainConfig.Spline(editedComponent);
 			}
 			ImGui::SameLine();
 			if (utilities::ImGuiButtonWrapper("Continentalness", splinePressedButton == 2 ? true : false)) {
 				splinePressedButton = 2;
-				editedComponent = TerrainGenerator::WorldGenParameter::CONTINENTALNESS;
-				splinePlotPoints = terrainGen.GetSplinePoints(editedComponent);
+				editedComponent = WorldGenParameter::CONTINENTALNESS;
+				splinePlotPoints = terrainConfig.Spline(editedComponent);
 			}
 			ImGui::SameLine();
 			if (utilities::ImGuiButtonWrapper("Weirdness", splinePressedButton == 3 ? true : false)) {
 				splinePressedButton = 3;
-				editedComponent = TerrainGenerator::WorldGenParameter::WEIRDNESS;
-				splinePlotPoints = terrainGen.GetSplinePoints(editedComponent);
+				editedComponent = WorldGenParameter::WEIRDNESS;
+				splinePlotPoints = terrainConfig.Spline(editedComponent);
 			}
 
 			if (splinePressedButton == 0) {
@@ -274,7 +279,7 @@ void TerrainGenerationSys::SplineEditor()
 				return;
 			}
 
-			if (splinePlotPoints.size() != 2 || splinePlotPoints[0].size() != splinePlotPoints[1].size()) {
+			if (splinePlotPoints.x.size() < 3 || splinePlotPoints.x.size() != splinePlotPoints.y.size()) {
 				std::cout << "[ERROR] Spline points not set correctly\n";
 				return;
 			}
@@ -289,17 +294,17 @@ void TerrainGenerationSys::SplineEditor()
 				ImPlot::SetupAxisLimits(ImAxis_X1, xmin, xmax, ImGuiCond_Always);
 				ImPlot::SetupAxisLimits(ImAxis_Y1, ymin, ymax, ImGuiCond_Always);
 
-				std::vector<double> xs, ys; xs.reserve(splinePlotPoints[0].size()); ys.reserve(splinePlotPoints[1].size());
-				for (auto& p : splinePlotPoints[0]) { xs.push_back(p); }
-				for (auto& p : splinePlotPoints[1]) { ys.push_back(p); }
-				ImPlot::PlotLine("Spline (lin.)", xs.data(), ys.data(), (int)splinePlotPoints[0].size());
-				ImPlot::PlotScatter("Spline points", xs.data(), ys.data(), (int)splinePlotPoints[0].size());
+				std::vector<double> xs, ys; xs.reserve(splinePlotPoints.x.size()); ys.reserve(splinePlotPoints.y.size());
+				for (auto& p : splinePlotPoints.x) { xs.push_back(p); }
+				for (auto& p : splinePlotPoints.y) { ys.push_back(p); }
+				ImPlot::PlotLine("Spline (lin.)", xs.data(), ys.data(), (int)splinePlotPoints.x.size());
+				ImPlot::PlotScatter("Spline points", xs.data(), ys.data(), (int)splinePlotPoints.x.size());
 
 				ImPlotPoint mouse = ImPlot::GetPlotMousePos();
 				if (splineDraggedPoint == -1 && ImPlot::IsPlotHovered() && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
-					for (int i = 0; i < (int)splinePlotPoints[0].size(); ++i) {
-						double dx = (double)mouse.x - splinePlotPoints[0][i];
-						double dy = (double)mouse.y - splinePlotPoints[1][i];
+					for (int i = 0; i < (int)splinePlotPoints.x.size(); ++i) {
+						double dx = (double)mouse.x - splinePlotPoints.x[i];
+						double dy = (double)mouse.y - splinePlotPoints.y[i];
 						if (dx * dx + dy * dy <= pick_radius * pick_radius) {
 							splineDraggedPoint = i;
 							break;
@@ -309,15 +314,15 @@ void TerrainGenerationSys::SplineEditor()
 
 				if (splineDraggedPoint != -1) {
 					if (ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
-						if (splineDraggedPoint == 0 || splineDraggedPoint == (int)splinePlotPoints[0].size() - 1) {
-							splinePlotPoints[1][splineDraggedPoint] = std::clamp((double)mouse.y, ymin, ymax);
+						if (splineDraggedPoint == 0 || splineDraggedPoint == (int)splinePlotPoints.x.size() - 1) {
+							splinePlotPoints.y[splineDraggedPoint] = std::clamp((double)mouse.y, ymin, ymax);
 						}
 						else {
-							double xmin_drag = splinePlotPoints[0][splineDraggedPoint - 1] + 0.01;
-							double xmax_drag = splinePlotPoints[0][splineDraggedPoint + 1] - 0.01;
+							double xmin_drag = splinePlotPoints.x[splineDraggedPoint - 1] + 0.01;
+							double xmax_drag = splinePlotPoints.x[splineDraggedPoint + 1] - 0.01;
 
-							splinePlotPoints[0][splineDraggedPoint] = std::clamp((double)mouse.x, xmin_drag, xmax_drag);
-							splinePlotPoints[1][splineDraggedPoint] = std::clamp((double)mouse.y, ymin, ymax);
+							splinePlotPoints.x[splineDraggedPoint] = std::clamp((double)mouse.x, xmin_drag, xmax_drag);
+							splinePlotPoints.y[splineDraggedPoint] = std::clamp((double)mouse.y, ymin, ymax);
 						}
 					}
 					else {
@@ -326,8 +331,8 @@ void TerrainGenerationSys::SplineEditor()
 				}
 
 				if (splineDraggedPoint == -1 && ImPlot::IsPlotHovered()) {
-					for (int i = 0; i < (int)splinePlotPoints[0].size(); i++) {
-						double dx = (double)mouse.x - splinePlotPoints[0][i], dy = (double)mouse.y - splinePlotPoints[1][i];
+					for (int i = 0; i < (int)splinePlotPoints.x.size(); i++) {
+						double dx = (double)mouse.x - splinePlotPoints.x[i], dy = (double)mouse.y - splinePlotPoints.y[i];
 						if (dx * dx + dy * dy <= pick_radius * pick_radius) {
 							ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
 							break;
@@ -337,7 +342,9 @@ void TerrainGenerationSys::SplineEditor()
 				ImPlot::EndPlot();
 			}
 			if (ImGui::Button("Set new spline points")) {
-				terrainGen.SetSpline(editedComponent, splinePlotPoints);
+				//Edited splines are smoothed (cubic), the defaults are linear - behaviour kept from before A3
+				splinePlotPoints.cubic = true;
+				terrainConfig.Spline(editedComponent) = splinePlotPoints;
 				changeTerrain = true;
 			}
 		}
