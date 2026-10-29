@@ -39,6 +39,9 @@
     <ClCompile Include="src\opengl\TextureClass.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="src\opengl\TerrainView.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="src\vendor\glm\detail\glm.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -529,12 +532,8 @@
     </None>
     <None Include="res\shaders\TerrainShaders\Terrain_fragment.shader" />
     <None Include="res\shaders\TerrainShaders\Terrain_vertex.shader" />
-    <None Include="res\shaders\HeightMapShaders\HeightMap_vertex.shader" />
-    <None Include="res\shaders\HeightMapShaders\HeightMap_fragment.shader" />
     <None Include="res\shaders\light_source_fragment.shader" />
     <None Include="res\shaders\light_source_vertex.shader" />
-    <None Include="res\shaders\HeightMapShaders\HeightMap_tesscontrol.shader" />
-    <None Include="res\shaders\HeightMapShaders\HeightMap_tesseval.shader" />
     <None Include="res\shaders\TerrainShaders\Terrain_controlTes.shader" />
     <None Include="res\shaders\TerrainShaders\Terrain_evalTes.shader" />
   </ItemGroup>
@@ -561,6 +560,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="src\opengl\TextureClass.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\opengl\TerrainView.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="src\vendor\glm\detail\_features.hpp">

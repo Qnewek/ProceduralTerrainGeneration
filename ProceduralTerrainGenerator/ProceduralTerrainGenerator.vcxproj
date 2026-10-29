@@ -101,6 +101,7 @@
     <ClCompile Include="src\opengl\Renderer.cpp" />
     <ClCompile Include="src\opengl\Shader.cpp" />
     <ClCompile Include="src\opengl\TextureClass.cpp" />
+    <ClCompile Include="src\opengl\TerrainView.cpp" />
     <ClCompile Include="src\utility\Camera.cpp" />
     <ClCompile Include="src\utility\LightSource.cpp" />
     <ClCompile Include="src\subSystems\NoiseBasedGenerationSys.cpp" />
@@ -150,16 +151,12 @@
     <ClCompile Include="src\subSystems\TerrainGenerationSys.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <None Include="res\shaders\HeightMapShaders\HeightMap_tesscontrol.shader" />
-    <None Include="res\shaders\HeightMapShaders\HeightMap_tesseval.shader" />
     <None Include="res\shaders\light_source_fragment.shader" />
     <None Include="res\shaders\light_source_vertex.shader" />
     <None Include="res\shaders\TerrainShaders\Terrain_controlTes.shader" />
     <None Include="res\shaders\TerrainShaders\Terrain_evalTes.shader" />
     <None Include="res\shaders\TerrainShaders\Terrain_vertex.shader" />
     <None Include="res\shaders\TerrainShaders\Terrain_fragment.shader" />
-    <None Include="res\shaders\HeightMapShaders\HeightMap_fragment.shader" />
-    <None Include="res\shaders\HeightMapShaders\HeightMap_vertex.shader" />
     <None Include="src\vendor\glm\detail\func_common.inl" />
     <None Include="src\vendor\glm\detail\func_common_simd.inl" />
     <None Include="src\vendor\glm\detail\func_exponential.inl" />
@@ -312,6 +309,7 @@
     <ClInclude Include="src\opengl\Renderer.h" />
     <ClInclude Include="src\opengl\Shader.h" />
     <ClInclude Include="src\opengl\TextureClass.h" />
+    <ClInclude Include="src\opengl\TerrainView.h" />
     <ClInclude Include="src\utility\Camera.h" />
     <ClInclude Include="src\utility\LightSource.h" />
     <ClInclude Include="src\subSystems\TerrainGenApp.h" />

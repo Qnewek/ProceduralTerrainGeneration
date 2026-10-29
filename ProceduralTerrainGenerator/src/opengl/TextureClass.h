@@ -17,8 +17,8 @@ public:
 	TextureClass();
 	TextureClass(const std::string& path);
 	TextureClass(unsigned int width, unsigned int height, unsigned char* image);
-	TextureClass(float* data, unsigned int width, unsigned int height);
-	TextureClass(std::vector<glm::vec3> colorData, unsigned int width, unsigned int height);
+	TextureClass(const float* data, unsigned int width, unsigned int height);
+	TextureClass(const std::vector<glm::vec3>& colorData, unsigned int width, unsigned int height);
 	~TextureClass();
 
 	void Bind(unsigned int slot = 0) const;
