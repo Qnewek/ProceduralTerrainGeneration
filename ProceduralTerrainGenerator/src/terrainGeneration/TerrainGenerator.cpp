@@ -1,15 +1,13 @@
 #include "TerrainGenerator.h"
 
 
-TerrainGenerator::TerrainGenerator() : width(0), height(0), seed(0), resolution(500), heightMap(nullptr),
+TerrainGenerator::TerrainGenerator() : width(0), height(0), seed(0), resolution(500),
 continentalnessNoise(), mountainousnessNoise(), weirdnessNoise(), continentalnessSpline(), mountainousnessSpline(), weirdnessSpline()
 {
 }
 
 TerrainGenerator::~TerrainGenerator()
 {
-	if(heightMap)
-		delete[] heightMap;
 }
 
 bool TerrainGenerator::Initialize(int _width, int _height)
@@ -56,12 +54,7 @@ bool TerrainGenerator::Resize(int _width, int _height)
 
 	this->width = _width;
 	this->height = _height;
-
-	if (heightMap) {
-		delete[] heightMap;
-	}
-
-	heightMap = new float[width * height];
+	heightMap.Resize(width, height);
 
 	if(!this->mountainousnessNoise.Resize(width, height) || !this->continentalnessNoise.Resize(width, height) || !this->weirdnessNoise.Resize(width, height)) {
 		std::cout << "[ERROR] Could not resize noises\n";
@@ -132,7 +125,7 @@ bool TerrainGenerator::GenerateTerrain(float originx, float originy)
 			heightMap[y * width + x] = elevation;
 		}
 	}
-	std::cout << "[LOG] HeightMap of size: " << height << "x" << width << " succesfully evaluated\n";
+	std::cout << "[LOG] HeightMap of size: " << width << "x" << height << " succesfully evaluated\n";
 	return true;
 }
 

@@ -13,7 +13,7 @@
 class TerrainGenerationSys
 {
 private:
-	float* terrainVertices;
+	std::vector<float> terrainVertices;
 	float heightScale, modelScale;
 	unsigned int stride;
 	int width, height, mapResolution;
@@ -57,8 +57,9 @@ public:
 	TerrainGenerationSys();
 	~TerrainGenerationSys();
 	
-	bool Initialize(unsigned int _height, unsigned int _width, float _heightScale);
+	bool Initialize(int _width, int _height, float _heightScale);
 	bool Resize();
+	void BuildMesh();
 	bool GenerateTerrain(float originx, float originy);
 	bool GenerateBiomes();
 

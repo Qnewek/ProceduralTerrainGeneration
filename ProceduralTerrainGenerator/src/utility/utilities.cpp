@@ -54,7 +54,7 @@ namespace utilities
 		}
 	}
 
-	void GenerateVerticesForResolution(float* vertices, const int& height, const int& width, int resolution, const unsigned int& stride, unsigned int posOffset, unsigned int texOffset){
+	void GenerateVerticesForResolution(float* vertices, const int& width, const int& height, int resolution, const unsigned int& stride, unsigned int posOffset, unsigned int texOffset){
 		for (int i = 0; i < resolution; i++)
 		{
 			for (int j = 0; j < resolution; j++)
@@ -383,14 +383,14 @@ namespace utilities
 		return false;
 	}
 	//ImGui interface for modifying map size
-	//@param height - height of the noise map in chunks
 	//@param width - width of the noise map in chunks
-	bool MapSizeImGui(int& height, int& width)
+	//@param height - height of the noise map in chunks
+	bool MapSizeImGui(int& width, int& height)
 	{
 		if (ImGui::CollapsingHeader("Size settings", ImGuiTreeNodeFlags_DefaultOpen)) {
 			ImGui::Text("Resize map");
-			ImGui::InputInt("Height", &height);
 			ImGui::InputInt("Width", &width);
+			ImGui::InputInt("Height", &height);
 			if (ImGui::Button("Resize")) {
 				return true;
 			}

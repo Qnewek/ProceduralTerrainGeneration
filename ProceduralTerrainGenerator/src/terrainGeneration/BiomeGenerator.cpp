@@ -1,34 +1,31 @@
 #include "BiomeGenerator.h"
 #include <iostream>
 
-BiomeGenerator::BiomeGenerator() : temperatureNoise(), humidityNoise(), biomeMap(nullptr), height(0), width(0), biomesLevels(5)
+BiomeGenerator::BiomeGenerator() : height(0), width(0), biomesLevels(5), temperatureNoise(), humidityNoise()
 {
 }
 
 BiomeGenerator::~BiomeGenerator()
 {
-	if (biomeMap) {
-		delete[] biomeMap;
-	}
 }
 
-bool BiomeGenerator::Initialize(int _height, int _width)
+bool BiomeGenerator::Initialize(int _width, int _height)
 {
 	if (biomeMap) {
 		std::cout << "[ERROR] BiomeMap already initialized" << std::endl;
 		return false;
 	}
 
-	if (!temperatureNoise.Initialize(_height, _width)) {
+	if (!temperatureNoise.Initialize(_width, _height)) {
 		std::cout << "[ERROR] Temperature noise couldnt be initialized\n";
 		return false;
 	}
-	if (!humidityNoise.Initialize(_height, _width)) {
+	if (!humidityNoise.Initialize(_width, _height)) {
 		std::cout << "[ERROR] Humidity noise couldnt be initialized\n";
 		return false;
 	}
 
-	if(!Resize(_height, _width)) {
+	if(!Resize(_width, _height)) {
 		return false;
 	}
 
@@ -76,7 +73,7 @@ bool BiomeGenerator::Initialize(int _height, int _width)
 	return true;
 }
 
-bool BiomeGenerator::Resize(int _height, int _width)
+bool BiomeGenerator::Resize(int _width, int _height)
 {
 	if (_height <= 0 || _width <= 0) {
 		std::cout << "[ERROR] Biome map couldnt be resized, width and height must be greater than 0\n";
@@ -89,14 +86,11 @@ bool BiomeGenerator::Resize(int _height, int _width)
 
 	width = _width;
 	height = _height;
-	if (biomeMap) {
-		delete[] biomeMap;
-	}
-	biomeMap = new int[width * height];
-	temperatureNoise.Resize(height, width);
-	humidityNoise.Resize(height, width);
+	biomeMap.Resize(width, height);
+	temperatureNoise.Resize(width, height);
+	humidityNoise.Resize(width, height);
 
-	std::cout << "[LOG] BiomeGenerator has been succesfully initialized with size: " << height << "x" << width << "\n";
+	std::cout << "[LOG] BiomeGenerator has been succesfully initialized with size: " << width << "x" << height << "\n";
 	isGenerated = false;
 	return true;
 }

@@ -24,7 +24,7 @@ namespace utilities
 
 	void ConvertToGrayscaleImage(float* data, unsigned char* image, const int& width, const int& height);
     void ParseNoiseIntoVertices(float* vertices, float* map, const int& width, const int& height, float scale, const unsigned int stride, unsigned int offset);
-	void GenerateVerticesForResolution(float* vertices, const int& height, const int& width, int resolution, const unsigned int& stride, unsigned int posOffset, unsigned int texOffset);
+	void GenerateVerticesForResolution(float* vertices, const int& width, const int& height, int resolution, const unsigned int& stride, unsigned int posOffset, unsigned int texOffset);
     void MeshIndicesStrips(unsigned int* indices, const int& width, const int& height);
     bool CalculateHeightMapNormals(float* vertices, const unsigned int& stride, unsigned int offSet, const unsigned int& width, const unsigned int& height);
 	bool PaintVerticesByHeight(float* vertices, const int& width, const int& height, const float& heightScale, const unsigned int& stride, heightMapMode m, unsigned int heightOffSet , unsigned int colorOffset);
@@ -35,7 +35,7 @@ namespace utilities
     
     //ImGui interface functions
     bool NoiseImGui(noise::NoiseConfigParameters& noiseConfig);
-	bool MapSizeImGui(int& height, int& width);
+	bool MapSizeImGui(int& width, int& height);
     bool DisplayModeImGui(float& modelSclae, float& topoStep, float& topoBandWidth, float& heightScale, heightMapMode& m, bool& wireFrame, bool& map2d, bool& infGen);
 	bool SavingImGui();
 	bool ImGuiButtonWrapper(const char* label, bool disabled);

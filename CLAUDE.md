@@ -80,7 +80,8 @@ Wartości szumów są w [-1, 1]. Konwencja indeksowania: `map[y * width + x]`.
 - Klasy PascalCase, metody PascalCase, pola camelCase, parametry ctor/Initialize z prefiksem `_` (`_width`).
 - Wzorzec: konstruktor domyślny + `bool Initialize(...)` + `Resize(...)`; błędy jako `return false` +
   `std::cout << "[ERROR] ..."`; logi `"[LOG] ..."`.
-- Surowe `new[]/delete[]` dla map (do zastąpienia `std::vector`, patrz A2). OpenGL obiekty w `std::unique_ptr`.
+- Mapy jako `Grid<T>` (`terrainGeneration/Grid.h`: `HeightField`, `BiomeMap`) — bez surowych `new[]/delete[]`.
+  Do OpenGL przez `.Data()`. OpenGL obiekty w `std::unique_ptr`.
 - Konfiguracje edytowane przez UI przez referencje (`GetConfigRef()`), UI = immediate-mode bezpośrednio
   w klasach subsystemów (`ImGuiLeftPanel/RightPanel/Output`).
 - Includy względem katalogów z `AdditionalIncludeDirectories` (własne: `#include "Noise.h"`) albo
@@ -89,9 +90,8 @@ Wartości szumów są w [-1, 1]. Konwencja indeksowania: `map[y * width + x]`.
 
 ## Pułapki — przeczytaj zanim zaczniesz zmieniać
 
-- **Kolejność parametrów width/height jest niespójna** między API: `SimplexNoiseClass::Resize(height, width)`,
-  `TerrainGenerator::Resize(width, height)`, `MapSizeImGui(height, width)`,
-  `GenerateVerticesForResolution(..., height, width, ...)`. Działa tylko dla map kwadratowych (B5).
+- **Rozmiary zawsze jako `(width, height)`** (ujednolicone w B5) — nowe API też tak. Mapy niekwadratowe
+  powinny działać; zmieniając generację sprawdź też taki przypadek.
 - Każdy `SimplexNoiseClass` ma własną tablicę permutacji (`perm`), budowaną leniwie w `PointNoise` przy zmianie
   `config.seed`. Używaj przeciążeń `SimplexNoise::noise(perm, ...)`; globalne `reseed` / `noise(x, y)` zostały
   tylko dla zgodności. Przed zrównolegleniem `PointNoise` wywołaj `UpdatePermutation()` raz przed pętlą

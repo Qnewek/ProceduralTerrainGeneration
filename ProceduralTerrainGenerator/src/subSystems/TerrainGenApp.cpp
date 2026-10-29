@@ -84,11 +84,11 @@ bool TerrainGenApp::Initialize()
     //Logic initialization
 	renderer.SetPatches(4);
 	camera.SetScreenSize(ViewportWidth(), ViewportHeight());
-    if (!noiseGenSys.Initialize(height, width, heightScale)) {
+    if (!noiseGenSys.Initialize(width, height, heightScale)) {
         std::cout << "[ERROR] Failed to initialize NoiseBasedGenerationSys" << std::endl;
         return false;
     }
-	if (!terrainGenSys.Initialize(height, width, heightScale)) {
+	if (!terrainGenSys.Initialize(width, height, heightScale)) {
 		std::cout << "[ERROR] Failed to initialize TerrainGenerationSys" << std::endl;
 		return false;
 	}

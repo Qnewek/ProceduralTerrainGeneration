@@ -14,13 +14,11 @@
 namespace noise
 {
 	SimplexNoiseClass::SimplexNoiseClass()
-		: config(NoiseConfigParameters()), width(0), height(0),
-		heightMap(nullptr)
+		: config(NoiseConfigParameters()), width(0), height(0)
 	{
 	}
 	SimplexNoiseClass::~SimplexNoiseClass()
 	{
-		delete[] heightMap;
 	}
 
 	//Rebuilds the permutation table if the seed changed since the last call.
@@ -37,19 +35,19 @@ namespace noise
 
 	//Initialize the size of the map that the noise will be generated into
 	//@param _width - width of the map
-	//@param _height - height of the
-	bool SimplexNoiseClass::Initialize(int _height, int _width) {
+	//@param _height - height of the map
+	bool SimplexNoiseClass::Initialize(int _width, int _height) {
 		if (heightMap) {
 			std::cout << "[ERROR] Noise map already initialized\n";
 			return false;
 		}
-		return Resize(_height, _width);
+		return Resize(_width, _height);
 	}
 
 	//Resize the size og the noise map
 	//@param _width - width of the map
 	//@param _height - height of the map
-	bool SimplexNoiseClass::Resize(int _height, int _width)
+	bool SimplexNoiseClass::Resize(int _width, int _height)
 	{
 		if (_height <= 0 || _width <= 0) {
 			std::cout << "[ERROR] Noise map couldnt be resized, width and height must be greater than 0\n";
@@ -62,11 +60,8 @@ namespace noise
 
 		width = _width;
 		height = _height;
-		if (heightMap) {
-			delete[] heightMap;
-		}
-		heightMap = new float[width * height];
-		std::cout << "[LOG] Noise object has been succesfully initialized with size: " << height << "x" << width << "\n";
+		heightMap.Resize(width, height);
+		std::cout << "[LOG] Noise object has been succesfully initialized with size: " << width << "x" << height << "\n";
 		return true;
 	}
 

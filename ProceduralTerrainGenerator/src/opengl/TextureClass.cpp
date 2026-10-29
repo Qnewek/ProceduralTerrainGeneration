@@ -32,7 +32,7 @@ TextureClass::TextureClass(const std::string& path):
 		stbi_image_free(m_LocalBuffer);
 }
 
-TextureClass::TextureClass(unsigned int height, unsigned int width, unsigned char* image):
+TextureClass::TextureClass(unsigned int width, unsigned int height, unsigned char* image):
 	m_RendererID(0), m_FilePath(""),
 	m_LocalBuffer(image), m_Height(height), m_Width(width), m_BPP(0) {
 	glGenTextures(1, &m_RendererID);
@@ -43,7 +43,7 @@ TextureClass::TextureClass(unsigned int height, unsigned int width, unsigned cha
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_RED, m_Height, m_Width, 0, GL_RED, GL_UNSIGNED_BYTE, m_LocalBuffer);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RED, m_Width, m_Height, 0, GL_RED, GL_UNSIGNED_BYTE, m_LocalBuffer);
 	glBindTexture(GL_TEXTURE_2D, 0);
 }
 
@@ -84,7 +84,7 @@ void TextureClass::SetNewImage(unsigned char* image)
 {
 	m_LocalBuffer = image;
 	glBindTexture(GL_TEXTURE_2D, m_RendererID);
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_RED, m_Height, m_Width, 0, GL_RED, GL_UNSIGNED_BYTE, m_LocalBuffer);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RED, m_Width, m_Height, 0, GL_RED, GL_UNSIGNED_BYTE, m_LocalBuffer);
 	glBindTexture(GL_TEXTURE_2D, 0);
 }
 
