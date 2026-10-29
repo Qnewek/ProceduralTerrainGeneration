@@ -104,10 +104,20 @@ static uint8_t originalPerm[256] = {
 */
 void SimplexNoise::reseed(int _seed) {
 	if (seed == _seed) return;
-	std::copy(std::begin(originalPerm), std::end(originalPerm), std::begin(perm));
 	seed = _seed;
+	makePermutation(seed, perm);
+}
+
+/**
+* Builds a permutation table for the seed without touching the global one (thread-safe)
+*
+* @param[in]  seed  integer value to shuffle the permutation table
+* @param[out] out   256-entry table to pass to the noise(perm, ...) overloads
+*/
+void SimplexNoise::makePermutation(int seed, uint8_t out[256]) {
+	std::copy(std::begin(originalPerm), std::end(originalPerm), out);
 	std::mt19937 generator(seed);
-	std::shuffle(std::begin(perm), std::end(perm), generator);
+	std::shuffle(out, out + 256, generator);
 }
 
 /**
@@ -122,8 +132,8 @@ void SimplexNoise::reseed(int _seed) {
  *
  * @return 8-bits hashed value
  */
-static inline uint8_t hash(int32_t i) {
-	return perm[static_cast<uint8_t>(i)];
+static inline uint8_t hash(const uint8_t* p, int32_t i) {
+	return p[static_cast<uint8_t>(i)];
 }
 
 /* NOTE Gradient table to test if lookup-table are more efficient than calculs
@@ -222,13 +232,13 @@ float SimplexNoise::noise(float x) {
 	float t0 = 1.0f - x0 * x0;
 	//  if(t0 < 0.0f) t0 = 0.0f; // not possible
 	t0 *= t0;
-	n0 = t0 * t0 * grad(hash(i0), x0);
+	n0 = t0 * t0 * grad(hash(perm, i0), x0);
 
 	// Calculate the contribution from the second corner
 	float t1 = 1.0f - x1 * x1;
 	//  if(t1 < 0.0f) t1 = 0.0f; // not possible
 	t1 *= t1;
-	n1 = t1 * t1 * grad(hash(i1), x1);
+	n1 = t1 * t1 * grad(hash(perm, i1), x1);
 
 	// The maximum value of this noise is 8*(3/4)^4 = 2.53125
 	// A factor of 0.395 scales to fit exactly within [-1,1]
@@ -245,7 +255,7 @@ float SimplexNoise::noise(float x) {
  *
  * @return Noise value in the range[-1; 1], value of 0 on all integer coordinates.
  */
-float SimplexNoise::noise(float x, float y) {
+float SimplexNoise::noise(const uint8_t* p, float x, float y) {
 	float n0, n1, n2;   // Noise contributions from the three corners
 
 	// Skewing/Unskewing factors for 2D
@@ -288,9 +298,9 @@ float SimplexNoise::noise(float x, float y) {
 	const float y2 = y0 - 1.0f + 2.0f * G2;
 
 	// Work out the hashed gradient indices of the three simplex corners
-	const int gi0 = hash(i + hash(j));
-	const int gi1 = hash(i + i1 + hash(j + j1));
-	const int gi2 = hash(i + 1 + hash(j + 1));
+	const int gi0 = hash(p, i + hash(p, j));
+	const int gi1 = hash(p, i + i1 + hash(p, j + j1));
+	const int gi2 = hash(p, i + 1 + hash(p, j + 1));
 
 	// Calculate the contribution from the first corner
 	float t0 = 0.5f - x0 * x0 - y0 * y0;
@@ -325,6 +335,10 @@ float SimplexNoise::noise(float x, float y) {
 	// Add contributions from each corner to get the final noise value.
 	// The result is scaled to return values in the interval [-1,1].
 	return 45.23065f * (n0 + n1 + n2);
+}
+
+float SimplexNoise::noise(float x, float y) {
+	return noise(perm, x, y);
 }
 
 
@@ -399,10 +413,10 @@ float SimplexNoise::noise(float x, float y, float z) {
 	float z3 = z0 - 1.0f + 3.0f * G3;
 
 	// Work out the hashed gradient indices of the four simplex corners
-	int gi0 = hash(i + hash(j + hash(k)));
-	int gi1 = hash(i + i1 + hash(j + j1 + hash(k + k1)));
-	int gi2 = hash(i + i2 + hash(j + j2 + hash(k + k2)));
-	int gi3 = hash(i + 1 + hash(j + 1 + hash(k + 1)));
+	int gi0 = hash(perm, i + hash(perm, j + hash(perm, k)));
+	int gi1 = hash(perm, i + i1 + hash(perm, j + j1 + hash(perm, k + k1)));
+	int gi2 = hash(perm, i + i2 + hash(perm, j + j2 + hash(perm, k + k2)));
+	int gi3 = hash(perm, i + 1 + hash(perm, j + 1 + hash(perm, k + 1)));
 
 	// Calculate the contribution from the four corners
 	float t0 = 0.6f - x0 * x0 - y0 * y0 - z0 * z0;
@@ -452,7 +466,7 @@ float SimplexNoise::noise(float x, float y, float z) {
  *
  * @return Noise value in the range[-1; 1], value of 0 on all integer coordinates.
  */
-float SimplexNoise::noise(float x, float y, float z, float w) {
+float SimplexNoise::noise(const uint8_t* p, float x, float y, float z, float w) {
 	float n0, n1, n2, n3, n4; // Noise contributions from the five corners
 
 	// Skewing/Unskewing factors for 4D
@@ -528,11 +542,11 @@ float SimplexNoise::noise(float x, float y, float z, float w) {
 	float z4 = z0 - 1.0f + 4.0f * G4;
 	float w4 = w0 - 1.0f + 4.0f * G4;
 	// Work out the hashed gradient indices of the five simplex corners
-	int gi0 = hash(i + hash(j + hash(k + hash(l))));
-	int gi1 = hash(i + i1 + hash(j + j1 + hash(k + k1 + hash(l + l1))));
-	int gi2 = hash(i + i2 + hash(j + j2 + hash(k + k2 + hash(l + l2))));
-	int gi3 = hash(i + i3 + hash(j + j3 + hash(k + k3 + hash(l + l3))));
-	int gi4 = hash(i + 1 + hash(j + 1 + hash(k + 1 + hash(l + 1))));
+	int gi0 = hash(p, i + hash(p, j + hash(p, k + hash(p, l))));
+	int gi1 = hash(p, i + i1 + hash(p, j + j1 + hash(p, k + k1 + hash(p, l + l1))));
+	int gi2 = hash(p, i + i2 + hash(p, j + j2 + hash(p, k + k2 + hash(p, l + l2))));
+	int gi3 = hash(p, i + i3 + hash(p, j + j3 + hash(p, k + k3 + hash(p, l + l3))));
+	int gi4 = hash(p, i + 1 + hash(p, j + 1 + hash(p, k + 1 + hash(p, l + 1))));
 	// Calculate the contribution from the five corners
 	float t0 = 0.6f - x0 * x0 - y0 * y0 - z0 * z0 - w0 * w0;
 	if (t0 < 0) n0 = 0.0;
@@ -566,6 +580,10 @@ float SimplexNoise::noise(float x, float y, float z, float w) {
 	}
 	// Sum up and scale the result to cover the range [-1,1]
 	return 27.0f * (n0 + n1 + n2 + n3 + n4);
+}
+
+float SimplexNoise::noise(float x, float y, float z, float w) {
+	return noise(perm, x, y, z, w);
 }
 
 

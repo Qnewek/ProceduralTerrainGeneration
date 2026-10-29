@@ -13,7 +13,7 @@
 class TerrainGenerationSys
 {
 private:
-	float* terrainVertices;
+	std::vector<float> terrainVertices;
 	float heightScale, modelScale;
 	unsigned int stride;
 	int width, height, mapResolution;
@@ -21,6 +21,7 @@ private:
 	bool biomesGeneration = false, map2d = false;
 	bool editNoise = false, editSpline = false, infiniteGeneration = false;
 	glm::vec3 oldCamPos = glm::vec3(0.0f);
+	double lastGenerationMs = 0.0;
 
 	//OpenGl objects
 	VertexBufferLayout layout;
@@ -56,8 +57,9 @@ public:
 	TerrainGenerationSys();
 	~TerrainGenerationSys();
 	
-	bool Initialize(unsigned int _height, unsigned int _width, float _heightScale);
+	bool Initialize(int _width, int _height, float _heightScale);
 	bool Resize();
+	void BuildMesh();
 	bool GenerateTerrain(float originx, float originy);
 	bool GenerateBiomes();
 

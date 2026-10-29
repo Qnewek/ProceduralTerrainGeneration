@@ -1,25 +1,23 @@
 #include "NoiseBasedGenerationSys.h"
 
+#include <algorithm>
+#include <chrono>
 #include <iostream>
 
 #include "imgui/imgui.h"
 #include "glm/glm.hpp"
 #include "glm/gtc/matrix_transform.hpp"
 
-NoiseBasedGenerationSys::NoiseBasedGenerationSys() : noise(), erosion(1, 1), vertices(nullptr),
+NoiseBasedGenerationSys::NoiseBasedGenerationSys() : noise(), erosion(1, 1),
 width(0), height(0), heightScale(1.0f), modelScale(1.0f), topoBandWidth(0.2f), topoStep(10.0f), stride(5), mapResolution(50)
 {
 }
 
 NoiseBasedGenerationSys::~NoiseBasedGenerationSys()
 {
-	if (vertices) {
-		delete[] vertices;
-		vertices = nullptr;
-	}
 }
 
-bool NoiseBasedGenerationSys::Initialize(int _height, int _width, float _heightScale)
+bool NoiseBasedGenerationSys::Initialize(int _width, int _height, float _heightScale)
 {
 	mainVAO = std::make_unique<VertexArray>();
 	layout.Push<float>(3);
@@ -28,14 +26,11 @@ bool NoiseBasedGenerationSys::Initialize(int _height, int _width, float _heightS
 	mainShader->Bind();
 	mainShader->SetUniform1i("displayMode", static_cast<int>(displayMode));
 
-	this->height = _height;
 	this->width = _width;
+	this->height = _height;
 	this->heightScale = _heightScale;
-	noise.Initialize(height, width);
-	vertices = new float[mapResolution * mapResolution * stride * 4];
-	utilities::GenerateVerticesForResolution(vertices, height*4, width*4, mapResolution, stride, 0, 3);
-	mainVertexBuffer = std::make_unique<VertexBuffer>(vertices, (mapResolution * mapResolution) * stride * 4 * sizeof(float));
-	mainVAO->AddBuffer(*mainVertexBuffer, layout);
+	noise.Initialize(width, height);
+	BuildMesh();
 
 	if(!GenerateNoise(0.0f, 0.0f)) {
 		std::cout << "[ERROR] Invalid height or width value" << std::endl;
@@ -51,17 +46,29 @@ bool NoiseBasedGenerationSys::Resize()
 	if (height != noise.GetHeight() || width != noise.GetWidth()) {
 		erosionDraw = false;
 		noise.Resize(width, height);
+		BuildMesh();
 		return  true;
 	}
 	return false;
 }
 
+//Rebuilds the patch grid so that it spans the current map size (width * 4 along X, height * 4 along Z)
+void NoiseBasedGenerationSys::BuildMesh()
+{
+	vertices.assign(static_cast<size_t>(mapResolution) * mapResolution * stride * 4, 0.0f);
+	utilities::GenerateVerticesForResolution(vertices.data(), width * 4, height * 4, mapResolution, stride, 0, 3);
+	mainVertexBuffer = std::make_unique<VertexBuffer>(vertices.data(), static_cast<unsigned int>(vertices.size() * sizeof(float)));
+	mainVAO->AddBuffer(*mainVertexBuffer, layout);
+}
+
 bool NoiseBasedGenerationSys::GenerateNoise(float originx, float originy)
 {
 	Resize();
+	auto start = std::chrono::steady_clock::now();
 	if (!noise.GenerateFractalNoise(originx, originy)) {
 		return false;
 	}
+	lastGenerationMs = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count();
 
 	terrainTexture = std::make_unique<TextureClass>(noise.GetMap(), width, height);
 	std::cout << "[LOG] Noise based terrain initialized" << std::endl;
@@ -108,7 +115,7 @@ void NoiseBasedGenerationSys::Draw(Renderer& renderer, Camera& camera, LightSour
 	mainShader->SetModel(model);
 	mainShader->SetUniform1f("step", topoStep);
 	mainShader->SetUniform1f("bandWidth", topoBandWidth);
-	mainShader->SetUniform1i("size", height / 2);
+	mainShader->SetUniform1i("size", std::max(width, height) / 2);
 	mainShader->SetUniform1i("flatten", map2d);
 	mainShader->SetUniform1i("heightMap", 0);
 	mainShader->SetUniform1f("heightScale", heightScale);
@@ -191,6 +198,7 @@ void NoiseBasedGenerationSys::ErosionImGui()
 
 void NoiseBasedGenerationSys::ImGuiOutput()
 {
+	ImGui::Text("Noise generation: %.1f ms (%dx%d)", lastGenerationMs, noise.GetWidth(), noise.GetHeight());
 	if (noise.GetHeight() * noise.GetWidth() > 500 * 500) {
 		ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.0f, 0.0f, 1.0f));
 		ImGui::TextWrapped(

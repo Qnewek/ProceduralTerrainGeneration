@@ -16,11 +16,11 @@ biomy, roślinność i kolejne feature'y.**
 | ~~B2~~ ✅ | `BiomeGenerator.cpp:129` | `DetermineBiome(H, T, ...)` przy sygnaturze `(temperature, humidity, ...)` | **Zrobione 2026-10-28:** `DetermineBiome(T, H, ...)`. Tabela biomów była projektowana pod T jako pierwszy argument; zakresy domyślnych biomów się nie nakładają (kolejność `unordered_map` nie ma znaczenia), luki (np. gorąco+wilgotno na lądzie) spadają na fallback id 0 = Grassplains — do przeprojektowania w Fazie 3 |
 | ~~B3~~ ✅ | `utilities.cpp:312, 400`, `TerrainGenerator.cpp:186, 203`, `Noise.cpp:166` | Brak `return` na części ścieżek (C4715) | **Zrobione 2026-10-28:** brakujące `return` dodane, `GetSelectedNoiseConfig` deleguje do `GetSelectedNoise`. Build bez C4715; test ręczny — zwinięte nagłówki nie wyzwalają regeneracji |
 | ~~B4~~ ✅ | `NoiseBasedGenerationSys.cpp:195` | `PushStyleColor(..., (1.0f, 0.0f, 0.0f, 1.0f))` — operator przecinka | **Zrobione 2026-10-28:** `ImVec4(1, 0, 0, 1)` |
-| B5 | `TerrainGenerator.cpp:66`, `NoiseBasedGenerationSys.cpp:53,130`, `TerrainGenerationSys.cpp:33`, shadery (`size = height/2`) | Niespójna kolejność `width/height` między API | Mapy niekwadratowe są obrócone/ucięte/niespójne |
+| ~~B5~~ ✅ | `TerrainGenerator.cpp:66`, `NoiseBasedGenerationSys.cpp:53,130`, `TerrainGenerationSys.cpp:33`, shadery (`size = height/2`) | Niespójna kolejność `width/height` między API | **Zrobione 2026-10-29:** wszędzie `(width, height)` (w tym `TextureClass`/`glTexImage2D`), TES liczy texel osobno dla x i y; checksum benchmarku bez zmian |
 | B6 | `Terrain_evalTes.shader`, `HeightMap_tesseval.shader` | `FragPos` liczony w clip space, światło w world space; normalna liczona z kroku w UV (`texel`) vs wysokość w jednostkach świata; normalna nie przechodzi przez `model` | Oświetlenie jest fizycznie błędne, normalne „spłaszczone” |
 | B7 | `TerrainGenerationSys::Draw`, `NoiseBasedGenerationSys::Draw` | Tryb infinite: regeneracja **całej** mapy + nowa tekstura z mipmapami przy każdym ruchu kamery, w wątku renderującym; biomy i podgląd szumów zawsze z originem (0,0); `MakeIsland` zależy od rozmiaru mapy | Spadki FPS, biomy nie pasują do terenu po przesunięciu, wyspa „jedzie” z kamerą |
-| B8 | `Noise.cpp:82` + `vendor/Simplex/SimplexNoise.cpp:105` | `PointNoise` woła `reseed(seed)` przy każdej próbce; tablica permutacji jest globalna | Przy 3 szumach przeplatanych per-piksel: `mt19937` + `shuffle(256)` ×3 na piksel — główny koszt generacji; brak thread-safety |
-| B9 | `Erosion.cpp:45`, klasy z `new[]` | `Erosion::map` nigdy nie zwalniany; klasy z surowymi wskaźnikami mają domyślny copy-ctor | Wyciek pamięci; ryzyko double-free przy kopiowaniu |
+| ~~B8~~ ✅ | `Noise.cpp:82` + `vendor/Simplex/SimplexNoise.cpp:105` | `PointNoise` woła `reseed(seed)` przy każdej próbce; tablica permutacji jest globalna | **Zrobione 2026-10-28:** permutacja per instancja, `reseed` poza hot-path; teren 512² 3239 → 227 ms (14,3×), checksum bez zmian |
+| ~~B9~~ ✅ | `Erosion.cpp:45`, klasy z `new[]` | `Erosion::map` nigdy nie zwalniany; klasy z surowymi wskaźnikami mają domyślny copy-ctor | **Zrobione 2026-10-29:** wszystkie mapy w `Grid<T>` (`std::vector`), brak `new[]`/`delete[]` poza vendor |
 | ~~B10~~ ✅ | `Camera.cpp:20` | `SetCameraConfig` przypisuje parametry same do siebie (shadowing); FOV slider do 300° | **Zrobione 2026-10-28:** parametry z prefiksem `_`, ustawia też `speed`; FOV slider 1–120° |
 | ~~B11~~ ✅ | `TerrainGenApp.cpp:27-90`, `Application.cpp` | `Initialize` zwraca 0 przy błędzie i sukcesie; `glewInit` błąd ignorowany; `ImPlot::DestroyContext` po `ImGui::DestroyContext` | **Zrobione 2026-10-28:** `Initialize` zwraca `bool` z logami `[ERROR]`, `main` przerywa przy błędzie, błąd `glewInit` przerywa start, `ImPlot::DestroyContext` przed `ImGui::DestroyContext` |
 | ~~B12~~ ✅ | `TerrainGenerationSys.cpp:376`, edytory | Nagłówek „Spline editor” użyty dwa razy w jednym oknie (kolizja ID ImGui); `static int` w edytorach; `'0' + i` dla `size_t`; pętla `j > 0` w `SegmentDrag` nie poprawia granicy 0 | **Zrobione 2026-10-28:** drugi nagłówek → „Biome levels editor”; stan edytorów (`*PressedButton`, `splineDraggedPoint`) jako pola klasy, metoda ewaluacji czytana z `terrainGen`; etykiety poziomów `%d`. (Zarzut o `j > 0` był błędny — granica 0 to stałe −1, a przeciągane wartości są do niej clampowane) |
@@ -92,10 +92,12 @@ Cel: kod gotowy na wielowątkowość/GPU, jedna ścieżka renderingu, mierzalna 
 
 1. **A8 Build system:** CMake (+ `CMakePresets.json`), zależności przez vcpkg manifest lub FetchContent
    (glfw, glew lub glad, glm, imgui, implot, stb). Usunąć binarki z repo. GitHub Actions: build Windows (+ Linux opcjonalnie).
-2. **A2/B9 RAII:** `std::vector<float>` zamiast `new[]` we wszystkich mapach; typ `HeightField { int w, h; std::vector<float> data; }`;
-   jedna konwencja `(width, height)` wszędzie (**B5**).
-3. **B8 Szum:** własna, bezstanowa implementacja Simplex/OpenSimplex2 z seedem jako argumentem (hash zamiast globalnej permutacji)
-   albo **FastNoise2** (SIMD, gotowe fBm/ridged/domain warp, ~10–50× szybciej). Usunąć `reseed` z hot-path.
+2. ~~**A2/B9 RAII:** `std::vector<float>` zamiast `new[]` we wszystkich mapach; typ `HeightField { int w, h; std::vector<float> data; }`;
+   jedna konwencja `(width, height)` wszędzie (**B5**).~~ ✅ 2026-10-29: `Grid<T>` w `terrainGeneration/Grid.h`
+   (`HeightField = Grid<float>`, `BiomeMap = Grid<int>`), indeks `y * width + x`; checksum benchmarku bez zmian.
+3. ~~**B8 Szum:** usunąć `reseed` z hot-path.~~ ✅ 2026-10-28: tablica permutacji per instancja `SimplexNoiseClass`
+   (vendor dostał przeciążenia `noise(perm, ...)`), wynik bit w bit identyczny. Teren 512²: 3239 → 227 ms (**14,3×**).
+   Dalej do rozważenia: **FastNoise2** (SIMD, fBm/ridged/domain warp) — kolejne ~5–10× na CPU.
 4. **A3 Rozdzielenie warstw:** `WorldConfig` (czyste struktury), generatory bez ImGui/GL, UI tylko edytuje config.
    Jeden `TerrainView` (mesh + shader + tekstury) używany przez oba tryby (**A4**).
 5. **Shadery:** jeden zestaw z preprocesorem `#include`/`#define` (prosty loader w `Shader.cpp`), hot-reload (F5);
@@ -105,7 +107,8 @@ Cel: kod gotowy na wielowątkowość/GPU, jedna ścieżka renderingu, mierzalna 
 7. **Wielowątkowość CPU (przejściowo):** generacja wierszami w `std::for_each(std::execution::par)` lub prosty thread-pool;
    generacja asynchroniczna z double-bufferingiem (UI nie czeka, wynik podmieniany po zakończeniu; anulowanie przestarzałych zadań po wersji configu).
 8. **Pomiar:** Tracy profiler (CPU + GPU zones) lub przynajmniej `GL_TIME_ELAPSED` queries + panel statystyk
-   (czas generacji, czas klatki, liczba trójkątów).
+   (czas generacji, czas klatki, liczba trójkątów). Częściowo ✅: `--benchmark` (headless, z checksumem) i czas
+   generacji w panelu Output. Brak: GPU timing, liczba trójkątów, Tracy.
 9. **Testy:** doctest/Catch2 — determinizm szumu (ten sam seed → te same wartości), zakresy [-1,1],
    wybór biomu dla zadanych parametrów, regresja height = f(x,z).
 10. **Serializacja (A7):** presety JSON (nlohmann/json) dla `WorldConfig`; load/save w UI; eksport heightmapy do PNG 16-bit / RAW / EXR.

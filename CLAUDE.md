@@ -21,6 +21,9 @@ Plan napraw i rozwoju: `docs/ROADMAP.md` (ID zadań `B*`, `A*`, `F*` są tam zde
   Zostają 2 ostrzeżenia linkera z binarek GLEW/GLFW (LNK4099 brak PDB, LNK4098 konflikt CRT) — do A8.
 - Working directory przy uruchomieniu musi być `ProceduralTerrainGenerator/` — ścieżki do `res/...` są względne.
 - Brak testów automatycznych i CI. Weryfikacja = build + ręczne uruchomienie.
+- Benchmark CPU bez okna: `..\Release\ProceduralTerrainGenerator.exe --benchmark` (uruchamiane z katalogu `ProceduralTerrainGenerator/`).
+  Wypisuje medianę czasu szumów i terenu dla 256²/512²/1024² oraz **checksum heightmapy** — przy refaktorach
+  generacji checksum musi się zgadzać (stan 2026-10-28: 512² teren ≈ 227 ms, checksum `9ecec06113f1ff1d`).
 - **Wielkość liter ścieżek = dokładnie taka jak w gicie** (`git ls-files`): `src/opengl`, `src/subSystems`,
   `src/terrainGeneration`, `src/utility`, `src/vendor`, `res/shaders`, `res/textures`, `light_source_*.shader`.
   Dotyczy kodu (`#include`, `"res/..."`), wpisów w `.vcxproj`/`.filters` i nazw katalogów na dysku.
@@ -77,7 +80,8 @@ Wartości szumów są w [-1, 1]. Konwencja indeksowania: `map[y * width + x]`.
 - Klasy PascalCase, metody PascalCase, pola camelCase, parametry ctor/Initialize z prefiksem `_` (`_width`).
 - Wzorzec: konstruktor domyślny + `bool Initialize(...)` + `Resize(...)`; błędy jako `return false` +
   `std::cout << "[ERROR] ..."`; logi `"[LOG] ..."`.
-- Surowe `new[]/delete[]` dla map (do zastąpienia `std::vector`, patrz A2). OpenGL obiekty w `std::unique_ptr`.
+- Mapy jako `Grid<T>` (`terrainGeneration/Grid.h`: `HeightField`, `BiomeMap`) — bez surowych `new[]/delete[]`.
+  Do OpenGL przez `.Data()`. OpenGL obiekty w `std::unique_ptr`.
 - Konfiguracje edytowane przez UI przez referencje (`GetConfigRef()`), UI = immediate-mode bezpośrednio
   w klasach subsystemów (`ImGuiLeftPanel/RightPanel/Output`).
 - Includy względem katalogów z `AdditionalIncludeDirectories` (własne: `#include "Noise.h"`) albo
@@ -86,12 +90,12 @@ Wartości szumów są w [-1, 1]. Konwencja indeksowania: `map[y * width + x]`.
 
 ## Pułapki — przeczytaj zanim zaczniesz zmieniać
 
-- **Kolejność parametrów width/height jest niespójna** między API: `SimplexNoiseClass::Resize(height, width)`,
-  `TerrainGenerator::Resize(width, height)`, `MapSizeImGui(height, width)`,
-  `GenerateVerticesForResolution(..., height, width, ...)`. Działa tylko dla map kwadratowych (B5).
-- `SimplexNoise` (vendor) ma **globalną** tablicę permutacji; `PointNoise` woła `reseed(seed)` przy każdej próbce.
-  Przeplatanie szumów o różnych seedach = tasowanie tablicy przy każdym pikselu (B8). Nie jest thread-safe —
-  nie zrównoleglaj generowania bez naprawienia tego.
+- **Rozmiary zawsze jako `(width, height)`** (ujednolicone w B5) — nowe API też tak. Mapy niekwadratowe
+  powinny działać; zmieniając generację sprawdź też taki przypadek.
+- Każdy `SimplexNoiseClass` ma własną tablicę permutacji (`perm`), budowaną leniwie w `PointNoise` przy zmianie
+  `config.seed`. Używaj przeciążeń `SimplexNoise::noise(perm, ...)`; globalne `reseed` / `noise(x, y)` zostały
+  tylko dla zgodności. Przed zrównolegleniem `PointNoise` wywołaj `UpdatePermutation()` raz przed pętlą
+  (leniwa aktualizacja w środku nie jest thread-safe).
 - Uniform `heightMap` w shaderze terenu jest przełączany między jednostką tekstury 0 (teren) i 1 (podgląd szumu).
 - `FragPos` w TES jest w clip space, a pozycja światła w world space — oświetlenie jest błędne (B6).
 - MSBuild nie znosi ścieżek > 260 znaków — testowy clean build rób w krótkiej ścieżce (np. `%TEMP%\ptg_cc`), nie w scratchpadzie.

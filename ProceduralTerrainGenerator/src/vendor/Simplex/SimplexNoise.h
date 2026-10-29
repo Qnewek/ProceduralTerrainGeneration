@@ -10,6 +10,7 @@
 #pragma once
 
 #include <cstddef>  // size_t
+#include <cstdint>  // uint8_t
 
 /**
  * @brief A Perlin Simplex Noise C++ Implementation (1D, 2D, 3D, 4D).
@@ -25,12 +26,17 @@ public:
 	// 4D Perlin simplex noise
 	static float noise(float x, float y, float z, float w);
 
+	// 2D/4D noise using a caller-owned permutation table instead of the global one (see makePermutation)
+	static float noise(const uint8_t* perm, float x, float y);
+	static float noise(const uint8_t* perm, float x, float y, float z, float w);
+
     // Fractal/Fractional Brownian Motion (fBm) noise summation
     float fractal(size_t octaves, float x) const;
     float fractal(size_t octaves, float x, float y) const;
     float fractal(size_t octaves, float x, float y, float z) const;
 
 	static void reseed(int _seed);
+	static void makePermutation(int seed, uint8_t out[256]);
 
     /**
      * Constructor of to initialize a fractal noise summation
