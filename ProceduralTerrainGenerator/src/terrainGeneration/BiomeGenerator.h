@@ -4,6 +4,7 @@
 #include <vector>
 
 #include "Biome.h"
+#include "Grid.h"
 
 enum class BiomeParameter {
 	CONTINENTALNESS,
@@ -16,7 +17,7 @@ enum class BiomeParameter {
 class BiomeGenerator
 {
 private:
-	int* biomeMap;
+	BiomeMap biomeMap;
 	int height, width;
 	bool isGenerated = false;
 
@@ -29,8 +30,8 @@ public:
 	BiomeGenerator();
 	~BiomeGenerator();
 
-	bool Initialize(int _height, int _width);
-	bool Resize(int _height, int _width);
+	bool Initialize(int _width, int _height);
+	bool Resize(int _width, int _height);
 	bool IsGenerated() const { return isGenerated; };
 	void Regenerate() { isGenerated = false; };
 	bool Biomify(noise::SimplexNoiseClass& continenatlness, noise::SimplexNoiseClass& mountainousness, noise::SimplexNoiseClass& weirdness);
@@ -43,7 +44,7 @@ public:
 	bool SetBiomes(std::vector<biome::Biome>& b);
 
 	biome::Biome& GetBiome(int id) { return biomes[id]; };
-	int* GetBiomeMap() const { return biomeMap; };
+	const BiomeMap& GetBiomeMap() const { return biomeMap; };
 	int GetBiomeAt(int x, int y);
 	noise::NoiseConfigParameters& GetTemperatureNoiseConfig() { return temperatureNoise.GetConfigRef(); };
 	noise::NoiseConfigParameters& GetHumidityNoiseConfig() { return humidityNoise.GetConfigRef(); };

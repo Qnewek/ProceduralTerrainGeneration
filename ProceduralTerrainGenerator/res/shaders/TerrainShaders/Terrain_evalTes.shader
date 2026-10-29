@@ -35,14 +35,14 @@ void main()
     Height =  texture(heightMap, texCoord).r * heightScale;
 
     //Normal (gradient)
-    float texel = 1.0 / float(textureSize(heightMap, 0).x);
-    float hL = texture(heightMap, texCoord + vec2(-texel, 0)).r * heightScale;
-    float hR = texture(heightMap, texCoord + vec2( texel, 0)).r * heightScale;
-    float hD = texture(heightMap, texCoord + vec2(0, -texel)).r * heightScale;
-    float hU = texture(heightMap, texCoord + vec2(0,  texel)).r * heightScale;
+    vec2 texel = 1.0 / vec2(textureSize(heightMap, 0));
+    float hL = texture(heightMap, texCoord + vec2(-texel.x, 0)).r * heightScale;
+    float hR = texture(heightMap, texCoord + vec2( texel.x, 0)).r * heightScale;
+    float hD = texture(heightMap, texCoord + vec2(0, -texel.y)).r * heightScale;
+    float hU = texture(heightMap, texCoord + vec2(0,  texel.y)).r * heightScale;
 
-    vec3 dx = vec3(2.0 * texel, hR - hL, 0.0);
-    vec3 dz = vec3(0.0, hU - hD, 2.0 * texel);
+    vec3 dx = vec3(2.0 * texel.x, hR - hL, 0.0);
+    vec3 dz = vec3(0.0, hU - hD, 2.0 * texel.y);
     aNormal = normalize(cross(dz, dx));
     //Normal
 

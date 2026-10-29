@@ -11,7 +11,7 @@ class NoiseBasedGenerationSys
 {
 	private:
 		//Config
-		float* vertices;
+		std::vector<float> vertices;
 		float heightScale, modelScale, topoStep, topoBandWidth;
 		unsigned int stride, mapResolution;
 		int width, height;
@@ -35,8 +35,9 @@ class NoiseBasedGenerationSys
 		NoiseBasedGenerationSys();
 		~NoiseBasedGenerationSys();
 		
-		bool Initialize(int _height, int _width, float _heightScale);
+		bool Initialize(int _width, int _height, float _heightScale);
 		bool Resize();
+		void BuildMesh();
 		bool GenerateNoise(float originx, float originy);
 		bool SimulateErosion();
 

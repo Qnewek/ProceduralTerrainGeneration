@@ -2,6 +2,8 @@
 
 #include <optional>
 
+#include "Grid.h"
+
 
 //Implementation of the algorith described here: http://www.firespark.de/resources/downloads/implementation%20of%20a%20methode%20for%20hydraulic%20erosion.pdf
 //Its a particle based hydraulic erosion algorithm that simulates the erosion of terrain by water droplets
@@ -81,12 +83,12 @@ namespace erosion {
 		int& GetDropletCountRef() { return dropletCount; }
 		int GetWidth() { return width; }
 		int GetHeight() { return height; }
-		float* GetMap() { return map; }
+		float* GetMap() { return map.Data(); }
 		void DontChangeMap() { changeMap = false; }
 		void ChangeMap() { changeMap = true; }
 
 	private:
-		float* map;
+		HeightField map;
 
 		int width, height;
 		int dropletCount = 20000;
