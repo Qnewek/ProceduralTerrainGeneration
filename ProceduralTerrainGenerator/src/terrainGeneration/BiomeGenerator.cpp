@@ -1,4 +1,5 @@
 #include "BiomeGenerator.h"
+#include "Parallel.h"
 #include <iostream>
 
 BiomeGenerator::BiomeGenerator() : height(0), width(0), temperatureNoise(), humidityNoise()
@@ -82,9 +83,9 @@ bool BiomeGenerator::Biomify(const BiomeConfig& config, noise::SimplexNoiseClass
 		return false;
 	}
 
-	int T, H, C, M, W;
-
-	for (int y = 0; y < height; y++) {
+	//Rows in parallel - every cell only reads the noise maps and the biome table
+	ParallelFor(height, [&](int y) {
+		int T, H, C, M, W;
 		for (int x = 0; x < width; x++) {
 			H = DetermineLevel(config.humidityLevels, humidityNoise.GetVal(x, y));
 			T = DetermineLevel(config.temperatureLevels, temperatureNoise.GetVal(x, y));
@@ -94,7 +95,7 @@ bool BiomeGenerator::Biomify(const BiomeConfig& config, noise::SimplexNoiseClass
 
 			biomeMap[y * width + x] = DetermineBiome(T, H, C, M, W);
 		}
-	}
+	});
 	std::cout << "[LOG] BiomeMap succesfully evaluated" << std::endl;
 	isGenerated = true;
 	return true;

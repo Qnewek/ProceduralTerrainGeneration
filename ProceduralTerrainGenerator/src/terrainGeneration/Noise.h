@@ -71,10 +71,15 @@ namespace noise
 		bool Initialize(int _width, int _height);
 		bool Resize(int _width, int _height);
 
+		//Fills the map in parallel (rows on the thread pool)
 		bool GenerateFractalNoise(const NoiseConfigParameters& config, float originx, float originy);
+		//Single sample; rebuilds the permutation table first if config.seed changed. Not thread-safe
 		float PointNoise(const NoiseConfigParameters& config, float x, float y);
+		//Single sample without touching the permutation table - safe to call from many threads at once.
+		//UpdatePermutation(config.seed) must be called before
+		float Evaluate(const NoiseConfigParameters& config, float x, float y) const;
 		bool MakeMapRidged(const NoiseConfigParameters& config);
-		float MakeIsland(const NoiseConfigParameters& config, float e, int x, int y);
+		float MakeIsland(const NoiseConfigParameters& config, float e, int x, int y) const;
 
 		//Rebuilds the permutation table if the seed changed since the last call
 		void UpdatePermutation(int seed);
@@ -94,6 +99,6 @@ namespace noise
 		int permSeed = 0;
 		bool permReady = false;
 
-		float Ridge(float h, float offset, float gain);
+		float Ridge(float h, float offset, float gain) const;
 	};
 }

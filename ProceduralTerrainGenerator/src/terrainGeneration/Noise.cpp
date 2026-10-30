@@ -8,6 +8,7 @@
 #include <numbers>
 
 #include "Simplex/SimplexNoise.h"
+#include "Parallel.h"
 
 #define PI 3.14159265
 
@@ -74,13 +75,13 @@ namespace noise
 			return false;
 		}
 
-		for (int y = 0; y < height; y++)
-		{
+		UpdatePermutation(config.seed);
+		ParallelFor(height, [&](int y) {
 			for (int x = 0; x < width; x++)
 			{
-				heightMap[y * width + x] = PointNoise(config, x + originx,y + originy);
+				heightMap[y * width + x] = Evaluate(config, x + originx, y + originy);
 			}
-		}
+		});
 		std::cout << "[LOG] Noise successfully generated" << std::endl;
 		return true;
 	}
@@ -88,6 +89,11 @@ namespace noise
 	float SimplexNoiseClass::PointNoise(const NoiseConfigParameters& config, float x, float y)
 	{
 		UpdatePermutation(config.seed);
+		return Evaluate(config, x, y);
+	}
+
+	float SimplexNoiseClass::Evaluate(const NoiseConfigParameters& config, float x, float y) const
+	{
 		float amplitude = 1.0f;
 		float frequency = 1.0f;
 		float elevation = 0.0f;
@@ -164,7 +170,7 @@ namespace noise
 	//@param h - height value
 	//@param offset - offset value
 	//@param gain - gain value
-	float SimplexNoiseClass::Ridge(float h, float offset, float gain)
+	float SimplexNoiseClass::Ridge(float h, float offset, float gain) const
 	{
 		return offset - abs((gain * abs(h)) - gain + 1.0f);
 	}
@@ -191,7 +197,7 @@ namespace noise
 	//@param e - elevation value
 	//@param x - x coordinate
 	//@param y - y coordinate
-	float SimplexNoiseClass::MakeIsland(const NoiseConfigParameters& config, float e, int x, int y) {
+	float SimplexNoiseClass::MakeIsland(const NoiseConfigParameters& config, float e, int x, int y) const {
 		float nx = x * 2 / (float)width  -1;
 		float ny = y * 2 / (float)height -1;
 		float distance = 0;
