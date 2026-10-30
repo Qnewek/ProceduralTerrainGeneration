@@ -2,7 +2,7 @@
 
 #include <iostream>
 #include "glm/glm.hpp"
-#include "imgui/imgui.h"
+#include "imgui.h"
 
 namespace utilities
 {
