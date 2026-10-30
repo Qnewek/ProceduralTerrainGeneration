@@ -4,8 +4,8 @@
 #include <algorithm>
 #include <chrono>
 
-#include "imgui/imgui.h"
-#include "ImPlot/implot.h"
+#include "imgui.h"
+#include "implot.h"
 
 bool WorldRequest::Any() const
 {

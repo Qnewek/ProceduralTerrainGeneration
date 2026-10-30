@@ -2,7 +2,7 @@
 
 #include "glm/gtc/matrix_transform.hpp"
 #include "glm/gtc/type_ptr.hpp"
-#include "imgui/imgui.h"
+#include "imgui.h"
 
 Camera::Camera(const unsigned int ScreenWidth, const unsigned int ScreenHeight, glm::vec3 _position, float cameraSpeed, float renderDistance) :
 	screenWidth(ScreenWidth), screenHeight(ScreenHeight), position(_position),
