@@ -1,7 +1,7 @@
 # Procedural Terrain Generator — analiza i plan rozwoju
 
-Diagnoza na 2026-10-27 (branch `lodChunked` = `master`, commit `fbd32ab`); postęp odhaczany na bieżąco, ostatnia aktualizacja 2026-10-29
-(Faza 0 zamknięta; z Fazy 1 zrobione: A2/B5/B9, B8, A3, A4).
+Diagnoza na 2026-10-27 (branch `lodChunked` = `master`, commit `fbd32ab`); postęp odhaczany na bieżąco, ostatnia aktualizacja 2026-10-30
+(Faza 0 zamknięta; z Fazy 1 zrobione: A2/B5/B9, B8, A3, A4, B6 + shadery, B15).
 Cel projektu: **generowanie terenu z edycją parametrów w czasie rzeczywistym, maksymalna wydajność,
 biomy, roślinność i kolejne feature'y.**
 
@@ -27,7 +27,7 @@ biomy, roślinność i kolejne feature'y.**
 | ~~B12~~ ✅ | `TerrainGenerationSys.cpp:376`, edytory | Nagłówek „Spline editor” użyty dwa razy w jednym oknie (kolizja ID ImGui); `static int` w edytorach; `'0' + i` dla `size_t`; pętla `j > 0` w `SegmentDrag` nie poprawia granicy 0 | **Zrobione 2026-10-28:** drugi nagłówek → „Biome levels editor”; stan edytorów (`*PressedButton`, `splineDraggedPoint`) jako pola klasy, metoda ewaluacji czytana z `terrainGen`; etykiety poziomów `%d`. (Zarzut o `j > 0` był błędny — granica 0 to stałe −1, a przeciągane wartości są do niej clampowane) |
 | ~~B13~~ ✅ | `.gitignore`, vcxproj | `.sln`, `.vcxproj`, `.filters`, `Dependencies/GLEW/lib` ignorowane; x64 bez include/lib; Release bez `NDEBUG`; vcxproj wskazuje nieistniejące pliki (`ValueGenerators/*`, `Terraformers/*`, `TerrainObjects/*`) | **Zrobione 2026-10-28:** pliki projektu i libki GLEW śledzone, x64 usunięte (GLFW w repo tylko x86 — wróci z A8), `NDEBUG` w Release, martwe wpisy usunięte, `imgui.ini` w ignore. Zweryfikowane buildem Debug/Release z czystego eksportu indeksu |
 | ~~B14~~ ✅ | `TerrainGenerator.cpp` | `int resolution` inicjalizowany `500.0f`; `EvaluationMethod::C` nie ustawia `elevation` (zostaje wartość z poprzedniego piksela); `SetResolution` nie regeneruje terenu automatycznie | **Zrobione 2026-10-28:** `resolution(500)`; `C`/`default` ustawiają `elevation = 0`. (Zarzut o `SetResolution` był błędny — przycisk „Change resolution” woła `GenerateTerrain`) |
-| B15 | `TextureClass`, subsystemy | Każda zmiana parametru = `glGenTextures` + `glTexImage2D` + `glGenerateMipmap` | Niepotrzebne alokacje GPU, stuttering przy suwakach |
+| ~~B15~~ ✅ | `TextureClass`, subsystemy | Każda zmiana parametru = `glGenTextures` + `glTexImage2D` + `glGenerateMipmap` | **Zrobione 2026-10-30:** `TextureClass` = niezmienny storage (`glTextureStorage2D`, DSA) + `Upload` przez `glTextureSubImage2D`; `TerrainView` tworzy teksturę warstwy tylko przy braku lub zmianie rozmiaru. Mipmapy usunięte — mapy czyta tylko TES, gdzie `texture()` zawsze bierze poziom 0, więc były liczone na darmo. Nieużywane konstruktory (stb, `unsigned char*`) usunięte |
 | ~~B16~~ ✅ | `LightSource.cpp:52`, `Shader.cpp` | Ścieżka `Light_source_*.shader` vs plik `light_source_*.shader`; brak sprawdzania statusu linkowania programu; komunikat zawsze „vertex/fragment”; `malloc` bez `free` | **Zrobione 2026-10-28:** ścieżki małymi literami, `CheckLinkStatus` po `glLinkProgram`, nazwy wszystkich 4 typów shaderów w komunikacie, log w `std::string` zamiast `malloc` |
 | ~~B17~~ ✅ | `NoiseBasedGenerationSys::Draw` | Mapa po erozji przesuwana o `width + 1`, a siatka ma szerokość `width * 4` | **Zrobione 2026-10-29 (A4):** przesunięcie = `TerrainView::GetWorldWidth() * 1.05` |
 | ~~B18~~ ✅ | `TerrainGenerationSys::NoisesLevelsForBiomes` | Przeciąganie poziomów biomów zmieniało dane, ale nie przeliczało mapy biomów (zmiana widoczna dopiero po innej regeneracji) | **Zrobione 2026-10-29:** `SegmentDrag` zwraca informację o zmianie, przycisk „Apply biome levels” (aktywny tylko przy niezastosowanych zmianach) regeneruje mapę — na żądanie, bo przeliczana jest cała mapa |
@@ -117,7 +117,9 @@ Cel: kod gotowy na wielowątkowość/GPU, jedna ścieżka renderingu, mierzalna 
    pod F5 / przyciskiem (przy błędzie zostaje stary program), wspólne `res/shaders/common/transform.glsl`.
    `#define` bez osobnej obsługi (wystarcza natywny preprocesor GLSL). Wspólny UBO kamery/światła przeniesiony do Fazy 4
    (przy 2 shaderach nie zyskuje nic, a komplikuje podmianę kamery w trybie 2D).
-6. **B15 Tekstury:** alokacja raz (`glTexStorage2D`), aktualizacja `glTexSubImage2D`; mipmapy tylko tam, gdzie potrzebne.
+6. ~~**B15 Tekstury:** alokacja raz (`glTexStorage2D`), aktualizacja `glTexSubImage2D`; mipmapy tylko tam, gdzie potrzebne.~~
+   ✅ 2026-10-30 — mipmapy nigdzie nie są dziś potrzebne (wrócą przy teksturach materiałów w Fazie 3, czytanych w FS).
+   Niezmienny storage przygotowuje też grunt pod zapis z compute shaderów (`glBindImageTexture`) w Fazie 2.
 7. **Wielowątkowość CPU (przejściowo):** generacja wierszami w `std::for_each(std::execution::par)` lub prosty thread-pool;
    generacja asynchroniczna z double-bufferingiem (UI nie czeka, wynik podmieniany po zakończeniu; anulowanie przestarzałych zadań po wersji configu).
 8. **Pomiar:** Tracy profiler (CPU + GPU zones) lub przynajmniej `GL_TIME_ELAPSED` queries + panel statystyk
@@ -207,7 +209,7 @@ Cel: realistyczne, płynne przejścia i biomy wpływające na kształt terenu.
 | Priorytet | Zadania | Dlaczego |
 |-----------|---------|----------|
 | P0 | Faza 0 (B13, B3, B2, B1, B11) | Bez tego każda dalsza praca jest na niepewnym gruncie |
-| P1 | Faza 1: ~~B8 (szum)~~ ✅, ~~A2/B5 (RAII + width/height)~~ ✅, ~~A3/A4 (rozdzielenie warstw)~~ ✅, B6 (shadery), profiler | Fundament — bez rozdzielenia warstw nie da się przenieść generacji na GPU |
+| P1 | Faza 1: ~~B8 (szum)~~ ✅, ~~A2/B5 (RAII + width/height)~~ ✅, ~~A3/A4 (rozdzielenie warstw)~~ ✅, ~~B6 (shadery)~~ ✅, ~~B15 (tekstury)~~ ✅, wielowątkowość, profiler | Fundament — bez rozdzielenia warstw nie da się przenieść generacji na GPU |
 | P1 | Faza 2.1–2.3 (compute height + chunki) | Największy zysk dla „real-time” |
 | P2 | Faza 2.4–2.7, Faza 3 | Jakość i skalowanie |
 | P3 | Faza 4, Faza 5 | Feature'y budowane na stabilnym fundamencie |

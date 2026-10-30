@@ -87,12 +87,21 @@ void TerrainView::SetFlatCameraUniforms(const TerrainRenderSettings& settings)
 
 void TerrainView::SetLayer(Layer layer, const HeightField& map)
 {
-	textures[static_cast<int>(layer)] = std::make_unique<TextureClass>(map.Data(), map.GetWidth(), map.GetHeight());
+	UploadLayer(layer, map.Data(), map.GetWidth(), map.GetHeight(), GL_R32F, GL_RED);
 }
 
 void TerrainView::SetBiomeColors(const std::vector<glm::vec3>& colors, int _width, int _height)
 {
-	textures[static_cast<int>(Layer::BIOMES)] = std::make_unique<TextureClass>(colors, _width, _height);
+	UploadLayer(Layer::BIOMES, colors.data(), _width, _height, GL_RGB32F, GL_RGB);
+}
+
+void TerrainView::UploadLayer(Layer layer, const void* data, int _width, int _height, GLenum internalFormat, GLenum format)
+{
+	std::unique_ptr<TextureClass>& texture = textures[static_cast<int>(layer)];
+	if (!texture || texture->GetWidth() != _width || texture->GetHeight() != _height) {
+		texture = std::make_unique<TextureClass>(_width, _height, internalFormat);
+	}
+	texture->Upload(data, format, GL_FLOAT);
 }
 
 void TerrainView::Draw(Renderer& renderer, Camera& camera, LightSource& light, const TerrainRenderSettings& settings,
