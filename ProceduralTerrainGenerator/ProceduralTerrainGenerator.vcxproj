@@ -304,6 +304,7 @@
     <ClInclude Include="src\terrainGeneration\Noise.h" />
     <ClInclude Include="src\terrainGeneration\Grid.h" />
     <ClInclude Include="src\terrainGeneration\Parallel.h" />
+    <ClInclude Include="src\terrainGeneration\GenerationJob.h" />
     <ClInclude Include="src\terrainGeneration\WorldConfig.h" />
     <ClInclude Include="src\terrainGeneration\TerrainGenerator.h" />
     <ClInclude Include="src\subSystems\NoiseBasedGenerationSys.h" />
