@@ -65,7 +65,8 @@ Dependencies/                    GLFW (lib vc2022), GLEW (static)
 
 1. CPU generuje mapę `float[width*height]` (`SimplexNoiseClass::GenerateFractalNoise` lub
    `TerrainGenerator::GenerateTerrain`, który dla każdego piksela woła `PointNoise` trzech szumów).
-2. Subsystem przekazuje mapę do `TerrainView::SetLayer`, który tworzy **nową** teksturę `GL_R32F` przy każdej zmianie (B15).
+2. Subsystem przekazuje mapę do `TerrainView::SetLayer`, który wgrywa ją (`glTextureSubImage2D`) do istniejącej tekstury
+   `GL_R32F` warstwy; nową teksturę (niezmienny storage, bez mipmap) tworzy tylko przy braku lub zmianie rozmiaru mapy.
 3. Siatka (`TerrainView`): stała siatka `mapResolution × mapResolution` (50×50) patchy-quadów o rozmiarze
    `width * worldUnitsPerTexel` (= 4, `GetWorldWidth()`), rysowana `GL_PATCHES` (4 wierzchołki).
 4. TCS: poziom teselacji 4–64 zależnie od odległości w przestrzeni oka. TES: próbkuje `heightMap`,
