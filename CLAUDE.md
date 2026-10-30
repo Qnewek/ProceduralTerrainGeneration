@@ -66,6 +66,8 @@ Dependencies/                    GLFW (lib vc2022), GLEW (static)
 
 1. CPU generuje mapę `float[width*height]` (`SimplexNoiseClass::GenerateFractalNoise` lub
    `TerrainGenerator::GenerateTerrain`, który dla każdego piksela woła `Evaluate` trzech szumów); wiersze równolegle.
+   Generacja idzie w tle (7b): UI ustawia flagi w `WorldRequest` / `NoiseRequest`, `Update()` subsystemu (co klatkę,
+   przed `Draw`) startuje zadanie na kopii map i configu, a gotowy wynik podmienia mapy subsystemu (`generated`).
 2. Subsystem przekazuje mapę do `TerrainView::SetLayer`, który wgrywa ją (`glTextureSubImage2D`) do istniejącej tekstury
    `GL_R32F` warstwy; nową teksturę (niezmienny storage, bez mipmap) tworzy tylko przy braku lub zmianie rozmiaru mapy.
 3. Siatka (`TerrainView`): stała siatka `mapResolution × mapResolution` (50×50) patchy-quadów o rozmiarze
@@ -88,8 +90,8 @@ Wartości szumów są w [-1, 1]. Konwencja indeksowania: `map[y * width + x]`.
 - Warstwy (A3): parametry świata to same dane w `WorldConfig.h`, trzymane przez subsystem (`world` / `config`).
   Generatory (`SimplexNoiseClass`, `TerrainGenerator`, `BiomeGenerator`, `Erosion`) **nie trzymają configu** —
   dostają `const XxxConfig&` w każdej metodzie generującej, a same przechowują tylko wyniki (mapy).
-  UI (immediate-mode w subsystemach: `ImGuiLeftPanel/RightPanel/Output`) edytuje config, subsystem woła generację
-  i przekazuje wynik do `TerrainView`. Stan edytorów (wybrany szum, wciśnięte przyciski) to nie config.
+  UI (immediate-mode w subsystemach: `ImGuiLeftPanel/RightPanel/Output`) edytuje config i zgłasza żądanie (`Request*`),
+  subsystem generuje w tle i przekazuje wynik do `TerrainView`. Stan edytorów (wybrany szum, wciśnięte przyciski) to nie config.
 - Includy względem katalogów z `AdditionalIncludeDirectories` (własne: `#include "Noise.h"`) albo
   `ExternalIncludePath` (`src/vendor`, GLFW, GLEW: `"imgui/imgui.h"`) — te drugie są kompilowane z `/external:W0`.
 - Komentarze po angielsku, w stylu `//@param`.
@@ -102,6 +104,10 @@ Wartości szumów są w [-1, 1]. Konwencja indeksowania: `map[y * width + x]`.
   `config.seed`. Używaj przeciążeń `SimplexNoise::noise(perm, ...)`; globalne `reseed` / `noise(x, y)` zostały
   tylko dla zgodności. `PointNoise` aktualizuje permutację leniwie i **nie jest thread-safe** — w pętlach równoległych
   wołaj `UpdatePermutation(config.seed)` raz przed pętlą, a w środku `Evaluate` (const).
+- **Mapy subsystemu (`generated`: `GeneratedWorld` / `NoiseMaps`) zmienia tylko instalacja wyniku zadania.** UI może je
+  czytać, ale nie modyfikować bezpośrednio — zmiana zostałaby nadpisana przez wynik trwającego zadania (liczy na kopii
+  sprzed zmiany). Każda modyfikacja map = flaga w żądaniu + krok w `RunGeneration`. Kod w `RunGeneration` działa na
+  wątku roboczym: bez OpenGL, bez ImGui, bez pól subsystemu (jest `static`).
 - Generacja map idzie wierszami przez `ParallelFor` (`terrainGeneration/Parallel.h`, `std::execution::par`).
   Iteracja może pisać tylko do swojego wiersza i czytać współdzielony stan; logowanie i błędy zbieraj po pętli
   (np. `std::atomic<bool>`), nie `return` ze środka.
