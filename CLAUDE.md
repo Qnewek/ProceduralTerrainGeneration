@@ -49,14 +49,15 @@ ProceduralTerrainGenerator/
       TerrainGenerator.*         continentalness/mountainousness/weirdness → heightMap (LINEAR lub SPLINE)
       BiomeGenerator.*, Biome.*  temperatura/wilgotność + 3 szumy terenu → poziomy (int) → id biomu
       Erosion.*                  erozja kroplowa (CPU, lista jednokierunkowa kropel)
-      VegetationGenerator.*      PUSTE — stara implementacja zakomentowana
+      Grid.h, Parallel.h         mapy Grid<T>; ParallelFor po wierszach
+      GenerationJob.h            jedno zadanie generacji w tle (std::async + TryTake)
     opengl/                      cienkie wrappery: Shader, VertexArray/Buffer, IndexBuffer, TextureClass, Renderer
       TerrainView.*              siatka + shader + tekstury (TERRAIN/OVERLAY/BIOMES), wspólny dla obu trybów
     utility/
       Camera.*                   kamera FPS (WASD, Space/Ctrl, M = mysz, Esc = zwolnij mysz)
       LightSource.*              punktowe światło + sześcian debug
-      utilities.*                helpery ImGui (NoiseImGui, DisplayModeImGui...) + dużo martwego kodu CPU-mesh
-    vendor/                      glm, imgui, ImPlot, SimplexNoise, tk::spline, PoissonGenerator, stb_image, tiny_obj_loader
+      utilities.*                helpery ImGui (NoiseImGui, DisplayModeImGui...), siatka patchy, kolory biomów
+    vendor/                      glm, imgui, ImPlot, SimplexNoise, tk::spline, stb_image
   res/shaders/
     TerrainShaders/              VS → TCS → TES → FS, jedyny zestaw dla terenu (oba tryby)
 Dependencies/                    GLFW (lib vc2022), GLEW (static)
@@ -123,7 +124,8 @@ Wartości szumów są w [-1, 1]. Konwencja indeksowania: `map[y * width + x]`.
   w `res/shaders/common/`). F5 w oknie aplikacji przeładowuje wszystkie shadery — przy błędzie zostaje stary program,
   a błąd idzie do konsoli. Numery linii w błędach dotyczą pliku, w którym błąd jest, ale nazwa pliku nie jest podawana.
 - MSBuild nie znosi ścieżek > 260 znaków — testowy clean build rób w krótkiej ścieżce (np. `%TEMP%\ptg_cc`), nie w scratchpadzie.
-- Branch `lodChunked` == `master` (brak własnych commitów) — planowane chunkowanie/LOD jeszcze nie istnieje.
+- Planowane chunkowanie/LOD jeszcze nie istnieje. Wcześniejsza próba (klasa `Chunk`, nigdy nie scalona) jest pod tagiem
+  `archive/infinite-terrain-chunks`; stara roślinność — w historii (`fb8b840`), opis w ROADMAP, Faza 4.
 
 ## Kierunek rozwoju (skrót z ROADMAP)
 

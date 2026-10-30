@@ -22,16 +22,6 @@ void Renderer::DrawTriangles(const VertexArray& va, const IndexBuffer& ib, const
 
 	glDrawElements(GL_TRIANGLES, ib.GetCount(), GL_UNSIGNED_INT, nullptr);
 }
-void Renderer::DrawTriangleStrips(const VertexArray& va, const IndexBuffer& ib, const Shader& shader, int numStrips, int numVertPerStrip) const {
-    shader.Bind();
-    va.Bind();
-    ib.Bind();
-
-    for(int i = 0; i < numStrips; i++) {
-       glDrawElements(GL_TRIANGLE_STRIP, numVertPerStrip, GL_UNSIGNED_INT, (void*)(sizeof(unsigned) * static_cast<size_t>(numVertPerStrip * i)));
-	}
-}
-
 void Renderer::DrawPatches(const VertexArray& va, const Shader& shader, int numPatches, int numPatchPts) const
 {
     shader.Bind();

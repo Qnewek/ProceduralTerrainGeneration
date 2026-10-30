@@ -1,40 +1,86 @@
 # Procedural Terrain Generator
 
-A tool created in order to play with **procedural terrain generation** method by adjusting theirs parameters and getting different interesting results. App uses noise-based algorithms, erosion simulation, and biome assignment as well as biome based vegetation placement. Thanks to interactive UI implemented using **ImGui** and **ImPlot** user can seamlessly adjust algorithms configs.
+Desktop tool (C++20, OpenGL 4.5) for interactive **procedural terrain generation**: every parameter of the
+algorithms can be changed in the UI (**Dear ImGui** + **ImPlot**) and the terrain is regenerated in the background
+while the app stays responsive.
 
 ## Features
 
-- **Loading heightmap from file**
-    Mode enabling possibility of loading greyscale image to be displayed as a terrain.
-  
-- **Noise-based Terrain Generation**
-    Uses [**Simplex Noise**](https://thebookofshaders.com/11) to generate base terrain and displays it. This mode gives user possibility of adjusting every parameter being used in generation method mentioned above.
-  List of parameters with theirs meaning:
-  
-  
+- **Noise heightmap mode**
+  Fractal [Simplex noise](https://thebookofshaders.com/11) (fBm) shown as a 3D terrain. Every parameter is editable:
+  seed, octaves, scale, contrast, redistribution, lacunarity, persistence, handling of negative values,
+  ridged noise and island masks (cone, diagonal, squircle, ...).
 
-- **Erosion Simulation**
-    Apply natural erosion algorithm on previously generated or loaded map, in order to create realistic terrain shapes and features in real world created by hydraulic erosion (water flowing downhill). Algorithm is based on [this work](http://www.firespark.de/resources/downloads/implementation%20of%20a%20methode%20for%20hydraulic%20erosion.pdf).
+- **Hydraulic erosion**
+  Droplet-based erosion of the generated map, shown next to the original. Repeated runs accumulate.
+  Based on [this work](http://www.firespark.de/resources/downloads/implementation%20of%20a%20methode%20for%20hydraulic%20erosion.pdf).
 
-- **Terrain Gneration with Noise-based parameters**
-    Generating terrain using multiple generated noises as parameters:
-  -**Mountainousness**: how much elevation should be in certain point.
-  -**Continentalness**: how far into the land the point is.
-  -**Peaks&Valleys**: adjusting terrain by adding some sharper shapes as ridges and valleys.
-  Currently there are 2 implemented algorithms, which are:
-  -Simple combining [0.0-1.0] noise values and multiplying them by heightscale.
-  -Using values generated with noises as points to sample from previously set spline functions.
-  
-- **Biome Generation**
-    Assign biomes based on terrain parameters, **temperature**, and **humidity** and 3 parameters mentioned above in **Terrain Gneration with Noise-based parameters** section, enabling making changes based on current biome.
-  The tool gives user the possibility of seting his own config of biome generation via UI, levels of each parameter noise with its bounds and defining biomes parameters includiong mentioned levels for which they occur. As for now there is a possibility of painting terrain with biome specified color.
+- **TerrainGen mode (multi-noise terrain)**
+  Terrain built from three noises, similar to Minecraft 1.18+:
+  - **Continentalness** - how far inland a point is,
+  - **Mountainousness** - how much elevation there is,
+  - **Weirdness** - sharper shapes such as ridges and valleys.
+
+  The noises are combined either linearly or through spline functions edited in the UI (draggable control points).
+
+- **Biomes**
+  Biome assignment from temperature, humidity and the three terrain noises. Each parameter is split into levels
+  whose bounds can be dragged in the UI; the terrain is painted with the biome colors.
+
+- **Rendering**
+  GPU tessellation (distance-based level of detail), world-space lighting, display modes: greyscale,
+  topographical with isolines, monocolor, biomes; wireframe and a top-down 2D map view.
+
+- **Performance**
+  Map generation is parallelised over rows and runs on a background thread, so editing parameters never freezes
+  the UI (512x512 terrain in ~50 ms on 6 threads).
 
 ## Screenshots
 
-*ScreenShots *
+*Coming soon.*
 
-## Installation
+## Building
 
-1. Clone the repository:  
+Requirements: Windows, Visual Studio 2022 (toolset v143). All dependencies (GLFW, GLEW, glm, ImGui, ImPlot, ...)
+are in the repository.
+
+1. Clone the repository:
    ```bash
    git clone https://github.com/Qnewek/ProceduralTerrainGeneration.git
+   ```
+2. Open `ProceduralTerrainGenerator.sln` and build `Debug|Win32` or `Release|Win32`,
+   or from the command line:
+   ```
+   MSBuild.exe ProceduralTerrainGenerator.sln /p:Configuration=Release /p:Platform=x86 /m
+   ```
+3. Run with the working directory set to `ProceduralTerrainGenerator/` (shaders and textures are loaded
+   from `res/` relative to it). Visual Studio does this by default.
+
+## Controls
+
+| Key | Action |
+|-----|--------|
+| `W` `A` `S` `D` | move the camera |
+| `Space` / `Left Ctrl` | move up / down |
+| `M` | mouse look |
+| `Esc` | release the mouse |
+| `F5` | reload shaders |
+
+The mode (Noise heightmap / TerrainGen) is selected in the top panel; generation parameters are in the right
+panel, display settings in the left one.
+
+## Benchmark
+
+```
+cd ProceduralTerrainGenerator
+..\Release\ProceduralTerrainGenerator.exe --benchmark
+```
+
+Runs CPU generation without a window for 256², 512² and 1024² maps and prints median times together with
+checksums of the generated maps (used to verify that refactors do not change the output).
+
+## Roadmap
+
+Planned work - GPU generation with compute shaders, chunked infinite world with LOD, continuous biomes with
+blending and texturing, instanced vegetation, GPU erosion, water and export - is described in
+[docs/ROADMAP.md](docs/ROADMAP.md) (in Polish).
