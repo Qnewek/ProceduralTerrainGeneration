@@ -1,7 +1,7 @@
 # Procedural Terrain Generator — analiza i plan rozwoju
 
 Diagnoza na 2026-10-27 (branch `lodChunked` = `master`, commit `fbd32ab`); postęp odhaczany na bieżąco, ostatnia aktualizacja 2026-10-30
-(Faza 0 zamknięta; z Fazy 1 zrobione: A2/B5/B9, B8, A3, A4, B6 + shadery, B15, 7a/7b — generacja równoległa i asynchroniczna).
+(Faza 0 zamknięta; z Fazy 1 zrobione: A2/B5/B9, B8, A3, A4, B6 + shadery, B15, 7a/7b — generacja równoległa i asynchroniczna, A9/A10).
 Cel projektu: **generowanie terenu z edycją parametrów w czasie rzeczywistym, maksymalna wydajność,
 biomy, roślinność i kolejne feature'y.**
 
@@ -44,8 +44,8 @@ biomy, roślinność i kolejne feature'y.**
 | A6 | Biomy oparte o dyskretne poziomy `int` i pierwszy pasujący biom z `unordered_map` (kolejność nieokreślona!) | Ostre granice, niedeterministyczny wybór przy nakładaniu się zakresów, brak blendingu, trudne do konfiguracji |
 | A7 | Brak serializacji (presety, konfiguracje biomów, eksport) — „Saving” to placeholder | Nie da się zapisać efektu pracy ani porównać ustawień |
 | A8 | Brak testów, CI, profilera; brak menedżera zależności (binarki w repo) | Regresje niewykrywalne; aktualizacje bibliotek ręczne |
-| A9 | Martwy kod: `VegetationGenerator` (pusty), CPU-mesh w `utilities.cpp` (`MapToVertices`, `PerformErosion`, `PaintVerticesByHeight`, `MeshIndicesStrips`, `CalculateHeightMapNormals`), `TINYOBJLOADER_IMPLEMENTATION` bez użycia, `DrawTriangleStrips`, gałęzie git bez scalenia | Szum poznawczy |
-| A10 | Higiena repo: śledzony `imgui.ini`, commity „sda/asd/x”, 17 zdalnych branchy, README z pustymi sekcjami | Trudno wrócić do projektu po przerwie (jak teraz) |
+| ~~A9~~ ✅ | Martwy kod: `VegetationGenerator` (pusty), CPU-mesh w `utilities.cpp` (`MapToVertices`, `PerformErosion`, `PaintVerticesByHeight`, `MeshIndicesStrips`, `CalculateHeightMapNormals`), `TINYOBJLOADER_IMPLEMENTATION` bez użycia, `DrawTriangleStrips`, gałęzie git bez scalenia | Szum poznawczy — **Zrobione 2026-10-30:** usunięte `VegetationGenerator`, CPU-mesh z `utilities` (zostały `GenerateVerticesForResolution`, `GetBiomeColorMap` i helpery ImGui), `DrawTriangleStrips`, nieużywane vendor `ObjLoader` (tiny_obj_loader) i `PoissonSampling` — wrócą w nowej postaci w Fazie 4. `res/textures/` zostaje (assety pod Fazę 3) |
+| ~~A10~~ ✅ | Higiena repo: śledzony `imgui.ini`, commity „sda/asd/x”, 17 zdalnych branchy, README z pustymi sekcjami | Trudno wrócić do projektu po przerwie (jak teraz) — **Zrobione 2026-10-30:** `imgui.ini` nieśledzony (od B13), scalone branche usunięte lokalnie i z GitHuba (zostaje `master`), jedyny nie scalony commit (`infiniteTerrain`, klasa `Chunk`) zachowany jako tag `archive/infinite-terrain-chunks`; README przepisany (funkcje, build, sterowanie, benchmark) — brakuje screenshotów |
 
 ---
 
@@ -138,7 +138,7 @@ Cel: kod gotowy na wielowątkowość/GPU, jedna ścieżka renderingu, mierzalna 
 9. **Testy:** doctest/Catch2 — determinizm szumu (ten sam seed → te same wartości), zakresy [-1,1],
    wybór biomu dla zadanych parametrów, regresja height = f(x,z).
 10. **Serializacja (A7):** presety JSON (nlohmann/json) dla `WorldConfig`; load/save w UI; eksport heightmapy do PNG 16-bit / RAW / EXR.
-11. **A9/A10:** usuń martwy kod, posprzątaj branche (zostaw `master` + aktywny feature branch).
+11. ~~**A9/A10:** usuń martwy kod, posprzątaj branche (zostaw `master` + aktywny feature branch).~~ ✅ 2026-10-30
 
 **Kryterium ukończenia:** mapa 1024² regeneruje się po ruchu suwaka bez blokowania UI; wszystkie testy zielone w CI.
 
@@ -193,6 +193,12 @@ Cel: realistyczne, płynne przejścia i biomy wpływające na kształt terenu.
 **Kryterium:** brak ostrych granic biomów; zmiana definicji biomu widoczna natychmiast; konfiguracja biomów ładowana z pliku.
 
 ### Faza 4 — roślinność i obiekty (2–4 tygodnie)
+Poprzednia implementacja (usunięta w A9, do wglądu w historii gita: `fb8b840` — ostatnia działająca wersja,
+`b7f7720` „Fixed trees”): Poisson-disk per chunk (vendor `PoissonGenerator.h`) z gęstością z biomu
+(`Biome::vegetationLevel`) i odrzucaniem pod poziomem morza, typy drzew per biom z prawdopodobieństwem (edytor ImGui),
+model `.obj` (tiny_obj_loader) rysowany `glDrawElementsInstanced`. Opierała się na siatce liczonej na CPU — nie do
+przeniesienia wprost, ale reguły rozmieszczenia i UI są dobrym punktem wyjścia.
+
 1. **Rozmieszczenie:** Poisson-disk / blue-noise per chunk z seedem z `hash(chunkX, chunkZ, worldSeed)` — deterministyczne
    i bez szwów (uwzględnij sąsiadów przy krawędziach). Najlepiej na GPU (compute: jittered grid + odrzucanie),
    do bufora instancji (pozycja, rotacja, skala, typ).
