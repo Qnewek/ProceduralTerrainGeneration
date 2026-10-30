@@ -117,7 +117,10 @@ void TerrainGenApp::Start()
         reloadKeyWasDown = reloadKeyDown;
 
         //Install finished background generation and start the pending one (only for the active mode)
-        if (currentMode == mode::TERRAIN_GEN) {
+        if (currentMode == mode::NOISE_HEIGHTMAP) {
+            noiseGenSys.Update();
+        }
+        else if (currentMode == mode::TERRAIN_GEN) {
             terrainGenSys.Update();
         }
 

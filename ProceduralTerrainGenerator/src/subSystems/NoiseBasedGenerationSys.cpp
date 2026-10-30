@@ -6,7 +6,7 @@
 
 #include "imgui/imgui.h"
 
-NoiseBasedGenerationSys::NoiseBasedGenerationSys() : noise(), erosion(1, 1)
+NoiseBasedGenerationSys::NoiseBasedGenerationSys()
 {
 }
 
@@ -19,74 +19,141 @@ bool NoiseBasedGenerationSys::Initialize(int _width, int _height, float _heightS
 	config.width = _width;
 	config.height = _height;
 	renderSettings.heightScale = _heightScale;
-	noise.Initialize(config.width, config.height);
 	if (!view.Initialize(config.width, config.height)) {
 		return false;
 	}
-
-	if(!GenerateNoise(0.0f, 0.0f)) {
+	auto initial = std::make_unique<NoiseMaps>();
+	if (!initial->noise.Initialize(config.width, config.height)) {
 		std::cout << "[ERROR] Invalid height or width value" << std::endl;
 		return false;
 	}
+
+	//The first frame needs a map, so the initial generation runs synchronously
+	NoiseRequest request;
+	request.noise = true;
+	GenerationResult result = Generate(std::move(initial), config, request);
+	if (!result.ok) {
+		std::cout << "[ERROR] NoiseBasedGenerationSys: initial generation failed" << std::endl;
+		return false;
+	}
+	InstallResult(result);
 
 	std::cout << "[LOG] NoiseBasedGenerationSys initialized\n";
 	return true;
 }
 
-bool NoiseBasedGenerationSys::Resize()
+bool NoiseBasedGenerationSys::RunGeneration(NoiseMaps& out, const NoiseMapConfig& _config, NoiseRequest& request)
 {
-	if (config.height != noise.GetHeight() || config.width != noise.GetWidth()) {
-		erosionDraw = false;
-		noise.Resize(config.width, config.height);
-		view.Resize(config.width, config.height);
-		return  true;
+	//A new size invalidates the noise map and the accumulated erosion
+	if (out.noise.GetWidth() != _config.width || out.noise.GetHeight() != _config.height) {
+		if (!out.noise.Resize(_config.width, _config.height)) {
+			return false;
+		}
+		if (!request.noise) {
+			request.noise = true;
+			request.originx = request.originy = 0.0f;
+		}
+		request.resetErosion = true;
 	}
-	return false;
+
+	if (request.noise && !out.noise.GenerateFractalNoise(_config.noise, request.originx, request.originy)) {
+		return false;
+	}
+	if (request.resetErosion) {
+		out.erosion.ChangeMap();
+	}
+	if (request.erode) {
+		if (_config.width <= 1 || _config.height <= 1) {
+			std::cout << "[ERROR] Invalid height or width value" << std::endl;
+			return false;
+		}
+		if (_config.height != out.erosion.GetHeight() || _config.width != out.erosion.GetWidth()) {
+			out.erosion.Resize(_config.width, _config.height);
+		}
+		//Copies the noise map only after a reset; otherwise erosion keeps accumulating on its own map
+		out.erosion.SetMap(out.noise.GetMap());
+		out.erosion.Erode(_config.erosion, std::nullopt);
+		out.erosion.DontChangeMap();
+		std::cout << "[LOG] Erosion simulated successfully" << std::endl;
+	}
+	return true;
 }
 
-bool NoiseBasedGenerationSys::GenerateNoise(float originx, float originy)
+NoiseBasedGenerationSys::GenerationResult NoiseBasedGenerationSys::Generate(std::unique_ptr<NoiseMaps> maps, const NoiseMapConfig& _config, NoiseRequest request)
 {
-	Resize();
+	GenerationResult result;
 	auto start = std::chrono::steady_clock::now();
-	if (!noise.GenerateFractalNoise(config.noise, originx, originy)) {
-		return false;
-	}
-	lastGenerationMs = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count();
-
-	view.SetLayer(TerrainView::Layer::TERRAIN, noise.GetField());
-	std::cout << "[LOG] Noise based terrain initialized" << std::endl;
-	return true;
+	result.ok = RunGeneration(*maps, _config, request);
+	result.ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count();
+	result.maps = std::move(maps);
+	result.done = request;
+	return result;
 }
 
-bool NoiseBasedGenerationSys::SimulateErosion()
+void NoiseBasedGenerationSys::Update()
 {
-	if(config.width <=1 || config.height <= 1) {
-		std::cout << "[ERROR] Invalid height or width value" << std::endl;
-		return false;
+	if (std::optional<GenerationResult> result = job.TryTake()) {
+		InstallResult(*result);
 	}
-	if (!noise.GetMap()) {
-		std::cout << "[ERROR] Noise map not initialized" << std::endl;
-		return false;
+	if (!job.IsRunning() && pending.Any()) {
+		StartJob();
 	}
-	if(config.height != erosion.GetHeight() || config.width != erosion.GetWidth()) {
-		erosion.Resize(config.width, config.height);
-	}
+}
 
-	erosion.SetMap(noise.GetMap());
-	erosion.Erode(config.erosion, std::nullopt);
-	erosion.DontChangeMap();
-	erosionDraw = true;
-	view.SetLayer(TerrainView::Layer::OVERLAY, erosion.GetField());
+void NoiseBasedGenerationSys::StartJob()
+{
+	//The job works on copies of the maps and the config, so the front buffer and config stay free for the UI
+	auto back = std::make_unique<NoiseMaps>(*generated);
+	job.Start([back = std::move(back), snapshot = config, request = pending]() mutable {
+		return Generate(std::move(back), snapshot, request);
+	});
+	pending = NoiseRequest();
+}
 
-	std::cout << "[LOG] Erosion simulated successfully" << std::endl;
-	return true;
+void NoiseBasedGenerationSys::InstallResult(GenerationResult& result)
+{
+	if (!result.ok) {
+		std::cout << "[ERROR] Noise generation failed, keeping the previous maps" << std::endl;
+		return;
+	}
+	generated = std::move(result.maps);
+	lastGenerationMs = result.ms;
+
+	const NoiseRequest& done = result.done;
+	//Size of the installed maps, not config.width/height - those may already hold the next resize
+	view.Resize(generated->noise.GetWidth(), generated->noise.GetHeight());
+	if (done.noise) {
+		view.SetLayer(TerrainView::Layer::TERRAIN, generated->noise.GetField());
+	}
+	if (done.resetErosion) {
+		erosionDraw = false;
+	}
+	//Not shown if a reset is already waiting - the eroded map is about to be dropped
+	if (done.erode && !pending.resetErosion) {
+		erosionDraw = true;
+		view.SetLayer(TerrainView::Layer::OVERLAY, generated->erosion.GetField());
+	}
+}
+
+void NoiseBasedGenerationSys::RequestNoise(float originx, float originy)
+{
+	pending.noise = true;
+	pending.originx = originx;
+	pending.originy = originy;
+	pending.resetErosion = true;
+	erosionDraw = false;
+}
+
+void NoiseBasedGenerationSys::RequestErosion()
+{
+	pending.erode = true;
 }
 
 void NoiseBasedGenerationSys::Draw(Renderer& renderer, Camera& camera, LightSource& light)
 {
 	if (infiniteGeneration) {
 		if(oldCamPos.x != camera.GetPosition().x || oldCamPos.z != camera.GetPosition().z) {
-			GenerateNoise(camera.GetPosition().x, camera.GetPosition().z);
+			RequestNoise(camera.GetPosition().x, camera.GetPosition().z);
 			oldCamPos = camera.GetPosition();
 		}
 		camera.CameraAnchor(true);
@@ -110,22 +177,18 @@ void NoiseBasedGenerationSys::Draw(Renderer& renderer, Camera& camera, LightSour
 void NoiseBasedGenerationSys::ImGuiRightPanel()
 {
 	if(utilities::MapSizeImGui(config.width, config.height)) {
-		GenerateNoise(0.0f, 0.0f);
+		RequestNoise(0.0f, 0.0f);
 	}
 
 	bool regen = utilities::NoiseImGui(config.noise);
 	ImGui::Checkbox("Instant Update", &instantUpdate);
 	if (!instantUpdate) {
 		if (ImGui::Button("Generate new noise")) {
-			GenerateNoise(0.0f, 0.0f);
-			erosionDraw = false;
-			erosion.ChangeMap();
+			RequestNoise(0.0f, 0.0f);
 		}
 	}
 	else if(regen){
-		GenerateNoise(0.0f, 0.0f);
-		erosionDraw = false;
-		erosion.ChangeMap();
+		RequestNoise(0.0f, 0.0f);
 	}
 	ErosionImGui();
 	utilities::SavingImGui();
@@ -161,19 +224,23 @@ void NoiseBasedGenerationSys::ErosionImGui()
 		ImGui::InputFloat("Blur", &e.blur, 0.0f, 1.0f);
 
 		if (ImGui::Button("Erode map")) {
-			SimulateErosion();
+			RequestErosion();
 		}
 		ImGui::SameLine();
 		if (ImGui::Button("Reset")) {
+			//Drops a not yet started erosion too, so the reset is not followed by an erosion of the old request
+			pending.erode = false;
+			pending.resetErosion = true;
 			erosionDraw = false;
-			erosion.ChangeMap();
 		}
 	}
 }
 
 void NoiseBasedGenerationSys::ImGuiOutput()
 {
-	ImGui::Text("Noise generation: %.1f ms (%dx%d)", lastGenerationMs, noise.GetWidth(), noise.GetHeight());
+	const noise::SimplexNoiseClass& noise = generated->noise;
+	ImGui::Text("Last generation: %.1f ms (%dx%d)%s", lastGenerationMs, noise.GetWidth(), noise.GetHeight(),
+		job.IsRunning() ? "  [generating...]" : "");
 	if (noise.GetHeight() * noise.GetWidth() > 500 * 500) {
 		ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.0f, 0.0f, 1.0f));
 		ImGui::TextWrapped(
