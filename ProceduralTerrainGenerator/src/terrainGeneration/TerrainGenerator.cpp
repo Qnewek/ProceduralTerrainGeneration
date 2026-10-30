@@ -1,6 +1,9 @@
 #include "TerrainGenerator.h"
 
+#include <atomic>
+
 #include "Splines/spline.h"
+#include "Parallel.h"
 
 //Builds a tk::spline from config control points
 static tk::spline MakeSpline(const SplinePoints& points)
@@ -59,19 +62,25 @@ bool TerrainGenerator::GenerateTerrain(const TerrainConfig& config, float origin
 		weirdnessSpline = MakeSpline(config.weirdnessSpline);
 	}
 
-	float continentalness = 0.0f;
-	float mountainousness = 0.0f;
-	float weirdness = 0.0f;
-	float elevation = 0.0f;
+	//Rows are evaluated in parallel, so the permutation tables must be ready before the loop
+	continentalnessNoise.UpdatePermutation(config.continentalness.seed);
+	mountainousnessNoise.UpdatePermutation(config.mountainousness.seed);
+	weirdnessNoise.UpdatePermutation(config.weirdness.seed);
 
-	for (int y = 0; y < height; y++) {
-		for (int x = 0; x < width; x++) {
-			continentalness = continentalnessNoise.PointNoise(config.continentalness, x + originx, y + originy);
-			mountainousness = mountainousnessNoise.PointNoise(config.mountainousness, x + originx, y + originy);
-			weirdness = weirdnessNoise.PointNoise(config.weirdness, x + originx, y + originy);
+	std::atomic<bool> failed = false;
+	ParallelFor(height, [&](int y) {
+		float continentalness = 0.0f;
+		float mountainousness = 0.0f;
+		float weirdness = 0.0f;
+		float elevation = 0.0f;
+
+		for (int x = 0; x < width && !failed; x++) {
+			continentalness = continentalnessNoise.Evaluate(config.continentalness, x + originx, y + originy);
+			mountainousness = mountainousnessNoise.Evaluate(config.mountainousness, x + originx, y + originy);
+			weirdness = weirdnessNoise.Evaluate(config.weirdness, x + originx, y + originy);
 			if (continentalness < -1.0f || mountainousness < -1.0f || weirdness < -1.0f) {
-				std::cout << "[ERROR] Couldnt get value for component noise!\n";
-				return false;
+				failed = true;
+				break;
 			}
 
 			switch (config.method)
@@ -100,6 +109,10 @@ bool TerrainGenerator::GenerateTerrain(const TerrainConfig& config, float origin
 			}
 			heightMap[y * width + x] = elevation;
 		}
+	});
+	if (failed) {
+		std::cout << "[ERROR] Couldnt get value for component noise!\n";
+		return false;
 	}
 	std::cout << "[LOG] HeightMap of size: " << width << "x" << height << " succesfully evaluated\n";
 	return true;

@@ -1,7 +1,7 @@
 # Procedural Terrain Generator — analiza i plan rozwoju
 
 Diagnoza na 2026-10-27 (branch `lodChunked` = `master`, commit `fbd32ab`); postęp odhaczany na bieżąco, ostatnia aktualizacja 2026-10-30
-(Faza 0 zamknięta; z Fazy 1 zrobione: A2/B5/B9, B8, A3, A4, B6 + shadery, B15).
+(Faza 0 zamknięta; z Fazy 1 zrobione: A2/B5/B9, B8, A3, A4, B6 + shadery, B15, 7a — równoległa generacja).
 Cel projektu: **generowanie terenu z edycją parametrów w czasie rzeczywistym, maksymalna wydajność,
 biomy, roślinność i kolejne feature'y.**
 
@@ -120,8 +120,14 @@ Cel: kod gotowy na wielowątkowość/GPU, jedna ścieżka renderingu, mierzalna 
 6. ~~**B15 Tekstury:** alokacja raz (`glTexStorage2D`), aktualizacja `glTexSubImage2D`; mipmapy tylko tam, gdzie potrzebne.~~
    ✅ 2026-10-30 — mipmapy nigdzie nie są dziś potrzebne (wrócą przy teksturach materiałów w Fazie 3, czytanych w FS).
    Niezmienny storage przygotowuje też grunt pod zapis z compute shaderów (`glBindImageTexture`) w Fazie 2.
-7. **Wielowątkowość CPU (przejściowo):** generacja wierszami w `std::for_each(std::execution::par)` lub prosty thread-pool;
-   generacja asynchroniczna z double-bufferingiem (UI nie czeka, wynik podmieniany po zakończeniu; anulowanie przestarzałych zadań po wersji configu).
+7. **Wielowątkowość CPU (przejściowo):** ~~generacja wierszami w `std::for_each(std::execution::par)` lub prosty thread-pool~~
+   ✅ 2026-10-30 (7a): `ParallelFor` (`terrainGeneration/Parallel.h`) w `GenerateFractalNoise`, `GenerateTerrain`, `Biomify`;
+   `SimplexNoiseClass::Evaluate` (const, bez leniwej permutacji) do wołania z wielu wątków. 6 wątków: 512² szumy 206 → 43 ms,
+   teren 211 → 47 ms, biomy 120 → 28 ms (4,2–4,8×), wszystkie checksumy bez zmian. Erozja zostaje sekwencyjna (krople
+   modyfikują wspólną mapę po kolei) — do Fazy 5.
+   **7b (otwarte):** generacja asynchroniczna z double-bufferingiem (UI nie czeka, wynik podmieniany po zakończeniu; anulowanie przestarzałych zadań po wersji configu).
+   Wymaga, żeby zadanie liczyło do własnych buforów — dziś generatory trzymają wyniki w polach, z których jednocześnie
+   czytają biomy, podgląd OVERLAY i `GetBiomeAt`.
 8. **Pomiar:** Tracy profiler (CPU + GPU zones) lub przynajmniej `GL_TIME_ELAPSED` queries + panel statystyk
    (czas generacji, czas klatki, liczba trójkątów). Częściowo ✅: `--benchmark` (headless, z checksumem) i czas
    generacji w panelu Output. Brak: GPU timing, liczba trójkątów, Tracy.
@@ -152,6 +158,11 @@ Cel: **edycja w czasie rzeczywistym przy 60+ FPS** i nieskończony świat.
    `glMultiDrawArraysIndirect` dla wszystkich chunków jednym wywołaniem.
 6. **Inkrementalna regeneracja:** dirty-flagi per warstwa (zmiana szumu temperatury nie przelicza wysokości),
    podgląd w niskiej rozdzielczości podczas przeciągania suwaka, pełna jakość po puszczeniu.
+   Kandydat do zrobienia wcześniej, jeszcze na CPU: `TerrainGenerator::GenerateTerrain` liczy trzy szumy od nowa dla każdego
+   piksela (`Evaluate`), choć te same wartości leżą już w mapach `continentalnessNoise` / `mountainousnessNoise` /
+   `weirdnessNoise` (dla originu 0,0). Gdyby teren czytał gotowe mapy, zmiana samego splajnu lub metody łączenia
+   przeliczałaby się prawie natychmiast (bez szumu), a zmiana jednego szumu kosztowałaby 1 szum zamiast 3. Wymaga pilnowania,
+   czy mapy szumów są aktualne względem configu (wersja/dirty-flaga per szum) i osobnej ścieżki dla originu ≠ 0 (tryb infinite).
 7. **CPU fallback:** ten sam algorytm w C++ (FastNoise2) dla zapytań `GetHeightAt(x,z)`, fizyki, eksportu i testów
    porównawczych GPU vs CPU (tolerancja ~1e-4).
 
@@ -209,7 +220,7 @@ Cel: realistyczne, płynne przejścia i biomy wpływające na kształt terenu.
 | Priorytet | Zadania | Dlaczego |
 |-----------|---------|----------|
 | P0 | Faza 0 (B13, B3, B2, B1, B11) | Bez tego każda dalsza praca jest na niepewnym gruncie |
-| P1 | Faza 1: ~~B8 (szum)~~ ✅, ~~A2/B5 (RAII + width/height)~~ ✅, ~~A3/A4 (rozdzielenie warstw)~~ ✅, ~~B6 (shadery)~~ ✅, ~~B15 (tekstury)~~ ✅, wielowątkowość, profiler | Fundament — bez rozdzielenia warstw nie da się przenieść generacji na GPU |
+| P1 | Faza 1: ~~B8 (szum)~~ ✅, ~~A2/B5 (RAII + width/height)~~ ✅, ~~A3/A4 (rozdzielenie warstw)~~ ✅, ~~B6 (shadery)~~ ✅, ~~B15 (tekstury)~~ ✅, ~~wielowątkowość (7a)~~ ✅, generacja asynchroniczna (7b), profiler | Fundament — bez rozdzielenia warstw nie da się przenieść generacji na GPU |
 | P1 | Faza 2.1–2.3 (compute height + chunki) | Największy zysk dla „real-time” |
 | P2 | Faza 2.4–2.7, Faza 3 | Jakość i skalowanie |
 | P3 | Faza 4, Faza 5 | Feature'y budowane na stabilnym fundamencie |
