@@ -1511,6 +1511,9 @@
     <ClInclude Include="src\terrainGeneration\Parallel.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="src\terrainGeneration\GenerationJob.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
     <ClInclude Include="src\terrainGeneration\WorldConfig.h">
       <Filter>Header Files</Filter>
     </ClInclude>
