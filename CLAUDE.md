@@ -22,8 +22,9 @@ Plan napraw i rozwoju: `docs/ROADMAP.md` (ID zadań `B*`, `A*`, `F*` są tam zde
 - Working directory przy uruchomieniu musi być `ProceduralTerrainGenerator/` — ścieżki do `res/...` są względne.
 - Brak testów automatycznych i CI. Weryfikacja = build + ręczne uruchomienie.
 - Benchmark CPU bez okna: `..\Release\ProceduralTerrainGenerator.exe --benchmark` (uruchamiane z katalogu `ProceduralTerrainGenerator/`).
-  Wypisuje medianę czasu szumów i terenu dla 256²/512²/1024² oraz **checksum heightmapy** — przy refaktorach
-  generacji checksum musi się zgadzać (stan 2026-10-28: 512² teren ≈ 227 ms, checksum `9ecec06113f1ff1d`).
+  Wypisuje medianę czasu szumów, terenu i biomów dla 256²/512²/1024² oraz **checksumy** heightmapy, map szumów
+  i mapy biomów — przy refaktorach generacji wszystkie muszą się zgadzać. Stan 2026-10-30 (6 wątków), 512²:
+  teren ≈ 47 ms, checksumy terrain `9ecec06113f1ff1d`, noises `d602f1e24734666d`, biomes `94a3305aac6164b0`.
 - **Wielkość liter ścieżek = dokładnie taka jak w gicie** (`git ls-files`): `src/opengl`, `src/subSystems`,
   `src/terrainGeneration`, `src/utility`, `src/vendor`, `res/shaders`, `res/textures`, `light_source_*.shader`.
   Dotyczy kodu (`#include`, `"res/..."`), wpisów w `.vcxproj`/`.filters` i nazw katalogów na dysku.
@@ -64,7 +65,7 @@ Dependencies/                    GLFW (lib vc2022), GLEW (static)
 ## Przepływ danych (jak to działa)
 
 1. CPU generuje mapę `float[width*height]` (`SimplexNoiseClass::GenerateFractalNoise` lub
-   `TerrainGenerator::GenerateTerrain`, który dla każdego piksela woła `PointNoise` trzech szumów).
+   `TerrainGenerator::GenerateTerrain`, który dla każdego piksela woła `Evaluate` trzech szumów); wiersze równolegle.
 2. Subsystem przekazuje mapę do `TerrainView::SetLayer`, który wgrywa ją (`glTextureSubImage2D`) do istniejącej tekstury
    `GL_R32F` warstwy; nową teksturę (niezmienny storage, bez mipmap) tworzy tylko przy braku lub zmianie rozmiaru mapy.
 3. Siatka (`TerrainView`): stała siatka `mapResolution × mapResolution` (50×50) patchy-quadów o rozmiarze
@@ -99,8 +100,11 @@ Wartości szumów są w [-1, 1]. Konwencja indeksowania: `map[y * width + x]`.
   powinny działać; zmieniając generację sprawdź też taki przypadek.
 - Każdy `SimplexNoiseClass` ma własną tablicę permutacji (`perm`), budowaną leniwie w `PointNoise` przy zmianie
   `config.seed`. Używaj przeciążeń `SimplexNoise::noise(perm, ...)`; globalne `reseed` / `noise(x, y)` zostały
-  tylko dla zgodności. Przed zrównolegleniem `PointNoise` wywołaj `UpdatePermutation(config.seed)` raz przed pętlą
-  (leniwa aktualizacja w środku nie jest thread-safe).
+  tylko dla zgodności. `PointNoise` aktualizuje permutację leniwie i **nie jest thread-safe** — w pętlach równoległych
+  wołaj `UpdatePermutation(config.seed)` raz przed pętlą, a w środku `Evaluate` (const).
+- Generacja map idzie wierszami przez `ParallelFor` (`terrainGeneration/Parallel.h`, `std::execution::par`).
+  Iteracja może pisać tylko do swojego wiersza i czytać współdzielony stan; logowanie i błędy zbieraj po pętli
+  (np. `std::atomic<bool>`), nie `return` ze środka.
 - Splajny: domyślne są liniowe, a po „Set new spline points” edytowany splajn staje się kubiczny
   (`SplinePoints::cubic`) — zachowane z wersji sprzed A3. Benchmark sprawdza tylko LINEAR_COMBINE.
 - Uniformy terenu ustawia wyłącznie `TerrainView::Draw` — subsystemy nie dotykają shadera. Wysokość bierze się
