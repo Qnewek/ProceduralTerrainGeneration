@@ -1,5 +1,6 @@
 #include "TerrainGenApp.h"
 #include "TerrainGenerator.h"
+#include "BiomeGenerator.h"
 
 #include <algorithm>
 #include <chrono>
@@ -8,14 +9,16 @@
 #include <iomanip>
 #include <iostream>
 #include <sstream>
+#include <thread>
 #include <vector>
 
-//FNV-1a hash of a float map, used to verify that generation output is unchanged between versions
-static uint64_t MapChecksum(const float* map, int width, int height)
+//FNV-1a hash of a map, used to verify that generation output is unchanged between versions
+//@param hash - result of a previous call to chain several maps into one checksum
+template<typename T>
+static uint64_t MapChecksum(const Grid<T>& map, uint64_t hash = 14695981039346656037ull)
 {
-	uint64_t hash = 14695981039346656037ull;
-	const unsigned char* bytes = reinterpret_cast<const unsigned char*>(map);
-	for (size_t i = 0; i < static_cast<size_t>(width) * height * sizeof(float); i++) {
+	const unsigned char* bytes = reinterpret_cast<const unsigned char*>(map.Data());
+	for (size_t i = 0; i < map.Size() * sizeof(T); i++) {
 		hash ^= bytes[i];
 		hash *= 1099511628211ull;
 	}
@@ -42,27 +45,44 @@ static double MedianMs(F fn)
 //Headless benchmark of CPU terrain generation, run with: ProceduralTerrainGenerator.exe --benchmark
 static int RunBenchmark()
 {
-	std::cout << "size        noises [ms]   terrain [ms]   terrain checksum\n";
+	std::cout << "hardware threads: " << std::thread::hardware_concurrency() << "\n";
+	std::cout << "size        noises [ms]   terrain [ms]   biomes [ms]   terrain checksum   noises checksum    biomes checksum\n";
 	for (int size : { 256, 512, 1024 }) {
 		//Generators log every call - silence them while measuring
 		std::ostringstream sink;
 		std::streambuf* original = std::cout.rdbuf(sink.rdbuf());
 
 		const TerrainConfig config = TerrainConfig::Default();
+		const BiomeConfig biomeConfig = BiomeConfig::Default();
 		TerrainGenerator gen;
-		bool ok = gen.Initialize(size, size);
+		BiomeGenerator biomeGen;
+		bool ok = gen.Initialize(size, size) && biomeGen.Initialize(size, size);
 		double noisesMs = MedianMs([&] { gen.GenerateNoises(config); });
 		double terrainMs = MedianMs([&] { gen.GenerateTerrain(config, 0.0f, 0.0f); });
+		//Temperature/humidity noises + biome assignment
+		double biomesMs = MedianMs([&] {
+			biomeGen.GenerateComponentNoises(biomeConfig);
+			biomeGen.Biomify(biomeConfig, gen.GetSelectedNoise(WorldGenParameter::CONTINENTALNESS),
+				gen.GetSelectedNoise(WorldGenParameter::MOUNTAINOUSNESS), gen.GetSelectedNoise(WorldGenParameter::WEIRDNESS));
+		});
 
 		std::cout.rdbuf(original);
 		if (!ok) {
-			std::cout << "[ERROR] TerrainGenerator initialization failed for size " << size << std::endl;
+			std::cout << "[ERROR] Generator initialization failed for size " << size << std::endl;
 			return -1;
 		}
+		uint64_t noisesChecksum = MapChecksum(gen.GetSelectedNoise(WorldGenParameter::CONTINENTALNESS).GetField());
+		noisesChecksum = MapChecksum(gen.GetSelectedNoise(WorldGenParameter::MOUNTAINOUSNESS).GetField(), noisesChecksum);
+		noisesChecksum = MapChecksum(gen.GetSelectedNoise(WorldGenParameter::WEIRDNESS).GetField(), noisesChecksum);
+
 		std::cout << std::left << std::setw(12) << (std::to_string(size) + "x" + std::to_string(size))
 			<< std::right << std::fixed << std::setprecision(1)
-			<< std::setw(11) << noisesMs << std::setw(15) << terrainMs
-			<< "   " << std::hex << MapChecksum(gen.GetHeightMap(), size, size) << std::dec << std::endl;
+			<< std::setw(11) << noisesMs << std::setw(15) << terrainMs << std::setw(14) << biomesMs
+			<< std::hex << std::setfill('0')
+			<< "   " << std::setw(16) << MapChecksum(gen.GetHeightField())
+			<< "   " << std::setw(16) << noisesChecksum
+			<< "   " << std::setw(16) << MapChecksum(biomeGen.GetBiomeMap())
+			<< std::dec << std::setfill(' ') << std::endl;
 	}
 	return 0;
 }
