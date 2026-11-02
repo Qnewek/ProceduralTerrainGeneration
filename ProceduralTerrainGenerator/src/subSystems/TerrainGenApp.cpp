@@ -14,7 +14,7 @@
 TerrainGenApp::TerrainGenApp() : window(nullptr), windowWidth(0), windowHeight(0), deltaTime(0.0f), lastFrame(0.0f),
 rightPanelWidth(400.0f),topPanelHeight(30.0f), bottomPanelHeight(200.0f), leftPanelWidth(400.0f),
 width(250), height(250), heightScale(256.0f),
-camera(1920, 1080, glm::vec3(0.0f, heightScale / 2.0f, 0.0f), 100.0f, 1000.0f), renderer(),
+camera(1920, 1080, glm::vec3(0.0f, heightScale, 0.0f), 100.0f, 1000.0f), renderer(),
 noiseGenSys(), currentMode(mode::NOISE_HEIGHTMAP), light(glm::vec3(0.0f, 0.0f, 0.0f), 20.0f)
 {
 }
@@ -93,7 +93,7 @@ bool TerrainGenApp::Initialize()
 		return false;
 	}
     light.Initialize();
-    light.SetPosition(glm::vec3(0.0f, 200.0f, 0.0f));
+    light.SetPosition(glm::vec3(0.0f, 400.0f, 0.0f));
 
     std::cout << "[LOG] Hub initialized" << std::endl;
     return true;
