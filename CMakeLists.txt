@@ -14,6 +14,7 @@ find_package(glm CONFIG REQUIRED)
 find_package(imgui CONFIG REQUIRED)
 find_package(implot CONFIG REQUIRED)
 find_package(Stb REQUIRED)
+find_package(doctest CONFIG REQUIRED)
 
 set(PTG_DIR ${CMAKE_CURRENT_SOURCE_DIR}/ProceduralTerrainGenerator)
 set(PTG_SRC ${PTG_DIR}/src)
@@ -79,3 +80,17 @@ target_link_libraries(ProceduralTerrainGenerator PRIVATE
 # Fallback working directory with res/, used when the exe is started from elsewhere (build dir, IDE)
 target_compile_definitions(ProceduralTerrainGenerator PRIVATE PTG_RESOURCE_DIR="${PTG_DIR}")
 ptg_set_warnings(ProceduralTerrainGenerator)
+
+# Unit tests of ptg_core, run with: ctest --preset x64-release
+enable_testing()
+add_executable(ptg_tests
+	${PTG_DIR}/tests/BiomeTests.cpp
+	${PTG_DIR}/tests/ErosionTests.cpp
+	${PTG_DIR}/tests/GridTests.cpp
+	${PTG_DIR}/tests/NoiseTests.cpp
+	${PTG_DIR}/tests/TerrainTests.cpp
+	${PTG_DIR}/tests/TestMain.cpp
+)
+target_link_libraries(ptg_tests PRIVATE ptg_core doctest::doctest)
+ptg_set_warnings(ptg_tests)
+add_test(NAME ptg_tests COMMAND ptg_tests)
