@@ -1,5 +1,6 @@
 #include "Erosion.h"
 
+#include <algorithm>
 #include <math.h>
 #include <random>
 #include <queue>
@@ -421,13 +422,14 @@ namespace erosion {
 		this->position.y += this->direction.y;
 	}
 
-	//Update the velocity of the droplet as geometric mean using the formula
-	//velocity(new) = sqrt(velocity(old)^2 + elevationDifference * gravity)
-	//Velocity(old) is squared to give old speed more weight in calculations
-	//than the slope of the terrain. elevationDifference is multiplied by gravity to 
-	//take gravity into cosideration when calculating the new velocity
+	//Update the velocity of the droplet using the formula
+	//velocity(new) = sqrt(max(0, velocity(old)^2 - elevationDifference * gravity))
+	//elevationDifference is new height - old height, so it is negative downhill and the droplet speeds up.
+	//A droplet that cannot make a climb stops (velocity 0); it still moves, because AdjustPosition ignores velocity
+	//@param elevationDifference - difference in elevation between the old and new position of the droplet
+	//@param gravity - gravity parameter
 	void Droplet::AdjustVelocity(float elevationDifference, float gravity) {
-		this->velocity = sqrtf((this->velocity * this->velocity) + (elevationDifference * gravity));
+		this->velocity = sqrtf(std::max(0.0f, (this->velocity * this->velocity) - (elevationDifference * gravity)));
 		if (log) {
 			std::cout << "[LOG] Velocity: " << this->velocity << std::endl;
 		}
