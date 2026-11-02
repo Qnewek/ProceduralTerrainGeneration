@@ -152,16 +152,12 @@ namespace noise
 			elevation = std::fabsf(MakeIsland(config, elevation, static_cast<int>(x), static_cast<int>(y)));
 		}
 
-		//Redistribute the noise
-		if (config.option != Options::NOTHING) {
+		//Redistribute the noise, keeping the sign: pow of a negative value with a fractional exponent is NaN.
+		//Negative values are possible with every option, because Ridge can produce them after negatives are dealt with
+		if (elevation < 0.0f)
+			elevation = -std::pow(-elevation, config.redistribution);
+		else
 			elevation = std::pow(elevation, config.redistribution);
-		}
-		else {
-			if (elevation < 0.0f)
-				elevation = -std::pow(-elevation, config.redistribution);
-			else
-				elevation = std::pow(elevation, config.redistribution);
-		}
 		return elevation;
 	}
 

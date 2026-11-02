@@ -211,9 +211,8 @@ TEST_CASE("Redistribution is a power that keeps the sign")
 	}) == 0);
 }
 
-//BUG: with an option other than NOTHING a negative ridge value goes straight into pow with a fractional exponent.
-//Reachable from the UI (Ridge + Redistribution sliders). Remove should_fail after the fix (see ROADMAP, B19)
-TEST_CASE("Ridge with a fractional redistribution does not produce NaN" * doctest::should_fail())
+//A ridge gain above 1 gives negative values even with an option that removes negatives from the noise itself
+TEST_CASE("Ridge with a fractional redistribution does not produce NaN")
 {
 	NoiseConfigParameters config = MakeConfig(Options::REVERT_NEGATIVES);
 	config.Ridge = true;
@@ -224,6 +223,28 @@ TEST_CASE("Ridge with a fractional redistribution does not produce NaN" * doctes
 	CHECK(CountCells(TEST_WIDTH, TEST_HEIGHT, [&](int x, int y) {
 		return std::isnan(noise.PointNoise(config, static_cast<float>(x), static_cast<float>(y)));
 	}) == 0);
+}
+
+TEST_CASE("Redistribution keeps the sign of negative ridge values with every option")
+{
+	for (Options option : { Options::REFIT_ALL, Options::FLATTEN_NEGATIVES, Options::REVERT_NEGATIVES }) {
+		CAPTURE(static_cast<int>(option));
+		NoiseConfigParameters plain = MakeConfig(option);
+		plain.Ridge = true;
+		plain.RidgeGain = 3.0f;
+		NoiseConfigParameters squared = plain;
+		squared.redistribution = 2.0f;
+
+		SimplexNoiseClass noise;
+		int negative = 0;
+		CHECK(CountCells(TEST_WIDTH, TEST_HEIGHT, [&](int x, int y) {
+			float base = noise.PointNoise(plain, static_cast<float>(x), static_cast<float>(y));
+			negative += base < 0.0f;
+			float expected = base < 0.0f ? -base * base : base * base;
+			return noise.PointNoise(squared, static_cast<float>(x), static_cast<float>(y)) != doctest::Approx(expected);
+		}) == 0);
+		CHECK(negative > 0);
+	}
 }
 
 TEST_CASE("Symmetrical noise repeats every resolution cells")
