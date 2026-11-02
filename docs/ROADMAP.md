@@ -1,7 +1,7 @@
 # Procedural Terrain Generator — analiza i plan rozwoju
 
 Diagnoza na 2026-10-27 (branch `lodChunked` = `master`, commit `fbd32ab`); postęp odhaczany na bieżąco, ostatnia aktualizacja 2026-10-30
-(Faza 0 zamknięta; z Fazy 1 zrobione: A2/B5/B9, B8, A3, A4, B6 + shadery, B15, 7a/7b — generacja równoległa i asynchroniczna, A9/A10).
+(Faza 0 zamknięta; z Fazy 1 zrobione: A2/B5/B9, B8, A3, A4, B6 + shadery, B15, 7a/7b — generacja równoległa i asynchroniczna, A9/A10, A8 — CMake + vcpkg + CI).
 Cel projektu: **generowanie terenu z edycją parametrów w czasie rzeczywistym, maksymalna wydajność,
 biomy, roślinność i kolejne feature'y.**
 
@@ -43,7 +43,7 @@ biomy, roślinność i kolejne feature'y.**
 | A5 | Brak modelu „świata”: mapa = jeden prostokąt `width×height` przypięty do kamery; brak chunków, LOD, cache | Infinite terrain i duże światy są niewykonalne wydajnie |
 | A6 | Biomy oparte o dyskretne poziomy `int` i pierwszy pasujący biom z `unordered_map` (kolejność nieokreślona!) | Ostre granice, niedeterministyczny wybór przy nakładaniu się zakresów, brak blendingu, trudne do konfiguracji |
 | A7 | Brak serializacji (presety, konfiguracje biomów, eksport) — „Saving” to placeholder | Nie da się zapisać efektu pracy ani porównać ustawień |
-| A8 | Brak testów, CI, profilera; brak menedżera zależności (binarki w repo) | Regresje niewykrywalne; aktualizacje bibliotek ręczne |
+| A8 | Brak testów, CI, profilera; brak menedżera zależności (binarki w repo) | Regresje niewykrywalne; aktualizacje bibliotek ręczne — **Częściowo 2026-10-30:** CMake + vcpkg, CI z kontrolą checksum; brak testów jednostkowych (Faza 1 pkt 9) i profilera (pkt 8) |
 | ~~A9~~ ✅ | Martwy kod: `VegetationGenerator` (pusty), CPU-mesh w `utilities.cpp` (`MapToVertices`, `PerformErosion`, `PaintVerticesByHeight`, `MeshIndicesStrips`, `CalculateHeightMapNormals`), `TINYOBJLOADER_IMPLEMENTATION` bez użycia, `DrawTriangleStrips`, gałęzie git bez scalenia | Szum poznawczy — **Zrobione 2026-10-30:** usunięte `VegetationGenerator`, CPU-mesh z `utilities` (zostały `GenerateVerticesForResolution`, `GetBiomeColorMap` i helpery ImGui), `DrawTriangleStrips`, nieużywane vendor `ObjLoader` (tiny_obj_loader) i `PoissonSampling` — wrócą w nowej postaci w Fazie 4. `res/textures/` zostaje (assety pod Fazę 3) |
 | ~~A10~~ ✅ | Higiena repo: śledzony `imgui.ini`, commity „sda/asd/x”, 17 zdalnych branchy, README z pustymi sekcjami | Trudno wrócić do projektu po przerwie (jak teraz) — **Zrobione 2026-10-30:** `imgui.ini` nieśledzony (od B13), scalone branche usunięte lokalnie i z GitHuba (zostaje `master`), jedyny nie scalony commit (`infiniteTerrain`, klasa `Chunk`) zachowany jako tag `archive/infinite-terrain-chunks`; README przepisany (funkcje, build, sterowanie, benchmark) — brakuje screenshotów |
 
@@ -93,8 +93,13 @@ Cel: świeży clone buduje się, brak UB, oczywiste bugi poprawione.
 ### Faza 1 — porządki i fundament pod wydajność (1–2 tygodnie)
 Cel: kod gotowy na wielowątkowość/GPU, jedna ścieżka renderingu, mierzalna wydajność.
 
-1. **A8 Build system:** CMake (+ `CMakePresets.json`), zależności przez vcpkg manifest lub FetchContent
-   (glfw, glew lub glad, glm, imgui, implot, stb). Usunąć binarki z repo. GitHub Actions: build Windows (+ Linux opcjonalnie).
+1. ~~**A8 Build system:** CMake (+ `CMakePresets.json`), zależności przez vcpkg manifest lub FetchContent
+   (glfw, glew lub glad, glm, imgui, implot, stb). Usunąć binarki z repo. GitHub Actions: build Windows (+ Linux opcjonalnie).~~
+   ✅ 2026-10-30: CMake + presety `x64-debug`/`x64-release` (Ninja, MSVC), vcpkg manifest z przypiętym baseline
+   (triplet `x64-windows-static`). `.sln`/`.vcxproj`, `Dependencies/` i vendorowane glm/imgui/ImPlot/stb usunięte —
+   w repo zostały tylko Simplex (własne przeciążenia) i tk::spline. Win32 → x64: checksumy benchmarku identyczne,
+   512² teren 47 → 37 ms. Targety `ptg_core` (generacja bez GL) / exe. LNK4099/LNK4098 zniknęły.
+   GitHub Actions: Windows, oba presety, kontrola checksum. Linux odłożony (`std::execution::par` na GCC wymaga TBB).
 2. ~~**A2/B9 RAII:** `std::vector<float>` zamiast `new[]` we wszystkich mapach; typ `HeightField { int w, h; std::vector<float> data; }`;
    jedna konwencja `(width, height)` wszędzie (**B5**).~~ ✅ 2026-10-29: `Grid<T>` w `terrainGeneration/Grid.h`
    (`HeightField = Grid<float>`, `BiomeMap = Grid<int>`), indeks `y * width + x`; checksum benchmarku bez zmian.

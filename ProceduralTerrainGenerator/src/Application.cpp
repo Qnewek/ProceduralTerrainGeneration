@@ -6,6 +6,7 @@
 #include <chrono>
 #include <cstdint>
 #include <cstring>
+#include <filesystem>
 #include <iomanip>
 #include <iostream>
 #include <sstream>
@@ -91,6 +92,16 @@ int main(int argc, char* argv[])
 {
 	if (argc > 1 && std::strcmp(argv[1], "--benchmark") == 0) {
 		return RunBenchmark();
+	}
+
+	//Shaders and textures are loaded from res/ relative to the working directory
+	std::error_code error;
+	if (!std::filesystem::exists("res", error)) {
+		std::filesystem::current_path(PTG_RESOURCE_DIR, error);
+		if (error) {
+			std::cout << "[ERROR] Cannot find res/ - run from the ProceduralTerrainGenerator directory" << std::endl;
+			return -1;
+		}
 	}
 
 	TerrainGenApp* app = new TerrainGenApp();

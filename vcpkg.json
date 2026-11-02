@@ -1,0 +1,16 @@
+{
+  "name": "procedural-terrain-generator",
+  "version-string": "0.1.0",
+  "builtin-baseline": "9eec002df1cd109f8f104cd966a763daf9751489",
+  "dependencies": [
+    "glew",
+    "glfw3",
+    "glm",
+    {
+      "name": "imgui",
+      "features": [ "glfw-binding", "opengl3-binding" ]
+    },
+    "implot",
+    "stb"
+  ]
+}

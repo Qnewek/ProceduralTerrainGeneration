@@ -4,7 +4,7 @@
 
 #include "glm/glm.hpp"
 #include "glm/gtc/matrix_transform.hpp"
-#include "imgui/imgui.h"
+#include "imgui.h"
 
 #include <iostream>
 
@@ -47,7 +47,7 @@ void LightSource::Initialize() {
 	};
 
 	m_VAO = std::make_unique<VertexArray>();
-	m_VertexBuffer = std::make_unique<VertexBuffer>(cubeVertices, 24 * sizeof(float));
+	m_VertexBuffer = std::make_unique<VertexBuffer>(cubeVertices, static_cast<unsigned int>(sizeof(cubeVertices)));
 	m_IndexBuffer = std::make_unique<IndexBuffer>(cubeIndices, 36);
 	m_Shader = std::make_unique<Shader>("res/shaders/light_source_vertex.shader", "res/shaders/light_source_fragment.shader");
 
