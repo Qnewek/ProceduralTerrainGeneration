@@ -55,6 +55,9 @@ jobs:
       - name: Build
         run: cmake --build --preset ${{ matrix.preset }}
 
+      - name: Unit tests
+        run: ctest --preset ${{ matrix.preset }}
+
       # Generation must stay bit-identical - compare benchmark checksums with the reference values
       - name: Benchmark checksums
         if: matrix.preset == 'x64-release'

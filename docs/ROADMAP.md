@@ -1,7 +1,7 @@
 # Procedural Terrain Generator — analiza i plan rozwoju
 
-Diagnoza na 2026-10-27 (branch `lodChunked` = `master`, commit `fbd32ab`); postęp odhaczany na bieżąco, ostatnia aktualizacja 2026-10-30
-(Faza 0 zamknięta; z Fazy 1 zrobione: A2/B5/B9, B8, A3, A4, B6 + shadery, B15, 7a/7b — generacja równoległa i asynchroniczna, A9/A10, A8 — CMake + vcpkg + CI).
+Diagnoza na 2026-10-27 (branch `lodChunked` = `master`, commit `fbd32ab`); postęp odhaczany na bieżąco, ostatnia aktualizacja 2026-11-02
+(Faza 0 zamknięta; z Fazy 1 zrobione: A2/B5/B9, B8, A3, A4, B6 + shadery, B15, 7a/7b — generacja równoległa i asynchroniczna, A9/A10, A8 — CMake + vcpkg + CI, testy jednostkowe).
 Cel projektu: **generowanie terenu z edycją parametrów w czasie rzeczywistym, maksymalna wydajność,
 biomy, roślinność i kolejne feature'y.**
 
@@ -31,6 +31,9 @@ biomy, roślinność i kolejne feature'y.**
 | ~~B16~~ ✅ | `LightSource.cpp:52`, `Shader.cpp` | Ścieżka `Light_source_*.shader` vs plik `light_source_*.shader`; brak sprawdzania statusu linkowania programu; komunikat zawsze „vertex/fragment”; `malloc` bez `free` | **Zrobione 2026-10-28:** ścieżki małymi literami, `CheckLinkStatus` po `glLinkProgram`, nazwy wszystkich 4 typów shaderów w komunikacie, log w `std::string` zamiast `malloc` |
 | ~~B17~~ ✅ | `NoiseBasedGenerationSys::Draw` | Mapa po erozji przesuwana o `width + 1`, a siatka ma szerokość `width * 4` | **Zrobione 2026-10-29 (A4):** przesunięcie = `TerrainView::GetWorldWidth() * 1.05` |
 | ~~B18~~ ✅ | `TerrainGenerationSys::NoisesLevelsForBiomes` | Przeciąganie poziomów biomów zmieniało dane, ale nie przeliczało mapy biomów (zmiana widoczna dopiero po innej regeneracji) | **Zrobione 2026-10-29:** `SegmentDrag` zwraca informację o zmianie, przycisk „Apply biome levels” (aktywny tylko przy niezastosowanych zmianach) regeneruje mapę — na żądanie, bo przeliczana jest cała mapa |
+| B19 | `Noise.cpp:157` (`Evaluate`) | Przy opcji innej niż `NOTHING` ujemna wartość po `Ridge` trafia do `pow` z ułamkowym wykładnikiem | NaN w mapie (osiągalne suwakami Ridge + Redistribution); test z `should_fail` w `NoiseTests.cpp` |
+| B20 | `Erosion.cpp:184, 430` (`AdjustVelocity`) | `deltaElevation` = nowa − stara wysokość, czyli ujemna w dół, więc kropla zwalnia w dół i przyspiesza pod górę; przy małej prędkości lub dużym `gravity` pierwiastek daje NaN, a NaN w pojemności każe `ErodeRadius` kopać sąsiednie komórki do 0 | Odwrócona fizyka erozji, możliwe dziury w mapie; test z `should_fail` w `ErosionTests.cpp`. Naprawa zmieni wygląd erozji (benchmark jej nie obejmuje) |
+| B21 | `vendor/Simplex/SimplexNoise.cpp:75, 86` | Tablice `perm`/`originalPerm` mają 247 wartości zamiast 256 (ręcznie zmieniona tabela): brak 23, 40, 94, 138, 159, 172, 181, 239, 242, a `0` występuje 10 razy | Nierówny rozkład gradientów szumu; test z `should_fail` w `NoiseTests.cpp`. Naprawa zmienia wszystkie światy i checksumy — zrobić razem z decyzją o zastąpieniu `std::shuffle` (wynik zależy od biblioteki standardowej, VS 2022 i VS 2026 dają różne checksumy, choć sama przyczyna nie jest potwierdzona) |
 
 ### 1.2 Problemy architektury i jakości (A)
 
@@ -43,7 +46,7 @@ biomy, roślinność i kolejne feature'y.**
 | A5 | Brak modelu „świata”: mapa = jeden prostokąt `width×height` przypięty do kamery; brak chunków, LOD, cache | Infinite terrain i duże światy są niewykonalne wydajnie |
 | A6 | Biomy oparte o dyskretne poziomy `int` i pierwszy pasujący biom z `unordered_map` (kolejność nieokreślona!) | Ostre granice, niedeterministyczny wybór przy nakładaniu się zakresów, brak blendingu, trudne do konfiguracji |
 | A7 | Brak serializacji (presety, konfiguracje biomów, eksport) — „Saving” to placeholder | Nie da się zapisać efektu pracy ani porównać ustawień |
-| A8 | Brak testów, CI, profilera; brak menedżera zależności (binarki w repo) | Regresje niewykrywalne; aktualizacje bibliotek ręczne — **Częściowo 2026-10-30:** CMake + vcpkg, CI z kontrolą checksum; brak testów jednostkowych (Faza 1 pkt 9) i profilera (pkt 8) |
+| A8 | Brak testów, CI, profilera; brak menedżera zależności (binarki w repo) | Regresje niewykrywalne; aktualizacje bibliotek ręczne — **Częściowo:** CMake + vcpkg, CI z kontrolą checksum (2026-10-30), testy jednostkowe (2026-11-02); brak profilera (Faza 1 pkt 8) |
 | ~~A9~~ ✅ | Martwy kod: `VegetationGenerator` (pusty), CPU-mesh w `utilities.cpp` (`MapToVertices`, `PerformErosion`, `PaintVerticesByHeight`, `MeshIndicesStrips`, `CalculateHeightMapNormals`), `TINYOBJLOADER_IMPLEMENTATION` bez użycia, `DrawTriangleStrips`, gałęzie git bez scalenia | Szum poznawczy — **Zrobione 2026-10-30:** usunięte `VegetationGenerator`, CPU-mesh z `utilities` (zostały `GenerateVerticesForResolution`, `GetBiomeColorMap` i helpery ImGui), `DrawTriangleStrips`, nieużywane vendor `ObjLoader` (tiny_obj_loader) i `PoissonSampling` — wrócą w nowej postaci w Fazie 4. `res/textures/` zostaje (assety pod Fazę 3) |
 | ~~A10~~ ✅ | Higiena repo: śledzony `imgui.ini`, commity „sda/asd/x”, 17 zdalnych branchy, README z pustymi sekcjami | Trudno wrócić do projektu po przerwie (jak teraz) — **Zrobione 2026-10-30:** `imgui.ini` nieśledzony (od B13), scalone branche usunięte lokalnie i z GitHuba (zostaje `master`), jedyny nie scalony commit (`infiniteTerrain`, klasa `Chunk`) zachowany jako tag `archive/infinite-terrain-chunks`; README przepisany (funkcje, build, sterowanie, benchmark) — brakuje screenshotów |
 
@@ -140,8 +143,11 @@ Cel: kod gotowy na wielowątkowość/GPU, jedna ścieżka renderingu, mierzalna 
 8. **Pomiar:** Tracy profiler (CPU + GPU zones) lub przynajmniej `GL_TIME_ELAPSED` queries + panel statystyk
    (czas generacji, czas klatki, liczba trójkątów). Częściowo ✅: `--benchmark` (headless, z checksumem) i czas
    generacji w panelu Output. Brak: GPU timing, liczba trójkątów, Tracy.
-9. **Testy:** doctest/Catch2 — determinizm szumu (ten sam seed → te same wartości), zakresy [-1,1],
-   wybór biomu dla zadanych parametrów, regresja height = f(x,z).
+9. ~~**Testy:** doctest/Catch2 — determinizm szumu (ten sam seed → te same wartości), zakresy [-1,1],
+   wybór biomu dla zadanych parametrów, regresja height = f(x,z).~~ ✅ 2026-11-02: doctest, target `ptg_tests`
+   (`ProceduralTerrainGenerator/tests/`), `ctest --preset <preset>` także w CI (Debug i Release). Testują właściwości, nie
+   konkretne wartości, więc nie zależą od kompilatora (w przeciwieństwie do checksum). Znalazły B19, B20, B21 — oznaczone `doctest::should_fail()`:
+   po naprawie błędu test zgłosi niepowodzenie, dopóki oznaczenie nie zostanie usunięte.
 10. **Serializacja (A7):** presety JSON (nlohmann/json) dla `WorldConfig`; load/save w UI; eksport heightmapy do PNG 16-bit / RAW / EXR.
 11. ~~**A9/A10:** usuń martwy kod, posprzątaj branche (zostaw `master` + aktywny feature branch).~~ ✅ 2026-10-30
 
