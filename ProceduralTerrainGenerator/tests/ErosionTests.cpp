@@ -175,14 +175,48 @@ TEST_CASE("Droplet below its capacity gathers, above its capacity deposits")
 	}
 }
 
-//BUG: AdjustVelocity gets new height - old height, which is negative downhill, so droplets slow down going down
-//and speed up going up. Below a certain speed the square root also turns NaN, and a NaN capacity makes ErodeRadius
-//dig the neighbouring cells down to 0. Remove should_fail after the fix (see ROADMAP, B20)
-TEST_CASE("Droplet speeds up going downhill" * doctest::should_fail())
+TEST_CASE("Droplet speeds up going downhill")
 {
 	Droplet droplet({ 0.0f, 0.0f }, 1.0f, 1.0f, 1.0f);
 	droplet.AdjustVelocity(-0.5f, 1.0f);
 	CHECK(droplet.GetVelocity() > 1.0f);
+}
+
+TEST_CASE("Droplet slows down going uphill")
+{
+	Droplet droplet({ 0.0f, 0.0f }, 1.0f, 1.0f, 1.0f);
+	droplet.AdjustVelocity(0.5f, 1.0f);
+	CHECK(droplet.GetVelocity() < 1.0f);
+	CHECK(droplet.GetVelocity() > 0.0f);
+}
+
+TEST_CASE("Droplet stops on a climb it cannot make instead of getting a NaN velocity")
+{
+	Droplet droplet({ 0.0f, 0.0f }, 1.0f, 1.0f, 1.0f);
+	droplet.AdjustVelocity(10.0f, 1.0f);
+	CHECK(droplet.GetVelocity() == 0.0f);
+}
+
+//A NaN velocity turns into a NaN capacity, which makes ErodeRadius dig the neighbouring cells down to 0.
+//Droplets are slow and the slope is steep, and every cell is high above 0, so a hole cannot come from normal erosion
+TEST_CASE("Erode does not dig holes on a steep slope")
+{
+	std::vector<float> map = MakeSlope(TEST_WIDTH, TEST_HEIGHT, 0.1f, 0.05f);
+	for (float& cell : map)
+		cell += 5.0f;
+
+	Erosion erosion(TEST_WIDTH, TEST_HEIGHT);
+	erosion.SetMap(map.data());
+
+	ErosionConfig config;
+	config.dropletCount = 500;
+	config.dropletLifetime = 32;
+	config.initialVelocity = 0.1f;
+	erosion.Erode(config, std::nullopt);
+
+	CHECK(CountCells(TEST_WIDTH, TEST_HEIGHT, [&](int x, int y) {
+		return !(erosion.GetField().At(x, y) > 1.0f);
+	}) == 0);
 }
 
 TEST_CASE("Erode without droplets leaves the map untouched")
