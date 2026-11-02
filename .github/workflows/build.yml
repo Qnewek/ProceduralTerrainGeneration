@@ -7,7 +7,8 @@ on:
 
 jobs:
   windows:
-    runs-on: windows-latest
+    # Same compiler as the reference checksums (VS 2022) - windows-latest and windows-2025 use VS 2026
+    runs-on: windows-2022
     strategy:
       fail-fast: false
       matrix:
@@ -62,6 +63,7 @@ jobs:
         run: |
           $output = & ../out/build/x64-release/ProceduralTerrainGenerator.exe --benchmark | Out-String
           Write-Output $output
+          if ($LASTEXITCODE -ne 0) { Write-Error "Benchmark failed with exit code $LASTEXITCODE"; exit 1 }
           $expected = @(
             '8a8df8aff8457944   01e2d197faaa91ee   2226c9def0b85b81',
             '9ecec06113f1ff1d   d602f1e24734666d   94a3305aac6164b0',
