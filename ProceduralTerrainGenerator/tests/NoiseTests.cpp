@@ -59,9 +59,7 @@ TEST_CASE("GetVal rejects coordinates outside the map")
 	CHECK(noise.GetVal(-1, 0) == -2.0f);
 }
 
-//BUG: originalPerm in SimplexNoise.cpp lists 247 values, the rest of the array is zero-initialized - 9 values are missing
-//and 0 appears 10 times. Fixing it changes every generated world and checksum. Remove should_fail after the fix (see ROADMAP, B21)
-TEST_CASE("makePermutation shuffles every byte value exactly once" * doctest::should_fail())
+TEST_CASE("makePermutation shuffles every byte value exactly once")
 {
 	uint8_t perm[256];
 	SimplexNoise::makePermutation(623, perm);
@@ -76,6 +74,28 @@ TEST_CASE("makePermutation shuffles every byte value exactly once" * doctest::sh
 			wrong++;
 	}
 	CHECK(wrong == 0);
+}
+
+//The tables must not depend on the compiler or standard library. Expected values come from a separate implementation
+//of mt19937 and Fisher-Yates, not from this code, so changing the table or the shuffle changes every generated world
+TEST_CASE("makePermutation gives a fixed table for a seed")
+{
+	struct Expected { int seed; uint8_t first[4]; uint8_t last[4]; };
+	const Expected cases[] = {
+		{ 623, { 128, 6, 8, 43 }, { 145, 228, 67, 99 } },
+		{ 1, { 115, 82, 72, 108 }, { 213, 41, 113, 197 } },
+		{ 90210, { 162, 177, 37, 227 }, { 7, 55, 213, 85 } },
+	};
+
+	for (const Expected& expected : cases) {
+		CAPTURE(expected.seed);
+		uint8_t perm[256];
+		SimplexNoise::makePermutation(expected.seed, perm);
+		for (int i = 0; i < 4; i++) {
+			CHECK(perm[i] == expected.first[i]);
+			CHECK(perm[252 + i] == expected.last[i]);
+		}
+	}
 }
 
 TEST_CASE("The same seed gives the same map")
@@ -211,12 +231,13 @@ TEST_CASE("Redistribution is a power that keeps the sign")
 	}) == 0);
 }
 
-//A ridge gain above 1 gives negative values even with an option that removes negatives from the noise itself
+//A ridge gain above 1 gives negative values even with an option that removes negatives from the noise itself.
+//With a gain of 10 every noise value below 0.8 turns negative, so the tests below do not depend on the noise pattern
 TEST_CASE("Ridge with a fractional redistribution does not produce NaN")
 {
 	NoiseConfigParameters config = MakeConfig(Options::REVERT_NEGATIVES);
 	config.Ridge = true;
-	config.RidgeGain = 3.0f;
+	config.RidgeGain = 10.0f;
 	config.redistribution = 1.5f;
 
 	SimplexNoiseClass noise;
@@ -231,7 +252,7 @@ TEST_CASE("Redistribution keeps the sign of negative ridge values with every opt
 		CAPTURE(static_cast<int>(option));
 		NoiseConfigParameters plain = MakeConfig(option);
 		plain.Ridge = true;
-		plain.RidgeGain = 3.0f;
+		plain.RidgeGain = 10.0f;
 		NoiseConfigParameters squared = plain;
 		squared.redistribution = 2.0f;
 

@@ -68,9 +68,9 @@ jobs:
           Write-Output $output
           if ($LASTEXITCODE -ne 0) { Write-Error "Benchmark failed with exit code $LASTEXITCODE"; exit 1 }
           $expected = @(
-            '8a8df8aff8457944   01e2d197faaa91ee   2226c9def0b85b81',
-            '9ecec06113f1ff1d   d602f1e24734666d   94a3305aac6164b0',
-            'b3bd8438fa050fa7   3da44213bcab5679   ad3b6ca276875106'
+            '53d53105c5a04042   b6830d69ed500428   7dc73e2260f70271',
+            '637427221ce26bfb   80cc02bb71d77ea4   d676ca6dc3f85ac5',
+            '8d70199bdbad2a7d   35b64154bef7296a   3df4b3e8b45f9700'
           )
           foreach ($line in $expected) {
             if (-not $output.Contains($line)) { Write-Error "Checksums changed, expected: $line"; exit 1 }
