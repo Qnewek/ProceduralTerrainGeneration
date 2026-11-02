@@ -57,7 +57,12 @@ void main()
 
 
     if(displayMode == 0){
-        aColor = vec3(Height/heightScale);
+        //0 is at 10% brightness; positive values go up to white, negative ones up to 25% brightness with a blue tint
+        float h = Height / heightScale;
+        if (h >= 0.0)
+            aColor = mix(vec3(0.1), vec3(1.0), h);
+        else
+            aColor = mix(vec3(0.1), vec3(0.20, 0.20, 0.25), -h);
     }
     else if(displayMode == 1){
         float hNorm = clamp((Height + 16.0) / heightScale, 0.0, 1.0);

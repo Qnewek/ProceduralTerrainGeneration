@@ -93,7 +93,7 @@ bool TerrainGenApp::Initialize()
 		return false;
 	}
     light.Initialize();
-    light.SetPosition(glm::vec3(0.0f, 2000.0f, 0.0f));
+    light.SetPosition(glm::vec3(0.0f, 200.0f, 0.0f));
 
     std::cout << "[LOG] Hub initialized" << std::endl;
     return true;
