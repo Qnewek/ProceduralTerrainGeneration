@@ -4,7 +4,7 @@
 #include <chrono>
 #include <iostream>
 
-#include "imgui/imgui.h"
+#include "imgui.h"
 
 NoiseBasedGenerationSys::NoiseBasedGenerationSys()
 {

@@ -33,7 +33,7 @@ while the app stays responsive.
 
 - **Performance**
   Map generation is parallelised over rows and runs on a background thread, so editing parameters never freezes
-  the UI (512x512 terrain in ~50 ms on 6 threads).
+  the UI (512x512 terrain in ~40 ms on 6 threads).
 
 ## Screenshots
 
@@ -41,20 +41,24 @@ while the app stays responsive.
 
 ## Building
 
-Requirements: Windows, Visual Studio 2022 (toolset v143). All dependencies (GLFW, GLEW, glm, ImGui, ImPlot, ...)
-are in the repository.
+Requirements: Windows x64, Visual Studio 2022 with the *Desktop development with C++* workload (it includes
+CMake, Ninja and vcpkg). Dependencies (GLFW, GLEW, glm, ImGui, ImPlot, stb) are installed by vcpkg from
+`vcpkg.json` on the first configure.
 
 1. Clone the repository:
    ```bash
    git clone https://github.com/Qnewek/ProceduralTerrainGeneration.git
    ```
-2. Open `ProceduralTerrainGenerator.sln` and build `Debug|Win32` or `Release|Win32`,
-   or from the command line:
+2. In Visual Studio: *File → Open → Folder...*, pick the repository and choose the `x64 Debug` or `x64 Release`
+   configuration (from `CMakePresets.json`). From a *Developer PowerShell for VS 2022*:
    ```
-   MSBuild.exe ProceduralTerrainGenerator.sln /p:Configuration=Release /p:Platform=x86 /m
+   cmake --preset x64-release
+   cmake --build --preset x64-release
    ```
-3. Run with the working directory set to `ProceduralTerrainGenerator/` (shaders and textures are loaded
-   from `res/` relative to it). Visual Studio does this by default.
+   The executable is written to `out/build/<preset>/`. Outside the Visual Studio prompt set `VCPKG_ROOT` to a
+   vcpkg checkout first.
+3. Run `ProceduralTerrainGenerator.exe`. Shaders and textures are loaded from `ProceduralTerrainGenerator/res/`;
+   if the working directory has no `res/` folder, the app switches to the source directory it was built from.
 
 ## Controls
 
@@ -72,12 +76,12 @@ panel, display settings in the left one.
 ## Benchmark
 
 ```
-cd ProceduralTerrainGenerator
-..\Release\ProceduralTerrainGenerator.exe --benchmark
+out\build\x64-release\ProceduralTerrainGenerator.exe --benchmark
 ```
 
 Runs CPU generation without a window for 256², 512² and 1024² maps and prints median times together with
-checksums of the generated maps (used to verify that refactors do not change the output).
+checksums of the generated maps (used to verify that refactors do not change the output). CI builds both
+presets on every push and pull request and fails if the checksums change.
 
 ## Roadmap
 

@@ -8,30 +8,37 @@ Plan napraw i rozwoju: `docs/ROADMAP.md` (ID zadań `B*`, `A*`, `F*` są tam zde
 
 ## Build i uruchomienie
 
-- Tylko Windows + Visual Studio 2022 (MSBuild, toolset v143). Brak CMake.
-- **Jedyne konfiguracje: `Debug|Win32` i `Release|Win32`** (x64 usunięte w B13 — `glfw3.lib` w repo jest 32-bit;
-  x64 wróci z CMake + vcpkg w Fazie 1, A8).
-- `.sln`, `.vcxproj`, `.vcxproj.filters` i `Dependencies/GLEW/lib/` są śledzone w gicie — świeży clone się buduje.
-  `.gitignore` ma wyjątek `!Dependencies/*/lib/**`, bo reguły `[Rr]elease/`, `Win32/`, `x64/` łapałyby libki.
-- Build z CLI:
+- CMake (`CMakeLists.txt` + `CMakePresets.json` w katalogu głównym) + vcpkg w trybie manifestu (`vcpkg.json`,
+  `builtin-baseline` = commit vcpkg z wersjami bibliotek). Tylko Windows x64, MSVC (VS 2022), generator Ninja,
+  triplet `x64-windows-static` (statyczny CRT, jeden exe bez DLL). Presety: `x64-debug`, `x64-release`.
+  Build trafia do `out/build/<preset>/` (ignorowane). Pierwszy configure buduje zależności vcpkg (~3 min).
+- Build z CLI wymaga środowiska MSVC (Developer PowerShell / `VsDevCmd.bat -arch=x64`) i `VCPKG_ROOT`
+  (VS ustawia go na swój vcpkg):
   ```
-  "C:\Program Files\Microsoft Visual Studio\2022\Community\MSBuild\Current\Bin\MSBuild.exe" ProceduralTerrainGenerator.sln /p:Configuration=Debug /p:Platform=x86 /m
+  cmake --preset x64-release
+  cmake --build --preset x64-release
   ```
-  Stan na 2026-10-28: `/W4 /WX` — każde ostrzeżenie kompilatora w `src/` (poza vendor) przerywa build.
-  Zostają 2 ostrzeżenia linkera z binarek GLEW/GLFW (LNK4099 brak PDB, LNK4098 konflikt CRT) — do A8.
-- Working directory przy uruchomieniu musi być `ProceduralTerrainGenerator/` — ścieżki do `res/...` są względne.
-- Brak testów automatycznych i CI. Weryfikacja = build + ręczne uruchomienie.
-- Benchmark CPU bez okna: `..\Release\ProceduralTerrainGenerator.exe --benchmark` (uruchamiane z katalogu `ProceduralTerrainGenerator/`).
+  W VS: *Open Folder* na katalogu repo — VS czyta presety sam.
+- Targety: `ptg_vendor` (Simplex, stb_image impl., bez ostrzeżeń), `ptg_core` (`terrainGeneration/`, bez GL/ImGui —
+  pod testy i benchmark), `ProceduralTerrainGenerator` (exe). `/W4 /WX /permissive-` dla `ptg_core` i exe;
+  nagłówki zależności są `SYSTEM` (`/external:W0`), więc ich ostrzeżenia nie przerywają buildu.
+- Shadery/tekstury czytane z `res/...` względem katalogu roboczego; jeśli go tam nie ma, `main` przechodzi do
+  `PTG_RESOURCE_DIR` (= `ProceduralTerrainGenerator/` w źródłach, wpisany przez CMake). Hot-reload działa na źródłach.
+- CI: `.github/workflows/build.yml` — Windows, oba presety, vcpkg na commicie z baseline (cache binarek
+  w `actions/cache`), w Release porównanie checksum benchmarku. Brak testów jednostkowych (pkt 9 ROADMAP).
+- Benchmark CPU bez okna: `out\build\x64-release\ProceduralTerrainGenerator.exe --benchmark`.
   Wypisuje medianę czasu szumów, terenu i biomów dla 256²/512²/1024² oraz **checksumy** heightmapy, map szumów
-  i mapy biomów — przy refaktorach generacji wszystkie muszą się zgadzać. Stan 2026-10-30 (6 wątków), 512²:
-  teren ≈ 47 ms, checksumy terrain `9ecec06113f1ff1d`, noises `d602f1e24734666d`, biomes `94a3305aac6164b0`.
+  i mapy biomów — przy refaktorach generacji wszystkie muszą się zgadzać (CI to sprawdza). Stan 2026-10-30
+  (x64, 6 wątków), 512²: teren ≈ 37 ms, checksumy terrain `9ecec06113f1ff1d`, noises `d602f1e24734666d`,
+  biomes `94a3305aac6164b0` (identyczne jak w dawnym buildzie Win32).
 - **Wielkość liter ścieżek = dokładnie taka jak w gicie** (`git ls-files`): `src/opengl`, `src/subSystems`,
   `src/terrainGeneration`, `src/utility`, `src/vendor`, `res/shaders`, `res/textures`, `light_source_*.shader`.
-  Dotyczy kodu (`#include`, `"res/..."`), wpisów w `.vcxproj`/`.filters` i nazw katalogów na dysku.
-  Windows i git (`core.ignorecase=true`) nie wyłapią rozjazdu — wyjdzie dopiero na Linuksie/CI.
-  VS pokazuje w Solution Explorerze nazwy z `.vcxproj`, nie z dysku.
-- Dodając nowy `.cpp`/`.h` trzeba go ręcznie dopisać do `.vcxproj` (i `.filters`).
-  Nowy `.cpp` z `src/vendor/` musi dostać `<WarningLevel>TurnOffAllWarnings</WarningLevel>`, inaczej `/WX` go wywali.
+  Dotyczy kodu (`#include`, `"res/..."`), ścieżek w `CMakeLists.txt` i nazw katalogów na dysku.
+  Windows i git (`core.ignorecase=true`) nie wyłapią rozjazdu — wyjdzie dopiero na Linuksie.
+- Nowy `.cpp` trzeba dopisać do odpowiedniego targetu w `CMakeLists.txt` (lista jawna, bez glob).
+  Kod obcy, trzymany w repo (`src/vendor/`), idzie do `ptg_vendor` — tam nie ma `/W4 /WX`.
+- Nowa biblioteka: dopisać do `vcpkg.json` i `find_package` + `target_link_libraries` w `CMakeLists.txt`.
+  Aktualizacja wersji bibliotek = zmiana `builtin-baseline` (commit z github.com/microsoft/vcpkg).
 
 ## Struktura
 
@@ -57,10 +64,11 @@ ProceduralTerrainGenerator/
       Camera.*                   kamera FPS (WASD, Space/Ctrl, M = mysz, Esc = zwolnij mysz)
       LightSource.*              punktowe światło + sześcian debug
       utilities.*                helpery ImGui (NoiseImGui, DisplayModeImGui...), siatka patchy, kolory biomów
-    vendor/                      glm, imgui, ImPlot, SimplexNoise, tk::spline, stb_image
+    vendor/                      SimplexNoise (z przeciążeniami perm), tk::spline, implementacja stb_image
   res/shaders/
     TerrainShaders/              VS → TCS → TES → FS, jedyny zestaw dla terenu (oba tryby)
-Dependencies/                    GLFW (lib vc2022), GLEW (static)
+CMakeLists.txt, CMakePresets.json, vcpkg.json   build; GLFW, GLEW, glm, ImGui, ImPlot, stb z vcpkg
+.github/workflows/build.yml      CI (Windows x64 Debug/Release + checksumy)
 ```
 
 ## Przepływ danych (jak to działa)
@@ -93,8 +101,9 @@ Wartości szumów są w [-1, 1]. Konwencja indeksowania: `map[y * width + x]`.
   dostają `const XxxConfig&` w każdej metodzie generującej, a same przechowują tylko wyniki (mapy).
   UI (immediate-mode w subsystemach: `ImGuiLeftPanel/RightPanel/Output`) edytuje config i zgłasza żądanie (`Request*`),
   subsystem generuje w tle i przekazuje wynik do `TerrainView`. Stan edytorów (wybrany szum, wciśnięte przyciski) to nie config.
-- Includy względem katalogów z `AdditionalIncludeDirectories` (własne: `#include "Noise.h"`) albo
-  `ExternalIncludePath` (`src/vendor`, GLFW, GLEW: `"imgui/imgui.h"`) — te drugie są kompilowane z `/external:W0`.
+- Includy własne po nazwie pliku (`#include "Noise.h"` — katalogi `src/*` są w include path targetów).
+  Zależności z vcpkg bez podkatalogu (`"imgui.h"`, `"implot.h"`, `"stb_image.h"`, `<GL/glew.h>`, `"glm/glm.hpp"`),
+  kod z `src/vendor` z podkatalogiem (`"Simplex/SimplexNoise.h"`, `"Splines/spline.h"`).
 - Komentarze po angielsku, w stylu `//@param`.
 
 ## Pułapki — przeczytaj zanim zaczniesz zmieniać
@@ -123,7 +132,8 @@ Wartości szumów są w [-1, 1]. Konwencja indeksowania: `map[y * width + x]`.
 - Shadery obsługują `#include "plik"` (ścieżka względna do pliku zawierającego, każdy plik raz na etap; wspólne
   w `res/shaders/common/`). F5 w oknie aplikacji przeładowuje wszystkie shadery — przy błędzie zostaje stary program,
   a błąd idzie do konsoli. Numery linii w błędach dotyczą pliku, w którym błąd jest, ale nazwa pliku nie jest podawana.
-- MSBuild nie znosi ścieżek > 260 znaków — testowy clean build rób w krótkiej ścieżce (np. `%TEMP%\ptg_cc`), nie w scratchpadzie.
+- MSVC/vcpkg nie znoszą ścieżek > 260 znaków — testowy clean build z eksportu repo rób w krótkiej ścieżce
+  (np. `%TEMP%\ptg_cc`), nie w scratchpadzie.
 - Planowane chunkowanie/LOD jeszcze nie istnieje. Wcześniejsza próba (klasa `Chunk`, nigdy nie scalona) jest pod tagiem
   `archive/infinite-terrain-chunks`; stara roślinność — w historii (`fb8b840`), opis w ROADMAP, Faza 4.
 
