@@ -26,16 +26,16 @@ Plan napraw i rozwoju: `docs/ROADMAP.md` (ID zadań `B*`, `A*`, `F*` są tam zde
   `PTG_RESOURCE_DIR` (= `ProceduralTerrainGenerator/` w źródłach, wpisany przez CMake). Hot-reload działa na źródłach.
 - CI: `.github/workflows/build.yml` — Windows, oba presety, vcpkg na commicie z baseline (cache binarek
   w `actions/cache`), testy jednostkowe, w Release porównanie checksum benchmarku.
-  Checksumy zależą od kompilatora: VS 2026 daje inne niż VS 2022, dlatego CI działa na `windows-2022`
-  (`windows-latest` i `windows-2025` to VS 2026). Zmiana VS lokalnie lub na CI = nowe wartości referencyjne.
+  VS 2026 dawał inne checksumy niż VS 2022, dlatego CI działa na `windows-2022` (`windows-latest` i `windows-2025`
+  to VS 2026). Po usunięciu `std::shuffle` (B21) nie sprawdzono, czy różnica została. Zmiana VS lokalnie lub na CI może wymagać nowych wartości referencyjnych.
 - Testy: `ctest --preset x64-release` (doctest, target `ptg_tests`, kod w `ProceduralTerrainGenerator/tests/`, tylko `ptg_core`).
   Szczegóły doctesta: `out\build\x64-release\ptg_tests.exe`. Mapy testowe są niekwadratowe. Znany błąd = test z `doctest::should_fail()`
   i ID z ROADMAP; po naprawie błędu test zacznie zgłaszać niepowodzenie, wtedy usuń oznaczenie.
 - Benchmark CPU bez okna: `out\build\x64-release\ProceduralTerrainGenerator.exe --benchmark`.
   Wypisuje medianę czasu szumów, terenu i biomów dla 256²/512²/1024² oraz **checksumy** heightmapy, map szumów
-  i mapy biomów — przy refaktorach generacji wszystkie muszą się zgadzać (CI to sprawdza). Stan 2026-10-30
-  (x64, 6 wątków), 512²: teren ≈ 37 ms, checksumy terrain `9ecec06113f1ff1d`, noises `d602f1e24734666d`,
-  biomes `94a3305aac6164b0` (identyczne jak w dawnym buildzie Win32).
+  i mapy biomów — przy refaktorach generacji wszystkie muszą się zgadzać (CI to sprawdza). Stan 2026-11-02
+  (x64, 6 wątków), 512²: teren ≈ 36 ms, checksumy terrain `637427221ce26bfb`, noises `80cc02bb71d77ea4`,
+  biomes `d676ca6dc3f85ac5`.
 - **Wielkość liter ścieżek = dokładnie taka jak w gicie** (`git ls-files`): `src/opengl`, `src/subSystems`,
   `src/terrainGeneration`, `src/utility`, `src/vendor`, `res/shaders`, `res/textures`, `light_source_*.shader`.
   Dotyczy kodu (`#include`, `"res/..."`), ścieżek w `CMakeLists.txt` i nazw katalogów na dysku.
