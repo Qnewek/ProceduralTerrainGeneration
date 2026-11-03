@@ -7,6 +7,8 @@
 #include "imgui.h"
 #include "implot.h"
 
+#include "Preset.h"
+
 bool WorldRequest::Any() const
 {
 	return noises[0] || noises[1] || noises[2] || terrain || biomeNoises[0] || biomeNoises[1] || biomes;
@@ -180,6 +182,56 @@ void TerrainGenerationSys::RequestBiomes()
 	pending.biomes = true;
 }
 
+void TerrainGenerationSys::PresetsImGui()
+{
+	std::string error;
+	switch (presets.ImGuiDraw()) {
+	case PresetPanel::Action::SAVE:
+		if (preset::Save(presets.SavePath(), world, error)) {
+			presets.ReportSaved();
+		}
+		else {
+			presets.ReportError(error);
+		}
+		break;
+	case PresetPanel::Action::LOAD: {
+		WorldConfig loaded;
+		if (preset::Load(presets.LoadPath(), loaded, error)) {
+			ApplyWorld(loaded);
+			presets.ReportLoaded();
+		}
+		else {
+			presets.ReportError(error);
+		}
+		break;
+	}
+	case PresetPanel::Action::NONE:
+		break;
+	}
+}
+
+void TerrainGenerationSys::ApplyWorld(const WorldConfig& loaded)
+{
+	world = loaded;
+
+	samplingResolution = world.terrain.continentalness.resolution;
+	splinePressedButton = 0;
+	splineDraggedPoint = -1;
+	biomeLevelsChanged = false;
+	changeTerrain = false;
+
+	RequestNoise(WorldGenParameter::CONTINENTALNESS);
+	RequestNoise(WorldGenParameter::MOUNTAINOUSNESS);
+	RequestNoise(WorldGenParameter::WEIRDNESS);
+	//In infinite mode the terrain stays centered on the camera
+	RequestTerrain(infiniteGeneration ? oldCamPos.x : 0.0f, infiniteGeneration ? oldCamPos.z : 0.0f);
+	RequestBiomeNoise(BiomeParameter::TEMPERATURE);
+	RequestBiomeNoise(BiomeParameter::HUMIDITY);
+	if (biomesGeneration) {
+		RequestBiomes();
+	}
+}
+
 void TerrainGenerationSys::Draw(Renderer& renderer, Camera& camera, LightSource& light) {
 	if (infiniteGeneration) {
 		if (oldCamPos.x != camera.GetPosition().x || oldCamPos.z != camera.GetPosition().z) {
@@ -247,6 +299,7 @@ void TerrainGenerationSys::ImGuiLeftPanel() {
 			s.displayMode = utilities::heightMapMode::TOPOGRAPHICAL;
 		}
 	}
+	PresetsImGui();
 	utilities::SavingImGui();
 }
 void TerrainGenerationSys::ImGuiOutput(glm::vec3 pos) {
