@@ -94,6 +94,10 @@ bool TerrainGenApp::Initialize()
 		std::cout << "[ERROR] Failed to initialize TerrainGenerationSys" << std::endl;
 		return false;
 	}
+	if (!mapImportSys.Initialize(width, height, heightScale)) {
+		std::cout << "[ERROR] Failed to initialize MapImportSys" << std::endl;
+		return false;
+	}
     light.Initialize();
     light.SetPosition(glm::vec3(0.0f, 400.0f, 0.0f));
 
@@ -127,6 +131,9 @@ void TerrainGenApp::Start()
         }
         else if (currentMode == mode::TERRAIN_GEN) {
             terrainGenSys.Update();
+        }
+        else if (currentMode == mode::MAP_IMPORT) {
+            mapImportSys.Update();
         }
 
 		Draw();
@@ -181,6 +188,9 @@ void TerrainGenApp::Draw()
     else if (currentMode == mode::TERRAIN_GEN) {
 		terrainGenSys.Draw(renderer, camera, light);
     }
+    else if (currentMode == mode::MAP_IMPORT) {
+        mapImportSys.Draw(renderer, camera, light);
+    }
     metrics->EndScene();
 
     glDisable(GL_SCISSOR_TEST);
@@ -190,6 +200,7 @@ void TerrainGenApp::ReloadShaders()
 {
     noiseGenSys.ReloadShaders();
     terrainGenSys.ReloadShaders();
+    mapImportSys.ReloadShaders();
     light.ReloadShader();
 }
 
@@ -219,6 +230,9 @@ void TerrainGenApp::ImGuiRender()
     else if (currentMode == mode::TERRAIN_GEN) {
         terrainGenSys.ImGuiLeftPanel();
     }
+    else if (currentMode == mode::MAP_IMPORT) {
+        mapImportSys.ImGuiLeftPanel();
+    }
 
     ImGui::End();
 
@@ -234,6 +248,9 @@ void TerrainGenApp::ImGuiRender()
     else if(currentMode == mode::TERRAIN_GEN) {
 		terrainGenSys.ImGuiRightPanel();
 	}
+    else if (currentMode == mode::MAP_IMPORT) {
+        mapImportSys.ImGuiRightPanel();
+    }
     ImGui::End();
 
 	//Top panel
@@ -250,6 +267,11 @@ void TerrainGenApp::ImGuiRender()
     if (ImGui::Button("TerrainGen"))
     {
         currentMode = mode::TERRAIN_GEN;
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("Imported map"))
+    {
+        currentMode = mode::MAP_IMPORT;
     }
     ImGui::SameLine();
     if (ImGui::Button("Reload shaders (F5)"))
@@ -273,6 +295,9 @@ void TerrainGenApp::ImGuiRender()
     }
     else if (currentMode == mode::TERRAIN_GEN) {
 		terrainGenSys.ImGuiOutput(camera.GetPosition());
+    }
+    else if (currentMode == mode::MAP_IMPORT) {
+        mapImportSys.ImGuiOutput();
     }
     bottomPanelHeight = ImGui::GetWindowHeight() <= windowHeight / 3 ? ImGui::GetWindowHeight() : windowHeight / 3;
     

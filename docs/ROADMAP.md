@@ -253,6 +253,8 @@ przeniesienia wprost, ale reguły rozmieszczenia i UI są dobrym punktem wyjści
 - **Woda:** płaszczyzna oceanu z refleksją/refrakcją, głębia, piana przy brzegu.
 - **Atmosfera:** fog zależny od wysokości, skybox/atmospheric scattering, cykl dnia, cienie (cascaded shadow maps).
 - **Eksport:** heightmap 16-bit/EXR, splat mapy, mesh OBJ/glTF (z LOD), lista instancji roślinności (JSON) → import do Unity/Unreal/Godot.
+- **Tryb „Imported map”:** ✅ 2026-11-03 podgląd mapy z pliku (PNG 1/2/4/8/16-bit, kolorowy zamieniany na szary, oraz R16/RAW): `HeightmapImport.*` +
+  `subSystems/MapImportSys.*`, wczytywanie w tle. Dalej: operacje na wczytanej mapie (erozja, modyfikacje, eksport) i kolejne formaty (np. EXR, TIFF).
 - **Edytor ręczny:** pędzle (podnieś/obniż/wygładź/spłaszcz) jako warstwa delta nad proceduralną bazą.
 - **Node graph** (imnodes) do składania szumów i operacji zamiast sztywnego continentalness/mountainousness/weirdness.
 

@@ -11,6 +11,10 @@ while the app stays responsive.
   seed, octaves, scale, contrast, redistribution, lacunarity, persistence, handling of negative values,
   ridged noise and island masks (cone, diagonal, squircle, ...).
 
+- **Imported map mode**
+  Shows a height map read from a file, chosen with a file dialog or from a folder list: PNG (8 or 16-bit; color is
+  converted to greyscale) or headerless 16-bit R16/RAW. Non-square R16 files need their size in the name, e.g. `map_1024x512.r16`.
+
 - **Hydraulic erosion**
   Droplet-based erosion of the generated map, shown next to the original. Repeated runs accumulate.
   Based on [this work](http://www.firespark.de/resources/downloads/implementation%20of%20a%20methode%20for%20hydraulic%20erosion.pdf).
