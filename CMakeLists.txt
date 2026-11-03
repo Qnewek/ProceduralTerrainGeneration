@@ -49,6 +49,7 @@ ptg_set_warnings(ptg_core)
 
 add_executable(ProceduralTerrainGenerator
 	${PTG_SRC}/Application.cpp
+	${PTG_SRC}/opengl/GpuQuery.cpp
 	${PTG_SRC}/opengl/IndexBuffer.cpp
 	${PTG_SRC}/opengl/Renderer.cpp
 	${PTG_SRC}/opengl/Shader.cpp
@@ -60,6 +61,7 @@ add_executable(ProceduralTerrainGenerator
 	${PTG_SRC}/subSystems/TerrainGenApp.cpp
 	${PTG_SRC}/subSystems/TerrainGenerationSys.cpp
 	${PTG_SRC}/utility/Camera.cpp
+	${PTG_SRC}/utility/FrameMetrics.cpp
 	${PTG_SRC}/utility/LightSource.cpp
 	${PTG_SRC}/utility/utilities.cpp
 )
@@ -88,9 +90,11 @@ add_executable(ptg_tests
 	${PTG_DIR}/tests/ErosionTests.cpp
 	${PTG_DIR}/tests/GridTests.cpp
 	${PTG_DIR}/tests/NoiseTests.cpp
+	${PTG_DIR}/tests/RollingStatsTests.cpp
 	${PTG_DIR}/tests/TerrainTests.cpp
 	${PTG_DIR}/tests/TestMain.cpp
 )
+target_include_directories(ptg_tests PRIVATE ${PTG_SRC}/utility)
 target_link_libraries(ptg_tests PRIVATE ptg_core doctest::doctest)
 ptg_set_warnings(ptg_tests)
 add_test(NAME ptg_tests COMMAND ptg_tests)

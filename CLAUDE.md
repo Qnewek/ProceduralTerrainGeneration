@@ -63,11 +63,12 @@ ProceduralTerrainGenerator/
       Erosion.*                  erozja kroplowa (CPU, lista jednokierunkowa kropel)
       Grid.h, Parallel.h         mapy Grid<T>; ParallelFor po wierszach
       GenerationJob.h            jedno zadanie generacji w tle (std::async + TryTake)
-    opengl/                      cienkie wrappery: Shader, VertexArray/Buffer, IndexBuffer, TextureClass, Renderer
+    opengl/                      cienkie wrappery: Shader, VertexArray/Buffer, IndexBuffer, TextureClass, Renderer, GpuQuery
       TerrainView.*              siatka + shader + tekstury (TERRAIN/OVERLAY/BIOMES), wspólny dla obu trybów
     utility/
       Camera.*                   kamera FPS (WASD, Space/Ctrl, M = mysz, Esc = zwolnij mysz)
       LightSource.*              punktowe światło + sześcian debug
+      FrameMetrics.*             pomiary w panelu Output (czas klatki/CPU/GPU, trójkąty); RollingStats.h = średnia i maks. z ostatnich próbek
       utilities.*                helpery ImGui (NoiseImGui, DisplayModeImGui...), siatka patchy, kolory biomów
     vendor/                      SimplexNoise (z przeciążeniami perm), tk::spline, implementacja stb_image
   tests/                         testy jednostkowe ptg_core (doctest)
@@ -140,6 +141,8 @@ Wartości szumów są w [-1, 1]. Konwencja indeksowania: `map[y * width + x]`.
   a błąd idzie do konsoli. Numery linii w błędach dotyczą pliku, w którym błąd jest, ale nazwa pliku nie jest podawana.
 - MSVC/vcpkg nie znoszą ścieżek > 260 znaków — testowy clean build z eksportu repo rób w krótkiej ścieżce
   (np. `%TEMP%\ptg_cc`), nie w scratchpadzie.
+- Pomiary GPU: `GL_TIME_ELAPSED` nie może się zagnieżdżać, więc scena i UI mają osobne, kolejne zapytania — nie otwieraj
+  kolejnego w ich trakcie. Liczba trójkątów obejmuje też sześcian światła i podgląd erozji, i jest liczona przed przycinaniem.
 - Planowane chunkowanie/LOD jeszcze nie istnieje. Wcześniejsza próba (klasa `Chunk`, nigdy nie scalona) jest pod tagiem
   `archive/infinite-terrain-chunks`; stara roślinność — w historii (`fb8b840`), opis w ROADMAP, Faza 4.
 
