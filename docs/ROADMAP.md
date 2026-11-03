@@ -1,7 +1,7 @@
 # Procedural Terrain Generator — analiza i plan rozwoju
 
-Diagnoza na 2026-10-27 (branch `lodChunked` = `master`, commit `fbd32ab`); postęp odhaczany na bieżąco, ostatnia aktualizacja 2026-11-02
-(Faza 0 zamknięta; z Fazy 1 zrobione: A2/B5/B9, B8, A3, A4, B6 + shadery, B15, 7a/7b — generacja równoległa i asynchroniczna, A9/A10, A8 — CMake + vcpkg + CI, testy jednostkowe).
+Diagnoza na 2026-10-27 (branch `lodChunked` = `master`, commit `fbd32ab`); postęp odhaczany na bieżąco, ostatnia aktualizacja 2026-11-03
+(Faza 0 zamknięta; z Fazy 1 zrobione: A2/B5/B9, B8, A3, A4, B6 + shadery, B15, 7a/7b — generacja równoległa i asynchroniczna, A9/A10, A8 — CMake + vcpkg + CI, testy jednostkowe, panel pomiarów).
 Cel projektu: **generowanie terenu z edycją parametrów w czasie rzeczywistym, maksymalna wydajność,
 biomy, roślinność i kolejne feature'y.**
 
@@ -46,7 +46,7 @@ biomy, roślinność i kolejne feature'y.**
 | A5 | Brak modelu „świata”: mapa = jeden prostokąt `width×height` przypięty do kamery; brak chunków, LOD, cache | Infinite terrain i duże światy są niewykonalne wydajnie |
 | A6 | Biomy oparte o dyskretne poziomy `int` i pierwszy pasujący biom z `unordered_map` (kolejność nieokreślona!) | Ostre granice, niedeterministyczny wybór przy nakładaniu się zakresów, brak blendingu, trudne do konfiguracji |
 | A7 | Brak serializacji (presety, konfiguracje biomów, eksport) — „Saving” to placeholder | Nie da się zapisać efektu pracy ani porównać ustawień |
-| A8 | Brak testów, CI, profilera; brak menedżera zależności (binarki w repo) | Regresje niewykrywalne; aktualizacje bibliotek ręczne — **Częściowo:** CMake + vcpkg, CI z kontrolą checksum (2026-10-30), testy jednostkowe (2026-11-02); brak profilera (Faza 1 pkt 8) |
+| A8 | Brak testów, CI, profilera; brak menedżera zależności (binarki w repo) | Regresje niewykrywalne; aktualizacje bibliotek ręczne — **Częściowo:** CMake + vcpkg, CI z kontrolą checksum (2026-10-30), testy jednostkowe (2026-11-02), panel pomiarów (2026-11-03); Tracy odłożony (Faza 1 pkt 8) |
 | ~~A9~~ ✅ | Martwy kod: `VegetationGenerator` (pusty), CPU-mesh w `utilities.cpp` (`MapToVertices`, `PerformErosion`, `PaintVerticesByHeight`, `MeshIndicesStrips`, `CalculateHeightMapNormals`), `TINYOBJLOADER_IMPLEMENTATION` bez użycia, `DrawTriangleStrips`, gałęzie git bez scalenia | Szum poznawczy — **Zrobione 2026-10-30:** usunięte `VegetationGenerator`, CPU-mesh z `utilities` (zostały `GenerateVerticesForResolution`, `GetBiomeColorMap` i helpery ImGui), `DrawTriangleStrips`, nieużywane vendor `ObjLoader` (tiny_obj_loader) i `PoissonSampling` — wrócą w nowej postaci w Fazie 4. `res/textures/` zostaje (assety pod Fazę 3) |
 | ~~A10~~ ✅ | Higiena repo: śledzony `imgui.ini`, commity „sda/asd/x”, 17 zdalnych branchy, README z pustymi sekcjami | Trudno wrócić do projektu po przerwie (jak teraz) — **Zrobione 2026-10-30:** `imgui.ini` nieśledzony (od B13), scalone branche usunięte lokalnie i z GitHuba (zostaje `master`), jedyny nie scalony commit (`infiniteTerrain`, klasa `Chunk`) zachowany jako tag `archive/infinite-terrain-chunks`; README przepisany (funkcje, build, sterowanie, benchmark) — brakuje screenshotów |
 
@@ -140,9 +140,22 @@ Cel: kod gotowy na wielowątkowość/GPU, jedna ścieżka renderingu, mierzalna 
    Erozja też w tle. Bez anulowania trwającego zadania: zmiana w trakcie liczenia czeka na jego koniec (opóźnienie ≤ ~2× czas
    generacji, UI nie stoi) — anulowanie co wiersz (`atomic` w `ParallelFor`) do dodania, jeśli będzie przeszkadzać.
    Tryb infinite „nadgania” kamerę o czas generacji (B7 bez zmian — do chunków w Fazie 2).
-8. **Pomiar:** Tracy profiler (CPU + GPU zones) lub przynajmniej `GL_TIME_ELAPSED` queries + panel statystyk
-   (czas generacji, czas klatki, liczba trójkątów). Częściowo ✅: `--benchmark` (headless, z checksumem) i czas
-   generacji w panelu Output. Brak: GPU timing, liczba trójkątów, Tracy.
+8. ~~**Pomiar:** `GL_TIME_ELAPSED` queries + panel statystyk (czas generacji, czas klatki, liczba trójkątów).~~
+   ✅ 2026-11-03: panel Output pokazuje czas klatki i CPU, czas GPU sceny i UI (`GpuQuery`, bez blokowania potoku, średnia
+   ze 120 klatek) oraz trójkąty po teselacji (`GL_PRIMITIVES_GENERATED`). Przełącznik VSync, bo przy włączonym czas klatki
+   jest przycięty do odświeżania monitora. Tracy odłożony: dodać, gdy te liczby nie wystarczą do znalezienia wąskiego gardła.
+
+   Punkt odniesienia przed Fazą 2 (Release, VSync wyłączony, tryb TerrainGen, kamera startowa (0, 256, 0) patrząca poziomo,
+   RTX 2060, i5-9600K, monitor 2560×1440; pomiar sprzed poprawki układu paneli, widok 3D był wtedy o ok. 150 px wyższy):
+
+   | Mapa | Klatka | Scena GPU | Trójkąty | Generacja |
+   |------|--------|-----------|----------|-----------|
+   | 512² | 0,83 ms | 0,67 ms | 8 092 012 | 97,6 ms |
+   | 1024² | 0,52 ms | 0,38 ms | 4 332 012 | 393,8 ms |
+
+   Większa mapa ma mniej trójkątów, bo siatka ma stałe 50×50 patchy, a poziom teselacji maleje z głębokością w widoku.
+   Liczba zależy mocno od kamery (według wzoru z shadera od ok. 0,1 do 12,5 mln na tej samej mapie), więc porównywać tylko przy tej samej pozycji i kierunku.
+   Wąskim gardłem jest generacja: 1024² liczy się dłużej niż ok. 750 klatek renderowania.
 9. ~~**Testy:** doctest/Catch2 — determinizm szumu (ten sam seed → te same wartości), zakresy [-1,1],
    wybór biomu dla zadanych parametrów, regresja height = f(x,z).~~ ✅ 2026-11-02: doctest, target `ptg_tests`
    (`ProceduralTerrainGenerator/tests/`), `ctest --preset <preset>` także w CI (Debug i Release). Testują właściwości, nie
@@ -241,7 +254,7 @@ przeniesienia wprost, ale reguły rozmieszczenia i UI są dobrym punktem wyjści
 | Priorytet | Zadania | Dlaczego |
 |-----------|---------|----------|
 | P0 | Faza 0 (B13, B3, B2, B1, B11) | Bez tego każda dalsza praca jest na niepewnym gruncie |
-| P1 | Faza 1: ~~B8 (szum)~~ ✅, ~~A2/B5 (RAII + width/height)~~ ✅, ~~A3/A4 (rozdzielenie warstw)~~ ✅, ~~B6 (shadery)~~ ✅, ~~B15 (tekstury)~~ ✅, ~~wielowątkowość (7a)~~ ✅, ~~generacja asynchroniczna (7b)~~ ✅, profiler | Fundament — bez rozdzielenia warstw nie da się przenieść generacji na GPU |
+| P1 | Faza 1: ~~B8 (szum)~~ ✅, ~~A2/B5 (RAII + width/height)~~ ✅, ~~A3/A4 (rozdzielenie warstw)~~ ✅, ~~B6 (shadery)~~ ✅, ~~B15 (tekstury)~~ ✅, ~~wielowątkowość (7a)~~ ✅, ~~generacja asynchroniczna (7b)~~ ✅, ~~pomiary~~ ✅ | Fundament — bez rozdzielenia warstw nie da się przenieść generacji na GPU |
 | P1 | Faza 2.1–2.3 (compute height + chunki) | Największy zysk dla „real-time” |
 | P2 | Faza 2.4–2.7, Faza 3 | Jakość i skalowanie |
 | P3 | Faza 4, Faza 5 | Feature'y budowane na stabilnym fundamencie |
