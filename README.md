@@ -35,6 +35,10 @@ while the app stays responsive.
   Generation parameters of each mode can be saved to and loaded from JSON files in `presets/`, which can also be
   edited by hand. Render settings and biome definitions are not included.
 
+- **Heightmap export**
+  Maps can be saved to `exports/` as 16-bit PNG or headerless 16-bit RAW (R16, little-endian). Values are mapped from a
+  fixed range: [0, 1] in TerrainGen, [-1, 1] in Noise heightmap. An eroded map that is shown goes to its own `_eroded` file.
+
 - **Performance**
   Map generation is parallelised over rows and runs on a background thread, so editing parameters never freezes
   the UI (512x512 terrain in ~40 ms on 6 threads).
