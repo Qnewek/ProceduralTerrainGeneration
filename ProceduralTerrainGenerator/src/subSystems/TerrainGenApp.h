@@ -16,6 +16,7 @@
 
 #include "NoiseBasedGenerationSys.h"
 #include "TerrainGenerationSys.h"
+#include "MapImportSys.h"
 
 class TerrainGenApp
 {
@@ -38,6 +39,7 @@ private:
 	//SubSystems
 	NoiseBasedGenerationSys noiseGenSys;
 	TerrainGenerationSys terrainGenSys;
+	MapImportSys mapImportSys;
 
 	//Time variables
 	float deltaTime;
@@ -69,6 +71,7 @@ private:
 	enum class mode
 	{
 		NOISE_HEIGHTMAP,
-		TERRAIN_GEN
+		TERRAIN_GEN,
+		MAP_IMPORT
 	} currentMode;
 };

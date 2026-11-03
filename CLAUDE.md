@@ -55,6 +55,7 @@ ProceduralTerrainGenerator/
       TerrainGenApp.*            okno GLFW, pętla główna, layout 4 paneli ImGui, przełączanie trybów
       NoiseBasedGenerationSys.*  tryb "Noise heightmap": jeden szum + erozja (podgląd obok)
       TerrainGenerationSys.*     tryb "TerrainGen": 3 szumy + splajny + biomy, edytory ImPlot
+      MapImportSys.*             tryb "Imported map": podgląd mapy wysokości z pliku, wczytywanej w tle
     terrainGeneration/
       WorldConfig.h              same dane: WorldConfig (TerrainConfig + BiomeConfig), NoiseMapConfig, ErosionConfig
       Noise.*                    noise::SimplexNoiseClass + NoiseConfigParameters (fBm, ridge, island, redistribution)
@@ -64,6 +65,7 @@ ProceduralTerrainGenerator/
       Grid.h, Parallel.h         mapy Grid<T>; ParallelFor po wierszach
       Preset.*                   zapis/odczyt WorldConfig i NoiseMapConfig jako JSON + walidacja
       HeightmapExport.*          zapis mapy jako PNG 16-bit lub RAW R16; FileIO.* = zapis przez plik tymczasowy
+      HeightmapImport.*          odczyt mapy z PNG lub R16/RAW; format po rozszerzeniu, nowy = czytnik i rozszerzenie w tym pliku
       GenerationJob.h            jedno zadanie generacji w tle (std::async + TryTake)
     opengl/                      cienkie wrappery: Shader, VertexArray/Buffer, IndexBuffer, TextureClass, Renderer, GpuQuery
       TerrainView.*              siatka + shader + tekstury (TERRAIN/OVERLAY/BIOMES), wspólny dla obu trybów
@@ -73,6 +75,7 @@ ProceduralTerrainGenerator/
       FrameMetrics.*             pomiary w panelu Output (czas klatki/CPU/GPU, trójkąty); RollingStats.h = średnia i maks. z ostatnich próbek
       PresetPanel.*              sekcja „Presets” w ImGui (lista plików, nazwa); zapis i odczyt wykonuje subsystem
       ExportPanel.*              sekcja „Saving” w ImGui; subsystem podaje mapy do zapisu i ich zakres wartości
+      FileDialog.*               systemowe okno wyboru pliku (tylko Windows, comdlg32); przy porcie na Linuksa do zastąpienia
       utilities.*                helpery ImGui (NoiseImGui, DisplayModeImGui...), siatka patchy, kolory biomów
     vendor/                      SimplexNoise (z przeciążeniami perm), tk::spline, implementacja stb_image
   tests/                         testy jednostkowe ptg_core (doctest)
@@ -152,6 +155,9 @@ Wartości szumów są w [-1, 1]. Konwencja indeksowania: `map[y * width + x]`.
   ani enumów w JSON bez podbicia `currentVersion`. Pliki trafiają do `presets/` względem katalogu roboczego (poza gitem).
 - Eksport map: zakres wartości jest stały (`heightmap::terrainRange`, `noiseRange`), nie min–max mapy. Zmiana zakresu generacji wymaga zmiany
   tych stałych, inaczej wartości zostaną przycięte. Eksport czyta `generated` w wątku głównym, więc zapisuje ostatni gotowy wynik, nie trwające zadanie.
+- Import map: plik nie przechowuje zakresu wartości, więc wybiera go użytkownik (`valueRanges` w `MapImportSys.cpp`). `lodepng` nie zamienia koloru na szary
+  ani niższej głębi na 16 bitów (błąd 56), dlatego PNG dekodujemy do RGBA o głębi pliku. Mapa żyje w `MapImportSys::map`, stąd pójdą przyszłe operacje na niej
+  (jak w innych trybach: w tle, na kopii).
 - Planowane chunkowanie/LOD jeszcze nie istnieje. Wcześniejsza próba (klasa `Chunk`, nigdy nie scalona) jest pod tagiem
   `archive/infinite-terrain-chunks`; stara roślinność — w historii (`fb8b840`), opis w ROADMAP, Faza 4.
 
