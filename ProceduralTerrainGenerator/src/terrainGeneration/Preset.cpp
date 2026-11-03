@@ -12,6 +12,8 @@
 
 #include <nlohmann/json.hpp>
 
+#include "FileIO.h"
+
 namespace preset {
 	namespace {
 		//Keeps fields in the order they are written, so files stay easy to read and edit
@@ -470,41 +472,6 @@ namespace preset {
 			}
 		}
 
-		bool WriteFile(const std::filesystem::path& path, const std::string& text, std::string& error)
-		{
-			std::error_code ec;
-			if (path.has_parent_path()) {
-				std::filesystem::create_directories(path.parent_path(), ec);
-				if (ec) {
-					error = "Cannot create the folder: " + ec.message();
-					return false;
-				}
-			}
-
-			//Written next to the target and renamed at the end, so a failed write keeps the previous file
-			std::filesystem::path temporary = path;
-			temporary += ".tmp";
-			bool written = false;
-			{
-				std::ofstream file(temporary, std::ios::binary | std::ios::trunc);
-				file << text;
-				file.flush();
-				written = file.good();
-			}
-			if (written) {
-				std::filesystem::rename(temporary, path, ec);
-				if (!ec) {
-					return true;
-				}
-				error = "Cannot replace the file: " + ec.message();
-			}
-			else {
-				error = "Cannot write the file";
-			}
-			std::filesystem::remove(temporary, ec);
-			return false;
-		}
-
 		template<typename Config>
 		bool SaveConfig(const std::filesystem::path& path, const Config& config, std::string& error)
 		{
@@ -515,7 +482,8 @@ namespace preset {
 				error = e.what();
 				return false;
 			}
-			return WriteFile(path, ToJson(config) + "\n", error);
+			const std::string text = ToJson(config) + "\n";
+			return WriteFileAtomic(path, text.data(), text.size(), error);
 		}
 
 		template<typename Config>

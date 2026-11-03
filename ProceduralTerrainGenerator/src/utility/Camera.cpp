@@ -64,16 +64,21 @@ void Camera::UpdateCameraVectors(CameraMovement movement) {
 }
 glm::vec3 Camera::SteerCamera(GLFWwindow* window, float deltaTime, bool yAxisMovement) {
 
-	if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS) {
+	//Keys typed into an ImGui text field must not steer the camera
+	const bool typing = ImGui::GetIO().WantTextInput;
+
+	if (!typing && glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS) {
 		DisableMouseControl(window);
 	}
-	if (glfwGetKey(window, GLFW_KEY_M) == GLFW_PRESS) {
+	if (!typing && glfwGetKey(window, GLFW_KEY_M) == GLFW_PRESS) {
 		EnableMouseControl(window);
 	}
 
 	speed = static_cast<float>(initSpeed * deltaTime);
 	if (mouseControl)
 		RotateCamera(window);
+	if (typing)
+		return position;
 	if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
 		UpdateCameraVectors(CameraMovement::FORWARD);
 	if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)

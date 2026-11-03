@@ -300,7 +300,7 @@ void TerrainGenerationSys::ImGuiLeftPanel() {
 		}
 	}
 	PresetsImGui();
-	utilities::SavingImGui();
+	exporter.ImGuiDraw({ { generated->terrain.GetHeightField(), "" } }, heightmap::terrainRange);
 }
 void TerrainGenerationSys::ImGuiOutput(glm::vec3 pos) {
 	ImGui::Text("Last generation: %.1f ms (%dx%d)%s", lastGenerationMs, generated->terrain.GetWidth(), generated->terrain.GetHeight(),
