@@ -230,7 +230,12 @@ void NoiseBasedGenerationSys::ImGuiRightPanel()
 	}
 	ErosionImGui();
 	PresetsImGui();
-	utilities::SavingImGui();
+	//The base map, plus the eroded one in its own file when it is shown
+	std::vector<ExportPanel::Target> exportTargets = { { generated->noise.GetField(), "" } };
+	if (erosionDraw) {
+		exportTargets.push_back({ generated->erosion.GetField(), "_eroded" });
+	}
+	exporter.ImGuiDraw(exportTargets, heightmap::noiseRange);
 }
 
 void NoiseBasedGenerationSys::ImGuiLeftPanel()

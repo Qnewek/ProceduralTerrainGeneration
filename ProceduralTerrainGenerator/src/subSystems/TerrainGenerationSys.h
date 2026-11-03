@@ -13,6 +13,7 @@
 #include "LightSource.h"
 #include "TerrainView.h"
 #include "PresetPanel.h"
+#include "ExportPanel.h"
 
 //All maps generated in the "TerrainGen" mode
 struct GeneratedWorld {
@@ -84,6 +85,7 @@ private:
 	//Replaces the world parameters, resets editors holding copies of them and regenerates everything shown
 	void ApplyWorld(const WorldConfig& loaded);
 	PresetPanel presets{ "presets/world" };
+	ExportPanel exporter{ "exports" };
 
 	//Editor UI state
 	WorldGenParameter editedComponent = WorldGenParameter::CONTINENTALNESS;

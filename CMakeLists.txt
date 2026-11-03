@@ -14,6 +14,7 @@ find_package(glm CONFIG REQUIRED)
 find_package(imgui CONFIG REQUIRED)
 find_package(implot CONFIG REQUIRED)
 find_package(nlohmann_json CONFIG REQUIRED)
+find_package(lodepng CONFIG REQUIRED)
 find_package(Stb REQUIRED)
 find_package(doctest CONFIG REQUIRED)
 
@@ -41,13 +42,15 @@ add_library(ptg_core STATIC
 	${PTG_SRC}/terrainGeneration/Biome.cpp
 	${PTG_SRC}/terrainGeneration/BiomeGenerator.cpp
 	${PTG_SRC}/terrainGeneration/Erosion.cpp
+	${PTG_SRC}/terrainGeneration/FileIO.cpp
+	${PTG_SRC}/terrainGeneration/HeightmapExport.cpp
 	${PTG_SRC}/terrainGeneration/Noise.cpp
 	${PTG_SRC}/terrainGeneration/Preset.cpp
 	${PTG_SRC}/terrainGeneration/TerrainGenerator.cpp
 )
 target_include_directories(ptg_core PUBLIC ${PTG_SRC}/terrainGeneration)
 target_link_libraries(ptg_core PUBLIC ptg_vendor glm::glm)
-target_link_libraries(ptg_core PRIVATE nlohmann_json::nlohmann_json)
+target_link_libraries(ptg_core PRIVATE nlohmann_json::nlohmann_json lodepng)
 ptg_set_warnings(ptg_core)
 
 add_executable(ProceduralTerrainGenerator
@@ -64,6 +67,7 @@ add_executable(ProceduralTerrainGenerator
 	${PTG_SRC}/subSystems/TerrainGenApp.cpp
 	${PTG_SRC}/subSystems/TerrainGenerationSys.cpp
 	${PTG_SRC}/utility/Camera.cpp
+	${PTG_SRC}/utility/ExportPanel.cpp
 	${PTG_SRC}/utility/FrameMetrics.cpp
 	${PTG_SRC}/utility/LightSource.cpp
 	${PTG_SRC}/utility/PresetPanel.cpp
@@ -93,6 +97,7 @@ add_executable(ptg_tests
 	${PTG_DIR}/tests/BiomeTests.cpp
 	${PTG_DIR}/tests/ErosionTests.cpp
 	${PTG_DIR}/tests/GridTests.cpp
+	${PTG_DIR}/tests/HeightmapExportTests.cpp
 	${PTG_DIR}/tests/NoiseTests.cpp
 	${PTG_DIR}/tests/PresetTests.cpp
 	${PTG_DIR}/tests/RollingStatsTests.cpp
@@ -100,6 +105,6 @@ add_executable(ptg_tests
 	${PTG_DIR}/tests/TestMain.cpp
 )
 target_include_directories(ptg_tests PRIVATE ${PTG_SRC}/utility)
-target_link_libraries(ptg_tests PRIVATE ptg_core doctest::doctest)
+target_link_libraries(ptg_tests PRIVATE ptg_core doctest::doctest lodepng)
 ptg_set_warnings(ptg_tests)
 add_test(NAME ptg_tests COMMAND ptg_tests)
