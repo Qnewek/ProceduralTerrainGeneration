@@ -204,18 +204,6 @@ namespace utilities
 		}
 		return false;
 	}
-	bool SavingImGui()
-	{
-		if (ImGui::CollapsingHeader("Saving")) {
-			if (ImGui::Button("Save heightMap as an image")) {
-				std::cout << "[LOG] Well it will work one day i promise!" << std::endl;
-			}
-			if (ImGui::Button("Save heightMap as an 3d object")) {
-				std::cout << "[LOG] Well it will work one day i promise!" << std::endl;
-			}
-		}
-		return true;
-	}
 	bool ImGuiButtonWrapper(const char* label, bool disabled)
 	{
 		if (disabled) {

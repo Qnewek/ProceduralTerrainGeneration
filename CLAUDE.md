@@ -63,6 +63,7 @@ ProceduralTerrainGenerator/
       Erosion.*                  erozja kroplowa (CPU, lista jednokierunkowa kropel)
       Grid.h, Parallel.h         mapy Grid<T>; ParallelFor po wierszach
       Preset.*                   zapis/odczyt WorldConfig i NoiseMapConfig jako JSON + walidacja
+      HeightmapExport.*          zapis mapy jako PNG 16-bit lub RAW R16; FileIO.* = zapis przez plik tymczasowy
       GenerationJob.h            jedno zadanie generacji w tle (std::async + TryTake)
     opengl/                      cienkie wrappery: Shader, VertexArray/Buffer, IndexBuffer, TextureClass, Renderer, GpuQuery
       TerrainView.*              siatka + shader + tekstury (TERRAIN/OVERLAY/BIOMES), wspólny dla obu trybów
@@ -71,6 +72,7 @@ ProceduralTerrainGenerator/
       LightSource.*              punktowe światło + sześcian debug
       FrameMetrics.*             pomiary w panelu Output (czas klatki/CPU/GPU, trójkąty); RollingStats.h = średnia i maks. z ostatnich próbek
       PresetPanel.*              sekcja „Presets” w ImGui (lista plików, nazwa); zapis i odczyt wykonuje subsystem
+      ExportPanel.*              sekcja „Saving” w ImGui; subsystem podaje mapy do zapisu i ich zakres wartości
       utilities.*                helpery ImGui (NoiseImGui, DisplayModeImGui...), siatka patchy, kolory biomów
     vendor/                      SimplexNoise (z przeciążeniami perm), tk::spline, implementacja stb_image
   tests/                         testy jednostkowe ptg_core (doctest)
@@ -148,6 +150,8 @@ Wartości szumów są w [-1, 1]. Konwencja indeksowania: `map[y * width + x]`.
 - Presety (`Preset.cpp`): nowe pole w `WorldConfig.h` trzeba dopisać do zapisu i odczytu oraz do `tests/PresetTests.cpp` (funkcje `Distinct*` / `CheckSame*`).
   Nowe wymaganie generacji wobec wartości configu = nowy warunek w `Check*`, bo plik można edytować ręcznie. Nie zmieniaj nazw pól
   ani enumów w JSON bez podbicia `currentVersion`. Pliki trafiają do `presets/` względem katalogu roboczego (poza gitem).
+- Eksport map: zakres wartości jest stały (`heightmap::terrainRange`, `noiseRange`), nie min–max mapy. Zmiana zakresu generacji wymaga zmiany
+  tych stałych, inaczej wartości zostaną przycięte. Eksport czyta `generated` w wątku głównym, więc zapisuje ostatni gotowy wynik, nie trwające zadanie.
 - Planowane chunkowanie/LOD jeszcze nie istnieje. Wcześniejsza próba (klasa `Chunk`, nigdy nie scalona) jest pod tagiem
   `archive/infinite-terrain-chunks`; stara roślinność — w historii (`fb8b840`), opis w ROADMAP, Faza 4.
 
