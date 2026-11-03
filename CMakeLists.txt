@@ -44,6 +44,7 @@ add_library(ptg_core STATIC
 	${PTG_SRC}/terrainGeneration/Erosion.cpp
 	${PTG_SRC}/terrainGeneration/FileIO.cpp
 	${PTG_SRC}/terrainGeneration/HeightmapExport.cpp
+	${PTG_SRC}/terrainGeneration/HeightmapImport.cpp
 	${PTG_SRC}/terrainGeneration/Noise.cpp
 	${PTG_SRC}/terrainGeneration/Preset.cpp
 	${PTG_SRC}/terrainGeneration/TerrainGenerator.cpp
@@ -63,11 +64,13 @@ add_executable(ProceduralTerrainGenerator
 	${PTG_SRC}/opengl/TextureClass.cpp
 	${PTG_SRC}/opengl/VertexArray.cpp
 	${PTG_SRC}/opengl/VertexBuffer.cpp
+	${PTG_SRC}/subSystems/MapImportSys.cpp
 	${PTG_SRC}/subSystems/NoiseBasedGenerationSys.cpp
 	${PTG_SRC}/subSystems/TerrainGenApp.cpp
 	${PTG_SRC}/subSystems/TerrainGenerationSys.cpp
 	${PTG_SRC}/utility/Camera.cpp
 	${PTG_SRC}/utility/ExportPanel.cpp
+	${PTG_SRC}/utility/FileDialog.cpp
 	${PTG_SRC}/utility/FrameMetrics.cpp
 	${PTG_SRC}/utility/LightSource.cpp
 	${PTG_SRC}/utility/PresetPanel.cpp
@@ -86,6 +89,7 @@ target_link_libraries(ProceduralTerrainGenerator PRIVATE
 	glfw
 	imgui::imgui
 	implot::implot
+	comdlg32
 )
 # Fallback working directory with res/, used when the exe is started from elsewhere (build dir, IDE)
 target_compile_definitions(ProceduralTerrainGenerator PRIVATE PTG_RESOURCE_DIR="${PTG_DIR}")
@@ -98,6 +102,7 @@ add_executable(ptg_tests
 	${PTG_DIR}/tests/ErosionTests.cpp
 	${PTG_DIR}/tests/GridTests.cpp
 	${PTG_DIR}/tests/HeightmapExportTests.cpp
+	${PTG_DIR}/tests/HeightmapImportTests.cpp
 	${PTG_DIR}/tests/NoiseTests.cpp
 	${PTG_DIR}/tests/PresetTests.cpp
 	${PTG_DIR}/tests/RollingStatsTests.cpp

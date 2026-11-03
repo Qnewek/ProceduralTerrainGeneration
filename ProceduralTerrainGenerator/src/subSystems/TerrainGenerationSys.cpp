@@ -294,7 +294,7 @@ void TerrainGenerationSys::ImGuiRightPanel() {
 }
 void TerrainGenerationSys::ImGuiLeftPanel() {
 	TerrainRenderSettings& s = renderSettings;
-	if (utilities::DisplayModeImGui(s.modelScale, s.topoStep, s.topoBandWidth, s.heightScale, s.displayMode, s.wireFrame, s.map2d, infiniteGeneration)) {
+	if (utilities::DisplayModeImGui(s.modelScale, s.topoStep, s.topoBandWidth, s.heightScale, s.displayMode, s.wireFrame, s.map2d, &infiniteGeneration)) {
 		if(!biomesGeneration && s.displayMode == utilities::heightMapMode::BIOMES) {
 			s.displayMode = utilities::heightMapMode::TOPOGRAPHICAL;
 		}
