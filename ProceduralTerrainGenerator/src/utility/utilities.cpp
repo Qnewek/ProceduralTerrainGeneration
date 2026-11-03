@@ -162,7 +162,7 @@ namespace utilities
 		}
 		return false;
 	}
-	bool DisplayModeImGui(float& modelScale, float& topoStep, float& topoBandWidth, float& heightScale, heightMapMode& m, bool& wireFrame, bool& map2d, bool& infGen)
+	bool DisplayModeImGui(float& modelScale, float& topoStep, float& topoBandWidth, float& heightScale, heightMapMode& m, bool& wireFrame, bool& map2d, bool* infGen)
 	{
 		if (ImGui::CollapsingHeader("Display settings:", ImGuiTreeNodeFlags_DefaultOpen)) {
 			ImGui::Text("Model scale:");
@@ -193,12 +193,14 @@ namespace utilities
 			ImGui::Checkbox("WireFrame", &wireFrame);
 
 			ImGui::Checkbox("2D map", &map2d);
-			if (ImGuiButtonWrapper("Partial generation", !infGen)) {
-				infGen = !infGen;
-			}
-			ImGui::SameLine();
-			if(ImGuiButtonWrapper("Infinite generation", infGen)) {
-				infGen = !infGen;
+			if (infGen) {
+				if (ImGuiButtonWrapper("Partial generation", !*infGen)) {
+					*infGen = !*infGen;
+				}
+				ImGui::SameLine();
+				if (ImGuiButtonWrapper("Infinite generation", *infGen)) {
+					*infGen = !*infGen;
+				}
 			}
 			return change;
 		}
