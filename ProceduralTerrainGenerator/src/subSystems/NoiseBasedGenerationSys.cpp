@@ -6,6 +6,8 @@
 
 #include "imgui.h"
 
+#include "Preset.h"
+
 NoiseBasedGenerationSys::NoiseBasedGenerationSys()
 {
 }
@@ -149,6 +151,42 @@ void NoiseBasedGenerationSys::RequestErosion()
 	pending.erode = true;
 }
 
+void NoiseBasedGenerationSys::PresetsImGui()
+{
+	std::string error;
+	switch (presets.ImGuiDraw()) {
+	case PresetPanel::Action::SAVE:
+		if (preset::Save(presets.SavePath(), config, error)) {
+			presets.ReportSaved();
+		}
+		else {
+			presets.ReportError(error);
+		}
+		break;
+	case PresetPanel::Action::LOAD: {
+		NoiseMapConfig loaded;
+		if (preset::Load(presets.LoadPath(), loaded, error)) {
+			ApplyConfig(loaded);
+			presets.ReportLoaded();
+		}
+		else {
+			presets.ReportError(error);
+		}
+		break;
+	}
+	case PresetPanel::Action::NONE:
+		break;
+	}
+}
+
+void NoiseBasedGenerationSys::ApplyConfig(const NoiseMapConfig& loaded)
+{
+	config = loaded;
+	pending.erode = false;
+	//In infinite mode the map stays centered on the camera
+	RequestNoise(infiniteGeneration ? oldCamPos.x : 0.0f, infiniteGeneration ? oldCamPos.z : 0.0f);
+}
+
 void NoiseBasedGenerationSys::Draw(Renderer& renderer, Camera& camera, LightSource& light)
 {
 	if (infiniteGeneration) {
@@ -191,6 +229,7 @@ void NoiseBasedGenerationSys::ImGuiRightPanel()
 		RequestNoise(0.0f, 0.0f);
 	}
 	ErosionImGui();
+	PresetsImGui();
 	utilities::SavingImGui();
 }
 

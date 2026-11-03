@@ -8,6 +8,7 @@
 #include "utilities.h"
 #include "LightSource.h"
 #include "TerrainView.h"
+#include "PresetPanel.h"
 
 //All maps generated in the "Noise heightmap" mode
 struct NoiseMaps {
@@ -65,6 +66,11 @@ class NoiseBasedGenerationSys
 		//New noise map; the erosion shown next to it is dropped and starts from the new map
 		void RequestNoise(float originx, float originy);
 		void RequestErosion();
+
+		void PresetsImGui();
+		//Replaces the parameters and regenerates the map; an erosion waiting to start is dropped
+		void ApplyConfig(const NoiseMapConfig& loaded);
+		PresetPanel presets{ "presets/noise" };
 	public:
 		NoiseBasedGenerationSys();
 		~NoiseBasedGenerationSys();
