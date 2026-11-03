@@ -11,8 +11,8 @@
 
 #include "utilities.h"
 
-TerrainGenApp::TerrainGenApp() : window(nullptr), windowWidth(0), windowHeight(0), deltaTime(0.0f), lastFrame(0.0f),
-rightPanelWidth(400.0f),topPanelHeight(30.0f), bottomPanelHeight(200.0f), leftPanelWidth(400.0f),
+TerrainGenApp::TerrainGenApp() : window(nullptr), windowWidth(0), windowHeight(0), deltaTime(0.0f), lastFrame(0.0),
+rightPanelWidth(400.0f),topPanelHeight(30.0f), bottomPanelHeight(280.0f), leftPanelWidth(400.0f),
 width(250), height(250), heightScale(256.0f),
 camera(1920, 1080, glm::vec3(0.0f, heightScale, 0.0f), 100.0f, 1000.0f), renderer(),
 noiseGenSys(), currentMode(mode::NOISE_HEIGHTMAP), light(glm::vec3(0.0f, 0.0f, 0.0f), 20.0f)
@@ -40,9 +40,7 @@ bool TerrainGenApp::Initialize()
     GLFWmonitor* primaryMonitor = glfwGetPrimaryMonitor();
     const GLFWvidmode* mode = glfwGetVideoMode(primaryMonitor);
 
-    windowWidth = mode->width;
-    windowHeight = mode->height;
-    window = glfwCreateWindow(windowWidth, windowHeight, "Procedural terrain generator", NULL, NULL);
+    window = glfwCreateWindow(mode->width, mode->height, "Procedural terrain generator", NULL, NULL);
 
     if (!window)
     {
@@ -57,6 +55,8 @@ bool TerrainGenApp::Initialize()
         glfwSetWindowIcon(window, 1, images);
         stbi_image_free(images[0].pixels);
     }
+
+    UpdateWindowSize();
 
     glfwMakeContextCurrent(window);
     glfwSwapInterval(1);
@@ -81,6 +81,8 @@ bool TerrainGenApp::Initialize()
 	ImGui_ImplGlfw_InitForOpenGL(window, true);
 	ImGui_ImplOpenGL3_Init("#version 450");
 
+    metrics = std::make_unique<FrameMetrics>();
+
     //Logic initialization
 	renderer.SetPatches(4);
 	camera.SetScreenSize(ViewportWidth(), ViewportHeight());
@@ -101,11 +103,14 @@ bool TerrainGenApp::Initialize()
 
 void TerrainGenApp::Start()
 {
+    lastFrame = glfwGetTime();
     while (!glfwWindowShouldClose(window))
     {
-        float currentFrame = static_cast<float>(glfwGetTime());
-        deltaTime = currentFrame - lastFrame;
+        double currentFrame = glfwGetTime();
+        deltaTime = static_cast<float>(currentFrame - lastFrame);
         lastFrame = currentFrame;
+
+        UpdateWindowSize();
 
 		camera.CameraAnchor(false);
         camera.SteerCamera(window, deltaTime, true);
@@ -126,6 +131,7 @@ void TerrainGenApp::Start()
 
 		Draw();
         ImGuiRender();
+        metrics->EndFrame(deltaTime * 1000.0, (glfwGetTime() - currentFrame) * 1000.0);
 
         camera.SetScreenSize(ViewportWidth(), ViewportHeight());
         
@@ -138,6 +144,7 @@ void TerrainGenApp::Start()
         glfwSwapBuffers(window);
     }
 
+    metrics.reset();
     ImGui_ImplOpenGL3_Shutdown();
     ImGui_ImplGlfw_Shutdown();
 	ImPlot::DestroyContext();
@@ -148,6 +155,16 @@ void TerrainGenApp::Start()
 }
 
 
+void TerrainGenApp::UpdateWindowSize()
+{
+    int framebufferWidth = 0, framebufferHeight = 0;
+    glfwGetFramebufferSize(window, &framebufferWidth, &framebufferHeight);
+    if (framebufferWidth > 0 && framebufferHeight > 0) {
+        windowWidth = framebufferWidth;
+        windowHeight = framebufferHeight;
+    }
+}
+
 void TerrainGenApp::Draw()
 {
     glEnable(GL_SCISSOR_TEST);
@@ -155,6 +172,7 @@ void TerrainGenApp::Draw()
     glScissor(static_cast<int>(leftPanelWidth), static_cast<int>(bottomPanelHeight), ViewportWidth(), ViewportHeight());
     renderer.Clear(glm::vec3(0.0f, 0.0f, 0.0f));
 
+    metrics->BeginScene();
     light.Draw(renderer, *camera.GetViewMatrix(), *camera.GetProjectionMatrix());
     if (currentMode == mode::NOISE_HEIGHTMAP)
     {
@@ -163,6 +181,7 @@ void TerrainGenApp::Draw()
     else if (currentMode == mode::TERRAIN_GEN) {
 		terrainGenSys.Draw(renderer, camera, light);
     }
+    metrics->EndScene();
 
     glDisable(GL_SCISSOR_TEST);
 }
@@ -182,7 +201,7 @@ void TerrainGenApp::ImGuiRender()
 
     //Left panel
     ImGui::SetNextWindowPos(ImVec2(0, 0), ImGuiCond_Always);
-    ImGui::SetNextWindowSize(ImVec2(leftPanelWidth, static_cast<float>(windowHeight - 60)), ImGuiCond_Always);
+    ImGui::SetNextWindowSize(ImVec2(leftPanelWidth, static_cast<float>(windowHeight)), ImGuiCond_Always);
     ImGui::Begin("Main tools", nullptr, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_None);
     leftPanelWidth = ImGui::GetWindowWidth() <= windowWidth / 2 ? ImGui::GetWindowWidth() : windowWidth / 2;
     if (ImGui::CollapsingHeader("A few words...", ImGuiTreeNodeFlags_DefaultOpen)) {
@@ -205,7 +224,7 @@ void TerrainGenApp::ImGuiRender()
 
 	//Right panel
     ImGui::SetNextWindowPos(ImVec2(windowWidth - rightPanelWidth, 0), ImGuiCond_Always);
-    ImGui::SetNextWindowSize(ImVec2(rightPanelWidth, static_cast<float>(windowHeight - 60)), ImGuiCond_Always);
+    ImGui::SetNextWindowSize(ImVec2(rightPanelWidth, static_cast<float>(windowHeight)), ImGuiCond_Always);
     ImGui::Begin("Tools", nullptr, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_None);
     rightPanelWidth = ImGui::GetWindowWidth() <= windowWidth/2 ? ImGui::GetWindowWidth() : windowWidth/2;
 
@@ -240,11 +259,14 @@ void TerrainGenApp::ImGuiRender()
     ImGui::End();
 
 	//Bottom panel
-    ImGui::SetNextWindowPos(ImVec2(leftPanelWidth, windowHeight - bottomPanelHeight - 60), ImGuiCond_Always);
+    ImGui::SetNextWindowPos(ImVec2(leftPanelWidth, windowHeight - bottomPanelHeight), ImGuiCond_Always);
     ImGui::SetNextWindowSize(ImVec2(windowWidth - rightPanelWidth - leftPanelWidth, bottomPanelHeight), ImGuiCond_Always);
     ImGui::Begin("OutPut", nullptr, ImGuiWindowFlags_None | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoScrollbar);
-    ImGui::TextWrapped("FPS: %.1f", 1.0f / deltaTime);
-	
+    if (ImGui::Checkbox("VSync (turn off to measure frame time)", &vsync)) {
+        glfwSwapInterval(vsync ? 1 : 0);
+    }
+    metrics->ImGuiOutput();
+
     camera.ImGuiOutPut();
     if (currentMode == mode::NOISE_HEIGHTMAP) {
         noiseGenSys.ImGuiOutput();
@@ -257,5 +279,7 @@ void TerrainGenApp::ImGuiRender()
     ImGui::End();
 
     ImGui::Render();
+    metrics->BeginUi();
     ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+    metrics->EndUi();
 }
