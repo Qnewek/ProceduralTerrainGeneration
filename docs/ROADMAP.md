@@ -1,7 +1,7 @@
 # Procedural Terrain Generator — analiza i plan rozwoju
 
 Diagnoza na 2026-10-27 (branch `lodChunked` = `master`, commit `fbd32ab`); postęp odhaczany na bieżąco, ostatnia aktualizacja 2026-11-03
-(Faza 0 zamknięta; z Fazy 1 zrobione: A2/B5/B9, B8, A3, A4, B6 + shadery, B15, 7a/7b — generacja równoległa i asynchroniczna, A9/A10, A8 — CMake + vcpkg + CI, testy jednostkowe, panel pomiarów).
+(Faza 0 zamknięta; z Fazy 1 zrobione: A2/B5/B9, B8, A3, A4, B6 + shadery, B15, 7a/7b — generacja równoległa i asynchroniczna, A9/A10, A8 — CMake + vcpkg + CI, testy jednostkowe, panel pomiarów, presety JSON).
 Cel projektu: **generowanie terenu z edycją parametrów w czasie rzeczywistym, maksymalna wydajność,
 biomy, roślinność i kolejne feature'y.**
 
@@ -45,7 +45,7 @@ biomy, roślinność i kolejne feature'y.**
 | ~~A4~~ ✅ | Duplikacja: dwa subsystemy z identycznym `Initialize/Draw/Resize`, dwa zestawy shaderów różniące się kilkoma liniami | Każdą poprawkę (np. B6) trzeba robić 2× — **Zrobione 2026-10-29:** wspólny `TerrainView`, jeden zestaw shaderów |
 | A5 | Brak modelu „świata”: mapa = jeden prostokąt `width×height` przypięty do kamery; brak chunków, LOD, cache | Infinite terrain i duże światy są niewykonalne wydajnie |
 | A6 | Biomy oparte o dyskretne poziomy `int` i pierwszy pasujący biom z `unordered_map` (kolejność nieokreślona!) | Ostre granice, niedeterministyczny wybór przy nakładaniu się zakresów, brak blendingu, trudne do konfiguracji |
-| A7 | Brak serializacji (presety, konfiguracje biomów, eksport) — „Saving” to placeholder | Nie da się zapisać efektu pracy ani porównać ustawień |
+| A7 | Brak serializacji (presety, konfiguracje biomów, eksport) — „Saving” to placeholder | Nie da się zapisać efektu pracy ani porównać ustawień — **Częściowo:** presety JSON (2026-11-03); brak eksportu i konfiguracji biomów z pliku |
 | A8 | Brak testów, CI, profilera; brak menedżera zależności (binarki w repo) | Regresje niewykrywalne; aktualizacje bibliotek ręczne — **Częściowo:** CMake + vcpkg, CI z kontrolą checksum (2026-10-30), testy jednostkowe (2026-11-02), panel pomiarów (2026-11-03); Tracy odłożony (Faza 1 pkt 8) |
 | ~~A9~~ ✅ | Martwy kod: `VegetationGenerator` (pusty), CPU-mesh w `utilities.cpp` (`MapToVertices`, `PerformErosion`, `PaintVerticesByHeight`, `MeshIndicesStrips`, `CalculateHeightMapNormals`), `TINYOBJLOADER_IMPLEMENTATION` bez użycia, `DrawTriangleStrips`, gałęzie git bez scalenia | Szum poznawczy — **Zrobione 2026-10-30:** usunięte `VegetationGenerator`, CPU-mesh z `utilities` (zostały `GenerateVerticesForResolution`, `GetBiomeColorMap` i helpery ImGui), `DrawTriangleStrips`, nieużywane vendor `ObjLoader` (tiny_obj_loader) i `PoissonSampling` — wrócą w nowej postaci w Fazie 4. `res/textures/` zostaje (assety pod Fazę 3) |
 | ~~A10~~ ✅ | Higiena repo: śledzony `imgui.ini`, commity „sda/asd/x”, 17 zdalnych branchy, README z pustymi sekcjami | Trudno wrócić do projektu po przerwie (jak teraz) — **Zrobione 2026-10-30:** `imgui.ini` nieśledzony (od B13), scalone branche usunięte lokalnie i z GitHuba (zostaje `master`), jedyny nie scalony commit (`infiniteTerrain`, klasa `Chunk`) zachowany jako tag `archive/infinite-terrain-chunks`; README przepisany (funkcje, build, sterowanie, benchmark) — brakuje screenshotów |
@@ -161,7 +161,11 @@ Cel: kod gotowy na wielowątkowość/GPU, jedna ścieżka renderingu, mierzalna 
    (`ProceduralTerrainGenerator/tests/`), `ctest --preset <preset>` także w CI (Debug i Release). Testują właściwości, nie
    konkretne wartości, więc nie zależą od kompilatora (w przeciwieństwie do checksum). Znalazły B19, B20 i B21 (wszystkie naprawione). Kolejne znane błędy oznaczać `doctest::should_fail()`:
    po naprawie błędu test zgłosi niepowodzenie, dopóki oznaczenie nie zostanie usunięte.
-10. **Serializacja (A7):** presety JSON (nlohmann/json) dla `WorldConfig`; load/save w UI; eksport heightmapy do PNG 16-bit / RAW / EXR.
+10. **Serializacja (A7):** ~~presety JSON (nlohmann/json) dla `WorldConfig`; load/save w UI;~~ eksport heightmapy do PNG 16-bit / RAW / EXR.
+    ✅ 2026-11-03 presety: `terrainGeneration/Preset.*` (`WorldConfig` i `NoiseMapConfig`, testowane bez okna) + sekcja „Presets”
+    w UI obu trybów (`presets/world`, `presets/noise`, poza gitem). Enumy po nazwie, wersja formatu, brakujące pola = wartości domyślne.
+    Loader odrzuca wartości, których generacja nie obsłuży, a błąd zostawia aktualny świat. Bez ustawień renderowania
+    (`heightScale`, tryb wyświetlania) i definicji biomów (do A6). Eksport heightmapy nadal do zrobienia.
 11. ~~**A9/A10:** usuń martwy kod, posprzątaj branche (zostaw `master` + aktywny feature branch).~~ ✅ 2026-10-30
 
 **Kryterium ukończenia:** mapa 1024² regeneruje się po ruchu suwaka bez blokowania UI; wszystkie testy zielone w CI.

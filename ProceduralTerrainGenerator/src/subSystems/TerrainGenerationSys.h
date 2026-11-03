@@ -12,6 +12,7 @@
 #include "Camera.h"
 #include "LightSource.h"
 #include "TerrainView.h"
+#include "PresetPanel.h"
 
 //All maps generated in the "TerrainGen" mode
 struct GeneratedWorld {
@@ -78,6 +79,11 @@ private:
 	void RequestTerrain(float originx, float originy);
 	void RequestBiomeNoise(BiomeParameter p);
 	void RequestBiomes();
+
+	void PresetsImGui();
+	//Replaces the world parameters, resets editors holding copies of them and regenerates everything shown
+	void ApplyWorld(const WorldConfig& loaded);
+	PresetPanel presets{ "presets/world" };
 
 	//Editor UI state
 	WorldGenParameter editedComponent = WorldGenParameter::CONTINENTALNESS;

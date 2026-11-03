@@ -31,6 +31,10 @@ while the app stays responsive.
   GPU tessellation (distance-based level of detail), world-space lighting, display modes: greyscale,
   topographical with isolines, monocolor, biomes; wireframe and a top-down 2D map view.
 
+- **Presets**
+  Generation parameters of each mode can be saved to and loaded from JSON files in `presets/`, which can also be
+  edited by hand. Render settings and biome definitions are not included.
+
 - **Performance**
   Map generation is parallelised over rows and runs on a background thread, so editing parameters never freezes
   the UI (512x512 terrain in ~40 ms on 6 threads).
