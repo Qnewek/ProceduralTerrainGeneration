@@ -14,6 +14,7 @@ const char* Shader::ShaderTypeName(unsigned int type)
     case GL_FRAGMENT_SHADER:        return "fragment";
     case GL_TESS_CONTROL_SHADER:    return "tessellation control";
     case GL_TESS_EVALUATION_SHADER: return "tessellation evaluation";
+    case GL_COMPUTE_SHADER:         return "compute";
     default:                        return "unknown";
     }
 }
@@ -36,6 +37,17 @@ Shader::Shader(const std::string& vertexFilepath, const std::string& fragmentFil
 		{GL_TESS_EVALUATION_SHADER, tessEvaluationFilepath}, {GL_FRAGMENT_SHADER, fragmentFilepath} }
 {
 	m_RendererID = BuildProgram();
+}
+
+Shader::Shader(std::vector<std::pair<unsigned int, std::string>> stages)
+	: m_RendererID(0), m_Stages(std::move(stages))
+{
+	m_RendererID = BuildProgram();
+}
+
+std::unique_ptr<Shader> Shader::Compute(const std::string& computeFilepath)
+{
+	return std::unique_ptr<Shader>(new Shader(std::vector<std::pair<unsigned int, std::string>>{ {GL_COMPUTE_SHADER, computeFilepath} }));
 }
 
 Shader::~Shader()
@@ -203,6 +215,11 @@ void Shader::SetUniformMat4f(const std::string& name, const glm::mat4& matrix)
 void Shader::SetUniform2f(const std::string& name, float v0, float v1)
 {
     GLCALL(glUniform2f(GetUniformLocation(name), v0, v1));
+}
+
+void Shader::SetUniform2i(const std::string& name, int v0, int v1)
+{
+    GLCALL(glUniform2i(GetUniformLocation(name), v0, v1));
 }
 
 void Shader::SetUniformMat3f(const std::string& name, const glm::mat3& matrix)

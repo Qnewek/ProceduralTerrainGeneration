@@ -5,7 +5,6 @@
 #include "glm/glm.hpp"
 
 #include "Noise.h"
-#include "BiomeGenerator.h"
 
 namespace utilities
 {
@@ -18,7 +17,6 @@ namespace utilities
 	};
 
 	void GenerateVerticesForResolution(float* vertices, const int& width, const int& height, int resolution, const unsigned int& stride, unsigned int posOffset, unsigned int texOffset);
-    std::vector<glm::vec3> GetBiomeColorMap(BiomeGenerator& biomeGen, const int& width, const int& height);
 
     //ImGui interface functions
     bool NoiseImGui(noise::NoiseConfigParameters& noiseConfig);
