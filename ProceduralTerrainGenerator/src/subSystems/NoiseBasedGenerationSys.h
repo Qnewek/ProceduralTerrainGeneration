@@ -1,9 +1,9 @@
 #pragma once
 #include <memory>
 
-#include "Noise.h"
 #include "Erosion.h"
 #include "GenerationJob.h"
+#include "GpuHeightGenerator.h"
 #include "Camera.h"
 #include "utilities.h"
 #include "LightSource.h"
@@ -11,13 +11,8 @@
 #include "PresetPanel.h"
 #include "ExportPanel.h"
 
-//All maps generated in the "Noise heightmap" mode
-struct NoiseMaps {
-	noise::SimplexNoiseClass noise;
-	erosion::Erosion erosion{ 1, 1 };
-};
-
-//What has to be regenerated. Requests made while a job runs accumulate and are generated together afterwards
+//What has to be done. The noise map is generated on the GPU at the next Update;
+//erosion runs on the CPU in a job, and requests made while it runs are done together afterwards
 struct NoiseRequest {
 	bool noise = false;
 	float originx = 0.0f, originy = 0.0f;
@@ -30,39 +25,36 @@ struct NoiseRequest {
 class NoiseBasedGenerationSys
 {
 	private:
-		struct GenerationResult {
-			std::unique_ptr<NoiseMaps> maps;
-			NoiseRequest done;		//what was actually regenerated (a resize forces more than requested)
+		struct ErosionResult {
+			std::unique_ptr<erosion::Erosion> erosion;
+			NoiseRequest done;
 			double ms = 0.0;
-			bool ok = false;
 		};
 
 		//Map size, noise and erosion parameters edited by the UI; generators only read them
 		NoiseMapConfig config;
 
 		bool erosionDraw = false, instantUpdate = true, infiniteGeneration = false;
-		double lastGenerationMs = 0.0;
+		double lastGenerationMs = 0.0, lastErosionMs = 0.0;
 		glm::vec3 oldCamPos = glm::vec3(0.0f, 0.0f, 0.0f);
 
-		//Rendering
+		//Rendering; the noise map lives in the TERRAIN layer of the view
 		TerrainView view;
 		TerrainRenderSettings renderSettings;
+		GpuHeightGenerator gpu;
 
-		//Front buffer: the maps shown and read by the UI, touched only by the main thread.
-		//A job generates into its own copy (back buffer) which replaces this one when finished
-		std::unique_ptr<NoiseMaps> generated;
-		GenerationJob<GenerationResult> job;
+		//Eroded map shown and read by the UI, touched only by the main thread.
+		//A job works on its own copy, which replaces this one when finished
+		std::unique_ptr<erosion::Erosion> eroded;
+		GenerationJob<ErosionResult> job;
 		NoiseRequest pending;
 
-		//Regenerates the parts of out selected by request for the given config.
-		//Used both synchronously (Initialize) and on the job thread
-		//@param request - in: what to regenerate, out: what was regenerated
-		static bool RunGeneration(NoiseMaps& out, const NoiseMapConfig& _config, NoiseRequest& request);
-		//RunGeneration on maps owned by the caller, timed; the maps are handed back in the result
-		static GenerationResult Generate(std::unique_ptr<NoiseMaps> maps, const NoiseMapConfig& _config, NoiseRequest request);
-		//Starts a job for the pending request on a copy of the front buffer
+		//Runs on the job thread
+		//@param base - the noise map, used when erosion starts from it
+		static ErosionResult RunErosion(std::unique_ptr<erosion::Erosion> maps, HeightField base, const erosion::ErosionConfig& erosionConfig, NoiseRequest request);
+		//Starts a job for the pending erosion request on a copy of the eroded map
 		void StartJob();
-		void InstallResult(GenerationResult& result);
+		void InstallResult(ErosionResult& result);
 
 		//New noise map; the erosion shown next to it is dropped and starts from the new map
 		void RequestNoise(float originx, float originy);
@@ -78,11 +70,11 @@ class NoiseBasedGenerationSys
 		~NoiseBasedGenerationSys();
 
 		bool Initialize(int _width, int _height, float _heightScale);
-		//Called every frame before Draw: installs a finished generation and starts the next one if anything is pending
+		//Called every frame before Draw: generates a requested map, installs a finished erosion and starts the next one
 		void Update();
 
 		void Draw(Renderer& renderer, Camera& camera, LightSource& light);
-		void ReloadShaders() { view.ReloadShader(); }
+		void ReloadShaders() { view.ReloadShader(); gpu.ReloadShaders(); }
 		void ImGuiRightPanel();
 		void ImGuiLeftPanel();
 		void ErosionImGui();

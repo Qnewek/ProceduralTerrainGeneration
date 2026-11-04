@@ -47,28 +47,6 @@ namespace utilities
 	//@param biomeGen - generator holding a generated biome map
 	//@param width, height - size of the biome map
 	//@return empty if the biome map is not generated or contains an unknown biome
-	std::vector<glm::vec3> GetBiomeColorMap(BiomeGenerator& biomeGen, const int& width, const int& height)
-	{
-		if (!biomeGen.IsGenerated()) {
-			std::cout << "[ERROR] Biome map not generated!" << std::endl;
-			return {};
-		}
-
-		std::vector<glm::vec3> colors(width * height);
-
-		for (int y = 0; y < height; y++) {
-			for (int x = 0; x < width; x++) {
-				int id = biomeGen.GetBiomeAt(x, y);
-				if (id < 0) {
-					std::cout << "[ERROR] Biome not found!\n";
-					return {};
-				}
-				glm::vec3 color = biomeGen.GetBiome(id).GetColor();
-				colors[y * width + x] = color;
-			}
-		}
-		return colors;
-	}
 
 	//ImGui interface for modifying noise parameters
 	//@param noise - Perlin noise object

@@ -2,17 +2,11 @@
 
 #include <iostream>
 #include <algorithm>
-#include <chrono>
 
 #include "imgui.h"
 #include "implot.h"
 
 #include "Preset.h"
-
-bool WorldRequest::Any() const
-{
-	return noises[0] || noises[1] || noises[2] || terrain || biomeNoises[0] || biomeNoises[1] || biomes;
-}
 
 TerrainGenerationSys::TerrainGenerationSys() {
 	renderSettings.displayMode = utilities::heightMapMode::TOPOGRAPHICAL;
@@ -25,144 +19,74 @@ bool TerrainGenerationSys::Initialize(int _width, int _height, float _heightScal
 	world.height = _height;
 	renderSettings.heightScale = _heightScale;
 
-	if (!view.Initialize(world.width, world.height)) {
-		return false;
-	}
-	auto initial = std::make_unique<GeneratedWorld>();
-	if (!initial->terrain.Initialize(world.width, world.height) || !initial->biomes.Initialize(world.width, world.height)) {
-		std::cout << "[ERROR] TerrainGenerationSys: generators couldnt be initialized\n";
+	if (!view.Initialize(world.width, world.height) || !gpu.Initialize()) {
 		return false;
 	}
 
-	//The first frame needs a map, so the initial generation runs synchronously
-	WorldRequest all;
-	all.noises[0] = all.noises[1] = all.noises[2] = true;
-	all.terrain = true;
-	all.biomeNoises[0] = all.biomeNoises[1] = true;
-	GenerationResult result = Generate(std::move(initial), world, all);
-	if (!result.ok) {
-		std::cout << "[ERROR] TerrainGenerationSys: initial generation failed\n";
-		return false;
-	}
-	InstallResult(result);
+	//The first frame needs a map
+	RequestTerrain(0.0f, 0.0f);
+	Update();
 
 	std::cout << "[LOG] TerrainGenerationSys initialized\n";
 	return true;
 
 }
 
-bool TerrainGenerationSys::RunGeneration(GeneratedWorld& out, const WorldConfig& config, WorldRequest& request)
-{
-	//A new size invalidates every map
-	if (out.terrain.GetWidth() != config.width || out.terrain.GetHeight() != config.height) {
-		if (!out.terrain.Resize(config.width, config.height) || !out.biomes.Resize(config.width, config.height)) {
-			return false;
-		}
-		request.noises[0] = request.noises[1] = request.noises[2] = true;
-		request.biomeNoises[0] = request.biomeNoises[1] = true;
-		if (!request.terrain) {
-			request.terrain = true;
-			request.originx = request.originy = 0.0f;
-		}
-		out.biomeColors.clear();
-	}
-
-	for (int i = 0; i < 3; i++) {
-		WorldGenParameter p = static_cast<WorldGenParameter>(i);
-		if (request.noises[i] && !out.terrain.GetSelectedNoise(p).GenerateFractalNoise(config.terrain.Noise(p), 0.0f, 0.0f)) {
-			return false;
-		}
-	}
-	if (request.terrain && !out.terrain.GenerateTerrain(config.terrain, request.originx, request.originy)) {
-		return false;
-	}
-
-	const BiomeParameter biomeNoises[2] = { BiomeParameter::TEMPERATURE, BiomeParameter::HUMIDITY };
-	for (int i = 0; i < 2; i++) {
-		if (request.biomeNoises[i] && !out.biomes.GetNoiseByParameter(biomeNoises[i]).GenerateFractalNoise(config.biomes.Noise(biomeNoises[i]), 0.0f, 0.0f)) {
-			return false;
-		}
-	}
-	if (request.biomes) {
-		if (!out.biomes.Biomify(config.biomes, out.terrain.GetSelectedNoise(WorldGenParameter::CONTINENTALNESS),
-			out.terrain.GetSelectedNoise(WorldGenParameter::MOUNTAINOUSNESS),
-			out.terrain.GetSelectedNoise(WorldGenParameter::WEIRDNESS))) {
-			std::cout << "[ERROR] Biomes couldnt be generated\n";
-			return false;
-		}
-		out.biomeColors = utilities::GetBiomeColorMap(out.biomes, config.width, config.height);
-	}
-	return true;
-}
-
-TerrainGenerationSys::GenerationResult TerrainGenerationSys::Generate(std::unique_ptr<GeneratedWorld> maps, const WorldConfig& config, WorldRequest request)
-{
-	GenerationResult result;
-	auto start = std::chrono::steady_clock::now();
-	result.ok = RunGeneration(*maps, config, request);
-	result.ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count();
-	result.world = std::move(maps);
-	result.done = request;
-	return result;
-}
-
 void TerrainGenerationSys::Update()
 {
-	if (std::optional<GenerationResult> result = job.TryTake()) {
-		InstallResult(*result);
-	}
-	if (!job.IsRunning() && pending.Any()) {
-		StartJob();
-	}
-}
-
-void TerrainGenerationSys::StartJob()
-{
-	//The job works on copies of the maps and the config, so the front buffer and world stay free for the UI
-	auto back = std::make_unique<GeneratedWorld>(*generated);
-	job.Start([back = std::move(back), config = world, request = pending]() mutable {
-		return Generate(std::move(back), config, request);
-	});
-	pending = WorldRequest();
-}
-
-void TerrainGenerationSys::InstallResult(GenerationResult& result)
-{
-	if (!result.ok) {
-		std::cout << "[ERROR] Terrain generation failed, keeping the previous maps\n";
+	gpu.PollMeasure(lastGenerationMs);
+	if (!pending.Any()) {
 		return;
 	}
-	generated = std::move(result.world);
-	lastGenerationMs = result.ms;
+	const WorldRequest request = pending;
+	pending = WorldRequest();
 
-	const WorldRequest& done = result.done;
-	int width = generated->terrain.GetWidth(), height = generated->terrain.GetHeight();
-	//Size of the installed maps, not world.width/height - those may already hold the next resize
+	const int width = world.width, height = world.height;
+	if (width < 2 || height < 2 || width > 8192 || height > 8192) {
+		std::cout << "[ERROR] Map size must be between 2 and 8192, keeping the previous maps\n";
+		return;
+	}
 	view.Resize(width, height);
-	if (done.terrain) {
-		view.SetLayer(TerrainView::Layer::TERRAIN, generated->terrain.GetHeightField());
+
+	gpu.BeginMeasure();
+	if (request.terrain) {
+		gpu.GenerateTerrain(world.terrain, request.originx, request.originy, view.LayerTexture(TerrainView::Layer::TERRAIN, width, height));
 	}
-	if (done.biomes && !generated->biomeColors.empty()) {
-		view.SetBiomeColors(generated->biomeColors, width, height);
+	if (request.overlay) {
+		GenerateOverlay();
 	}
-	if (done.noises[0] || done.noises[1] || done.noises[2] || done.biomeNoises[0] || done.biomeNoises[1]) {
-		UpdateOverlay();
+	if (request.biomes) {
+		if (!biomeIds || biomeIds->GetWidth() != width || biomeIds->GetHeight() != height) {
+			biomeIds = std::make_unique<TextureClass>(width, height, GL_R32I);
+		}
+		gpu.GenerateBiomes(world.biomes, world.terrain, biomeTable, view.LayerTexture(TerrainView::Layer::BIOMES, width, height), *biomeIds);
+	}
+	gpu.EndMeasure();
+
+	if (request.biomes) {
+		biomeMap.Resize(width, height);
+		biomeIds->Read(GL_RED_INTEGER, GL_INT, static_cast<int>(biomeMap.Size() * sizeof(int)), biomeMap.Data());
 	}
 }
 
-void TerrainGenerationSys::UpdateOverlay()
+void TerrainGenerationSys::GenerateOverlay()
 {
+	const noise::NoiseConfigParameters* edited = nullptr;
 	if (editNoise && noisePressedButton != 0) {
-		view.SetLayer(TerrainView::Layer::OVERLAY, generated->terrain.GetSelectedNoise(editedComponent).GetField());
+		edited = &world.terrain.Noise(editedComponent);
 	}
 	else if (biomesGeneration && biomeNoisePressedButton != 0) {
-		view.SetLayer(TerrainView::Layer::OVERLAY, generated->biomes.GetNoiseByParameter(editedBiomeComponent).GetField());
+		edited = &world.biomes.Noise(editedBiomeComponent);
+	}
+	//Without an edited noise the layer must stay as it is: a new texture would have no contents to show
+	if (edited) {
+		gpu.GenerateNoise(*edited, 0.0f, 0.0f, view.LayerTexture(TerrainView::Layer::OVERLAY, world.width, world.height));
 	}
 }
 
-void TerrainGenerationSys::RequestNoise(WorldGenParameter p)
+void TerrainGenerationSys::RequestOverlay()
 {
-	pending.noises[static_cast<int>(p)] = true;
+	pending.overlay = true;
 }
 
 void TerrainGenerationSys::RequestTerrain(float originx, float originy)
@@ -170,11 +94,6 @@ void TerrainGenerationSys::RequestTerrain(float originx, float originy)
 	pending.terrain = true;
 	pending.originx = originx;
 	pending.originy = originy;
-}
-
-void TerrainGenerationSys::RequestBiomeNoise(BiomeParameter p)
-{
-	pending.biomeNoises[p == BiomeParameter::HUMIDITY ? 1 : 0] = true;
 }
 
 void TerrainGenerationSys::RequestBiomes()
@@ -217,16 +136,11 @@ void TerrainGenerationSys::ApplyWorld(const WorldConfig& loaded)
 	samplingResolution = world.terrain.continentalness.resolution;
 	splinePressedButton = 0;
 	splineDraggedPoint = -1;
-	biomeLevelsChanged = false;
 	changeTerrain = false;
 
-	RequestNoise(WorldGenParameter::CONTINENTALNESS);
-	RequestNoise(WorldGenParameter::MOUNTAINOUSNESS);
-	RequestNoise(WorldGenParameter::WEIRDNESS);
+	RequestOverlay();
 	//In infinite mode the terrain stays centered on the camera
 	RequestTerrain(infiniteGeneration ? oldCamPos.x : 0.0f, infiniteGeneration ? oldCamPos.z : 0.0f);
-	RequestBiomeNoise(BiomeParameter::TEMPERATURE);
-	RequestBiomeNoise(BiomeParameter::HUMIDITY);
 	if (biomesGeneration) {
 		RequestBiomes();
 	}
@@ -245,8 +159,9 @@ void TerrainGenerationSys::Draw(Renderer& renderer, Camera& camera, LightSource&
 }
 void TerrainGenerationSys::ImGuiRightPanel() {
 	if(utilities::MapSizeImGui(world.width, world.height)) {
-		//The job notices the new size and regenerates every map; biomes only if they are shown
+		//Every map shown has to get the new size; biomes only if they are shown
 		RequestTerrain(0.0f, 0.0f);
+		RequestOverlay();
 		if (biomesGeneration) {
 			RequestBiomes();
 		}
@@ -276,10 +191,11 @@ void TerrainGenerationSys::ImGuiRightPanel() {
 			world.terrain.continentalness.resolution = samplingResolution;
 			world.terrain.mountainousness.resolution = samplingResolution;
 			world.terrain.weirdness.resolution = samplingResolution;
-			RequestNoise(WorldGenParameter::CONTINENTALNESS);
-			RequestNoise(WorldGenParameter::MOUNTAINOUSNESS);
-			RequestNoise(WorldGenParameter::WEIRDNESS);
+			RequestOverlay();
 			RequestTerrain(0.0f, 0.0f);
+			if (biomesGeneration) {
+				RequestBiomes();
+			}
 		}
 		NoiseEditor();
 		if (!editNoise) {
@@ -300,19 +216,21 @@ void TerrainGenerationSys::ImGuiLeftPanel() {
 		}
 	}
 	PresetsImGui();
-	exporter.ImGuiDraw({ { generated->terrain.GetHeightField(), "" } }, heightmap::terrainRange);
+	exporter.ImGuiDraw({ { view.GetMapWidth(), view.GetMapHeight(), "", [this] { return view.ReadLayer(TerrainView::Layer::TERRAIN); } } }, heightmap::terrainRange);
 }
 void TerrainGenerationSys::ImGuiOutput(glm::vec3 pos) {
-	ImGui::Text("Last generation: %.1f ms (%dx%d)%s", lastGenerationMs, generated->terrain.GetWidth(), generated->terrain.GetHeight(),
-		job.IsRunning() ? "  [generating...]" : "");
-	BiomeGenerator& biomeGen = generated->biomes;
-	if(biomesGeneration && biomeGen.IsGenerated()) {
+	ImGui::Text("Last generation (GPU): %.2f ms (%dx%d)", lastGenerationMs, view.GetMapWidth(), view.GetMapHeight());
+	if(biomesGeneration && !biomeMap.Empty()) {
 		//Biome map size, not world.width/height - those may already hold an unapplied resize
-		int width = biomeGen.GetBiomeMap().GetWidth(), height = biomeGen.GetBiomeMap().GetHeight();
+		int width = biomeMap.GetWidth(), height = biomeMap.GetHeight();
 		int posX = static_cast<int>(pos.x) + width/2;
 		int posZ = static_cast<int>(pos.z) + height/2;
 		if (posX >= 0 && posX < width && posZ >= 0 && posZ < height) {
-			ImGui::Text("Biome at camera position: %s", biomeGen.GetBiome(biomeGen.GetBiomeAt(posX, posZ)).GetName().c_str());
+			const int id = biomeMap.At(posX, posZ);
+			auto found = std::find_if(biomeTable.begin(), biomeTable.end(), [id](const biome::Biome& b) { return b.GetId() == id; });
+			if (found != biomeTable.end()) {
+				ImGui::Text("Biome at camera position: %s", found->GetName().c_str());
+			}
 		}
 	}
 }
@@ -330,19 +248,19 @@ void TerrainGenerationSys::NoiseEditor()
 			if (utilities::ImGuiButtonWrapper("Mountainousness", noisePressedButton == 1 ? true : false)) {
 				noisePressedButton = 1;
 				editedComponent = WorldGenParameter::MOUNTAINOUSNESS;
-				UpdateOverlay();
+				RequestOverlay();
 			}
 			ImGui::SameLine();
 			if (utilities::ImGuiButtonWrapper("Continentalness", noisePressedButton == 2 ? true : false)) {
 				noisePressedButton = 2;
 				editedComponent = WorldGenParameter::CONTINENTALNESS;
-				UpdateOverlay();
+				RequestOverlay();
 			}
 			ImGui::SameLine();
 			if (utilities::ImGuiButtonWrapper("Weirdness", noisePressedButton == 3 ? true : false)) {
 				noisePressedButton = 3;
 				editedComponent = WorldGenParameter::WEIRDNESS;
-				UpdateOverlay();
+				RequestOverlay();
 			}
 			if (noisePressedButton == 0) {
 				ImGui::Text("[Currently no noise is beeing changed]");
@@ -350,9 +268,8 @@ void TerrainGenerationSys::NoiseEditor()
 			}
 
 			biomesGeneration = false;
-			//The preview (OVERLAY) is refreshed when the job finishes
 			if (utilities::NoiseImGui(world.terrain.Noise(editedComponent))) {
-				RequestNoise(editedComponent);
+				RequestOverlay();
 				changeTerrain = true;
 			}
 			if (ImGui::Button("Accept changes")) {
@@ -391,13 +308,13 @@ void TerrainGenerationSys::BiomeNoisesEditor()
 	if (utilities::ImGuiButtonWrapper("Temperature", biomeNoisePressedButton == 1 ? true : false)) {
 		biomeNoisePressedButton = 1;
 		editedBiomeComponent = BiomeParameter::TEMPERATURE;
-		UpdateOverlay();
+		RequestOverlay();
 	}
 	ImGui::SameLine();
 	if (utilities::ImGuiButtonWrapper("Humidity", biomeNoisePressedButton == 2 ? true : false)) {
 		biomeNoisePressedButton = 2;
 		editedBiomeComponent = BiomeParameter::HUMIDITY;
-		UpdateOverlay();
+		RequestOverlay();
 	}
 	if (biomeNoisePressedButton == 0) {
 		ImGui::Text("[Currently no noise is beeing changed]");
@@ -407,7 +324,7 @@ void TerrainGenerationSys::BiomeNoisesEditor()
 	showPreview = true;
 
 	if (utilities::NoiseImGui(world.biomes.Noise(editedBiomeComponent))) {
-		RequestBiomeNoise(editedBiomeComponent);
+		RequestOverlay();
 	}
 
 	if (ImGui::Button("Accept changes")) {
@@ -523,19 +440,14 @@ void TerrainGenerationSys::SplineEditor()
 }
 void TerrainGenerationSys::NoisesLevelsForBiomes() {
 	if (ImGui::CollapsingHeader("Biome levels editor", ImGuiTreeNodeFlags_DefaultOpen)) {
-		biomeLevelsChanged |= SegmentDrag(world.biomes.temperatureLevels, "Temperature levels");
-		biomeLevelsChanged |= SegmentDrag(world.biomes.humidityLevels, "Humidity levels");
-		biomeLevelsChanged |= SegmentDrag(world.biomes.continentalnessLevels, "Continentalness levels");
-		biomeLevelsChanged |= SegmentDrag(world.biomes.mountainousnessLevels, "Mountainousness levels");
-		biomeLevelsChanged |= SegmentDrag(world.biomes.weirdnessLevels, "Weirdness levels");
-
-		//The whole biome map is regenerated, so level changes are applied on demand instead of on every drag
-		ImGui::BeginDisabled(!biomeLevelsChanged);
-		if (ImGui::Button("Apply biome levels")) {
+		bool levelsChanged = SegmentDrag(world.biomes.temperatureLevels, "Temperature levels");
+		levelsChanged |= SegmentDrag(world.biomes.humidityLevels, "Humidity levels");
+		levelsChanged |= SegmentDrag(world.biomes.continentalnessLevels, "Continentalness levels");
+		levelsChanged |= SegmentDrag(world.biomes.mountainousnessLevels, "Mountainousness levels");
+		levelsChanged |= SegmentDrag(world.biomes.weirdnessLevels, "Weirdness levels");
+		if (levelsChanged) {
 			RequestBiomes();
-			biomeLevelsChanged = false;
 		}
-		ImGui::EndDisabled();
 	}
 }
 

@@ -13,7 +13,7 @@ ExportPanel::ExportPanel(std::filesystem::path _folder) : folder(std::move(_fold
 
 std::filesystem::path ExportPanel::PathOf(const Target& target) const
 {
-	return folder / heightmap::FileName(std::string(name) + target.suffix, format, target.map.GetWidth(), target.map.GetHeight());
+	return folder / heightmap::FileName(std::string(name) + target.suffix, format, target.width, target.height);
 }
 
 void ExportPanel::ExportAll(const std::vector<Target>& targets, heightmap::ValueRange range)
@@ -25,7 +25,7 @@ void ExportPanel::ExportAll(const std::vector<Target>& targets, heightmap::Value
 		const std::string fileName = path.filename().string();
 		size_t mapClipped = 0;
 		std::string error;
-		if (!heightmap::Export(path, target.map, format, range, mapClipped, error)) {
+		if (!heightmap::Export(path, target.read(), format, range, mapClipped, error)) {
 			status = "Error (" + fileName + "): " + error;
 			if (!saved.empty()) {
 				status += "\nSaved before the error: " + saved;

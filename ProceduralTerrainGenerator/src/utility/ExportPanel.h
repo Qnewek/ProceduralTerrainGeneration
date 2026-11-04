@@ -1,6 +1,7 @@
 #pragma once
 
 #include <filesystem>
+#include <functional>
 #include <string>
 #include <vector>
 
@@ -12,8 +13,9 @@ class ExportPanel
 public:
 	//One map to write, each one goes to its own file
 	struct Target {
-		const HeightField& map;
+		int width, height;
 		const char* suffix;		//added to the file name, e.g. "_eroded"
+		std::function<HeightField()> read;	//called only when exporting, because a map may have to come from the GPU
 	};
 
 	//@param _folder - folder with the exports, created by the first export

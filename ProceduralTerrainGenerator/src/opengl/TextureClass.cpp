@@ -1,7 +1,7 @@
 #include "TextureClass.h"
 
 TextureClass::TextureClass(int _width, int _height, GLenum _internalFormat) :
-	m_RendererID(0), m_Width(_width), m_Height(_height)
+	m_RendererID(0), m_Width(_width), m_Height(_height), m_InternalFormat(_internalFormat)
 {
 	glCreateTextures(GL_TEXTURE_2D, 1, &m_RendererID);
 
@@ -24,7 +24,17 @@ void TextureClass::Upload(const void* data, GLenum format, GLenum type)
 	glTextureSubImage2D(m_RendererID, 0, 0, 0, m_Width, m_Height, format, type, data);
 }
 
+void TextureClass::Read(GLenum format, GLenum type, int size, void* data) const
+{
+	glGetTextureImage(m_RendererID, 0, format, type, size, data);
+}
+
 void TextureClass::Bind(unsigned int slot) const
 {
 	glBindTextureUnit(slot, m_RendererID);
+}
+
+void TextureClass::BindImage(unsigned int unit, GLenum access) const
+{
+	glBindImageTexture(unit, m_RendererID, 0, GL_FALSE, 0, access, m_InternalFormat);
 }
