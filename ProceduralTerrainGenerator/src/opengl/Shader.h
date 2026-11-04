@@ -1,4 +1,5 @@
 #pragma once
+#include <memory>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
@@ -20,6 +21,11 @@ public:
 	Shader(const std::string& vertexFilepath, const std::string& fragmentFilepath, const std::string& tessControlFilepath, const std::string& tessEvaluationFilepath);
 	~Shader();
 
+	//@return a compute program; check IsValid(), as for the constructors
+	static std::unique_ptr<Shader> Compute(const std::string& computeFilepath);
+	//@return false if the program could not be built
+	bool IsValid() const { return m_RendererID != 0; }
+
 	//Rebuilds the program from the source files. On a compile or link error the current program is kept.
 	//@return true if the new program replaced the old one
 	bool Reload();
@@ -30,6 +36,7 @@ public:
 	//uniforms
 	void SetUniform1f(const std::string& name, float value);
 	void SetUniform2f(const std::string& name, float v0, float v1);
+	void SetUniform2i(const std::string& name, int v0, int v1);
 	void SetUniform4f(const std::string& name, float v0, float v1, float v2, float v3);
 	void SetUniform1i(const std::string& name, int value);
 	void SetUniform3fv(const std::string& name, glm::vec3 v);
@@ -46,6 +53,7 @@ public:
 
 	unsigned int GetRendererID() const { return m_RendererID; }
 private:
+	explicit Shader(std::vector<std::pair<unsigned int, std::string>> stages);
 	//Reads a source file and expands #include directives recursively
 	//@param included - files already pasted into this stage (each file is included once)
 	std::string ParseShader(const std::string& filepath, std::unordered_set<std::string>& included);

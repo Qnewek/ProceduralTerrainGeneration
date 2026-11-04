@@ -1,7 +1,7 @@
 # Procedural Terrain Generator — analiza i plan rozwoju
 
-Diagnoza na 2026-10-27 (branch `lodChunked` = `master`, commit `fbd32ab`); postęp odhaczany na bieżąco, ostatnia aktualizacja 2026-11-03
-(Fazy 0 i 1 zamknięte: A2/B5/B9, B8, A3, A4, B6 + shadery, B15, 7a/7b — generacja równoległa i asynchroniczna, A9/A10, A8 — CMake + vcpkg + CI, testy jednostkowe, panel pomiarów, presety JSON, eksport heightmapy; następna jest Faza 2).
+Diagnoza na 2026-10-27 (branch `lodChunked` = `master`, commit `fbd32ab`); postęp odhaczany na bieżąco, ostatnia aktualizacja 2026-11-04
+(Fazy 0 i 1 zamknięte: A2/B5/B9, B8, A3, A4, B6 + shadery, B15, 7a/7b — generacja równoległa i asynchroniczna, A9/A10, A8 — CMake + vcpkg + CI, testy jednostkowe, panel pomiarów, presety JSON, eksport heightmapy; w toku Faza 2: generacja w aplikacji wyłącznie na GPU, dalej normalne i chunki).
 Cel projektu: **generowanie terenu z edycją parametrów w czasie rzeczywistym, maksymalna wydajność,
 biomy, roślinność i kolejne feature'y.**
 
@@ -185,6 +185,26 @@ Cel: **edycja w czasie rzeczywistym przy 60+ FPS** i nieskończony świat.
 1. **Compute shader height pass:** port szumu (fBm, ridged, domain warping) i ewaluacji splajnów do GLSL
    (splajny jako 1D LUT-tekstury `R32F`, 256–1024 próbek — przeliczane na CPU przy edycji punktów).
    Wyjście: `R32F` heightmap per chunk. Mapa 2048² w < 2 ms na średnim GPU → suwaki działają „na żywo”.
+
+   ✅ 2026-11-04: `opengl/GpuHeightGenerator.*`, `res/shaders/ComputeShaders/`, `common/noise.glsl`, `common/simplex.glsl`. **Aplikacja generuje wyłącznie na GPU** (decyzja właściciela);
+   generatory CPU zostają w `ptg_core` tylko dla `--benchmark`, `--gpu-check` i testów. Erozja nadal na CPU, na mapie odczytanej z tekstury, do Fazy 5.
+   Dzięki temu poziomy biomów działają na żywo (bez przycisku „Apply biome levels”), a tryb infinite nie nadgania już kamery (B7: nadal cała mapa przy każdym ruchu, biomy i tak z originem 0,0).
+   Obejmuje wszystkie opcje szumu (także szum 4D `symmetrical`, wyspy, ridge) i wszystkie metody łączenia. Splajny to tablice 1024 próbek. Domain warping nie istnieje też na CPU, więc nie ma czego portować.
+   `ProceduralTerrainGenerator.exe --gpu-check` porównuje GPU z CPU na 29 konfiguracjach (w tym biomy) i mierzy czas; wymaga GPU, więc uruchamiany ręcznie, nie w CI.
+
+   Teren, domyślny config (LINEAR_COMBINE), RTX 2060 i i5-9600K, Release, ukryte okno, mediana z `glFinish`:
+
+   | Mapa | CPU (6 wątków) | GPU |
+   |------|----------------|-----|
+   | 512² | 41 ms | 0,38 ms |
+   | 1024² | 169 ms | 1,23 ms |
+   | 2048² | 736 ms | 5,26 ms |
+   | 4096² | 2702 ms | 20,3 ms |
+
+   Założenie „2048² w < 2 ms” nie jest spełnione na tej karcie (5,26 ms), ale 2048² nadal mieści się w jednej klatce przy 60 FPS.
+   Mapy nie są identyczne bit w bit. Dla typowych ustawień różnica to ok. 1e-5. Większe różnice sprawdzone na CPU, przesuwając współrzędną o najmniejszy krok `float`: 8 oktaw
+   przy lacunarity 3,1 daje 2,4e-3 na samym CPU (2,35e-3 między GPU i CPU), a szum 4D ma nieciągłości na granicach sympleksów, ok. 3,8e-4 (promień narożnika 0,6 zamiast 0,5).
+   Splajn liniowy w tablicy: do 1,4e-4 na zagięciach. Różnice w zachowaniu: dla szumu spoza [-1, 1] tablica bierze wartość krańcową, a `tk::spline` ekstrapoluje; GPU nie zgłasza błędu przy szumie poniżej -1.
 2. **Normal/derived pass:** compute liczący normal map + slope + curvature (potrzebne do teksturowania i roślinności).
 3. **ChunkManager:** siatka chunków (np. 256×256 próbek, 1 próbka = 1 m), współrzędne świata, generacja tylko nowych chunków
    w kolejce priorytetowej (odległość od kamery + frustum), cache LRU, budżet ms/klatkę.
@@ -254,9 +274,16 @@ przeniesienia wprost, ale reguły rozmieszczenia i UI są dobrym punktem wyjści
 - **Atmosfera:** fog zależny od wysokości, skybox/atmospheric scattering, cykl dnia, cienie (cascaded shadow maps).
 - **Eksport:** heightmap 16-bit/EXR, splat mapy, mesh OBJ/glTF (z LOD), lista instancji roślinności (JSON) → import do Unity/Unreal/Godot.
 - **Tryb „Imported map”:** ✅ 2026-11-03 podgląd mapy z pliku (PNG 1/2/4/8/16-bit, kolorowy zamieniany na szary, oraz R16/RAW): `HeightmapImport.*` +
-  `subSystems/MapImportSys.*`, wczytywanie w tle. Dalej: operacje na wczytanej mapie (erozja, modyfikacje, eksport) i kolejne formaty (np. EXR, TIFF).
+  `subSystems/MapImportSys.*`, wczytywanie w tle. Dalszy ciąg w Fazie 6.
 - **Edytor ręczny:** pędzle (podnieś/obniż/wygładź/spłaszcz) jako warstwa delta nad proceduralną bazą.
 - **Node graph** (imnodes) do składania szumów i operacji zamiast sztywnego continentalness/mountainousness/weirdness.
+
+### Faza 6 — operacje na wczytanej mapie (otwarte)
+Rozwinięcie trybu „Imported map”, który dziś tylko pokazuje mapę z pliku.
+
+1. **Operacje na mapie:** erozja i inne modyfikacje wykonywane w tle, na kopii `MapImportSys::map`, jak w pozostałych trybach.
+2. **Eksport wyniku:** zapis zmienionej mapy przez `ExportPanel`, z zakresem wartości wybranym przy wczytaniu.
+3. **Kolejne formaty:** np. EXR, TIFF; nowy format to czytnik i rozszerzenie w `HeightmapImport.cpp`.
 
 ---
 
@@ -268,7 +295,7 @@ przeniesienia wprost, ale reguły rozmieszczenia i UI są dobrym punktem wyjści
 | P1 | Faza 1: ~~B8 (szum)~~ ✅, ~~A2/B5 (RAII + width/height)~~ ✅, ~~A3/A4 (rozdzielenie warstw)~~ ✅, ~~B6 (shadery)~~ ✅, ~~B15 (tekstury)~~ ✅, ~~wielowątkowość (7a)~~ ✅, ~~generacja asynchroniczna (7b)~~ ✅, ~~pomiary~~ ✅ | Fundament — bez rozdzielenia warstw nie da się przenieść generacji na GPU |
 | P1 | Faza 2.1–2.3 (compute height + chunki) | Największy zysk dla „real-time” |
 | P2 | Faza 2.4–2.7, Faza 3 | Jakość i skalowanie |
-| P3 | Faza 4, Faza 5 | Feature'y budowane na stabilnym fundamencie |
+| P3 | Faza 4, Faza 5, Faza 6 | Feature'y budowane na stabilnym fundamencie |
 
 Sugerowany pierwszy krok po Fazie 0: **zmierzyć** (Tracy) czas `TerrainGenerator::GenerateTerrain` dla 512²,
 naprawić B8 i zmierzyć ponownie — da to konkretny obraz, ile zostało do zyskania na CPU zanim przejdziemy na GPU.

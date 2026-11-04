@@ -34,6 +34,7 @@ namespace biome {
 		glm::vec2 GetHumidityLevel() const { return humidityLevel; };
 		glm::vec2 GetContinentalnessLevel() const { return continentalnessLevel; };
 		glm::vec2 GetMountainousnessLevel() const { return mountainousnessLevel; };
+		glm::vec2 GetWeirdnessLevel() const { return weirdnessLevel; };
 		glm::vec3 GetColor() const { return color; };
 		
 		void SetTemperatureLevel(glm::vec2 _temperatureLevel) { temperatureLevel = _temperatureLevel; }
@@ -43,4 +44,7 @@ namespace biome {
 		void SetWeirdnessLevel(glm::vec2 _weirdnessLevel) { weirdnessLevel = _weirdnessLevel; }
 
 	};
+
+	//Biomes used by default, with id 0 as the one assigned where no biome matches
+	std::vector<Biome> DefaultBiomes();
 }

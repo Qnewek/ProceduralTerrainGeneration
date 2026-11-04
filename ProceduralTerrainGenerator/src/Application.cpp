@@ -1,4 +1,5 @@
 #include "TerrainGenApp.h"
+#include "GpuHeightCheck.h"
 #include "TerrainGenerator.h"
 #include "BiomeGenerator.h"
 
@@ -102,6 +103,10 @@ int main(int argc, char* argv[])
 			std::cout << "[ERROR] Cannot find res/ - run from the ProceduralTerrainGenerator directory" << std::endl;
 			return -1;
 		}
+	}
+
+	if (argc > 1 && std::strcmp(argv[1], "--gpu-check") == 0) {
+		return RunGpuHeightCheck();
 	}
 
 	TerrainGenApp* app = new TerrainGenApp();

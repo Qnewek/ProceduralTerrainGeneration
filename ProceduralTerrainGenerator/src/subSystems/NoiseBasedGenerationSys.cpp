@@ -21,82 +21,64 @@ bool NoiseBasedGenerationSys::Initialize(int _width, int _height, float _heightS
 	config.width = _width;
 	config.height = _height;
 	renderSettings.heightScale = _heightScale;
-	if (!view.Initialize(config.width, config.height)) {
+	if (!view.Initialize(config.width, config.height) || !gpu.Initialize()) {
 		return false;
 	}
-	auto initial = std::make_unique<NoiseMaps>();
-	if (!initial->noise.Initialize(config.width, config.height)) {
-		std::cout << "[ERROR] Invalid height or width value" << std::endl;
-		return false;
-	}
+	eroded = std::make_unique<erosion::Erosion>(1, 1);
 
-	//The first frame needs a map, so the initial generation runs synchronously
-	NoiseRequest request;
-	request.noise = true;
-	GenerationResult result = Generate(std::move(initial), config, request);
-	if (!result.ok) {
-		std::cout << "[ERROR] NoiseBasedGenerationSys: initial generation failed" << std::endl;
-		return false;
-	}
-	InstallResult(result);
+	//The first frame needs a map
+	RequestNoise(0.0f, 0.0f);
+	Update();
 
 	std::cout << "[LOG] NoiseBasedGenerationSys initialized\n";
 	return true;
 }
 
-bool NoiseBasedGenerationSys::RunGeneration(NoiseMaps& out, const NoiseMapConfig& _config, NoiseRequest& request)
+NoiseBasedGenerationSys::ErosionResult NoiseBasedGenerationSys::RunErosion(std::unique_ptr<erosion::Erosion> maps, HeightField base, const erosion::ErosionConfig& erosionConfig, NoiseRequest request)
 {
-	//A new size invalidates the noise map and the accumulated erosion
-	if (out.noise.GetWidth() != _config.width || out.noise.GetHeight() != _config.height) {
-		if (!out.noise.Resize(_config.width, _config.height)) {
-			return false;
-		}
-		if (!request.noise) {
-			request.noise = true;
-			request.originx = request.originy = 0.0f;
-		}
-		request.resetErosion = true;
-	}
-
-	if (request.noise && !out.noise.GenerateFractalNoise(_config.noise, request.originx, request.originy)) {
-		return false;
-	}
+	auto start = std::chrono::steady_clock::now();
 	if (request.resetErosion) {
-		out.erosion.ChangeMap();
+		maps->ChangeMap();
 	}
 	if (request.erode) {
-		if (_config.width <= 1 || _config.height <= 1) {
-			std::cout << "[ERROR] Invalid height or width value" << std::endl;
-			return false;
-		}
-		if (_config.height != out.erosion.GetHeight() || _config.width != out.erosion.GetWidth()) {
-			out.erosion.Resize(_config.width, _config.height);
+		if (base.GetHeight() != maps->GetHeight() || base.GetWidth() != maps->GetWidth()) {
+			maps->Resize(base.GetWidth(), base.GetHeight());
 		}
 		//Copies the noise map only after a reset; otherwise erosion keeps accumulating on its own map
-		out.erosion.SetMap(out.noise.GetMap());
-		out.erosion.Erode(_config.erosion, std::nullopt);
-		out.erosion.DontChangeMap();
+		maps->SetMap(base.Data());
+		maps->Erode(erosionConfig, std::nullopt);
+		maps->DontChangeMap();
 		std::cout << "[LOG] Erosion simulated successfully" << std::endl;
 	}
-	return true;
-}
 
-NoiseBasedGenerationSys::GenerationResult NoiseBasedGenerationSys::Generate(std::unique_ptr<NoiseMaps> maps, const NoiseMapConfig& _config, NoiseRequest request)
-{
-	GenerationResult result;
-	auto start = std::chrono::steady_clock::now();
-	result.ok = RunGeneration(*maps, _config, request);
+	ErosionResult result;
 	result.ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count();
-	result.maps = std::move(maps);
+	result.erosion = std::move(maps);
 	result.done = request;
 	return result;
 }
 
 void NoiseBasedGenerationSys::Update()
 {
-	if (std::optional<GenerationResult> result = job.TryTake()) {
+	gpu.PollMeasure(lastGenerationMs);
+
+	if (std::optional<ErosionResult> result = job.TryTake()) {
 		InstallResult(*result);
 	}
+
+	if (pending.noise) {
+		if (config.width >= 2 && config.height >= 2 && config.width <= 8192 && config.height <= 8192) {
+			view.Resize(config.width, config.height);
+			gpu.BeginMeasure();
+			gpu.GenerateNoise(config.noise, pending.originx, pending.originy, view.LayerTexture(TerrainView::Layer::TERRAIN, config.width, config.height));
+			gpu.EndMeasure();
+		}
+		else {
+			std::cout << "[ERROR] Map size must be between 2 and 8192, keeping the previous map" << std::endl;
+		}
+		pending.noise = false;
+	}
+
 	if (!job.IsRunning() && pending.Any()) {
 		StartJob();
 	}
@@ -104,36 +86,31 @@ void NoiseBasedGenerationSys::Update()
 
 void NoiseBasedGenerationSys::StartJob()
 {
-	//The job works on copies of the maps and the config, so the front buffer and config stay free for the UI
-	auto back = std::make_unique<NoiseMaps>(*generated);
-	job.Start([back = std::move(back), snapshot = config, request = pending]() mutable {
-		return Generate(std::move(back), snapshot, request);
+	//The job works on a copy, so the map shown and the config stay free for the UI
+	auto back = std::make_unique<erosion::Erosion>(*eroded);
+	HeightField base;
+	if (pending.erode) {
+		base = view.ReadLayer(TerrainView::Layer::TERRAIN);
+	}
+	job.Start([back = std::move(back), base = std::move(base), erosionConfig = config.erosion, request = pending]() mutable {
+		return RunErosion(std::move(back), std::move(base), erosionConfig, request);
 	});
 	pending = NoiseRequest();
 }
 
-void NoiseBasedGenerationSys::InstallResult(GenerationResult& result)
+void NoiseBasedGenerationSys::InstallResult(ErosionResult& result)
 {
-	if (!result.ok) {
-		std::cout << "[ERROR] Noise generation failed, keeping the previous maps" << std::endl;
-		return;
-	}
-	generated = std::move(result.maps);
-	lastGenerationMs = result.ms;
+	eroded = std::move(result.erosion);
 
 	const NoiseRequest& done = result.done;
-	//Size of the installed maps, not config.width/height - those may already hold the next resize
-	view.Resize(generated->noise.GetWidth(), generated->noise.GetHeight());
-	if (done.noise) {
-		view.SetLayer(TerrainView::Layer::TERRAIN, generated->noise.GetField());
-	}
 	if (done.resetErosion) {
 		erosionDraw = false;
 	}
 	//Not shown if a reset is already waiting - the eroded map is about to be dropped
 	if (done.erode && !pending.resetErosion) {
+		lastErosionMs = result.ms;
 		erosionDraw = true;
-		view.SetLayer(TerrainView::Layer::OVERLAY, generated->erosion.GetField());
+		view.SetLayer(TerrainView::Layer::OVERLAY, eroded->GetField());
 	}
 }
 
@@ -231,9 +208,10 @@ void NoiseBasedGenerationSys::ImGuiRightPanel()
 	ErosionImGui();
 	PresetsImGui();
 	//The base map, plus the eroded one in its own file when it is shown
-	std::vector<ExportPanel::Target> exportTargets = { { generated->noise.GetField(), "" } };
+	std::vector<ExportPanel::Target> exportTargets = { { view.GetMapWidth(), view.GetMapHeight(), "", [this] { return view.ReadLayer(TerrainView::Layer::TERRAIN); } } };
 	if (erosionDraw) {
-		exportTargets.push_back({ generated->erosion.GetField(), "_eroded" });
+		const HeightField& field = eroded->GetField();
+		exportTargets.push_back({ field.GetWidth(), field.GetHeight(), "_eroded", [&field] { return field; } });
 	}
 	exporter.ImGuiDraw(exportTargets, heightmap::noiseRange);
 }
@@ -282,17 +260,7 @@ void NoiseBasedGenerationSys::ErosionImGui()
 
 void NoiseBasedGenerationSys::ImGuiOutput()
 {
-	const noise::SimplexNoiseClass& noise = generated->noise;
-	ImGui::Text("Last generation: %.1f ms (%dx%d)%s", lastGenerationMs, noise.GetWidth(), noise.GetHeight(),
-		job.IsRunning() ? "  [generating...]" : "");
-	if (noise.GetHeight() * noise.GetWidth() > 500 * 500) {
-		ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.0f, 0.0f, 1.0f));
-		ImGui::TextWrapped(
-			"Warning!\n"
-			"It is highly recommended to set a smaller map size while adjusting settings,"
-			"due to high complexity of the algorithm for large maps!"
-		);
-		ImGui::PopStyleColor();
-	}
+	ImGui::Text("Last generation (GPU): %.2f ms (%dx%d)", lastGenerationMs, view.GetMapWidth(), view.GetMapHeight());
+	ImGui::Text("Last erosion (CPU): %.1f ms%s", lastErosionMs, job.IsRunning() ? "  [eroding...]" : "");
 }
 
