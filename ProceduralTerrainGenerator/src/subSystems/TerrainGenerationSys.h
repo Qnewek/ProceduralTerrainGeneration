@@ -6,43 +6,29 @@
 #include "glm/glm.hpp"
 
 #include "utilities.h"
-#include "TerrainGenerator.h"
-#include "BiomeGenerator.h"
-#include "GenerationJob.h"
+#include "Biome.h"
+#include "Grid.h"
+#include "GpuHeightGenerator.h"
+#include "WorldConfig.h"
 #include "Camera.h"
 #include "LightSource.h"
 #include "TerrainView.h"
 #include "PresetPanel.h"
 #include "ExportPanel.h"
 
-//All maps generated in the "TerrainGen" mode
-struct GeneratedWorld {
-	TerrainGenerator terrain;
-	BiomeGenerator biomes;
-	std::vector<glm::vec3> biomeColors;
-};
-
-//What has to be regenerated. Requests made while a job runs accumulate and are generated together afterwards
+//What has to be regenerated at the next Update
 struct WorldRequest {
-	bool noises[3] = {};		//terrain component noises, indexed by WorldGenParameter
 	bool terrain = false;
 	float originx = 0.0f, originy = 0.0f;
-	bool biomeNoises[2] = {};	//temperature, humidity
+	bool overlay = false;		//preview of the edited noise
 	bool biomes = false;		//biome map and colors
 
-	bool Any() const;
+	bool Any() const { return terrain || overlay || biomes; }
 };
 
 class TerrainGenerationSys
 {
 private:
-	struct GenerationResult {
-		std::unique_ptr<GeneratedWorld> world;
-		WorldRequest done;		//what was actually regenerated (a resize forces more than requested)
-		double ms = 0.0;
-		bool ok = false;
-	};
-
 	bool changeTerrain = false;
 	bool biomesGeneration = false;
 	bool editNoise = false, editSpline = false, infiniteGeneration = false;
@@ -51,34 +37,26 @@ private:
 	glm::vec3 oldCamPos = glm::vec3(0.0f);
 	double lastGenerationMs = 0.0;
 
-	//Rendering
+	//Rendering; generated maps live in the layers of the view
 	TerrainView view;
 	TerrainRenderSettings renderSettings;
 
 	//World parameters (map size, terrain, biomes) edited by the UI; generators only read them
 	WorldConfig world;
 
-	//Front buffer: the maps shown and read by the UI, touched only by the main thread.
-	//A job generates into its own copy (back buffer) which replaces this one when finished
-	std::unique_ptr<GeneratedWorld> generated;
-	GenerationJob<GenerationResult> job;
+	GpuHeightGenerator gpu;
 	WorldRequest pending;
 
-	//Regenerates the parts of out selected by request (in dependency order) for config.
-	//Used both synchronously (Initialize) and on the job thread
-	//@param request - in: what to regenerate, out: what was regenerated
-	static bool RunGeneration(GeneratedWorld& out, const WorldConfig& config, WorldRequest& request);
-	//RunGeneration on maps owned by the caller, timed; the maps are handed back in the result
-	static GenerationResult Generate(std::unique_ptr<GeneratedWorld> maps, const WorldConfig& config, WorldRequest request);
-	//Starts a job for the pending request on a copy of the front buffer
-	void StartJob();
-	void InstallResult(GenerationResult& result);
-	//Shows the currently edited noise (terrain or biome component) in the OVERLAY layer
-	void UpdateOverlay();
+	std::vector<biome::Biome> biomeTable = biome::DefaultBiomes();
+	std::unique_ptr<TextureClass> biomeIds;
+	//Copy of biomeIds on the CPU, for the name of the biome under the camera
+	BiomeMap biomeMap;
 
-	void RequestNoise(WorldGenParameter p);
+	//Generates the currently edited noise (terrain or biome component) into the OVERLAY layer
+	void GenerateOverlay();
+
+	void RequestOverlay();
 	void RequestTerrain(float originx, float originy);
-	void RequestBiomeNoise(BiomeParameter p);
 	void RequestBiomes();
 
 	void PresetsImGui();
@@ -92,7 +70,6 @@ private:
 	BiomeParameter editedBiomeComponent = BiomeParameter::TEMPERATURE;
 	int samplingResolution = 500;
 	SplinePoints splinePlotPoints;	//copy of the edited spline, applied with "Set new spline points"
-	bool biomeLevelsChanged = false;	//levels dragged but not applied yet ("Apply biome levels")
 
 	//Pressed editor buttons (0 = nothing selected)
 	int noisePressedButton = 0;
@@ -105,11 +82,11 @@ public:
 	~TerrainGenerationSys();
 	
 	bool Initialize(int _width, int _height, float _heightScale);
-	//Called every frame before Draw: installs a finished generation and starts the next one if anything is pending
+	//Called every frame before Draw: generates what was requested
 	void Update();
 
 	void Draw(Renderer& renderer, Camera& camera, LightSource& light);
-	void ReloadShaders() { view.ReloadShader(); }
+	void ReloadShaders() { view.ReloadShader(); gpu.ReloadShaders(); }
 	void ImGuiRightPanel();
 	void ImGuiLeftPanel();
 	void ImGuiOutput(glm::vec3 pos);

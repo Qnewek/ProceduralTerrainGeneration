@@ -45,6 +45,9 @@ public:
 	//Rebuilds the terrain shader from its source files (hot-reload)
 	bool ReloadShader() { return shader->Reload(); }
 
+	int GetMapWidth() const { return width; }
+	int GetMapHeight() const { return height; }
+
 	//Size of the patch grid in world units (before modelScale)
 	float GetWorldWidth() const { return width * worldUnitsPerTexel; }
 	float GetWorldHeight() const { return height * worldUnitsPerTexel; }
@@ -56,7 +59,10 @@ public:
 
 	//Layer textures are allocated once per map size; same-size updates only upload the new data
 	void SetLayer(Layer layer, const HeightField& map);
-	void SetBiomeColors(const std::vector<glm::vec3>& colors, int _width, int _height);
+	//Texture of a layer with the given size, for writing to it directly (GL_RGBA32F for BIOMES, GL_R32F otherwise)
+	TextureClass& LayerTexture(Layer layer, int _width, int _height);
+	//Copies a height layer to the CPU, waiting for the GPU; the layer must exist
+	HeightField ReadLayer(Layer layer) const;
 	bool HasLayer(Layer layer) const { return textures[static_cast<int>(layer)] != nullptr; }
 
 	//Draws the patch grid displaced by the selected height layer
@@ -67,10 +73,6 @@ public:
 
 private:
 	void BuildMesh();
-	//Uploads float data to a layer, (re)creating its texture only if there is none or the size differs
-	//@param internalFormat - sized format used when the texture is created, e.g. GL_R32F
-	//@param format - pixel format of data, e.g. GL_RED
-	void UploadLayer(Layer layer, const void* data, int _width, int _height, GLenum internalFormat, GLenum format);
 	//Sets view/projection of a top-down orthographic camera framing the flat view bounds
 	void SetFlatCameraUniforms(const TerrainRenderSettings& settings);
 

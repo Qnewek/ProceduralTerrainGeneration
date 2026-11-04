@@ -1,8 +1,7 @@
 # Procedural Terrain Generator
 
 Desktop tool (C++20, OpenGL 4.5) for interactive **procedural terrain generation**: every parameter of the
-algorithms can be changed in the UI (**Dear ImGui** + **ImPlot**) and the terrain is regenerated in the background
-while the app stays responsive.
+algorithms can be changed in the UI (**Dear ImGui** + **ImPlot**) and the terrain is regenerated on the GPU right away.
 
 ## Features
 
@@ -12,7 +11,7 @@ while the app stays responsive.
   ridged noise and island masks (cone, diagonal, squircle, ...).
 
 - **Imported map mode**
-  Shows a height map read from a file, chosen with a file dialog or from a folder list: PNG (8 or 16-bit; color is
+  Shows a height map read from a file, chosen with a file dialog or from a folder list: PNG (up to 16-bit; color is
   converted to greyscale) or headerless 16-bit R16/RAW. Non-square R16 files need their size in the name, e.g. `map_1024x512.r16`.
 
 - **Hydraulic erosion**
@@ -44,8 +43,8 @@ while the app stays responsive.
   fixed range: [0, 1] in TerrainGen, [-1, 1] in Noise heightmap. An eroded map that is shown goes to its own `_eroded` file.
 
 - **Performance**
-  Map generation is parallelised over rows and runs on a background thread, so editing parameters never freezes
-  the UI (512x512 terrain in ~40 ms on 6 threads).
+  Maps are generated in compute shaders, so parameters can be edited live (1024x1024 terrain in ~1.2 ms on an
+  RTX 2060, against ~170 ms on 6 CPU threads). Erosion still runs on the CPU, on a background thread.
 
 ## Screenshots
 
@@ -82,7 +81,7 @@ CMake, Ninja and vcpkg). Dependencies (GLFW, GLEW, glm, ImGui, ImPlot, stb) are 
 | `Esc` | release the mouse |
 | `F5` | reload shaders |
 
-The mode (Noise heightmap / TerrainGen) is selected in the top panel; generation parameters are in the right
+The mode (Noise heightmap / TerrainGen / Imported map) is selected in the top panel; generation parameters are in the right
 panel, display settings in the left one.
 
 ## Benchmark
@@ -94,6 +93,13 @@ out\build\x64-release\ProceduralTerrainGenerator.exe --benchmark
 Runs CPU generation without a window for 256², 512² and 1024² maps and prints median times together with
 checksums of the generated maps (used to verify that refactors do not change the output). CI builds both
 presets on every push and pull request and fails if the checksums change.
+
+```
+out\build\x64-release\ProceduralTerrainGenerator.exe --gpu-check
+```
+
+Compares the compute shader generator used by the app with the CPU one on many configurations and prints the times
+of both. The CPU generators remain only for this and for the benchmark. It needs a GPU with OpenGL 4.5, so CI does not run it.
 
 ## Roadmap
 

@@ -56,6 +56,8 @@ ptg_set_warnings(ptg_core)
 
 add_executable(ProceduralTerrainGenerator
 	${PTG_SRC}/Application.cpp
+	${PTG_SRC}/opengl/GpuHeightCheck.cpp
+	${PTG_SRC}/opengl/GpuHeightGenerator.cpp
 	${PTG_SRC}/opengl/GpuQuery.cpp
 	${PTG_SRC}/opengl/IndexBuffer.cpp
 	${PTG_SRC}/opengl/Renderer.cpp
