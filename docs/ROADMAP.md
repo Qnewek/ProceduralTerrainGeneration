@@ -179,7 +179,7 @@ Cel: kod gotowy na wielowątkowość/GPU, jedna ścieżka renderingu, mierzalna 
 
 ## 4. Plan rozwojowy
 
-### Faza 2 — generacja na GPU + chunki/LOD (główny skok wydajności, 2–4 tygodnie)
+### Faza 2 — generacja na GPU + chunki/LOD (główny skok wydajności, 2–4 tygodnie) — ✅ zamknięta 2026-11-08
 Cel: **edycja w czasie rzeczywistym przy 60+ FPS** i nieskończony świat.
 
 1. **Compute shader height pass:** port szumu (fBm, ridged, domain warping) i ewaluacji splajnów do GLSL
@@ -263,6 +263,20 @@ Cel: **edycja w czasie rzeczywistym przy 60+ FPS** i nieskończony świat.
 
 **Kryterium:** przelot kamerą 200 m/s bez dziur i przycięć; zmiana dowolnego parametru szumu widoczna w < 50 ms
 na obszarze widoku; stabilne 60 FPS przy dystansie widzenia 4+ km.
+
+Pomiar (2026-11-08): przy 1 tekselu = 1 m i skali modelu 1 jest 200 m/s = 800 jednostek/s („Camera speed”), a 4 km = 16000 jednostek („Render distance”).
+Output → „Record flight”: prędkość (średnia i najwyższa w 1 s), FPS, czas klatki (99% i najgorszy), klatki > 20 ms (`FlightRecord::slowFrameMs`) i klatki z dziurą w widoku
+(chunk w widoku bez własnych map i bez gotowego zastępstwa; teren pod spodem jest wtedy niebem). W trybie infinite Output pokazuje też czas od zmiany parametru do klatki,
+w której każdy rysowany chunk jest aktualny, i do pełnej szczegółowości (`ChunkWorld::ImGuiUpdateTimes`).
+
+Wynik przelotu właściciela (TerrainGen z biomami, render distance 4 km, 31 s, 7545 klatek): 762 j/s (≈190 m/s), średnio ≈243 FPS, najgorsza klatka 13,86 ms,
+0 klatek > 20 ms; rysowane 99 z 440 chunków w zasięgu, generacja 1,4 ms GPU na klatkę; zmiana parametru widoczna po 30 ms, pełna szczegółowość też po 30 ms.
+Jedyne odstępstwo: 4 klatki z dziurą — chunki wchodzące w zasięg na jego granicy przed wygenerowaniem. Poprawka: `ChunkWorld` planuje chunki do 1,15 × zasięgu
+(`prefetchFactor`), rysuje i liczy dziury tylko w zasięgu. Ponowny przelot po poprawce: 0 klatek z dziurą.
+
+✅ **Faza 2 zamknięta 2026-11-08** — kryterium spełnione. Pkt 6 (inkrementalna regeneracja) i 7 (CPU fallback) nie były potrzebne do kryterium:
+generacja na GPU mieści się w 30 ms od zmiany do pełnego widoku, a generatory CPU już istnieją (benchmark, `--gpu-check`, testy). Zostają jako możliwe usprawnienia,
+podobnie jak z pkt 4: teselacja wg rozmiaru na ekranie, morfowanie między poziomami LOD, wysokość kamery w wyborze poziomu; z pkt 3: budżet w ms, floating origin.
 
 ### Faza 3 — biomy 2.0 (2–3 tygodnie)
 Cel: realistyczne, płynne przejścia i biomy wpływające na kształt terenu.

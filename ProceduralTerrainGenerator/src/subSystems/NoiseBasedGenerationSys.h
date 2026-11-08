@@ -85,6 +85,8 @@ class NoiseBasedGenerationSys
 		void Draw(Renderer& renderer, Camera& camera, LightSource& light);
 		//true while the 2D map is shown instead of the 3D view
 		bool FlatView() const { return renderSettings.map2d; }
+		//Infinite generation shows chunks with part of the view not generated yet
+		bool HoleInView() const { return chunksShown && chunks.HasHoleInView(); }
 		void ReloadShaders() { view.ReloadShader(); chunks.ReloadShader(); gpu.ReloadShaders(); }
 		void ImGuiRightPanel();
 		void ImGuiLeftPanel();
