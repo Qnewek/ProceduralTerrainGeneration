@@ -31,6 +31,20 @@ void Camera::SetCameraConfig(glm::vec3 _position, glm::vec3 _front, glm::vec3 _u
 	right = glm::normalize(glm::cross(front, up));
 	up = glm::normalize(glm::cross(right, front));
 }
+void Camera::LookAt(glm::vec3 _position, glm::vec3 target)
+{
+	position = _position;
+	const glm::vec3 direction = target - position;
+	if (glm::length(direction) < 1e-4f) {
+		return;
+	}
+	const glm::vec3 d = glm::normalize(direction);
+	//Inverse of the ROTATE formula in UpdateCameraVectors
+	yaw = glm::degrees(std::atan2(d.z, d.x));
+	pitch = glm::clamp(glm::degrees(std::asin(d.y)), -89.0f, 89.0f);
+	UpdateCameraVectors(CameraMovement::ROTATE);
+}
+
 void Camera::SetScreenSize(unsigned int width, unsigned int height)
 {
 	if (width != screenWidth) {
@@ -138,13 +152,7 @@ void Camera::ImGuiOutPut()
 }
 
 glm::mat4* Camera::GetViewMatrix() {
-	view = glm::mat4(1.0f);
-	if (anchor) {
-		view = glm::lookAt(glm::vec3(0.0f, position.y, 0.0f), glm::vec3(0.0f, position.y, 0.0f) + front, up);
-	}
-	else {
-		view = glm::lookAt(position, position + front, up);
-	}
+	view = glm::lookAt(position, position + front, up);
 	return &view;
 }
 glm::mat4* Camera::GetProjectionMatrix() {

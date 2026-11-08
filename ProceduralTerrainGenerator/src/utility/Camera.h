@@ -23,7 +23,7 @@ private:
 	unsigned int screenWidth, screenHeight;
 	float yaw, pitch, xpos, ypos;
 	float initSpeed, speed, sensitivity, fov;
-	bool mouseControl, anchor = false;
+	bool mouseControl;
 
 	glm::vec3 position, front, up, right;
 	glm::vec2 viewDist;
@@ -52,6 +52,8 @@ public:
 	void SetYaw(float value) { yaw = value; }
 	void SetPitch(float value) { pitch = value; }
 	void SetPosition(glm::vec3 value) { position = value; }
+	//Moves the camera to _position and turns it towards target (pitch limited to +-89 degrees)
+	void LookAt(glm::vec3 _position, glm::vec3 target);
 	void SetSpeed(float value) { speed = value; initSpeed = value; }
 	void SetSensitivity(float value) { sensitivity = value; }
 	void SetFov(float value) { fov = value; }
@@ -63,5 +65,5 @@ public:
 	float& GetFovRef()  { return fov; }
 	float& GetSensitivityRef() { return sensitivity; }
 	glm::vec2& GetViewDist() { return viewDist; }
-	void CameraAnchor(bool b) { anchor = b; }
+	float GetRenderDistance() const { return viewDist.y; }
 };

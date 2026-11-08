@@ -86,12 +86,22 @@ namespace {
 		shader.Unbind();
 	}
 
-	void RunHeightShader(Shader& shader, unsigned int input, int mode, float originx, float originy, TextureClass& target)
+	//Sets the uniforms shared by the generating shaders; the shader must be bound
+	void SetMapUniforms(Shader& shader, float originx, float originy, const TextureClass& target, glm::ivec2 islandSize)
+	{
+		if (islandSize.x <= 0 || islandSize.y <= 0) {
+			islandSize = glm::ivec2(target.GetWidth(), target.GetHeight());
+		}
+		shader.SetUniform2i("mapSize", target.GetWidth(), target.GetHeight());
+		shader.SetUniform2f("origin", originx, originy);
+		shader.SetUniform2i("islandSize", islandSize.x, islandSize.y);
+	}
+
+	void RunHeightShader(Shader& shader, unsigned int input, int mode, float originx, float originy, TextureClass& target, glm::ivec2 islandSize)
 	{
 		shader.Bind();
 		shader.SetUniform1i("mode", mode);
-		shader.SetUniform2i("mapSize", target.GetWidth(), target.GetHeight());
-		shader.SetUniform2f("origin", originx, originy);
+		SetMapUniforms(shader, originx, originy, target, islandSize);
 		glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, input);
 		target.BindImage(0, GL_WRITE_ONLY);
 		DispatchTiles(shader, target.GetWidth(), target.GetHeight());
@@ -137,16 +147,16 @@ void GpuHeightGenerator::PollMeasure(double& ms)
 	}
 }
 
-void GpuHeightGenerator::GenerateNoise(const noise::NoiseConfigParameters& config, float originx, float originy, TextureClass& target)
+void GpuHeightGenerator::GenerateNoise(const noise::NoiseConfigParameters& config, float originx, float originy, TextureClass& target, glm::ivec2 islandSize)
 {
 	//Uninitialized on purpose: the shader reads only what is set for the mode
 	auto input = std::make_unique_for_overwrite<GpuHeightInput>();
 	SetNoise(input->noises, input->permutations, 0, config);
 	glNamedBufferSubData(heightInput, 0, offsetof(GpuHeightInput, splines), input.get());
-	RunHeightShader(*heightShader, heightInput, MODE_NOISE, originx, originy, target);
+	RunHeightShader(*heightShader, heightInput, MODE_NOISE, originx, originy, target, islandSize);
 }
 
-void GpuHeightGenerator::GenerateTerrain(const TerrainConfig& config, float originx, float originy, TextureClass& target)
+void GpuHeightGenerator::GenerateTerrain(const TerrainConfig& config, float originx, float originy, TextureClass& target, glm::ivec2 islandSize)
 {
 	auto input = std::make_unique_for_overwrite<GpuHeightInput>();
 	SetNoise(input->noises, input->permutations, 0, config.continentalness);
@@ -164,10 +174,11 @@ void GpuHeightGenerator::GenerateTerrain(const TerrainConfig& config, float orig
 		SetSpline(*input, 2, config.weirdnessSpline);
 	}
 	glNamedBufferSubData(heightInput, 0, mode == MODE_SPLINE ? sizeof(GpuHeightInput) : offsetof(GpuHeightInput, splines), input.get());
-	RunHeightShader(*heightShader, heightInput, mode, originx, originy, target);
+	RunHeightShader(*heightShader, heightInput, mode, originx, originy, target, islandSize);
 }
 
-void GpuHeightGenerator::GenerateBiomes(const BiomeConfig& biomes, const TerrainConfig& terrain, const std::vector<biome::Biome>& table, TextureClass& colors, TextureClass& ids)
+void GpuHeightGenerator::GenerateBiomes(const BiomeConfig& biomes, const TerrainConfig& terrain, const std::vector<biome::Biome>& table, float originx, float originy,
+	TextureClass& colors, TextureClass& ids, glm::ivec2 islandSize)
 {
 	auto input = std::make_unique_for_overwrite<GpuBiomeInput>();
 	SetNoise(input->noises, input->permutations, 0, terrain.continentalness);
@@ -201,7 +212,7 @@ void GpuHeightGenerator::GenerateBiomes(const BiomeConfig& biomes, const Terrain
 
 	biomeShader->SetUniform1i("biomeCount", static_cast<int>(entries.size()));
 	biomeShader->SetUniform3fv("fallbackColor", fallbackColor);
-	biomeShader->SetUniform2i("mapSize", colors.GetWidth(), colors.GetHeight());
+	SetMapUniforms(*biomeShader, originx, originy, colors, islandSize);
 	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, biomeInput);
 	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, biomeLevels);
 	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 2, biomeTable);

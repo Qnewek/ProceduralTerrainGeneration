@@ -25,17 +25,21 @@ public:
 	bool Initialize();
 	void ReloadShaders();
 
+	//Origins are map positions (in texels) of texel (0, 0) of the target. islandSize is the size of the map an island
+	//fills, starting at map position (0, 0); (0, 0) = the size of the target, as on the CPU. A chunk passes the size of the whole map.
+
 	//GPU version of SimplexNoiseClass::GenerateFractalNoise
 	//@param target - GL_R32F
-	void GenerateNoise(const noise::NoiseConfigParameters& config, float originx, float originy, TextureClass& target);
+	void GenerateNoise(const noise::NoiseConfigParameters& config, float originx, float originy, TextureClass& target, glm::ivec2 islandSize = glm::ivec2(0));
 	//GPU version of TerrainGenerator::GenerateTerrain. Unlike the CPU, it does not report noise values below -1
 	//as an error, and a spline takes its end value for a noise outside [-1, 1] instead of extrapolating
 	//@param target - GL_R32F
-	void GenerateTerrain(const TerrainConfig& config, float originx, float originy, TextureClass& target);
+	void GenerateTerrain(const TerrainConfig& config, float originx, float originy, TextureClass& target, glm::ivec2 islandSize = glm::ivec2(0));
 	//GPU version of BiomeGenerator::Biomify, including its noises. Biomes are tried in the order of the table
 	//@param colors - GL_RGBA32F, color of the biome of every texel
 	//@param ids - GL_R32I of the same size, id of the biome of every texel
-	void GenerateBiomes(const BiomeConfig& biomes, const TerrainConfig& terrain, const std::vector<biome::Biome>& table, TextureClass& colors, TextureClass& ids);
+	void GenerateBiomes(const BiomeConfig& biomes, const TerrainConfig& terrain, const std::vector<biome::Biome>& table, float originx, float originy,
+		TextureClass& colors, TextureClass& ids, glm::ivec2 islandSize = glm::ivec2(0));
 
 	//Measure the GPU time of the Generate calls between them; cannot overlap another GL_TIME_ELAPSED query
 	void BeginMeasure() { timer->Begin(); }

@@ -7,6 +7,7 @@
 
 #include "utilities.h"
 #include "Biome.h"
+#include "ChunkWorld.h"
 #include "Grid.h"
 #include "GpuHeightGenerator.h"
 #include "WorldConfig.h"
@@ -16,10 +17,9 @@
 #include "PresetPanel.h"
 #include "ExportPanel.h"
 
-//What has to be regenerated at the next Update
+//What has to be regenerated at the next Update; with infinite generation any request regenerates the chunks
 struct WorldRequest {
 	bool terrain = false;
-	float originx = 0.0f, originy = 0.0f;
 	bool overlay = false;		//preview of the edited noise
 	bool biomes = false;		//biome map and colors
 
@@ -34,12 +34,18 @@ private:
 	bool editNoise = false, editSpline = false, infiniteGeneration = false;
 	//true while an edited component noise (OVERLAY layer) is shown instead of the terrain
 	bool showPreview = false;
-	glm::vec3 oldCamPos = glm::vec3(0.0f);
 	double lastGenerationMs = 0.0;
 
-	//Rendering; generated maps live in the layers of the view
+	//Rendering; the finite map lives in the layers of the view, the infinite world in chunks
 	TerrainView view;
+	ChunkWorld chunks;
 	TerrainRenderSettings renderSettings;
+	//infiniteGeneration as of the last Update
+	bool chunksShown = false;
+	//Noise the chunks show instead of the terrain, nullptr for the terrain
+	const noise::NoiseConfigParameters* chunkPreview = nullptr;
+	//Map size an island fills in the chunks: the last valid world size
+	glm::ivec2 islandSize = glm::ivec2(0);
 
 	//World parameters (map size, terrain, biomes) edited by the UI; generators only read them
 	WorldConfig world;
@@ -52,11 +58,17 @@ private:
 	//Copy of biomeIds on the CPU, for the name of the biome under the camera
 	BiomeMap biomeMap;
 
-	//Generates the currently edited noise (terrain or biome component) into the OVERLAY layer
+	//Currently edited noise (terrain or biome component), nullptr if none
+	const noise::NoiseConfigParameters* EditedNoise() const;
+	//Generates the currently edited noise into the OVERLAY layer
 	void GenerateOverlay();
+	//Infinite generation: turns requests into regenerating the chunks and generates the next chunks around the camera
+	void UpdateChunks(const Camera& camera);
+	//Finite map: generates what was requested
+	void GenerateFinite();
 
 	void RequestOverlay();
-	void RequestTerrain(float originx, float originy);
+	void RequestTerrain();
 	void RequestBiomes();
 
 	void PresetsImGui();
@@ -82,11 +94,14 @@ public:
 	~TerrainGenerationSys();
 	
 	bool Initialize(int _width, int _height, float _heightScale);
-	//Called every frame before Draw: generates what was requested
-	void Update();
+	//Called every frame before Draw: generates what was requested, or the chunks around the camera
+	//@param camera - moved to the finite map when infinite generation is turned off
+	void Update(Camera& camera);
 
 	void Draw(Renderer& renderer, Camera& camera, LightSource& light);
-	void ReloadShaders() { view.ReloadShader(); gpu.ReloadShaders(); }
+	//true while the 2D map is shown instead of the 3D view
+	bool FlatView() const { return renderSettings.map2d; }
+	void ReloadShaders() { view.ReloadShader(); chunks.ReloadShader(); gpu.ReloadShaders(); }
 	void ImGuiRightPanel();
 	void ImGuiLeftPanel();
 	void ImGuiOutput(glm::vec3 pos);

@@ -19,7 +19,7 @@ biomy, roślinność i kolejne feature'y.**
 | ~~B4~~ ✅ | `NoiseBasedGenerationSys.cpp:195` | `PushStyleColor(..., (1.0f, 0.0f, 0.0f, 1.0f))` — operator przecinka | **Zrobione 2026-10-28:** `ImVec4(1, 0, 0, 1)` |
 | ~~B5~~ ✅ | `TerrainGenerator.cpp:66`, `NoiseBasedGenerationSys.cpp:53,130`, `TerrainGenerationSys.cpp:33`, shadery (`size = height/2`) | Niespójna kolejność `width/height` między API | **Zrobione 2026-10-29:** wszędzie `(width, height)` (w tym `TextureClass`/`glTexImage2D`), TES liczy texel osobno dla x i y; checksum benchmarku bez zmian |
 | ~~B6~~ ✅ | `Terrain_evalTes.shader` (od A4 jedyny TES) | `FragPos` liczony w clip space, światło w world space; normalna liczona z kroku w UV (`texel`) vs wysokość w jednostkach świata; normalna nie przechodzi przez `model`; tryb 2D (`flatten`) ignoruje `model` | **Zrobione 2026-10-29:** `FragPos` w world space, krok normalnej `texelWorldSize`, `normalMatrix`; tryb 2D = ortogonalna kamera z góry w `TerrainView` (cała mapa, proporcje viewportu, `modelScale`, obie mapy przy erozji) — wcześniej pokazywał ~1/16 mapy obróconej o 90° |
-| B7 | `TerrainGenerationSys::Draw`, `NoiseBasedGenerationSys::Draw` | Tryb infinite: regeneracja **całej** mapy + nowa tekstura z mipmapami przy każdym ruchu kamery, w wątku renderującym; biomy i podgląd szumów zawsze z originem (0,0); `MakeIsland` zależy od rozmiaru mapy | Spadki FPS, biomy nie pasują do terenu po przesunięciu, wyspa „jedzie” z kamerą |
+| ~~B7~~ ✅ | `TerrainGenerationSys::Draw`, `NoiseBasedGenerationSys::Draw` | Tryb infinite: regeneracja **całej** mapy + nowa tekstura z mipmapami przy każdym ruchu kamery, w wątku renderującym; biomy i podgląd szumów zawsze z originem (0,0); `MakeIsland` zależy od rozmiaru mapy | **Zrobione 2026-11-08:** chunki (`ChunkWorld`, Faza 2 pkt 3); biomy i podgląd z originem chunka, wyspa wg rozmiaru mapy (`islandSize`) |
 | ~~B8~~ ✅ | `Noise.cpp:82` + `vendor/Simplex/SimplexNoise.cpp:105` | `PointNoise` woła `reseed(seed)` przy każdej próbce; tablica permutacji jest globalna | **Zrobione 2026-10-28:** permutacja per instancja, `reseed` poza hot-path; teren 512² 3239 → 227 ms (14,3×), checksum bez zmian |
 | ~~B9~~ ✅ | `Erosion.cpp:45`, klasy z `new[]` | `Erosion::map` nigdy nie zwalniany; klasy z surowymi wskaźnikami mają domyślny copy-ctor | **Zrobione 2026-10-29:** wszystkie mapy w `Grid<T>` (`std::vector`), brak `new[]`/`delete[]` poza vendor |
 | ~~B10~~ ✅ | `Camera.cpp:20` | `SetCameraConfig` przypisuje parametry same do siebie (shadowing); FOV slider do 300° | **Zrobione 2026-10-28:** parametry z prefiksem `_`, ustawia też `speed`; FOV slider 1–120° |
@@ -44,7 +44,7 @@ biomy, roślinność i kolejne feature'y.**
 | ~~A2~~ ✅ | Ręczne zarządzanie pamięcią (`new[]`/`delete[]`, raw pointers), brak rule-of-5 | Błędy B9, trudne refaktory — **Zrobione 2026-10-29:** mapy w `Grid<T>` (`std::vector`) |
 | ~~A3~~ ✅ | Logika generacji, stan UI i rendering wymieszane w subsystemach (`TerrainGenerationSys` = 420 linii UI+GL+logika) | Nie da się przenieść generacji na wątek/GPU ani testować bez okna — **Zrobione 2026-10-29:** config w `WorldConfig.h`, generatory bezstanowe względem configu, GL w `TerrainView` |
 | ~~A4~~ ✅ | Duplikacja: dwa subsystemy z identycznym `Initialize/Draw/Resize`, dwa zestawy shaderów różniące się kilkoma liniami | Każdą poprawkę (np. B6) trzeba robić 2× — **Zrobione 2026-10-29:** wspólny `TerrainView`, jeden zestaw shaderów |
-| A5 | Brak modelu „świata”: mapa = jeden prostokąt `width×height` przypięty do kamery; brak chunków, LOD, cache | Infinite terrain i duże światy są niewykonalne wydajnie |
+| A5 | Brak modelu „świata”: mapa = jeden prostokąt `width×height` przypięty do kamery; brak chunków, LOD, cache | Infinite terrain i duże światy są niewykonalne wydajnie — **Częściowo:** chunki z cache (2026-11-08); brak LOD (Faza 2 pkt 4) |
 | A6 | Biomy oparte o dyskretne poziomy `int` i pierwszy pasujący biom z `unordered_map` (kolejność nieokreślona!) | Ostre granice, niedeterministyczny wybór przy nakładaniu się zakresów, brak blendingu, trudne do konfiguracji |
 | A7 | Brak serializacji (presety, konfiguracje biomów, eksport) — „Saving” to placeholder | Nie da się zapisać efektu pracy ani porównać ustawień — **Częściowo:** presety JSON i eksport heightmapy (2026-11-03); brak konfiguracji biomów z pliku (Faza 3) |
 | A8 | Brak testów, CI, profilera; brak menedżera zależności (binarki w repo) | Regresje niewykrywalne; aktualizacje bibliotek ręczne — **Częściowo:** CMake + vcpkg, CI z kontrolą checksum (2026-10-30), testy jednostkowe (2026-11-02), panel pomiarów (2026-11-03); Tracy odłożony (Faza 1 pkt 8) |
@@ -216,6 +216,19 @@ Cel: **edycja w czasie rzeczywistym przy 60+ FPS** i nieskończony świat.
 3. **ChunkManager:** siatka chunków (np. 256×256 próbek, 1 próbka = 1 m), współrzędne świata, generacja tylko nowych chunków
    w kolejce priorytetowej (odległość od kamery + frustum), cache LRU, budżet ms/klatkę.
    Usuwa „kotwiczenie” kamery i regenerację całej mapy (**B7**, **A5**). Do rozważenia: floating origin dla dużych współrzędnych.
+
+   ✅ 2026-11-08 (bez frustum i budżetu w ms): `opengl/ChunkWorld.*`. „Infinite generation” w trybach TerrainGen i Noise heightmap to teraz świat z chunków (decyzja właściciela);
+   „Partial generation” zostaje skończoną mapą do edycji, eksportu i erozji (te dwa są ukryte w trybie infinite). Kamera porusza się swobodnie, kotwiczenie usunięte.
+   Chunk = 128×128 tekseli (512 jednostek świata), tekstury 131² z marginesem 1 teksela, więc normalne są ciągłe, a sąsiednie chunki dzielą krawędź.
+   Świat jest ustawiony tak, że pokrywa skończoną mapę w tym samym miejscu (`AlignWithMap`), a wyspa wypełnia obszar o rozmiarze mapy (nowy parametr `islandSize` generatora).
+   Kolejność: odległość od kamery; najwyżej 16 chunków na klatkę (liczba, nie ms). Zmiana parametru unieważnia wszystkie chunki, stara zawartość jest widoczna do czasu podmiany.
+   Cache: chunki poza zasięgiem zostają, dopóki jest ich więcej niż połowa liczby chunków w zasięgu (+16), najdłużej niewidziane idą pierwsze, a ich tekstury są używane ponownie.
+   Biomy pod kamerą: odczyt identyfikatorów chunka z GPU tylko po wejściu do niego lub jego regeneracji. Zasięg = „Render distance” kamery.
+   `--gpu-check` sprawdza, że chunk (origin + `islandSize`) jest bit w bit równy fragmentowi pełnej mapy (szum z wyspą, teren, biomy).
+   Pamięć: ok. 0,7 MB na chunk z biomami (0,35 MB bez). Przy render distance 5000 to ok. 300 chunków w zasięgu, więc bez LOD (pkt 4) duży zasięg kosztuje setki MB.
+   Zostało: priorytet chunków w polu widzenia (pkt 5), budżet w ms, floating origin.
+   Przy okazji (prośba właściciela): słońce zamiast światła punktowego (`LightSource`: azymut i wysokość), proceduralne niebo (`Sky`, `common/sky.glsl`)
+   z mgłą terenu w kolorze nieba przy granicy zasięgu (ukrywa też doładowywanie chunków) oraz przeniesienie kamery nad skończoną mapę po wyłączeniu trybu infinite.
 4. **LOD:** quadtree chunków (lub geometry clipmaps) + teselacja w TCS oparta o rozmiar krawędzi w pikselach ekranu
    (zamiast stałych `MIN/MAX_DISTANCE`); morfowanie/skirts przeciw szczelinom między poziomami.
 5. **Culling:** frustum culling chunków na CPU + odrzucanie patchy w TCS (`gl_TessLevelOuter = 0`), opcjonalnie
