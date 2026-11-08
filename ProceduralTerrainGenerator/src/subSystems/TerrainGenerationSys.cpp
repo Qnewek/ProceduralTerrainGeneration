@@ -74,8 +74,7 @@ void TerrainGenerationSys::UpdateChunks(const Camera& camera)
 		chunks.AlignWithMap(world.width, world.height);
 	}
 
-	const glm::vec3 position = camera.GetPosition() / renderSettings.modelScale;
-	if (chunks.Plan(glm::vec2(position.x, position.z), camera.GetRenderDistance() / renderSettings.modelScale) == 0) {
+	if (chunks.Plan(ChunkWorld::ViewFrom(camera, renderSettings)) == 0) {
 		return;
 	}
 	gpu.BeginMeasure();
@@ -290,7 +289,7 @@ void TerrainGenerationSys::ImGuiOutput(glm::vec3 pos) {
 	int id = -1;
 	if (chunksShown) {
 		ImGui::Text("Last generation (GPU): %.2f ms (up to %d chunks of %dx%d)", lastGenerationMs, ChunkWorld::maxChunksPerFrame, ChunkWorld::chunkSize, ChunkWorld::chunkSize);
-		ImGui::Text("Chunks: %d in view, %d cached, %d waiting", chunks.GetVisibleCount(), chunks.GetCachedCount(), chunks.GetPendingCount());
+		ImGui::Text("Chunks: %d drawn of %d in range, %d cached, %d waiting", chunks.GetVisibleCount(), chunks.GetInRangeCount(), chunks.GetCachedCount(), chunks.GetPendingCount());
 		ImGui::Text("Coarsest level in view: %d (1 sample per %d texels)", chunks.GetCoarsestLevel(), 1 << chunks.GetCoarsestLevel());
 		id = chunks.BiomeAt(position);
 	}

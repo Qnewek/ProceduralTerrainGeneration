@@ -3,11 +3,13 @@
 #include <cstdint>
 #include <functional>
 #include <memory>
+#include <optional>
 #include <unordered_map>
 #include <vector>
 
 #include "glm/glm.hpp"
 
+#include "Frustum.h"
 #include "GpuHeightGenerator.h"
 #include "GpuSurfacePass.h"
 #include "Grid.h"
@@ -17,7 +19,8 @@
 //A chunk of level L covers chunkSize * 2^L map texels with the same textureSize^2 textures, so it samples every 2^L-th
 //position; samples lie on integer positions, so where levels meet they are equal. A chunk closer to the camera than
 //lodDistance times its size is drawn as its four children, but only once all four exist, so the view has no holes.
-//Missing and outdated chunks are generated nearest first, a few per frame; chunks out of view stay cached up to a limit.
+//Missing and outdated chunks are generated a few per frame, those in the view frustum first, then nearest first; only chunks
+//in the frustum are drawn. Chunks out of range stay cached up to a limit.
 //Map position p (in texels) lies at world XZ mapOrigin + p * worldUnitsPerTexel. mapOrigin puts the world over a finite map
 //of the size given to AlignWithMap, so switching modes keeps the terrain in place. Only for the thread owning the GL context.
 class ChunkWorld
@@ -52,11 +55,19 @@ public:
 	//a change invalidates the chunks
 	void AlignWithMap(int width, int height);
 
-	//Picks the chunks to draw within radius of center and frees cached chunks over the limit. Call every frame before GenerateNext and Draw
-	//@param center - camera XZ in world units (before modelScale)
-	//@param radius - view distance in world units (before modelScale)
+	//Where the world is seen from; all in world units before modelScale
+	struct View {
+		glm::vec2 center = glm::vec2(0.0f);	//camera XZ
+		float radius = 0.0f;				//view distance
+		float heightScale = 1.0f;			//bounds the height of the chunks for the frustum test
+		std::optional<Frustum> frustum;		//none = everything in range is in view (2D map)
+	};
+	//View of the camera as drawn with these settings
+	static View ViewFrom(const Camera& camera, const TerrainRenderSettings& settings);
+
+	//Picks the chunks to draw and frees cached chunks over the limit. Call every frame before GenerateNext and Draw
 	//@return number of chunks waiting for generation
-	int Plan(glm::vec2 center, float radius);
+	int Plan(const View& view);
 	//Generates up to maxChunksPerFrame of the chunks picked by Plan, nearest first, with their surface maps.
 	//They are drawn from the next Plan on, when a whole set of children can replace its parent
 	void GenerateNext(const GenerateFn& generate);
@@ -67,7 +78,10 @@ public:
 	//Reads the finest chunk there, which is the one under the camera; copies its ids from the GPU when it changes
 	int BiomeAt(glm::vec2 position);
 
+	//Chunks drawn: in range and in the frustum
 	int GetVisibleCount() const { return static_cast<int>(visible.size()); }
+	//Chunks that would be drawn without the frustum test
+	int GetInRangeCount() const { return inRange; }
 	int GetCachedCount() const { return static_cast<int>(chunks.size()); }
 	int GetPendingCount() const { return static_cast<int>(pending.size()); }
 	//Coarsest level among the chunks drawn
@@ -86,6 +100,8 @@ private:
 		int level;
 		glm::ivec2 coord;
 		float distance;
+		//Order of generation: 0 = leaves a hole in view, 1 = a hole out of view, 2 = in view, 3 = out of view
+		int rank;
 	};
 
 	static uint64_t Key(int level, glm::ivec2 coord);
@@ -94,7 +110,9 @@ private:
 	Chunk* Find(int level, glm::ivec2 coord);
 	//Visits a chunk within radius: draws it, or its children if they should and can replace it, and requests what is missing
 	//@param local - camera relative to map texel (0, 0)
-	void Select(int level, glm::ivec2 coord, glm::vec2 local, float radius);
+	void Select(int level, glm::ivec2 coord, glm::vec2 local, const View& view);
+	//Whether the chunk can be seen; the box spans all heights a map can have
+	bool InView(int level, glm::ivec2 coord, const View& view) const;
 	//Existing chunk, or a new one with textures of a freed chunk if there is one
 	Chunk& Obtain(int level, glm::ivec2 coord);
 	void AllocateTextures(Chunk& chunk);
@@ -107,6 +125,7 @@ private:
 	std::vector<Chunk*> visible;
 	std::vector<PendingChunk> pending;
 	size_t visited = 0;
+	int inRange = 0;
 	int coarsestLevel = 0;
 
 	//A chunk closer to the camera than this many of its sizes is replaced by its children
