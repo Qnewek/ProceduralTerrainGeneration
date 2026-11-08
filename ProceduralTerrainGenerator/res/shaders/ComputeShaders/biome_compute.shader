@@ -1,7 +1,6 @@
 #version 450 core
 
-// Assigns a biome to every texel; GLSL version of BiomeGenerator::Biomify, which reads maps generated earlier.
-// Here the five noises are evaluated in place; the CPU maps always start at map position (0, 0), which is origin = (0, 0) here.
+// Assigns a biome to every texel from the levels of its five noises, evaluated in place.
 
 layout(local_size_x = 32, local_size_y = 32) in;
 

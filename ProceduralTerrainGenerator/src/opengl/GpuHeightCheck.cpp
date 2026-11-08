@@ -7,268 +7,163 @@
 #include <functional>
 #include <iomanip>
 #include <iostream>
-#include <limits>
 #include <sstream>
 #include <string>
+#include <tuple>
 #include <vector>
 
 #include <GL/glew.h>
 #include <GLFW/glfw3.h>
 
-#include "BiomeGenerator.h"
+#include "Grid.h"
 #include "GpuHeightGenerator.h"
 #include "GpuSurfacePass.h"
-#include "SurfaceDerivatives.h"
-#include "TerrainGenerator.h"
 
 namespace {
-	struct Difference {
-		float max = 0.0f;
-		int x = 0, y = 0;
-		bool invalid = false;	//NaN or infinity in either map
-		int aboveTolerance = 0;
-	};
+	//Not square, so swapped axes are detected; larger than one part of a dispatch along X
+	constexpr int mapWidth = 1100, mapHeight = 257;
+	//Same distance between texels as in TerrainView; a power of two, so dividing by it rounds nothing
+	constexpr float surfaceTexelSize = 4.0f;
 
-	struct CheckCase {
+	//One line of the report, padded so that results form a column
+	void Report(const std::string& name, const std::string& details, bool ok)
+	{
+		std::cout << std::left << std::setw(40) << name << std::setw(44) << details << (ok ? "ok" : "FAILED") << "\n";
+	}
+
+	HeightField ReadHeight(const TextureClass& texture)
+	{
+		HeightField map(texture.GetWidth(), texture.GetHeight());
+		texture.Read(GL_RED, GL_FLOAT, static_cast<int>(map.Size() * sizeof(float)), map.Data());
+		return map;
+	}
+
+	struct RangeCase {
 		std::string name;
-		std::function<bool(HeightField&)> cpu;
-		std::function<void(TextureClass&)> gpu;
-		float tolerance;
+		std::function<void(TextureClass&)> generate;
+		float min, max;
 	};
 
-	//Rounding differs slightly between CPU and GPU, so the maps are never identical.
-	//The larger tolerances match how much the CPU result itself changes when a coordinate moves by the smallest float step
-	constexpr float noiseTolerance = 1e-4f;
-	//At very high frequencies float coordinates are coarse (measured on CPU: 2.4e-3 for the 8 octave case below)
-	constexpr float highFrequencyTolerance = 3e-3f;
-	//The 4D noise jumps slightly at simplex borders: its corner radius is 0.6, not 0.5 (measured on CPU: 3.8e-4)
-	constexpr float symmetricalTolerance = 5e-4f;
-	//A spline table cannot follow a corner of a linear spline exactly
-	constexpr float splineTolerance = 2e-3f;
-
-	Difference Compare(const HeightField& cpu, const HeightField& gpu, float tolerance)
+	//Every value must be finite and within the range the configuration promises
+	bool CheckRanges(GpuHeightGenerator& gpu)
 	{
-		Difference result;
-		for (int y = 0; y < cpu.GetHeight(); y++) {
-			for (int x = 0; x < cpu.GetWidth(); x++) {
-				const float a = cpu.At(x, y), b = gpu.At(x, y);
-				if (!std::isfinite(a) || !std::isfinite(b)) {
-					result.invalid = true;
-				}
-				const float difference = std::abs(a - b);
-				if (difference > tolerance) {
-					result.aboveTolerance++;
-				}
-				if (difference > result.max) {
-					result.max = difference;
-					result.x = x;
-					result.y = y;
-				}
-			}
-		}
-		return result;
-	}
-
-	//Runs fn with the console silenced, because the generators log every call
-	template<typename F>
-	auto Muted(F fn)
-	{
-		std::ostringstream sink;
-		std::streambuf* original = std::cout.rdbuf(sink.rdbuf());
-		auto result = fn();
-		std::cout.rdbuf(original);
-		return result;
-	}
-
-	bool CpuNoise(const noise::NoiseConfigParameters& config, float originx, float originy, HeightField& out)
-	{
-		return Muted([&] {
-			noise::SimplexNoiseClass generator;
-			if (!generator.Initialize(out.GetWidth(), out.GetHeight()) || !generator.GenerateFractalNoise(config, originx, originy)) {
-				return false;
-			}
-			out = generator.GetField();
-			return true;
-		});
-	}
-
-	bool CpuTerrain(const TerrainConfig& config, float originx, float originy, HeightField& out)
-	{
-		return Muted([&] {
-			TerrainGenerator generator;
-			if (!generator.Initialize(out.GetWidth(), out.GetHeight()) || !generator.GenerateTerrain(config, originx, originy)) {
-				return false;
-			}
-			out = generator.GetHeightField();
-			return true;
-		});
-	}
-
-	std::vector<CheckCase> BuildCases(GpuHeightGenerator& gpu)
-	{
-		std::vector<CheckCase> cases;
-		const auto addNoise = [&](const std::string& name, const noise::NoiseConfigParameters& config, float tolerance = noiseTolerance, float originx = 0.0f, float originy = 0.0f) {
-			cases.push_back({ "noise: " + name,
-				[=](HeightField& out) { return CpuNoise(config, originx, originy, out); },
-				[=, &gpu](TextureClass& target) { gpu.GenerateNoise(config, MapArea{ glm::vec2(originx, originy) }, target); },
-				tolerance });
-		};
-		const auto addTerrain = [&](const std::string& name, const TerrainConfig& config, float tolerance, float originx = 0.0f, float originy = 0.0f) {
-			cases.push_back({ "terrain: " + name,
-				[=](HeightField& out) { return CpuTerrain(config, originx, originy, out); },
-				[=, &gpu](TextureClass& target) { gpu.GenerateTerrain(config, MapArea{ glm::vec2(originx, originy) }, target); },
-				tolerance });
+		std::vector<RangeCase> cases;
+		const auto addNoise = [&](const std::string& name, const noise::NoiseConfigParameters& config, float min, float max) {
+			cases.push_back({ "noise: " + name, [=, &gpu](TextureClass& t) { gpu.GenerateNoise(config, MapArea{}, t); }, min, max });
 		};
 
 		noise::NoiseConfigParameters n;
-		addNoise("default", n);
-		addNoise("origin", n, noiseTolerance, 123.5f, -77.25f);
-
-		n = {}; n.seed = 98765; n.xoffset = -3.5f; n.yoffset = 12.25f;
-		addNoise("seed and offset", n);
-		n = {}; n.lacunarity = 3.1f; n.persistance = 0.8f; n.scale = 2.7f; n.constrast = 1.7f;
-		//Fewer octaves keep the strict tolerance, so a real error cannot hide behind the larger one
-		for (int octaves : { 1, 4, 8 }) {
-			n.octaves = octaves;
-			addNoise("fractal parameters, " + std::to_string(octaves) + " oct", n, octaves < 8 ? noiseTolerance : highFrequencyTolerance);
+		n.octaves = 8;
+		n.constrast = 1.5f;
+		for (auto [option, name, min] : { std::tuple{ noise::Options::NOTHING, "nothing", -1.0f }, { noise::Options::REFIT_ALL, "refit", 0.0f },
+			{ noise::Options::FLATTEN_NEGATIVES, "flatten", 0.0f }, { noise::Options::REVERT_NEGATIVES, "revert", 0.0f } }) {
+			n.option = option;
+			addNoise(std::string("option ") + name, n, min, 1.0f);
 		}
-
-		for (auto [option, name] : { std::pair{ noise::Options::REFIT_ALL, "refit" }, { noise::Options::FLATTEN_NEGATIVES, "flatten" },
-			{ noise::Options::REVERT_NEGATIVES, "revert" }, { noise::Options::NOTHING, "nothing" } }) {
-			n = {}; n.option = option;
-			addNoise(std::string("option ") + name, n);
-		}
-
-		n = {}; n.Ridge = true; n.RidgeGain = 3.0f; n.RidgeOffset = 0.8f; n.option = noise::Options::NOTHING;
-		addNoise("ridge", n);
+		n = {}; n.Ridge = true; n.option = noise::Options::NOTHING;
+		addNoise("ridge", n, 0.0f, 1.0f);
+		n = {}; n.Ridge = true; n.redistribution = 0.5f; n.option = noise::Options::NOTHING;
+		addNoise("ridge, redistribution 0.5", n, -1.0f, 1.0f);
 		n = {}; n.redistribution = 2.5f; n.option = noise::Options::NOTHING;
-		addNoise("redistribution 2.5", n);
-		n = {}; n.redistribution = 0.5f; n.option = noise::Options::NOTHING;
-		addNoise("redistribution 0.5", n);
+		addNoise("redistribution 2.5", n, -1.0f, 1.0f);
 		n = {}; n.symmetrical = true;
-		for (int octaves : { 1, 8 }) {
-			n.octaves = octaves;
-			addNoise("symmetrical, " + std::to_string(octaves) + " oct", n, octaves == 1 ? noiseTolerance : symmetricalTolerance);
-		}
-
+		addNoise("symmetrical", n, -1.0f, 1.0f);
 		for (auto [type, name] : { std::pair{ noise::IslandType::CONE, "cone" }, { noise::IslandType::DIAGONAL, "diagonal" },
 			{ noise::IslandType::EUCLIDEAN_SQUARED, "euclidean" }, { noise::IslandType::SQUARE_BUMP, "square bump" },
 			{ noise::IslandType::HYPERBOLOID, "hyperboloid" }, { noise::IslandType::SQUIRCLE, "squircle" }, { noise::IslandType::TRIG, "trig" } }) {
 			n = {}; n.island = true; n.islandType = type; n.mixPower = 0.6f;
-			addNoise(std::string("island ") + name, n);
+			addNoise(std::string("island ") + name, n, 0.0f, 1.0f);
 		}
 
 		TerrainConfig t = TerrainConfig::Default();
-		addTerrain("linear", t, noiseTolerance);
-		addTerrain("linear with origin", t, noiseTolerance, 40.0f, 900.5f);
+		cases.push_back({ "terrain: linear", [=, &gpu](TextureClass& target) { gpu.GenerateTerrain(t, MapArea{}, target); }, 0.0f, 1.0f });
 		t.method = EvaluationMethod::SPLINE_COMBINE;
-		addTerrain("linear splines", t, splineTolerance);
+		cases.push_back({ "terrain: linear splines", [=, &gpu](TextureClass& target) { gpu.GenerateTerrain(t, MapArea{}, target); }, 0.0f, 1.0f });
 		t.continentalnessSpline.cubic = t.mountainousnessSpline.cubic = t.weirdnessSpline.cubic = true;
-		addTerrain("cubic splines", t, splineTolerance);
-		t.method = EvaluationMethod::C;
-		addTerrain("no method", t, noiseTolerance);
-		return cases;
+		//A cubic spline overshoots between its points
+		cases.push_back({ "terrain: cubic splines", [=, &gpu](TextureClass& target) { gpu.GenerateTerrain(t, MapArea{}, target); }, -0.1f, 1.1f });
+
+		std::cout << "values: finite and within the range of the configuration\n";
+		TextureClass target(mapWidth, mapHeight, GL_R32F);
+		bool allOk = true;
+		for (const RangeCase& c : cases) {
+			c.generate(target);
+			const HeightField map = ReadHeight(target);
+			size_t outside = 0;
+			float low = map[0], high = map[0];
+			for (size_t i = 0; i < map.Size(); i++) {
+				outside += !(map[i] >= c.min && map[i] <= c.max) ? 1 : 0;
+				low = std::min(low, map[i]);
+				high = std::max(high, map[i]);
+			}
+			//A constant map means the configuration had no effect
+			const bool ok = outside == 0 && high > low;
+			allOk = allOk && ok;
+			std::ostringstream details;
+			details << std::fixed << std::setprecision(3) << "[" << low << ", " << high << "], " << outside << " outside";
+			Report(c.name, details.str(), ok);
+		}
+		return allOk;
 	}
 
-	//A cell lying right at a level boundary can land on the other side of it, because the noises differ slightly
-	constexpr double biomeMismatchTolerance = 0.001;
-
-	bool CheckBiomes(GpuHeightGenerator& gpu, const std::string& name, const TerrainConfig& terrain, const BiomeConfig& biomes, int width, int height)
+	//The same configuration gives the same map, and a change of the seed changes it
+	bool CheckDeterminism(GpuHeightGenerator& gpu)
 	{
-		BiomeMap cpuMap = Muted([&] {
-			TerrainGenerator terrainGenerator;
-			BiomeGenerator biomeGenerator;
-			BiomeMap map;
-			if (terrainGenerator.Initialize(width, height) && biomeGenerator.Initialize(width, height) && terrainGenerator.GenerateNoises(terrain) && biomeGenerator.GenerateComponentNoises(biomes)
-				&& biomeGenerator.Biomify(biomes, terrainGenerator.GetSelectedNoise(WorldGenParameter::CONTINENTALNESS), terrainGenerator.GetSelectedNoise(WorldGenParameter::MOUNTAINOUSNESS),
-					terrainGenerator.GetSelectedNoise(WorldGenParameter::WEIRDNESS))) {
-				map = biomeGenerator.GetBiomeMap();
-			}
-			return map;
-		});
-		if (cpuMap.Empty()) {
-			std::cout << name << ": [ERROR] CPU generation failed\n";
-			return false;
+		TextureClass first(mapWidth, mapHeight, GL_R32F), second(mapWidth, mapHeight, GL_R32F);
+		TerrainConfig config = TerrainConfig::Default();
+		gpu.GenerateTerrain(config, MapArea{}, first);
+		gpu.GenerateTerrain(config, MapArea{}, second);
+		const HeightField a = ReadHeight(first), b = ReadHeight(second);
+		const bool same = std::memcmp(a.Data(), b.Data(), a.Size() * sizeof(float)) == 0;
+		Report("terrain: generated twice", same ? "identical" : "different", same);
+
+		config.continentalness.seed += 1;
+		gpu.GenerateTerrain(config, MapArea{}, second);
+		const HeightField c = ReadHeight(second);
+		size_t changed = 0;
+		for (size_t i = 0; i < a.Size(); i++) {
+			changed += a[i] != c[i] ? 1 : 0;
 		}
+		//Most texels change; some stay where a factor is 0 anyway
+		const bool differs = changed > a.Size() / 2;
+		Report("terrain: other continentalness seed", std::to_string(changed) + " of " + std::to_string(a.Size()) + " texels changed", differs);
+		return same && differs;
+	}
 
-		TextureClass colors(width, height, GL_RGBA32F), ids(width, height, GL_R32I);
-		gpu.GenerateBiomes(biomes, terrain, biome::DefaultBiomes(), MapArea{}, colors, ids);
-		BiomeMap gpuMap(width, height);
-		ids.Read(GL_RED_INTEGER, GL_INT, static_cast<int>(gpuMap.Size() * sizeof(int)), gpuMap.Data());
-
-		//Every color must belong to the id next to it
-		std::vector<float> colorData(gpuMap.Size() * 4);
-		colors.Read(GL_RGBA, GL_FLOAT, static_cast<int>(colorData.size() * sizeof(float)), colorData.data());
+	//Ids come from the table and every color belongs to the id next to it
+	bool CheckBiomes(GpuHeightGenerator& gpu)
+	{
+		TextureClass colors(mapWidth, mapHeight, GL_RGBA32F), ids(mapWidth, mapHeight, GL_R32I);
 		const std::vector<biome::Biome> table = biome::DefaultBiomes();
-		size_t different = 0, wrongColor = 0;
-		for (size_t i = 0; i < gpuMap.Size(); i++) {
-			different += cpuMap[i] != gpuMap[i] ? 1 : 0;
-			const glm::vec3 expected = table[gpuMap[i]].GetColor();
+		gpu.GenerateBiomes(BiomeConfig::Default(), TerrainConfig::Default(), table, MapArea{}, colors, ids);
+		BiomeMap idMap(mapWidth, mapHeight);
+		ids.Read(GL_RED_INTEGER, GL_INT, static_cast<int>(idMap.Size() * sizeof(int)), idMap.Data());
+		std::vector<float> colorData(idMap.Size() * 4);
+		colors.Read(GL_RGBA, GL_FLOAT, static_cast<int>(colorData.size() * sizeof(float)), colorData.data());
+
+		size_t unknown = 0, wrongColor = 0;
+		std::vector<size_t> counts(table.size(), 0);
+		for (size_t i = 0; i < idMap.Size(); i++) {
+			const auto found = std::find_if(table.begin(), table.end(), [&](const biome::Biome& b) { return b.GetId() == idMap[i]; });
+			if (found == table.end()) {
+				unknown++;
+				continue;
+			}
+			counts[found - table.begin()]++;
+			const glm::vec3 expected = found->GetColor();
 			wrongColor += expected.r != colorData[i * 4] || expected.g != colorData[i * 4 + 1] || expected.b != colorData[i * 4 + 2] ? 1 : 0;
 		}
-
-		const double share = static_cast<double>(different) / static_cast<double>(gpuMap.Size());
-		const bool ok = share <= biomeMismatchTolerance && wrongColor == 0;
-		std::cout << std::left << std::setw(37) << name << different << " of " << gpuMap.Size() << " cells differ, wrong colors: " << wrongColor << "   " << (ok ? "ok" : "TOO DIFFERENT") << "\n";
-		return ok;
-	}
-
-	//Both sides read the same height map, so only the rounding of a few operations differs (e.g. a fused multiply-add on the GPU).
-	//Differences of nearly equal heights lose the relative precision, so the error is measured in height units,
-	//in steps of float at the largest height of the map
-	constexpr float surfaceUlpTolerance = 4.0f;
-	//Same distance between texels as in TerrainView; a power of two, so dividing by it rounds nothing
-	constexpr float surfaceTexelSize = 4.0f;
-
-	//Compares the surface map of the GPU with surface::Compute on the same input
-	//@param heightScale - multiplies the input, to test steep maps without a new generator
-	bool CheckSurface(GpuSurfacePass& pass, const std::string& name, HeightField height, float heightScale)
-	{
-		for (size_t i = 0; i < height.Size(); i++) {
-			height[i] *= heightScale;
-		}
-		const int width = height.GetWidth(), rows = height.GetHeight();
-		TextureClass input(width, rows, GL_R32F), output(width, rows, GL_RGBA32F);
-		input.Upload(height.Data(), GL_RED, GL_FLOAT);
-		pass.Run(input, surfaceTexelSize, output);
-		surface::DerivativeMap gpuMap(width, rows);
-		output.Read(GL_RGBA, GL_FLOAT, static_cast<int>(gpuMap.Size() * sizeof(surface::Derivatives)), gpuMap.Data());
-		const surface::DerivativeMap cpuMap = surface::Compute(height, surfaceTexelSize);
-
-		float highest = 0.0f;
-		for (size_t i = 0; i < height.Size(); i++) {
-			highest = std::max(highest, std::abs(height[i]));
-		}
-		const float ulp = std::max(highest, 1e-30f) * std::numeric_limits<float>::epsilon();
-
-		//Gradient times the texel size and Laplacian times its square are height differences
-		bool ok = true;
-		std::cout << std::left << std::setw(37) << name;
-		const char* channels[] = { "dx", "dy", "laplacian" };
-		for (int c = 0; c < 3; c++) {
-			const auto value = [c](const surface::Derivatives& d) {
-				return c == 0 ? d.dx * surfaceTexelSize : c == 1 ? d.dy * surfaceTexelSize : d.laplacian * surfaceTexelSize * surfaceTexelSize;
-			};
-			float difference = 0.0f;
-			bool invalid = false;
-			for (size_t i = 0; i < cpuMap.Size(); i++) {
-				const float a = value(cpuMap[i]), b = value(gpuMap[i]);
-				invalid = invalid || !std::isfinite(a) || !std::isfinite(b);
-				difference = std::max(difference, std::abs(a - b));
-			}
-			const float ulps = difference / ulp;
-			const bool channelOk = !invalid && ulps <= surfaceUlpTolerance;
-			ok = ok && channelOk;
-			std::cout << channels[c] << " " << std::fixed << std::setprecision(1) << ulps << " ulp" << std::defaultfloat << (channelOk ? "" : invalid ? " INVALID" : " TOO DIFFERENT") << "   ";
-		}
-		std::cout << (ok ? "ok" : "") << "\n";
+		const size_t present = static_cast<size_t>(std::count_if(counts.begin(), counts.end(), [](size_t c) { return c > 0; }));
+		//The default world has more than one biome on a map this large
+		const bool ok = unknown == 0 && wrongColor == 0 && present > 1;
+		Report("biomes: default", std::to_string(present) + " biomes, " + std::to_string(unknown) + " unknown ids, " + std::to_string(wrongColor) + " wrong colors", ok);
 		return ok;
 	}
 
 	//A chunk is a part of the map generated on its own, with an origin and the island size of the whole map; a coarser
 	//level of detail also takes every step-th sample. It has to equal the same samples of the whole map exactly,
 	//or chunk borders would show seams and levels would not meet
-	bool CheckChunks(GpuHeightGenerator& gpu, int width, int height)
+	bool CheckChunks(GpuHeightGenerator& gpu)
 	{
 		constexpr int partWidth = 131, partHeight = 50;
 		const glm::ivec2 corner(300, 30);
@@ -276,28 +171,29 @@ namespace {
 		const auto check = [&](const std::string& name, GLenum format, GLenum type, const std::function<void(const MapArea&, TextureClass&)>& generate) {
 			constexpr int bytes = 4;
 			const GLenum internalFormat = format == GL_RED_INTEGER ? GL_R32I : GL_R32F;
-			TextureClass whole(width, height, internalFormat);
+			TextureClass whole(mapWidth, mapHeight, internalFormat);
 			generate(MapArea{}, whole);
-			std::vector<unsigned char> wholeData(static_cast<size_t>(width) * height * bytes), partData(static_cast<size_t>(partWidth) * partHeight * bytes);
+			std::vector<unsigned char> wholeData(static_cast<size_t>(mapWidth) * mapHeight * bytes), partData(static_cast<size_t>(partWidth) * partHeight * bytes);
 			whole.Read(format, type, static_cast<int>(wholeData.size()), wholeData.data());
 			for (int step : { 1, 2, 4 }) {
 				TextureClass part(partWidth, partHeight, internalFormat);
-				generate(MapArea{ glm::vec2(corner), static_cast<float>(step), glm::ivec2(width, height) }, part);
+				generate(MapArea{ glm::vec2(corner), static_cast<float>(step), glm::ivec2(mapWidth, mapHeight) }, part);
 				part.Read(format, type, static_cast<int>(partData.size()), partData.data());
 				int different = 0;
 				for (int y = 0; y < partHeight; y++) {
 					for (int x = 0; x < partWidth; x++) {
-						const unsigned char* a = &wholeData[(static_cast<size_t>(corner.y + y * step) * width + corner.x + x * step) * bytes];
+						const unsigned char* a = &wholeData[(static_cast<size_t>(corner.y + y * step) * mapWidth + corner.x + x * step) * bytes];
 						const unsigned char* b = &partData[(static_cast<size_t>(y) * partWidth + x) * bytes];
 						different += std::memcmp(a, b, bytes) != 0 ? 1 : 0;
 					}
 				}
 				const bool ok = different == 0;
 				allOk = allOk && ok;
-				std::cout << std::left << std::setw(37) << (name + ", step " + std::to_string(step)) << different << " of " << partWidth * partHeight << " texels differ   " << (ok ? "ok" : "SEAMS") << "\n";
+				Report(name + ", step " + std::to_string(step), std::to_string(different) + " of " + std::to_string(partWidth * partHeight) + " texels differ", ok);
 			}
 		};
 
+		std::cout << "\nchunks: a part of the map, also every 2nd and 4th sample, equals the whole map bit for bit\n";
 		noise::NoiseConfigParameters n;
 		n.island = true;
 		n.mixPower = 0.6f;
@@ -314,58 +210,67 @@ namespace {
 		return allOk;
 	}
 
-	bool RunComparison(GpuHeightGenerator& gpu, GpuSurfacePass& surfacePass)
+	//Gradient (dx, dy) and Laplacian of h per world unit, as surface_compute.shader writes them
+	struct Derivatives {
+		float dx, dy, laplacian, reserved;
+	};
+
+	//Runs the surface pass on h(x, y) given in texels and checks every texel against the expected derivatives
+	bool CheckSurfaceCase(GpuSurfacePass& pass, const std::string& name, const std::function<float(float, float)>& h,
+		const std::function<Derivatives(int, int)>& expected)
 	{
-		//Not square, so swapped axes are detected; larger than one part of a dispatch along X
-		constexpr int width = 1100, height = 257;
-		TextureClass target(width, height, GL_R32F);
-		HeightField cpuMap(width, height), gpuMap(width, height);
-
-		bool allOk = true;
-		std::cout << "case                                 max difference   at          result\n";
-		for (const CheckCase& c : BuildCases(gpu)) {
-			if (!c.cpu(cpuMap)) {
-				std::cout << c.name << ": [ERROR] CPU generation failed\n";
-				allOk = false;
-				continue;
-			}
-			c.gpu(target);
-			target.Read(GL_RED, GL_FLOAT, static_cast<int>(gpuMap.Size() * sizeof(float)), gpuMap.Data());
-
-			const Difference difference = Compare(cpuMap, gpuMap, c.tolerance);
-			const bool ok = !difference.invalid && difference.max <= c.tolerance;
-			allOk = allOk && ok;
-			std::cout << std::left << std::setw(37) << c.name << std::scientific << std::setprecision(2) << std::setw(17) << difference.max
-				<< std::setw(12) << (std::to_string(difference.x) + "," + std::to_string(difference.y))
-				<< (ok ? "ok" : (difference.invalid ? "INVALID VALUES" : "TOO DIFFERENT")) << std::defaultfloat
-				<< (difference.aboveTolerance > 0 ? " (" + std::to_string(difference.aboveTolerance) + " px)" : "") << "\n";
-		}
-
-		const TerrainConfig terrain = TerrainConfig::Default();
-		BiomeConfig biomes = BiomeConfig::Default();
-		allOk = CheckBiomes(gpu, "biomes: default", terrain, biomes, width, height) && allOk;
-		biomes.temperature.seed = 777;
-		biomes.humidityLevels = { -1.0f, -0.2f, 0.1f, 0.4f, 1.01f };
-		biomes.continentalnessLevels = { -1.0f, -0.4f, -0.1f, 0.2f, 0.5f, 1.01f };
-		allOk = CheckBiomes(gpu, "biomes: other seed and levels", terrain, biomes, width, height) && allOk;
-
-		std::cout << "\n";
-		allOk = CheckChunks(gpu, width, height) && allOk;
-
-		std::cout << "\nsurface map: largest difference in height units, in steps of float at the largest height\n";
+		//Small and not square; the borders are a large part of it, so one-sided differences are covered
+		constexpr int width = 7, height = 5;
 		HeightField input(width, height);
-		if (CpuTerrain(terrain, 0.0f, 0.0f, input)) {
-			allOk = CheckSurface(surfacePass, "surface: default terrain", input, 1.0f) && allOk;
-			allOk = CheckSurface(surfacePass, "surface: default terrain x 256", input, 256.0f) && allOk;
+		for (int y = 0; y < height; y++) {
+			for (int x = 0; x < width; x++) {
+				input.At(x, y) = h(static_cast<float>(x), static_cast<float>(y));
+			}
 		}
-		noise::NoiseConfigParameters rough;
-		rough.octaves = 8;
-		rough.lacunarity = 3.1f;
-		rough.scale = 2.7f;
-		if (CpuNoise(rough, 0.0f, 0.0f, input)) {
-			allOk = CheckSurface(surfacePass, "surface: 8 octave noise", input, 1.0f) && allOk;
+		TextureClass inputTexture(width, height, GL_R32F), output(width, height, GL_RGBA32F);
+		inputTexture.Upload(input.Data(), GL_RED, GL_FLOAT);
+		pass.Run(inputTexture, surfaceTexelSize, output);
+		std::vector<Derivatives> result(static_cast<size_t>(width) * height);
+		output.Read(GL_RGBA, GL_FLOAT, static_cast<int>(result.size() * sizeof(Derivatives)), result.data());
+
+		float worst = 0.0f;
+		for (int y = 0; y < height; y++) {
+			for (int x = 0; x < width; x++) {
+				const Derivatives& d = result[static_cast<size_t>(y) * width + x];
+				const Derivatives e = expected(x, y);
+				worst = std::max({ worst, std::abs(d.dx - e.dx), std::abs(d.dy - e.dy), std::abs(d.laplacian - e.laplacian) });
+				if (!std::isfinite(d.dx) || !std::isfinite(d.dy) || !std::isfinite(d.laplacian)) {
+					worst = INFINITY;
+				}
+			}
 		}
-		return allOk;
+		//Inputs are small integers and halves, so the differences are exact up to a rounding or two
+		const bool ok = worst <= 1e-5f;
+		std::ostringstream details;
+		details << "largest error " << std::scientific << std::setprecision(1) << worst;
+		Report(name, details.str(), ok);
+		return ok;
+	}
+
+	bool CheckSurface(GpuSurfacePass& pass)
+	{
+		std::cout << "\nsurface map: derivatives of maps with known derivatives\n";
+		constexpr float t = surfaceTexelSize;
+		bool ok = CheckSurfaceCase(pass, "surface: flat", [](float, float) { return 0.3f; },
+			[](int, int) { return Derivatives{ 0.0f, 0.0f, 0.0f, 0.0f }; });
+		//Rises by 0.5 per texel along x and falls by 0.25 along y; the same gradient on the borders
+		ok = CheckSurfaceCase(pass, "surface: plane", [](float x, float y) { return 0.5f * x - 0.25f * y; },
+			[](int, int) { return Derivatives{ 0.5f / t, -0.25f / t, 0.0f, 0.0f }; }) && ok;
+		//h = x^2 + y^2: second difference 2 along each axis; inside, the central difference of x^2 is exactly 2x
+		ok = CheckSurfaceCase(pass, "surface: bowl", [](float x, float y) { return x * x + y * y; },
+			[](int x, int y) {
+				const auto first = [](int v, int size) {
+					//One-sided at the borders: (v + 1)^2 - v^2 or v^2 - (v - 1)^2
+					return v == 0 ? 1.0f : v == size - 1 ? static_cast<float>(2 * v - 1) : static_cast<float>(2 * v);
+				};
+				return Derivatives{ first(x, 7) / t, first(y, 5) / t, 4.0f / (t * t), 0.0f };
+			}) && ok;
+		return ok;
 	}
 
 	//@return median time of finishing the work given by fn, in ms. The first run is skipped: drivers finish compiling shaders then
@@ -386,32 +291,25 @@ namespace {
 	void RunTimings(GpuHeightGenerator& gpu, GpuSurfacePass& surfacePass)
 	{
 		const TerrainConfig config = TerrainConfig::Default();
-		std::cout << "\nterrain, default config   CPU [ms]   GPU [ms]\n";
+		const BiomeConfig biomes = BiomeConfig::Default();
+		const std::vector<biome::Biome> table = biome::DefaultBiomes();
+		std::cout << "\nGPU time [ms]   terrain   biomes   surface map\n";
 		for (int size : { 512, 1024, 2048, 4096 }) {
-			TextureClass target(size, size, GL_R32F);
-			const double gpuMs = MedianMs([&] {
-				gpu.GenerateTerrain(config, MapArea{}, target);
+			TextureClass height(size, size, GL_R32F), colors(size, size, GL_RGBA32F), ids(size, size, GL_R32I), surface(size, size, GL_RGBA32F);
+			const double terrainMs = MedianMs([&] {
+				gpu.GenerateTerrain(config, MapArea{}, height);
 				glFinish();
 			}, 9);
-			HeightField cpuMap(size, size);
-			const double cpuMs = MedianMs([&] { CpuTerrain(config, 0.0f, 0.0f, cpuMap); }, 3);
-			std::cout << std::left << std::setw(26) << (std::to_string(size) + "x" + std::to_string(size)) << std::right << std::fixed << std::setprecision(2)
-				<< std::setw(8) << cpuMs << std::setw(11) << gpuMs << std::defaultfloat << "\n" << std::left;
-		}
-
-		std::cout << "\nsurface map               CPU [ms]   GPU [ms]\n";
-		for (int size : { 512, 1024, 2048, 4096 }) {
-			TextureClass height(size, size, GL_R32F), target(size, size, GL_RGBA32F);
-			gpu.GenerateTerrain(config, MapArea{}, height);
-			const double gpuMs = MedianMs([&] {
-				surfacePass.Run(height, surfaceTexelSize, target);
+			const double biomesMs = MedianMs([&] {
+				gpu.GenerateBiomes(biomes, config, table, MapArea{}, colors, ids);
 				glFinish();
 			}, 9);
-			HeightField cpuHeight(size, size);
-			height.Read(GL_RED, GL_FLOAT, static_cast<int>(cpuHeight.Size() * sizeof(float)), cpuHeight.Data());
-			const double cpuMs = MedianMs([&] { surface::Compute(cpuHeight, surfaceTexelSize); }, 3);
-			std::cout << std::left << std::setw(26) << (std::to_string(size) + "x" + std::to_string(size)) << std::right << std::fixed << std::setprecision(2)
-				<< std::setw(8) << cpuMs << std::setw(11) << gpuMs << std::defaultfloat << "\n" << std::left;
+			const double surfaceMs = MedianMs([&] {
+				surfacePass.Run(height, surfaceTexelSize, surface);
+				glFinish();
+			}, 9);
+			std::cout << std::left << std::setw(14) << (std::to_string(size) + "x" + std::to_string(size)) << std::right << std::fixed << std::setprecision(2)
+				<< std::setw(10) << terrainMs << std::setw(9) << biomesMs << std::setw(14) << surfaceMs << std::defaultfloat << "\n" << std::left;
 		}
 	}
 }
@@ -444,9 +342,13 @@ int RunGpuHeightCheck()
 		GpuHeightGenerator gpu;
 		GpuSurfacePass surfacePass;
 		if (gpu.Initialize() && surfacePass.Initialize()) {
-			const bool ok = RunComparison(gpu, surfacePass);
+			bool ok = CheckRanges(gpu);
+			ok = CheckDeterminism(gpu) && ok;
+			ok = CheckBiomes(gpu) && ok;
+			ok = CheckChunks(gpu) && ok;
+			ok = CheckSurface(surfacePass) && ok;
 			RunTimings(gpu, surfacePass);
-			std::cout << "\n" << (ok ? "All maps match" : "[ERROR] Some maps differ") << std::endl;
+			std::cout << "\n" << (ok ? "All checks passed" : "[ERROR] Some checks failed") << std::endl;
 			result = ok ? 0 : 1;
 		}
 	}

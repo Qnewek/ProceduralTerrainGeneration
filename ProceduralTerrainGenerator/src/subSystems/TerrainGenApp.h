@@ -13,7 +13,6 @@
 #include "Erosion.h"
 #include "LightSource.h"
 #include "Sky.h"
-#include "TerrainGenerator.h"
 
 #include "NoiseBasedGenerationSys.h"
 #include "TerrainGenerationSys.h"
