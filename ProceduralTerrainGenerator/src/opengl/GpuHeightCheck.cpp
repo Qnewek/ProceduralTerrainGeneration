@@ -84,12 +84,13 @@ namespace {
 		}
 
 		TerrainConfig t = TerrainConfig::Default();
+		t.method = EvaluationMethod::LINEAR_COMBINE;
 		cases.push_back({ "terrain: linear", [=, &gpu](TextureClass& target) { gpu.GenerateTerrain(t, MapArea{}, target); }, 0.0f, 1.0f });
 		t.method = EvaluationMethod::SPLINE_COMBINE;
 		cases.push_back({ "terrain: linear splines", [=, &gpu](TextureClass& target) { gpu.GenerateTerrain(t, MapArea{}, target); }, 0.0f, 1.0f });
 		t.continentalnessSpline.cubic = t.mountainousnessSpline.cubic = t.weirdnessSpline.cubic = true;
-		//A cubic spline overshoots between its points
-		cases.push_back({ "terrain: cubic splines", [=, &gpu](TextureClass& target) { gpu.GenerateTerrain(t, MapArea{}, target); }, -0.1f, 1.1f });
+		//Cubic splines are monotone (SampleSpline), so they stay in [0, 1] like their points
+		cases.push_back({ "terrain: cubic splines", [=, &gpu](TextureClass& target) { gpu.GenerateTerrain(t, MapArea{}, target); }, 0.0f, 1.0f });
 		t = TerrainConfig::Default();
 		t.method = EvaluationMethod::LAYERED;
 		cases.push_back({ "terrain: layered", [=, &gpu](TextureClass& target) { gpu.GenerateTerrain(t, MapArea{}, target); }, 0.0f, 1.0f });
@@ -97,7 +98,10 @@ namespace {
 		cases.push_back({ "terrain: layered, only mountains", [=, &gpu](TextureClass& target) { gpu.GenerateTerrain(t, MapArea{}, target); }, 0.0f, 1.0f });
 		t.mountainShare = 0.6f;
 		t.continentalnessSpline.cubic = t.mountainousnessSpline.cubic = t.peaksSpline.cubic = true;
-		cases.push_back({ "terrain: layered, cubic splines", [=, &gpu](TextureClass& target) { gpu.GenerateTerrain(t, MapArea{}, target); }, -0.1f, 1.1f });
+		cases.push_back({ "terrain: layered, cubic splines", [=, &gpu](TextureClass& target) { gpu.GenerateTerrain(t, MapArea{}, target); }, 0.0f, 1.0f });
+		//A steep rise next to a flat part, where a natural cubic spline went far above 1
+		t.continentalnessSpline = { { -1.0, -0.9, 1.0 }, { 0.0, 1.0, 1.0 }, true };
+		cases.push_back({ "terrain: layered, steep cubic spline", [=, &gpu](TextureClass& target) { gpu.GenerateTerrain(t, MapArea{}, target); }, 0.0f, 1.0f });
 
 		std::cout << "values: finite and within the range of the configuration\n";
 		TextureClass target(mapWidth, mapHeight, GL_R32F);
