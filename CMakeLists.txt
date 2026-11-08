@@ -30,7 +30,7 @@ function(ptg_set_warnings target)
 	endif()
 endfunction()
 
-# Code kept in the repository (Simplex noise with per-instance permutations, tk::spline, stb_image implementation)
+# Code kept in the repository (Simplex noise with per-instance permutations, stb_image implementation)
 add_library(ptg_vendor STATIC
 	${PTG_SRC}/vendor/Simplex/SimplexNoise.cpp
 	${PTG_SRC}/vendor/stb_image/stb_image.cpp
@@ -46,6 +46,7 @@ add_library(ptg_core STATIC
 	${PTG_SRC}/terrainGeneration/HeightmapExport.cpp
 	${PTG_SRC}/terrainGeneration/HeightmapImport.cpp
 	${PTG_SRC}/terrainGeneration/Preset.cpp
+	${PTG_SRC}/terrainGeneration/SplineSampling.cpp
 )
 target_include_directories(ptg_core PUBLIC ${PTG_SRC}/terrainGeneration)
 target_link_libraries(ptg_core PUBLIC ptg_vendor glm::glm)
@@ -111,6 +112,7 @@ add_executable(ptg_tests
 	${PTG_DIR}/tests/HeightmapImportTests.cpp
 	${PTG_DIR}/tests/PermutationTests.cpp
 	${PTG_DIR}/tests/PresetTests.cpp
+	${PTG_DIR}/tests/SplineTests.cpp
 	${PTG_DIR}/tests/RollingStatsTests.cpp
 	${PTG_DIR}/tests/TestMain.cpp
 )

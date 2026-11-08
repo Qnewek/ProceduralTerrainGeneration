@@ -59,6 +59,7 @@ ProceduralTerrainGenerator/
       Biome.*                    biom = zakresy wartości 5 szumów + kolor; najbliższy biom (Nearest) i wagi przejść (BlendWeight) — opis reguł, które liczy biome_compute.shader
       Erosion.*                  erozja kroplowa (CPU, lista jednokierunkowa kropel)
       Grid.h                     mapy Grid<T>
+      SplineSampling.*           próbkowanie splajnu do tablicy (dla GPU i wykresu w edytorze)
       Frustum.h                  płaszczyzny frustum z macierzy i test AABB (culling chunków)
       Preset.*                   zapis/odczyt WorldConfig i NoiseMapConfig jako JSON + walidacja
       HeightmapExport.*          zapis mapy jako PNG 16-bit lub RAW R16; FileIO.* = zapis przez plik tymczasowy
@@ -80,7 +81,7 @@ ProceduralTerrainGenerator/
       ExportPanel.*              sekcja „Saving” w ImGui; subsystem podaje mapy do zapisu i ich zakres wartości
       FileDialog.*               systemowe okno wyboru pliku (tylko Windows, comdlg32); przy porcie na Linuksa do zastąpienia
       utilities.*                helpery ImGui (NoiseImGui, DisplayModeImGui...), siatka patchy, kolory biomów
-    vendor/                      SimplexNoise (z niego tylko makePermutation: tablice permutacji dla GPU), tk::spline (próbkowanie splajnów do tablicy dla GPU), stb_image
+    vendor/                      SimplexNoise (z niego tylko makePermutation: tablice permutacji dla GPU), stb_image
   tests/                         testy jednostkowe ptg_core (doctest)
   res/shaders/
     TerrainShaders/              VS → TCS → TES → FS, jedyny zestaw dla terenu (oba tryby)
@@ -124,7 +125,7 @@ Wartości szumów są w [-1, 1]. Konwencja indeksowania: `map[y * width + x]`.
   subsystem generuje w tle i przekazuje wynik do `TerrainView`. Stan edytorów (wybrany szum, wciśnięte przyciski) to nie config.
 - Includy własne po nazwie pliku (`#include "Noise.h"` — katalogi `src/*` są w include path targetów).
   Zależności z vcpkg bez podkatalogu (`"imgui.h"`, `"implot.h"`, `"stb_image.h"`, `<GL/glew.h>`, `"glm/glm.hpp"`),
-  kod z `src/vendor` z podkatalogiem (`"Simplex/SimplexNoise.h"`, `"Splines/spline.h"`).
+  kod z `src/vendor` z podkatalogiem (`"Simplex/SimplexNoise.h"`).
 - Komentarze po angielsku, w stylu `//@param`.
 
 ## Pułapki — przeczytaj zanim zaczniesz zmieniać
@@ -137,8 +138,10 @@ Wartości szumów są w [-1, 1]. Konwencja indeksowania: `map[y * width + x]`.
   wątku roboczym: bez OpenGL, bez ImGui, bez pól subsystemu (jest `static`). OpenGL tylko w wątku głównym, więc `GpuHeightGenerator` działa w `Update()`.
 - Odczyt z GPU (`ReadLayer`, `TextureClass::Read`) czeka na zakończenie pracy GPU; nie wołaj go co klatkę. Wyjątek: identyfikatory biomów po każdej ich generacji, dla nazwy biomu pod kamerą.
 - `GpuHeightGenerator::BeginMeasure`/`EndMeasure` to `GL_TIME_ELAPSED`, więc nie mogą nachodzić na pomiary sceny; działają, bo `Update()` idzie przed `BeginScene`.
-- Splajny: domyślne są liniowe, a po „Set new spline points” edytowany splajn staje się kubiczny
-  (`SplinePoints::cubic`) — zachowane z wersji sprzed A3. GPU dostaje splajn jako tablicę 1024 próbek (`SetSpline`).
+- Splajny: liniowe albo kubiczne wg `SplinePoints::cubic` (checkbox „Smooth (cubic)” w edytorze). Kubiczny = monotoniczny PCHIP (własna implementacja,
+  tk::spline usunięty 2026-11-08): nie wychodzi poza wartości sąsiednich punktów, więc splajn z punktami w [0, 1] daje wynik w [0, 1]. GPU dostaje splajn jako tablicę 1024 próbek, a edytor rysuje
+  krzywą tą samą funkcją (`SampleSpline`, `SplineSampling.*`). Edytor zmienia splajn w configu na żywo (bez kopii); końce zostają w x = -1 i 1, minimum 3 punkty.
+  Domyślna metoda terenu to LAYERED (Linear nie używa splajnów).
 - Uniformy terenu ustawia wyłącznie `TerrainView::Draw` — subsystemy nie dotykają shadera. Wysokość bierze się
   z warstwy podanej w `Draw` (`heightLayer`: TERRAIN = jednostka 0, OVERLAY = 1 dla podglądu szumu / erozji w Noise heightmap).
   TerrainGen zawsze pokazuje teren wynikowy; edytowany szum składowy widać tylko w `NoisePreview` w panelu, a zmiany jego parametrów od razu regenerują teren (i biomy, jeśli są włączone).
