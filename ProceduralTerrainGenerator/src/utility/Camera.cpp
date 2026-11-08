@@ -137,7 +137,8 @@ void Camera::RotateCamera(GLFWwindow* window) {
 void Camera::ImGuiDraw() {
 	if (ImGui::CollapsingHeader("Camera settings", ImGuiTreeNodeFlags_DefaultOpen)) {
 		ImGui::DragFloat3("Camera position", glm::value_ptr(position), 1.0f);
-		ImGui::SliderFloat("Camera speed", &initSpeed, 0.1f, 200.0f);
+		//World units per second; a map texel is 4 units at model scale 1
+		ImGui::SliderFloat("Camera speed", &initSpeed, 0.1f, 2000.0f, "%.1f", ImGuiSliderFlags_Logarithmic);
 		ImGui::SliderFloat("Camera FOV", &fov, 1.0f, 120.0f);
 		ImGui::SliderFloat("Camera sensitivity", &sensitivity, 0.01f, 1.0f);
 		//Chunks of the infinite world get coarser with distance, so they can be seen far away

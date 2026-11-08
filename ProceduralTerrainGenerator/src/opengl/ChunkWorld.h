@@ -1,5 +1,6 @@
 #pragma once
 
+#include <chrono>
 #include <cstdint>
 #include <functional>
 #include <memory>
@@ -47,8 +48,9 @@ public:
 	//Level of detail settings
 	void ImGuiDraw();
 
-	//Every chunk has to be generated again; old contents stay shown until replaced
-	void Invalidate() { worldVersion++; }
+	//Every chunk has to be generated again; old contents stay shown until replaced.
+	//Starts measuring how long the view takes to show the change
+	void Invalidate();
 	//Biome maps are generated only while enabled; a change invalidates the chunks
 	void SetBiomes(bool enabled);
 	//Puts map texel (0, 0) where TerrainView draws it for a map of this size, and makes islands fill that size;
@@ -86,6 +88,10 @@ public:
 	int GetPendingCount() const { return static_cast<int>(pending.size()); }
 	//Coarsest level among the chunks drawn
 	int GetCoarsestLevel() const { return coarsestLevel; }
+	//Part of the view has nothing to draw: a chunk in view has neither its own maps nor a generated replacement
+	bool HasHoleInView() const { return holeInView; }
+	//Output panel: time from the last change (Invalidate) until every chunk drawn showed it, and until no chunk in view waited (full detail)
+	void ImGuiUpdateTimes() const;
 
 private:
 	struct Chunk {
@@ -116,6 +122,8 @@ private:
 	//Existing chunk, or a new one with textures of a freed chunk if there is one
 	Chunk& Obtain(int level, glm::ivec2 coord);
 	void AllocateTextures(Chunk& chunk);
+	//Called by Plan: finishes the measurement of the last change when the view shows it
+	void MeasureChange();
 	void BuildMesh();
 
 	std::unordered_map<uint64_t, Chunk> chunks;
@@ -126,6 +134,13 @@ private:
 	std::vector<PendingChunk> pending;
 	size_t visited = 0;
 	int inRange = 0;
+	bool holeInView = false;
+
+	//Measuring a change: time of the last Invalidate, results (negative = not yet)
+	std::chrono::steady_clock::time_point changeTime;
+	bool measuringChange = false;
+	double updateMs = -1.0, fullDetailMs = -1.0;	//from the last change until the view shows it / until full detail
+	int measuredChanges = 0;
 	int coarsestLevel = 0;
 
 	//A chunk closer to the camera than this many of its sizes is replaced by its children
@@ -137,6 +152,8 @@ private:
 	glm::vec2 mapOrigin = glm::vec2(0.0f);
 	glm::vec2 lastCenter = glm::vec2(0.0f);
 	float lastRadius = 0.0f;
+	//Distance up to which the last Plan visited chunks, a little past the view distance
+	float planRadius = 0.0f;
 
 	//Copy of the biome ids of one chunk on the CPU
 	BiomeMap biomeCopy;
