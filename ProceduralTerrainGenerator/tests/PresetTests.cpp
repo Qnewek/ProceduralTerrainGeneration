@@ -33,6 +33,11 @@ static noise::NoiseConfigParameters DistinctNoise(int base)
 	n.mixPower = b + 1.2f;
 	n.islandType = noise::IslandType::SQUIRCLE;
 	n.symmetrical = true;
+	n.warpStrength = b + 1.3f;
+	n.warpScale = b + 1.4f;
+	n.slopeErosion = b + 1.5f;
+	n.terraceSteps = 5 + base;
+	n.terraceSharpness = b + 1.6f;
 	return n;
 }
 
@@ -57,6 +62,11 @@ static void CheckSameNoise(const noise::NoiseConfigParameters& a, const noise::N
 	CHECK(a.mixPower == b.mixPower);
 	CHECK(a.islandType == b.islandType);
 	CHECK(a.symmetrical == b.symmetrical);
+	CHECK(a.warpStrength == b.warpStrength);
+	CHECK(a.warpScale == b.warpScale);
+	CHECK(a.slopeErosion == b.slopeErosion);
+	CHECK(a.terraceSteps == b.terraceSteps);
+	CHECK(a.terraceSharpness == b.terraceSharpness);
 }
 
 static void CheckSameSpline(const SplinePoints& a, const SplinePoints& b)
@@ -236,6 +246,9 @@ TEST_CASE("Invalid presets are rejected and the config stays unchanged")
 		{ "float out of range", Replaced(valid, "\"scale\": 1.3", "\"scale\": 1e300") },
 		{ "zero octaves", Replaced(valid, "\"octaves\": 3", "\"octaves\": 0") },
 		{ "zero resolution", Replaced(valid, "\"resolution\": 301", "\"resolution\": 0") },
+		{ "negative slope erosion", Replaced(valid, "\"slopeErosion\": 2.5", "\"slopeErosion\": -1.0") },
+		{ "negative terrace steps", Replaced(valid, "\"terraceSteps\": 6", "\"terraceSteps\": -1") },
+		{ "too many terrace steps", Replaced(valid, "\"terraceSteps\": 6", "\"terraceSteps\": 1000") },
 		{ "spline sizes differ", Replaced(valid, "0.2,", "") },
 		{ "spline x not ascending", Replaced(valid, "0.1,", "-1.0,") },
 		{ "spline y out of range", Replaced(valid, "0.2,", "2.0,") },

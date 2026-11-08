@@ -22,9 +22,10 @@ namespace {
 	//Layout of NoiseParams in the shaders (std430)
 	struct GpuNoiseParams {
 		float xoffset, yoffset, scale, contrast, redistribution, lacunarity, persistence, revertGain, ridgeGain, ridgeOffset, mixPower;
-		int32_t resolution, octaves, option, ridge, island, islandType, symmetrical;
+		float warpStrength, warpScale, slopeErosion, terraceSharpness;
+		int32_t resolution, octaves, option, ridge, island, islandType, symmetrical, terraceSteps;
 	};
-	static_assert(sizeof(GpuNoiseParams) == 72);
+	static_assert(sizeof(GpuNoiseParams) == 92);
 
 	//Layout of the HeightInput block in the height shader (std430)
 	struct GpuHeightInput {
@@ -51,7 +52,9 @@ namespace {
 	{
 		noises[index] = {
 			n.xoffset, n.yoffset, n.scale, n.constrast, n.redistribution, n.lacunarity, n.persistance, n.revertGain, n.RidgeGain, n.RidgeOffset, n.mixPower,
-			n.resolution, n.octaves, static_cast<int32_t>(n.option), n.Ridge ? 1 : 0, n.island ? 1 : 0, static_cast<int32_t>(n.islandType), n.symmetrical ? 1 : 0
+			n.warpStrength, n.warpScale, n.slopeErosion, n.terraceSharpness,
+			n.resolution, n.octaves, static_cast<int32_t>(n.option), n.Ridge ? 1 : 0, n.island ? 1 : 0, static_cast<int32_t>(n.islandType), n.symmetrical ? 1 : 0,
+			n.terraceSteps
 		};
 
 		std::array<uint8_t, 256> perm;
