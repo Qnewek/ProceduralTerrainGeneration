@@ -6,6 +6,38 @@ layout(vertices=4) out;
 in vec2 TexCoord[];
 out vec2 TextureCoord[];
 
+uniform float heightScale;
+uniform float skirtDepth;
+
+//Largest absolute height of a map (noises are in [-1, 1]) with a margin; heightBound in ChunkWorld.cpp
+const float HEIGHT_BOUND = 1.5;
+
+//true if the patch, with any height it can get in the TES, lies entirely outside one plane of the view frustum
+bool outsideFrustum()
+{
+    float top = HEIGHT_BOUND * abs(heightScale);
+    float bottom = -top - skirtDepth;
+    mat4 clipFromModel = projection * view * model;
+    //Corners of the box around the patch in clip space; a point is inside when -w <= x, y, z <= w
+    vec4 corners[8];
+    for (int i = 0; i < 4; i++) {
+        vec4 p = gl_in[i].gl_Position;
+        corners[i * 2] = clipFromModel * vec4(p.x, bottom, p.z, 1.0);
+        corners[i * 2 + 1] = clipFromModel * vec4(p.x, top, p.z, 1.0);
+    }
+    for (int axis = 0; axis < 3; axis++) {
+        bool belowAll = true, aboveAll = true;
+        for (int i = 0; i < 8; i++) {
+            belowAll = belowAll && corners[i][axis] < -corners[i].w;
+            aboveAll = aboveAll && corners[i][axis] > corners[i].w;
+        }
+        if (belowAll || aboveAll) {
+            return true;
+        }
+    }
+    return false;
+}
+
 void main()
 {
     gl_out[gl_InvocationID].gl_Position = gl_in[gl_InvocationID].gl_Position;
@@ -13,6 +45,17 @@ void main()
 
     if(gl_InvocationID == 0)
     {
+        //A tessellation level of 0 discards the patch
+        if (outsideFrustum()) {
+            gl_TessLevelOuter[0] = 0.0;
+            gl_TessLevelOuter[1] = 0.0;
+            gl_TessLevelOuter[2] = 0.0;
+            gl_TessLevelOuter[3] = 0.0;
+            gl_TessLevelInner[0] = 0.0;
+            gl_TessLevelInner[1] = 0.0;
+            return;
+        }
+
         const int MIN_TESS_LEVEL = 4;
         const int MAX_TESS_LEVEL = 64;
         const float MIN_DISTANCE = 20;

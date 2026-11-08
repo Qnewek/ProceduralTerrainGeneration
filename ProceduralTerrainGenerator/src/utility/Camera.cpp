@@ -152,14 +152,23 @@ void Camera::ImGuiOutPut()
 	ImGui::Text("Camera Position: (%.2f, %.2f, %.2f)", this->GetPosition().x, this->GetPosition().y, this->GetPosition().z);
 }
 
+glm::mat4 Camera::ComputeView() const
+{
+	return glm::lookAt(position, position + front, up);
+}
+
+glm::mat4 Camera::ComputeProjection() const
+{
+	//The near plane moves away with a long render distance, or the depth buffer would lack precision far away
+	return glm::perspective(glm::radians(fov), (float)screenWidth / (float)screenHeight, std::max(viewDist.x, viewDist.y / 20000.0f), viewDist.y);
+}
+
 glm::mat4* Camera::GetViewMatrix() {
-	view = glm::lookAt(position, position + front, up);
+	view = ComputeView();
 	return &view;
 }
 glm::mat4* Camera::GetProjectionMatrix() {
-	projection = glm::mat4(1.0f);
-	//The near plane moves away with a long render distance, or the depth buffer would lack precision far away
-	projection = glm::perspective(glm::radians(fov), (float)screenWidth / (float)screenHeight, std::max(viewDist.x, viewDist.y / 20000.0f), viewDist.y);
+	projection = ComputeProjection();
 	return &projection;
 }
 void Camera::EnableMouseControl(GLFWwindow* window) {

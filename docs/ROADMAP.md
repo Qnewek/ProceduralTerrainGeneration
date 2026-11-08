@@ -226,7 +226,7 @@ Cel: **edycja w czasie rzeczywistym przy 60+ FPS** i nieskończony świat.
    Biomy pod kamerą: odczyt identyfikatorów chunka z GPU tylko po wejściu do niego lub jego regeneracji. Zasięg = „Render distance” kamery.
    `--gpu-check` sprawdza, że chunk (origin + `islandSize`) jest bit w bit równy fragmentowi pełnej mapy (szum z wyspą, teren, biomy).
    Pamięć: ok. 0,7 MB na chunk z biomami (0,35 MB bez). Przy render distance 5000 to ok. 300 chunków w zasięgu, więc bez LOD (pkt 4) duży zasięg kosztuje setki MB.
-   Zostało: priorytet chunków w polu widzenia (pkt 5), budżet w ms, floating origin.
+   Zostało: budżet w ms, floating origin (priorytet chunków w polu widzenia zrobiony w pkt 5).
    Przy okazji (prośba właściciela): słońce zamiast światła punktowego (`LightSource`: azymut i wysokość), proceduralne niebo (`Sky`, `common/sky.glsl`)
    z mgłą terenu w kolorze nieba przy granicy zasięgu (ukrywa też doładowywanie chunków) oraz przeniesienie kamery nad skończoną mapę po wyłączeniu trybu infinite.
 4. **LOD:** quadtree chunków (lub geometry clipmaps) + teselacja w TCS oparta o rozmiar krawędzi w pikselach ekranu
@@ -244,6 +244,13 @@ Cel: **edycja w czasie rzeczywistym przy 60+ FPS** i nieskończony świat.
    Odległość do chunka liczona w XZ, bez wysokości kamery. Zostało: teselacja wg rozmiaru na ekranie, morfowanie między poziomami (przejścia są skokowe), uwzględnienie wysokości kamery.
 5. **Culling:** frustum culling chunków na CPU + odrzucanie patchy w TCS (`gl_TessLevelOuter = 0`), opcjonalnie
    `glMultiDrawArraysIndirect` dla wszystkich chunków jednym wywołaniem.
+
+   ✅ 2026-11-08 (bez `glMultiDrawArraysIndirect`): `terrainGeneration/Frustum.h` (6 płaszczyzn z `projection * view * model`, test AABB, testy w `tests/FrustumTests.cpp`).
+   `ChunkWorld::Plan` dostaje `View` (`ViewFrom(camera, settings)`) i rysuje tylko chunki w polu widzenia; pudełko chunka obejmuje każdą możliwą wysokość
+   (±1,5 · `heightScale`, niżej jeszcze skirt), bo wysokości chunka CPU nie zna. Kolejność generacji: dziura w widoku, dziura poza widokiem, chunk w widoku, poza widokiem,
+   a w każdej grupie najbliższe — zamyka „priorytet frustum” z pkt 3. Chunki poza widokiem nadal są generowane i trzymane w cache, więc obrót kamery ich nie odsłania.
+   TCS ustawia poziomy teselacji na 0 dla patchy, których pudełko (te same granice wysokości) leży w całości po złej stronie jednej płaszczyzny; działa też dla skończonej mapy i w widoku 2D.
+   W widoku 2D chunki nie są przycinane na CPU (pokazywany jest cały zasięg). Output: „drawn of in range”. Liczba trójkątów w panelu nadal jest liczona przed przycinaniem.
 6. **Inkrementalna regeneracja:** dirty-flagi per warstwa (zmiana szumu temperatury nie przelicza wysokości),
    podgląd w niskiej rozdzielczości podczas przeciągania suwaka, pełna jakość po puszczeniu.
    Kandydat do zrobienia wcześniej, jeszcze na CPU: `TerrainGenerator::GenerateTerrain` liczy trzy szumy od nowa dla każdego
