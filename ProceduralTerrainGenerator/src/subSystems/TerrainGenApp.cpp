@@ -138,7 +138,8 @@ void TerrainGenApp::Start()
 
 		Draw();
         ImGuiRender();
-        metrics->EndFrame(deltaTime * 1000.0, (glfwGetTime() - currentFrame) * 1000.0);
+        const bool holeInView = (currentMode == mode::NOISE_HEIGHTMAP && noiseGenSys.HoleInView()) || (currentMode == mode::TERRAIN_GEN && terrainGenSys.HoleInView());
+        metrics->EndFrame(deltaTime * 1000.0, (glfwGetTime() - currentFrame) * 1000.0, camera.GetPosition(), holeInView);
 
         camera.SetScreenSize(ViewportWidth(), ViewportHeight());
         

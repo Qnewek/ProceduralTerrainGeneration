@@ -17,6 +17,8 @@ namespace {
 	//Depth of the skirts, as a part of heightScale for a level 0 chunk; doubles with every level, like the distance between samples
 	constexpr float skirtPart = 0.01f;
 	constexpr float maxSkirtPart = 0.5f;
+	//Chunks are planned this many times farther than the view distance, so they are ready before they come into view
+	constexpr float prefetchFactor = 1.15f;
 	//Largest absolute height of a map (noises are in [-1, 1]), with a margin; the same bound is used by the TCS
 	constexpr float heightBound = 1.5f;
 	//Bits of a chunk coordinate in a key
@@ -99,6 +101,55 @@ void ChunkWorld::BuildMesh()
 	vao->AddBuffer(*vertexBuffer, layout);
 }
 
+void ChunkWorld::Invalidate()
+{
+	worldVersion++;
+	changeTime = std::chrono::steady_clock::now();
+	measuringChange = true;
+	updateMs = -1.0;
+	fullDetailMs = -1.0;
+}
+
+void ChunkWorld::MeasureChange()
+{
+	if (!measuringChange) {
+		return;
+	}
+	const double elapsedMs = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - changeTime).count();
+	if (updateMs < 0.0) {
+		const bool current = !holeInView && std::all_of(visible.begin(), visible.end(), [this](const Chunk* chunk) { return chunk->version == worldVersion; });
+		if (!current) {
+			return;
+		}
+		updateMs = elapsedMs;
+	}
+	//Ranks 0 and 2 are the chunks in view
+	const bool fullDetail = std::none_of(pending.begin(), pending.end(), [](const PendingChunk& p) { return p.rank == 0 || p.rank == 2; });
+	if (fullDetail) {
+		fullDetailMs = elapsedMs;
+		measuringChange = false;
+		measuredChanges++;
+	}
+}
+
+void ChunkWorld::ImGuiUpdateTimes() const
+{
+	if (measuredChanges == 0 && !measuringChange) {
+		return;
+	}
+	if (updateMs < 0.0) {
+		ImGui::Text("Last change: waiting for the view...");
+	}
+	else if (fullDetailMs < 0.0) {
+		ImGui::Text("Last change: in view after %.0f ms, waiting for full detail...", updateMs);
+	}
+	else {
+		ImGui::Text("Last change: in view after %.0f ms, full detail after %.0f ms", updateMs, fullDetailMs);
+	}
+	ImGui::SetItemTooltip("Measured from the parameter change to the frame whose plan found every drawn chunk current,\n"
+		"then until no chunk in view waits for generation. Includes waiting for frames (vsync)");
+}
+
 void ChunkWorld::SetBiomes(bool enabled)
 {
 	if (enabled != biomes) {
@@ -148,19 +199,19 @@ int ChunkWorld::Plan(const View& requested)
 	View view = requested;
 	view.radius = std::clamp(view.radius, 0.0f, NodeSize(maxLevel));
 	const glm::vec2 center = view.center;
-	const float radius = view.radius;
 	lastCenter = center;
-	lastRadius = radius;
+	lastRadius = view.radius;
+	planRadius = view.radius * prefetchFactor;
 
-	//The roots are the smallest chunks larger than the view distance, so at most 3 x 3 of them are in range
+	//The roots are the smallest chunks larger than the planned distance, so at most 3 x 3 of them are in range
 	int rootLevel = 0;
-	while (rootLevel < maxLevel && NodeSize(rootLevel) < radius) {
+	while (rootLevel < maxLevel && NodeSize(rootLevel) < planRadius) {
 		rootLevel++;
 	}
 	const float rootSize = NodeSize(rootLevel);
 	const glm::vec2 local = center - mapOrigin;
-	const glm::ivec2 low(glm::floor((local - radius) / rootSize));
-	const glm::ivec2 high(glm::floor((local + radius) / rootSize));
+	const glm::ivec2 low(glm::floor((local - planRadius) / rootSize));
+	const glm::ivec2 high(glm::floor((local + planRadius) / rootSize));
 	for (int z = low.y; z <= high.y; z++) {
 		for (int x = low.x; x <= high.x; x++) {
 			Select(rootLevel, { x, z }, local, view);
@@ -173,6 +224,8 @@ int ChunkWorld::Plan(const View& requested)
 		}
 		return a.distance < b.distance || (a.distance == b.distance && a.level > b.level);
 	});
+	holeInView = !pending.empty() && pending.front().rank == 0;
+	MeasureChange();
 
 	//Keeps half as many chunks out of range as in it, longest unseen go first
 	const size_t limit = visited + visited / 2 + 16;
@@ -223,14 +276,14 @@ bool ChunkWorld::InView(int level, glm::ivec2 coord, const View& view) const
 
 void ChunkWorld::Select(int level, glm::ivec2 coord, glm::vec2 local, const View& view)
 {
-	const float radius = view.radius;
 	const float size = NodeSize(level);
 	const float distance = DistanceToSquare(local, glm::vec2(coord) * size, size);
-	if (distance > radius) {
+	if (distance > planRadius) {
 		return;
 	}
 	visited++;
-	const bool inView = InView(level, coord, view);
+	//Chunks between the view distance and planRadius are only prepared; the far plane would cut them off
+	const bool inView = distance <= view.radius && InView(level, coord, view);
 	Chunk* chunk = Find(level, coord);
 	if (chunk) {
 		chunk->lastSeen = frame;
@@ -244,7 +297,7 @@ void ChunkWorld::Select(int level, glm::ivec2 coord, glm::vec2 local, const View
 		for (const glm::ivec2 offset : childOffsets) {
 			const glm::ivec2 childCoord = coord * 2 + offset;
 			const float childDistance = DistanceToSquare(local, glm::vec2(childCoord) * childSize, childSize);
-			if (childDistance > radius) {
+			if (childDistance > planRadius) {
 				continue;
 			}
 			Chunk* child = Find(level - 1, childCoord);
@@ -256,7 +309,7 @@ void ChunkWorld::Select(int level, glm::ivec2 coord, glm::vec2 local, const View
 				ready = false;
 				//Children are requested once there is a parent to show meanwhile
 				if (drawable) {
-					pending.push_back({ level - 1, childCoord, childDistance, inView && InView(level - 1, childCoord, view) ? 2 : 3 });
+					pending.push_back({ level - 1, childCoord, childDistance, inView && childDistance <= view.radius && InView(level - 1, childCoord, view) ? 2 : 3 });
 				}
 			}
 		}
@@ -268,7 +321,7 @@ void ChunkWorld::Select(int level, glm::ivec2 coord, glm::vec2 local, const View
 		}
 	}
 
-	if (drawable) {
+	if (drawable && distance <= view.radius) {
 		inRange++;
 		if (inView) {
 			visible.push_back(chunk);
