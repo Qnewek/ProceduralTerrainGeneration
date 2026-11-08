@@ -62,6 +62,7 @@ ProceduralTerrainGenerator/
       TerrainGenerator.*         continentalness/mountainousness/weirdness → heightMap (LINEAR lub SPLINE)
       BiomeGenerator.*, Biome.*  temperatura/wilgotność + 3 szumy terenu → poziomy (int) → id biomu
       Erosion.*                  erozja kroplowa (CPU, lista jednokierunkowa kropel)
+      SurfaceDerivatives.*       gradient i laplasjan mapy wysokości (CPU, wzorzec dla GpuSurfacePass) + normalna/nachylenie/krzywizna
       Grid.h, Parallel.h         mapy Grid<T>; ParallelFor po wierszach
       Preset.*                   zapis/odczyt WorldConfig i NoiseMapConfig jako JSON + walidacja
       HeightmapExport.*          zapis mapy jako PNG 16-bit lub RAW R16; FileIO.* = zapis przez plik tymczasowy
@@ -70,6 +71,7 @@ ProceduralTerrainGenerator/
     opengl/                      cienkie wrappery: Shader, VertexArray/Buffer, IndexBuffer, TextureClass, Renderer, GpuQuery
       TerrainView.*              siatka + shader + tekstury (TERRAIN/OVERLAY/BIOMES), wspólny dla obu trybów
       GpuHeightGenerator.*       jedyna generacja w aplikacji: szum, teren i biomy w compute shaderach; GpuHeightCheck.* = porównanie z CPU (--gpu-check)
+      GpuSurfacePass.*           mapa pochodnych (gradient + laplasjan) z mapy wysokości; uruchamia ją TerrainView
     utility/
       Camera.*                   kamera FPS (WASD, Space/Ctrl, M = mysz, Esc = zwolnij mysz)
       LightSource.*              punktowe światło + sześcian debug
@@ -82,7 +84,7 @@ ProceduralTerrainGenerator/
   tests/                         testy jednostkowe ptg_core (doctest)
   res/shaders/
     TerrainShaders/              VS → TCS → TES → FS, jedyny zestaw dla terenu (oba tryby)
-    ComputeShaders/              height_compute.shader (szum, teren), biome_compute.shader; wspólne: common/noise.glsl, noise_params.glsl, simplex.glsl
+    ComputeShaders/              height_compute.shader (szum, teren), biome_compute.shader, surface_compute.shader; wspólne: common/noise.glsl, noise_params.glsl, simplex.glsl, surface.glsl
 CMakeLists.txt, CMakePresets.json, vcpkg.json   build; GLFW, GLEW, glm, ImGui, ImPlot, stb z vcpkg
 .github/workflows/build.yml      CI (Windows x64 Debug/Release + checksumy)
 ```
@@ -98,8 +100,9 @@ CMakeLists.txt, CMakePresets.json, vcpkg.json   build; GLFW, GLEW, glm, ImGui, I
 3. Siatka (`TerrainView`): stała siatka `mapResolution × mapResolution` (50×50) patchy-quadów o rozmiarze
    `width * worldUnitsPerTexel` (= 4, `GetWorldWidth()`), rysowana `GL_PATCHES` (4 wierzchołki).
 4. TCS: poziom teselacji 4–64 zależnie od odległości w przestrzeni oka. TES: próbkuje `heightMap`,
-   przesuwa wierzchołek o `height * heightScale`, liczy normalną z różnic skończonych, koloruje wg `displayMode`
-   (0 grey, 1 topo, 2 mono, 3 biomy z `biomeMap`).
+   przesuwa wierzchołek o `height * heightScale`, bierze normalną z `surfaceMap`, koloruje wg `displayMode`
+   (0 grey, 1 topo, 2 mono, 3 biomy z `biomeMap`, 4 nachylenie, 5 krzywizna). `surfaceMap` (gradient + laplasjan surowej wysokości, `RGBA32F`)
+   liczy `TerrainView::Draw` przez `GpuSurfacePass`, tylko gdy warstwa wysokości zmieniła się od ostatniego razu (`LayerTexture` oznacza ją jako nieaktualną).
 5. Tryb „infinite”: przy każdej zmianie XZ kamery regeneruje **całą** mapę z originem = pozycja kamery,
    a kamera jest „zakotwiczona” w (0, y, 0) (`Camera::CameraAnchor`).
 
@@ -141,8 +144,10 @@ Wartości szumów są w [-1, 1]. Konwencja indeksowania: `map[y * width + x]`.
   (`SplinePoints::cubic`) — zachowane z wersji sprzed A3. Benchmark sprawdza tylko LINEAR_COMBINE.
 - Uniformy terenu ustawia wyłącznie `TerrainView::Draw` — subsystemy nie dotykają shadera. Wysokość bierze się
   z warstwy podanej w `Draw` (`heightLayer`: TERRAIN = jednostka 0, OVERLAY = 1 dla podglądu szumu / erozji).
-- Oświetlenie w world space: `FragPos = model * p`, normalna z różnic skończonych z krokiem `texelWorldSize`
-  (= `worldUnitsPerTexel`) przez `normalMatrix`. Zmieniając skalę siatki, zmień `worldUnitsPerTexel`, nie shader.
+- Oświetlenie w world space: `FragPos = model * p`, normalna z gradientu `surfaceMap` (krok `worldUnitsPerTexel`)
+  przez `normalMatrix`. Zmieniając skalę siatki, zmień `worldUnitsPerTexel`, nie shader.
+- Kto pisze do warstwy wysokości, musi wziąć teksturę przez `LayerTexture` / `SetLayer` (one oznaczają `surfaceMap` jako nieaktualną). Zapis inną drogą zostawi
+  starą normalną. `surfaceMap` nie zależy od `heightScale`: skala jest stosowana w `surface.glsl`.
 - Tryb „2D map” nie ma osobnej gałęzi w shaderze — `TerrainView` podmienia `view`/`projection` na ortogonalną
   kamerę z góry (+X w prawo, −Z w górę) kadrującą `SetFlatViewBounds` (domyślnie cała mapa).
 - Shadery obsługują `#include "plik"` (ścieżka względna do pliku zawierającego, każdy plik raz na etap; wspólne
@@ -160,7 +165,7 @@ Wartości szumów są w [-1, 1]. Konwencja indeksowania: `map[y * width + x]`.
 - Import map: plik nie przechowuje zakresu wartości, więc wybiera go użytkownik (`valueRanges` w `MapImportSys.cpp`). `lodepng` nie zamienia koloru na szary
   ani niższej głębi na 16 bitów (błąd 56), dlatego PNG dekodujemy do RGBA o głębi pliku. Mapa żyje w `MapImportSys::map`, stąd pójdą przyszłe operacje na niej
   (jak w innych trybach: w tle, na kopii).
-- **Generacja istnieje w dwóch wersjach:** C++ (`Noise.cpp`, `TerrainGenerator.cpp`, `BiomeGenerator.cpp`, `vendor/Simplex`) i GLSL (`ComputeShaders/`, `common/noise.glsl`, `common/simplex.glsl`). Aplikacja używa tylko GLSL, ale CPU jest punktem odniesienia. Zmianę algorytmu lub
+- **Generacja istnieje w dwóch wersjach:** C++ (`Noise.cpp`, `TerrainGenerator.cpp`, `BiomeGenerator.cpp`, `SurfaceDerivatives.cpp`, `vendor/Simplex`) i GLSL (`ComputeShaders/`, `common/noise.glsl`, `common/simplex.glsl`, `common/surface.glsl`). Aplikacja używa tylko GLSL, ale CPU jest punktem odniesienia. Zmianę algorytmu lub
   pola configu trzeba powtórzyć w obu i w `GpuNoiseParams`/`SetNoise`, po czym uruchomić `--gpu-check` (CI go nie uruchamia, bo nie ma GPU). Tolerancje w `GpuHeightCheck.cpp`
   wynikają z pomiarów opisanych w ROADMAP (Faza 2, pkt 1); nie podnoś ich bez sprawdzenia, ile zmienia się sam wynik CPU po przesunięciu współrzędnej o najmniejszy krok `float`.
   Checksumy benchmarku dotyczą tylko CPU; wynik GPU nie jest z nimi porównywany.

@@ -6,6 +6,7 @@
 #include <functional>
 #include <iomanip>
 #include <iostream>
+#include <limits>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -15,6 +16,8 @@
 
 #include "BiomeGenerator.h"
 #include "GpuHeightGenerator.h"
+#include "GpuSurfacePass.h"
+#include "SurfaceDerivatives.h"
 #include "TerrainGenerator.h"
 
 namespace {
@@ -209,7 +212,59 @@ namespace {
 		return ok;
 	}
 
-	bool RunComparison(GpuHeightGenerator& gpu)
+	//Both sides read the same height map, so only the rounding of a few operations differs (e.g. a fused multiply-add on the GPU).
+	//Differences of nearly equal heights lose the relative precision, so the error is measured in height units,
+	//in steps of float at the largest height of the map
+	constexpr float surfaceUlpTolerance = 4.0f;
+	//Same distance between texels as in TerrainView; a power of two, so dividing by it rounds nothing
+	constexpr float surfaceTexelSize = 4.0f;
+
+	//Compares the surface map of the GPU with surface::Compute on the same input
+	//@param heightScale - multiplies the input, to test steep maps without a new generator
+	bool CheckSurface(GpuSurfacePass& pass, const std::string& name, HeightField height, float heightScale)
+	{
+		for (size_t i = 0; i < height.Size(); i++) {
+			height[i] *= heightScale;
+		}
+		const int width = height.GetWidth(), rows = height.GetHeight();
+		TextureClass input(width, rows, GL_R32F), output(width, rows, GL_RGBA32F);
+		input.Upload(height.Data(), GL_RED, GL_FLOAT);
+		pass.Run(input, surfaceTexelSize, output);
+		surface::DerivativeMap gpuMap(width, rows);
+		output.Read(GL_RGBA, GL_FLOAT, static_cast<int>(gpuMap.Size() * sizeof(surface::Derivatives)), gpuMap.Data());
+		const surface::DerivativeMap cpuMap = surface::Compute(height, surfaceTexelSize);
+
+		float highest = 0.0f;
+		for (size_t i = 0; i < height.Size(); i++) {
+			highest = std::max(highest, std::abs(height[i]));
+		}
+		const float ulp = std::max(highest, 1e-30f) * std::numeric_limits<float>::epsilon();
+
+		//Gradient times the texel size and Laplacian times its square are height differences
+		bool ok = true;
+		std::cout << std::left << std::setw(37) << name;
+		const char* channels[] = { "dx", "dy", "laplacian" };
+		for (int c = 0; c < 3; c++) {
+			const auto value = [c](const surface::Derivatives& d) {
+				return c == 0 ? d.dx * surfaceTexelSize : c == 1 ? d.dy * surfaceTexelSize : d.laplacian * surfaceTexelSize * surfaceTexelSize;
+			};
+			float difference = 0.0f;
+			bool invalid = false;
+			for (size_t i = 0; i < cpuMap.Size(); i++) {
+				const float a = value(cpuMap[i]), b = value(gpuMap[i]);
+				invalid = invalid || !std::isfinite(a) || !std::isfinite(b);
+				difference = std::max(difference, std::abs(a - b));
+			}
+			const float ulps = difference / ulp;
+			const bool channelOk = !invalid && ulps <= surfaceUlpTolerance;
+			ok = ok && channelOk;
+			std::cout << channels[c] << " " << std::fixed << std::setprecision(1) << ulps << " ulp" << std::defaultfloat << (channelOk ? "" : invalid ? " INVALID" : " TOO DIFFERENT") << "   ";
+		}
+		std::cout << (ok ? "ok" : "") << "\n";
+		return ok;
+	}
+
+	bool RunComparison(GpuHeightGenerator& gpu, GpuSurfacePass& surfacePass)
 	{
 		//Not square, so swapped axes are detected; larger than one part of a dispatch along X
 		constexpr int width = 1100, height = 257;
@@ -243,6 +298,20 @@ namespace {
 		biomes.humidityLevels = { -1.0f, -0.2f, 0.1f, 0.4f, 1.01f };
 		biomes.continentalnessLevels = { -1.0f, -0.4f, -0.1f, 0.2f, 0.5f, 1.01f };
 		allOk = CheckBiomes(gpu, "biomes: other seed and levels", terrain, biomes, width, height) && allOk;
+
+		std::cout << "\nsurface map: largest difference in height units, in steps of float at the largest height\n";
+		HeightField input(width, height);
+		if (CpuTerrain(terrain, 0.0f, 0.0f, input)) {
+			allOk = CheckSurface(surfacePass, "surface: default terrain", input, 1.0f) && allOk;
+			allOk = CheckSurface(surfacePass, "surface: default terrain x 256", input, 256.0f) && allOk;
+		}
+		noise::NoiseConfigParameters rough;
+		rough.octaves = 8;
+		rough.lacunarity = 3.1f;
+		rough.scale = 2.7f;
+		if (CpuNoise(rough, 0.0f, 0.0f, input)) {
+			allOk = CheckSurface(surfacePass, "surface: 8 octave noise", input, 1.0f) && allOk;
+		}
 		return allOk;
 	}
 
@@ -261,7 +330,7 @@ namespace {
 		return times[times.size() / 2];
 	}
 
-	void RunTimings(GpuHeightGenerator& gpu)
+	void RunTimings(GpuHeightGenerator& gpu, GpuSurfacePass& surfacePass)
 	{
 		const TerrainConfig config = TerrainConfig::Default();
 		std::cout << "\nterrain, default config   CPU [ms]   GPU [ms]\n";
@@ -273,6 +342,21 @@ namespace {
 			}, 9);
 			HeightField cpuMap(size, size);
 			const double cpuMs = MedianMs([&] { CpuTerrain(config, 0.0f, 0.0f, cpuMap); }, 3);
+			std::cout << std::left << std::setw(26) << (std::to_string(size) + "x" + std::to_string(size)) << std::right << std::fixed << std::setprecision(2)
+				<< std::setw(8) << cpuMs << std::setw(11) << gpuMs << std::defaultfloat << "\n" << std::left;
+		}
+
+		std::cout << "\nsurface map               CPU [ms]   GPU [ms]\n";
+		for (int size : { 512, 1024, 2048, 4096 }) {
+			TextureClass height(size, size, GL_R32F), target(size, size, GL_RGBA32F);
+			gpu.GenerateTerrain(config, 0.0f, 0.0f, height);
+			const double gpuMs = MedianMs([&] {
+				surfacePass.Run(height, surfaceTexelSize, target);
+				glFinish();
+			}, 9);
+			HeightField cpuHeight(size, size);
+			height.Read(GL_RED, GL_FLOAT, static_cast<int>(cpuHeight.Size() * sizeof(float)), cpuHeight.Data());
+			const double cpuMs = MedianMs([&] { surface::Compute(cpuHeight, surfaceTexelSize); }, 3);
 			std::cout << std::left << std::setw(26) << (std::to_string(size) + "x" + std::to_string(size)) << std::right << std::fixed << std::setprecision(2)
 				<< std::setw(8) << cpuMs << std::setw(11) << gpuMs << std::defaultfloat << "\n" << std::left;
 		}
@@ -305,9 +389,10 @@ int RunGpuHeightCheck()
 		std::cout << "GPU: " << glGetString(GL_RENDERER) << "\n\n";
 		//The GL objects must go before the context does
 		GpuHeightGenerator gpu;
-		if (gpu.Initialize()) {
-			const bool ok = RunComparison(gpu);
-			RunTimings(gpu);
+		GpuSurfacePass surfacePass;
+		if (gpu.Initialize() && surfacePass.Initialize()) {
+			const bool ok = RunComparison(gpu, surfacePass);
+			RunTimings(gpu, surfacePass);
 			std::cout << "\n" << (ok ? "All maps match" : "[ERROR] Some maps differ") << std::endl;
 			result = ok ? 0 : 1;
 		}
