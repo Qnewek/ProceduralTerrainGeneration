@@ -19,7 +19,7 @@ bool TerrainGenerationSys::Initialize(int _width, int _height, float _heightScal
 	world.height = _height;
 	renderSettings.heightScale = _heightScale;
 
-	if (!view.Initialize(world.width, world.height) || !chunks.Initialize() || !gpu.Initialize()) {
+	if (!view.Initialize(world.width, world.height) || !chunks.Initialize() || !gpu.Initialize() || !noisePreview.Initialize()) {
 		return false;
 	}
 
@@ -40,11 +40,11 @@ void TerrainGenerationSys::Update(Camera& camera)
 	if (leftInfinite) {
 		//Changes made meanwhile went only to the chunks
 		RequestTerrain();
-		RequestOverlay();
 		if (biomesGeneration) {
 			RequestBiomes();
 		}
 	}
+	GeneratePreview();
 	if (infiniteGeneration) {
 		UpdateChunks(camera);
 	}
@@ -63,11 +63,6 @@ void TerrainGenerationSys::UpdateChunks(const Camera& camera)
 		chunks.Invalidate();
 		pending = WorldRequest();
 	}
-	const noise::NoiseConfigParameters* preview = showPreview ? EditedNoise() : nullptr;
-	if (preview != chunkPreview) {
-		chunkPreview = preview;
-		chunks.Invalidate();
-	}
 	chunks.SetBiomes(biomesGeneration);
 	//An invalid size waiting in the UI keeps the previous one
 	if (world.width >= 2 && world.height >= 2 && world.width <= 8192 && world.height <= 8192) {
@@ -79,12 +74,7 @@ void TerrainGenerationSys::UpdateChunks(const Camera& camera)
 	}
 	gpu.BeginMeasure();
 	chunks.GenerateNext([&](const MapArea& area, TextureClass& height, TextureClass* colors, TextureClass* ids) {
-		if (preview) {
-			gpu.GenerateNoise(*preview, area, height);
-		}
-		else {
-			gpu.GenerateTerrain(world.terrain, area, height);
-		}
+		gpu.GenerateTerrain(world.terrain, area, height);
 		if (colors && ids) {
 			gpu.GenerateBiomes(world.biomes, world.terrain, biomeTable, area, *colors, *ids);
 		}
@@ -111,9 +101,6 @@ void TerrainGenerationSys::GenerateFinite()
 	if (request.terrain) {
 		gpu.GenerateTerrain(world.terrain, MapArea{}, view.LayerTexture(TerrainView::Layer::TERRAIN, width, height));
 	}
-	if (request.overlay) {
-		GenerateOverlay();
-	}
 	if (request.biomes) {
 		if (!biomeIds || biomeIds->GetWidth() != width || biomeIds->GetHeight() != height) {
 			biomeIds = std::make_unique<TextureClass>(width, height, GL_R32I);
@@ -139,17 +126,22 @@ const noise::NoiseConfigParameters* TerrainGenerationSys::EditedNoise() const
 	return nullptr;
 }
 
-void TerrainGenerationSys::GenerateOverlay()
+void TerrainGenerationSys::GeneratePreview()
 {
-	//Without an edited noise the layer must stay as it is: a new texture would have no contents to show
-	if (const noise::NoiseConfigParameters* edited = EditedNoise()) {
-		gpu.GenerateNoise(*edited, MapArea{}, view.LayerTexture(TerrainView::Layer::OVERLAY, world.width, world.height));
+	if (!pending.preview) {
+		return;
+	}
+	pending.preview = false;
+	const noise::NoiseConfigParameters* edited = EditedNoise();
+	//An invalid size waiting in the UI keeps the previous picture
+	if (edited && showNoisePreview && world.width >= 2 && world.height >= 2 && world.width <= 8192 && world.height <= 8192) {
+		noisePreview.Generate(gpu, *edited, world.width, world.height);
 	}
 }
 
-void TerrainGenerationSys::RequestOverlay()
+void TerrainGenerationSys::RequestPreview()
 {
-	pending.overlay = true;
+	pending.preview = true;
 }
 
 void TerrainGenerationSys::RequestTerrain()
@@ -199,7 +191,7 @@ void TerrainGenerationSys::ApplyWorld(const WorldConfig& loaded)
 	splineDraggedPoint = -1;
 	changeTerrain = false;
 
-	RequestOverlay();
+	RequestPreview();
 	RequestTerrain();
 	if (biomesGeneration) {
 		RequestBiomes();
@@ -211,14 +203,13 @@ void TerrainGenerationSys::Draw(Renderer& renderer, Camera& camera, LightSource&
 		chunks.Draw(renderer, camera, light, renderSettings);
 		return;
 	}
-	TerrainView::Layer heightLayer = showPreview && view.HasLayer(TerrainView::Layer::OVERLAY) ? TerrainView::Layer::OVERLAY : TerrainView::Layer::TERRAIN;
-	view.Draw(renderer, camera, light, renderSettings, heightLayer);
+	view.Draw(renderer, camera, light, renderSettings, TerrainView::Layer::TERRAIN);
 }
 void TerrainGenerationSys::ImGuiRightPanel() {
 	if(utilities::MapSizeImGui(world.width, world.height)) {
 		//Every map shown has to get the new size; biomes only if they are shown
 		RequestTerrain();
-		RequestOverlay();
+		RequestPreview();
 		if (biomesGeneration) {
 			RequestBiomes();
 		}
@@ -239,7 +230,7 @@ void TerrainGenerationSys::ImGuiRightPanel() {
 					changeTerrain = true;
 					//The method decides which spline weirdness uses, so an open editor takes the new one
 					if (splinePressedButton != 0) {
-						splinePlotPoints = world.terrain.MethodSpline(editedComponent);
+						splinePlotPoints = world.terrain.MethodSpline(editedSplineComponent);
 					}
 				}
 				if (is_selected)
@@ -255,25 +246,23 @@ void TerrainGenerationSys::ImGuiRightPanel() {
 			changeTerrain |= ImGui::SliderFloat("Mountain share", &world.terrain.mountainShare, 0.0f, 1.0f);
 			ImGui::SetItemTooltip("Part of the height range for mountains; the continentalness base takes the rest");
 		}
-		ImGui::SliderInt("Sampling resolution", &samplingResolution, 10, 1000);
-		if (ImGui::Button("Change resolution")) {
+		//Applied at once to all three terrain noises, like the other parameters
+		if (ImGui::SliderInt("Sampling resolution", &samplingResolution, 10, 1000)) {
 			world.terrain.continentalness.resolution = samplingResolution;
 			world.terrain.mountainousness.resolution = samplingResolution;
 			world.terrain.weirdness.resolution = samplingResolution;
-			RequestOverlay();
+			RequestPreview();
 			RequestTerrain();
 			if (biomesGeneration) {
 				RequestBiomes();
 			}
 		}
 		NoiseEditor();
-		if (!editNoise) {
-			SplineEditor();
-			BiomesEditor();
-			if (changeTerrain) {
-				RequestTerrain();
-				changeTerrain = false;
-			}
+		SplineEditor();
+		BiomesEditor();
+		if (changeTerrain) {
+			RequestTerrain();
+			changeTerrain = false;
 		}
 	}
 }
@@ -330,7 +319,8 @@ void TerrainGenerationSys::NoiseEditor()
 	ImGui::Separator();
 	if (ImGui::Checkbox("Edit component noise", &editNoise)) {
 		noisePressedButton = 0;
-		showPreview = editNoise;
+		//The biome noise editor may own the picture now
+		RequestPreview();
 	}
 	if (editNoise) {
 		if (ImGui::CollapsingHeader("Terrain noise editor", ImGuiTreeNodeFlags_DefaultOpen)) {
@@ -338,37 +328,59 @@ void TerrainGenerationSys::NoiseEditor()
 			if (utilities::ImGuiButtonWrapper("Mountainousness", noisePressedButton == 1 ? true : false)) {
 				noisePressedButton = 1;
 				editedComponent = WorldGenParameter::MOUNTAINOUSNESS;
-				RequestOverlay();
+				RequestPreview();
 			}
 			ImGui::SameLine();
 			if (utilities::ImGuiButtonWrapper("Continentalness", noisePressedButton == 2 ? true : false)) {
 				noisePressedButton = 2;
 				editedComponent = WorldGenParameter::CONTINENTALNESS;
-				RequestOverlay();
+				RequestPreview();
 			}
 			ImGui::SameLine();
 			if (utilities::ImGuiButtonWrapper("Weirdness", noisePressedButton == 3 ? true : false)) {
 				noisePressedButton = 3;
 				editedComponent = WorldGenParameter::WEIRDNESS;
-				RequestOverlay();
+				RequestPreview();
 			}
 			if (noisePressedButton == 0) {
 				ImGui::Text("[Currently no noise is beeing changed]");
 				return;
 			}
 
-			biomesGeneration = false;
-			if (utilities::NoiseImGui(world.terrain.Noise(editedComponent))) {
-				RequestOverlay();
+			ImGui::TextDisabled("The view shows the resulting terrain, changes apply at once");
+			NoisePreviewImGui(world.terrain.Noise(editedComponent));
+			//The biome noise editor can be open at the same time, with widgets of the same names
+			ImGui::PushID("terrainNoise");
+			const bool noiseChanged = utilities::NoiseImGui(world.terrain.Noise(editedComponent));
+			ImGui::PopID();
+			if (noiseChanged) {
+				RequestPreview();
 				changeTerrain = true;
+				//Biomes are chosen by the terrain noises too
+				if (biomesGeneration) {
+					RequestBiomes();
+				}
 			}
-			if (ImGui::Button("Accept changes")) {
+			if (ImGui::Button("Done")) {
 				editNoise = false;
 				noisePressedButton = 0;
-				RequestTerrain();
-				showPreview = false;
+				RequestPreview();
 			}
 		}
+	}
+}
+
+void TerrainGenerationSys::NoisePreviewImGui(const noise::NoiseConfigParameters& noise)
+{
+	//Both noise editors can be open; the picture belongs to the one EditedNoise picks
+	if (EditedNoise() != &noise) {
+		return;
+	}
+	if (ImGui::Checkbox("Show noise as 2D map", &showNoisePreview) && showNoisePreview) {
+		RequestPreview();
+	}
+	if (showNoisePreview) {
+		noisePreview.ImGuiDraw();
 	}
 }
 
@@ -398,29 +410,31 @@ void TerrainGenerationSys::BiomeNoisesEditor()
 	if (utilities::ImGuiButtonWrapper("Temperature", biomeNoisePressedButton == 1 ? true : false)) {
 		biomeNoisePressedButton = 1;
 		editedBiomeComponent = BiomeParameter::TEMPERATURE;
-		RequestOverlay();
+		RequestPreview();
 	}
 	ImGui::SameLine();
 	if (utilities::ImGuiButtonWrapper("Humidity", biomeNoisePressedButton == 2 ? true : false)) {
 		biomeNoisePressedButton = 2;
 		editedBiomeComponent = BiomeParameter::HUMIDITY;
-		RequestOverlay();
+		RequestPreview();
 	}
 	if (biomeNoisePressedButton == 0) {
 		ImGui::Text("[Currently no noise is beeing changed]");
 		return;
 	}
 
-	showPreview = true;
-
-	if (utilities::NoiseImGui(world.biomes.Noise(editedBiomeComponent))) {
-		RequestOverlay();
+	NoisePreviewImGui(world.biomes.Noise(editedBiomeComponent));
+	ImGui::PushID("biomeNoise");
+	const bool noiseChanged = utilities::NoiseImGui(world.biomes.Noise(editedBiomeComponent));
+	ImGui::PopID();
+	if (noiseChanged) {
+		RequestPreview();
+		RequestBiomes();
 	}
 
-	if (ImGui::Button("Accept changes")) {
+	if (ImGui::Button("Done##biomeNoise")) {
 		biomeNoisePressedButton = 0;
-		RequestBiomes();
-		showPreview = false;
+		RequestPreview();
 	}
 }
 
@@ -438,22 +452,22 @@ void TerrainGenerationSys::SplineEditor()
 				ImGui::TextDisabled("The Linear method uses no splines");
 			}
 			ImGui::Text("Select spline to edit:");
-			if (utilities::ImGuiButtonWrapper("Mountainousness", splinePressedButton == 1 ? true : false)) {
+			if (utilities::ImGuiButtonWrapper("Mountainousness##spline", splinePressedButton == 1 ? true : false)) {
 				splinePressedButton = 1;
-				editedComponent = WorldGenParameter::MOUNTAINOUSNESS;
-				splinePlotPoints = world.terrain.MethodSpline(editedComponent);
+				editedSplineComponent = WorldGenParameter::MOUNTAINOUSNESS;
+				splinePlotPoints = world.terrain.MethodSpline(editedSplineComponent);
 			}
 			ImGui::SameLine();
-			if (utilities::ImGuiButtonWrapper("Continentalness", splinePressedButton == 2 ? true : false)) {
+			if (utilities::ImGuiButtonWrapper("Continentalness##spline", splinePressedButton == 2 ? true : false)) {
 				splinePressedButton = 2;
-				editedComponent = WorldGenParameter::CONTINENTALNESS;
-				splinePlotPoints = world.terrain.MethodSpline(editedComponent);
+				editedSplineComponent = WorldGenParameter::CONTINENTALNESS;
+				splinePlotPoints = world.terrain.MethodSpline(editedSplineComponent);
 			}
 			ImGui::SameLine();
-			if (utilities::ImGuiButtonWrapper(layered ? "Peaks & valleys" : "Weirdness", splinePressedButton == 3 ? true : false)) {
+			if (utilities::ImGuiButtonWrapper(layered ? "Peaks & valleys" : "Weirdness##spline", splinePressedButton == 3 ? true : false)) {
 				splinePressedButton = 3;
-				editedComponent = WorldGenParameter::WEIRDNESS;
-				splinePlotPoints = world.terrain.MethodSpline(editedComponent);
+				editedSplineComponent = WorldGenParameter::WEIRDNESS;
+				splinePlotPoints = world.terrain.MethodSpline(editedSplineComponent);
 			}
 			if (layered) {
 				ImGui::SetItemTooltip("Shape of mountains from weirdness: low = valleys, high = peaks.\n"
@@ -477,11 +491,11 @@ void TerrainGenerationSys::SplineEditor()
 			//What the axes mean depends on the method: LAYERED gives each spline its own role
 			const char* xLabel = "Continentalness";
 			const char* yLabel = layered ? "Base height" : "Height factor";
-			if (editedComponent == WorldGenParameter::MOUNTAINOUSNESS) {
+			if (editedSplineComponent == WorldGenParameter::MOUNTAINOUSNESS) {
 				xLabel = "Mountainousness";
 				yLabel = layered ? "Mountain amplitude" : "Height factor";
 			}
-			else if (editedComponent == WorldGenParameter::WEIRDNESS) {
+			else if (editedSplineComponent == WorldGenParameter::WEIRDNESS) {
 				xLabel = layered ? "Weirdness (valleys -> peaks)" : "Weirdness";
 				yLabel = layered ? "Mountain shape" : "Height factor";
 			}
@@ -541,7 +555,7 @@ void TerrainGenerationSys::SplineEditor()
 			if (ImGui::Button("Set new spline points")) {
 				//Edited splines are smoothed (cubic), the defaults are linear - behaviour kept from before A3
 				splinePlotPoints.cubic = true;
-				world.terrain.MethodSpline(editedComponent) = splinePlotPoints;
+				world.terrain.MethodSpline(editedSplineComponent) = splinePlotPoints;
 				changeTerrain = true;
 			}
 		}

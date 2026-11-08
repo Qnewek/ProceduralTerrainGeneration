@@ -60,6 +60,7 @@ add_executable(ProceduralTerrainGenerator
 	${PTG_SRC}/opengl/GpuQuery.cpp
 	${PTG_SRC}/opengl/GpuSurfacePass.cpp
 	${PTG_SRC}/opengl/IndexBuffer.cpp
+	${PTG_SRC}/opengl/NoisePreview.cpp
 	${PTG_SRC}/opengl/Renderer.cpp
 	${PTG_SRC}/opengl/Shader.cpp
 	${PTG_SRC}/opengl/TerrainView.cpp
