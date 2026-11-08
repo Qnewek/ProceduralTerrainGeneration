@@ -26,6 +26,7 @@ namespace preset {
 		constexpr int minMapSize = 2;
 		constexpr int maxMapSize = 8192;
 		constexpr int maxOctaves = 32;
+		constexpr int maxTerraceSteps = 64;
 
 		template<typename E>
 		struct EnumName {
@@ -108,6 +109,11 @@ namespace preset {
 			j["islandMixPower"] = ReadableFloat(n.mixPower);
 			j["islandType"] = NameOf(islandTypeNames, n.islandType);
 			j["symmetrical"] = n.symmetrical;
+			j["warpStrength"] = ReadableFloat(n.warpStrength);
+			j["warpScale"] = ReadableFloat(n.warpScale);
+			j["slopeErosion"] = ReadableFloat(n.slopeErosion);
+			j["terraceSteps"] = n.terraceSteps;
+			j["terraceSharpness"] = ReadableFloat(n.terraceSharpness);
 			return j;
 		}
 
@@ -284,6 +290,12 @@ namespace preset {
 			r.Read("islandMixPower", n.mixPower);
 			r.ReadEnum("islandType", islandTypeNames, n.islandType);
 			r.Read("symmetrical", n.symmetrical);
+			//Missing in presets saved before these fields existed; the defaults turn them off
+			r.Read("warpStrength", n.warpStrength);
+			r.Read("warpScale", n.warpScale);
+			r.Read("slopeErosion", n.slopeErosion);
+			r.Read("terraceSteps", n.terraceSteps);
+			r.Read("terraceSharpness", n.terraceSharpness);
 		}
 
 		void ReadSpline(const Reader& parent, const char* key, SplinePoints& s)
@@ -369,6 +381,12 @@ namespace preset {
 			}
 			if (n.resolution <= 0) {
 				throw std::runtime_error(name + ": resolution must be greater than 0");
+			}
+			if (n.slopeErosion < 0.0f) {
+				throw std::runtime_error(name + ": slopeErosion must not be negative");
+			}
+			if (n.terraceSteps < 0 || n.terraceSteps > maxTerraceSteps) {
+				throw std::runtime_error(name + ": terraceSteps must be between 0 and " + std::to_string(maxTerraceSteps));
 			}
 		}
 

@@ -1,4 +1,4 @@
-// Port of the 2D and 4D noise from src/vendor/Simplex/SimplexNoise.cpp; a change there must be repeated here.
+// 2D and 4D simplex noise, ported from src/vendor/Simplex/SimplexNoise.cpp (of which the app now uses only makePermutation).
 // The file including this one provides: int permAt(int table, int i), returning entry i & 255 of a permutation table.
 
 float grad2(int hash, float x, float y)
@@ -55,6 +55,53 @@ float simplex2(int table, float x, float y)
 		t2 *= t2;
 		sum += t2 * t2 * grad2(permAt(table, i + 1 + permAt(table, j + 1)), x2, y2);
 	}
+	return 45.23065 * sum;
+}
+
+// Gradient vector g of grad2: grad2(hash, x, y) = dot(g, vec2(x, y))
+vec2 grad2Vector(int hash)
+{
+	int h = hash & 63;
+	float su = (h & 1) != 0 ? -1.0 : 1.0;
+	float sv = (h & 2) != 0 ? -2.0 : 2.0;
+	return h < 4 ? vec2(su, sv) : vec2(sv, su);
+}
+
+// Contribution of one corner and its derivatives: t^4 * dot(g, d)
+vec3 simplex2Corner(int hash, float x, float y)
+{
+	float t = 0.5 - x * x - y * y;
+	if (t < 0.0) {
+		return vec3(0.0);
+	}
+	vec2 g = grad2Vector(hash);
+	float dotGD = dot(g, vec2(x, y));
+	float t2 = t * t;
+	float t4 = t2 * t2;
+	// d/dx t^4 = 4 t^3 * (-2x)
+	return vec3(t4 * dotGD, -8.0 * t2 * t * dotGD * vec2(x, y) + t4 * g);
+}
+
+// simplex2 with its derivatives: (value, d/dx, d/dy). The value can differ from simplex2 in the last bits (other order of operations)
+vec3 simplex2Grad(int table, float x, float y)
+{
+	const float F2 = 0.366025403;
+	const float G2 = 0.211324865;
+
+	float s = (x + y) * F2;
+	int i = int(floor(x + s));
+	int j = int(floor(y + s));
+
+	float t = float(i + j) * G2;
+	float x0 = x - (float(i) - t);
+	float y0 = y - (float(j) - t);
+
+	int i1 = x0 > y0 ? 1 : 0;
+	int j1 = x0 > y0 ? 0 : 1;
+
+	vec3 sum = simplex2Corner(permAt(table, i + permAt(table, j)), x0, y0);
+	sum += simplex2Corner(permAt(table, i + i1 + permAt(table, j + j1)), x0 - float(i1) + G2, y0 - float(j1) + G2);
+	sum += simplex2Corner(permAt(table, i + 1 + permAt(table, j + 1)), x0 - 1.0 + 2.0 * G2, y0 - 1.0 + 2.0 * G2);
 	return 45.23065 * sum;
 }
 

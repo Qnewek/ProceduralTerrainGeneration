@@ -68,6 +68,14 @@ namespace {
 		addNoise("redistribution 2.5", n, -1.0f, 1.0f);
 		n = {}; n.symmetrical = true;
 		addNoise("symmetrical", n, -1.0f, 1.0f);
+		n = {}; n.option = noise::Options::NOTHING; n.warpStrength = 2.0f; n.warpScale = 3.0f;
+		addNoise("warp", n, -1.0f, 1.0f);
+		n = {}; n.option = noise::Options::NOTHING; n.slopeErosion = 2.0f;
+		addNoise("slope erosion", n, -1.0f, 1.0f);
+		n = {}; n.option = noise::Options::NOTHING; n.terraceSteps = 7; n.terraceSharpness = 1.0f;
+		addNoise("terraces", n, -1.0f, 1.0f);
+		n = {}; n.warpStrength = 1.0f; n.slopeErosion = 1.0f; n.terraceSteps = 4; n.island = true;
+		addNoise("warp, erosion, terraces, island", n, 0.0f, 1.0f);
 		for (auto [type, name] : { std::pair{ noise::IslandType::CONE, "cone" }, { noise::IslandType::DIAGONAL, "diagonal" },
 			{ noise::IslandType::EUCLIDEAN_SQUARED, "euclidean" }, { noise::IslandType::SQUARE_BUMP, "square bump" },
 			{ noise::IslandType::HYPERBOLOID, "hyperboloid" }, { noise::IslandType::SQUIRCLE, "squircle" }, { noise::IslandType::TRIG, "trig" } }) {
@@ -128,6 +136,43 @@ namespace {
 		const bool differs = changed > a.Size() / 2;
 		Report("terrain: other continentalness seed", std::to_string(changed) + " of " + std::to_string(a.Size()) + " texels changed", differs);
 		return same && differs;
+	}
+
+	//Every shape operation changes the noise, and turning it back off restores the noise bit for bit
+	bool CheckShapeOperations(GpuHeightGenerator& gpu)
+	{
+		TextureClass target(mapWidth, mapHeight, GL_R32F);
+		const noise::NoiseConfigParameters base;
+		gpu.GenerateNoise(base, MapArea{}, target);
+		const HeightField baseMap = ReadHeight(target);
+
+		bool allOk = true;
+		const auto check = [&](const std::string& name, const noise::NoiseConfigParameters& config) {
+			gpu.GenerateNoise(config, MapArea{}, target);
+			const HeightField map = ReadHeight(target);
+			size_t changed = 0;
+			for (size_t i = 0; i < map.Size(); i++) {
+				changed += map[i] != baseMap[i] ? 1 : 0;
+			}
+			const bool ok = changed > map.Size() / 4;
+			allOk = allOk && ok;
+			Report("shape: " + name, std::to_string(changed) + " of " + std::to_string(map.Size()) + " texels changed", ok);
+		};
+		noise::NoiseConfigParameters n;
+		n.warpStrength = 0.5f;
+		check("warp", n);
+		n = {}; n.slopeErosion = 0.5f;
+		check("slope erosion", n);
+		n = {}; n.terraceSteps = 5;
+		check("terraces", n);
+
+		//Off again: the original loop, the same bits as before the operations existed
+		n = {}; n.warpScale = 3.0f; n.terraceSharpness = 0.9f;
+		gpu.GenerateNoise(n, MapArea{}, target);
+		const HeightField off = ReadHeight(target);
+		const bool same = std::memcmp(off.Data(), baseMap.Data(), off.Size() * sizeof(float)) == 0;
+		Report("shape: all off, other inactive settings", same ? "identical to the base noise" : "different", same);
+		return allOk && same;
 	}
 
 	//Ids come from the table and every color belongs to the id next to it
@@ -198,6 +243,11 @@ namespace {
 		n.island = true;
 		n.mixPower = 0.6f;
 		check("chunk: noise with island", GL_RED, GL_FLOAT, [&](const MapArea& area, TextureClass& t) { gpu.GenerateNoise(n, area, t); });
+		noise::NoiseConfigParameters shaped;
+		shaped.warpStrength = 1.0f;
+		shaped.slopeErosion = 1.0f;
+		shaped.terraceSteps = 4;
+		check("chunk: warp, erosion, terraces", GL_RED, GL_FLOAT, [&](const MapArea& area, TextureClass& t) { gpu.GenerateNoise(shaped, area, t); });
 		TerrainConfig terrain = TerrainConfig::Default();
 		terrain.method = EvaluationMethod::SPLINE_COMBINE;
 		check("chunk: terrain", GL_RED, GL_FLOAT, [&](const MapArea& area, TextureClass& t) { gpu.GenerateTerrain(terrain, area, t); });
@@ -344,6 +394,7 @@ int RunGpuHeightCheck()
 		if (gpu.Initialize() && surfacePass.Initialize()) {
 			bool ok = CheckRanges(gpu);
 			ok = CheckDeterminism(gpu) && ok;
+			ok = CheckShapeOperations(gpu) && ok;
 			ok = CheckBiomes(gpu) && ok;
 			ok = CheckChunks(gpu) && ok;
 			ok = CheckSurface(surfacePass) && ok;

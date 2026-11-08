@@ -121,6 +121,24 @@ namespace utilities
 				}
 				regenerate |= ImGui::SliderFloat("Mix Power", &noiseConfig.mixPower, 0.0f, 1.0f);
 			}
+
+			// Shape operations; 0 turns each of them off
+			ImGui::SeparatorText("Shape");
+			regenerate |= ImGui::SliderFloat("Warp strength", &noiseConfig.warpStrength, 0.0f, 2.0f);
+			ImGui::SetItemTooltip("Domain warping: moves the noise by a second noise, which bends coastlines and mountain ranges.\n"
+				"1 = by about one feature of the noise. Has no effect on symmetrical noise");
+			if (noiseConfig.warpStrength != 0.0f) {
+				regenerate |= ImGui::SliderFloat("Warp scale", &noiseConfig.warpScale, 0.1f, 4.0f);
+				ImGui::SetItemTooltip("Frequency of the moving noise relative to this one; higher = finer swirls");
+			}
+			regenerate |= ImGui::SliderFloat("Slope erosion", &noiseConfig.slopeErosion, 0.0f, 2.0f);
+			ImGui::SetItemTooltip("Weakens fine octaves on steep slopes: smooth flanks, details in valleys and on ridges, like eroded terrain");
+			regenerate |= ImGui::SliderInt("Terrace steps", &noiseConfig.terraceSteps, 0, 32);
+			ImGui::SetItemTooltip("Splits the height into flat ledges, this many per unit of height; 0 = off");
+			if (noiseConfig.terraceSteps > 0) {
+				regenerate |= ImGui::SliderFloat("Terrace sharpness", &noiseConfig.terraceSharpness, 0.0f, 1.0f);
+				ImGui::SetItemTooltip("0 = gentle steps, 1 = flat ledges with steep risers");
+			}
 			return regenerate;
 		}
 		return false;
