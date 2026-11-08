@@ -106,6 +106,7 @@ enable_testing()
 add_executable(ptg_tests
 	${PTG_DIR}/tests/BiomeTests.cpp
 	${PTG_DIR}/tests/ErosionTests.cpp
+	${PTG_DIR}/tests/FlightRecordTests.cpp
 	${PTG_DIR}/tests/FrustumTests.cpp
 	${PTG_DIR}/tests/GridTests.cpp
 	${PTG_DIR}/tests/HeightmapExportTests.cpp
