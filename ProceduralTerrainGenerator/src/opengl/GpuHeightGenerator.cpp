@@ -87,21 +87,23 @@ namespace {
 	}
 
 	//Sets the uniforms shared by the generating shaders; the shader must be bound
-	void SetMapUniforms(Shader& shader, float originx, float originy, const TextureClass& target, glm::ivec2 islandSize)
+	void SetMapUniforms(Shader& shader, const MapArea& area, const TextureClass& target)
 	{
+		glm::ivec2 islandSize = area.islandSize;
 		if (islandSize.x <= 0 || islandSize.y <= 0) {
 			islandSize = glm::ivec2(target.GetWidth(), target.GetHeight());
 		}
 		shader.SetUniform2i("mapSize", target.GetWidth(), target.GetHeight());
-		shader.SetUniform2f("origin", originx, originy);
+		shader.SetUniform2f("origin", area.origin.x, area.origin.y);
+		shader.SetUniform1f("sampleStep", area.step);
 		shader.SetUniform2i("islandSize", islandSize.x, islandSize.y);
 	}
 
-	void RunHeightShader(Shader& shader, unsigned int input, int mode, float originx, float originy, TextureClass& target, glm::ivec2 islandSize)
+	void RunHeightShader(Shader& shader, unsigned int input, int mode, const MapArea& area, TextureClass& target)
 	{
 		shader.Bind();
 		shader.SetUniform1i("mode", mode);
-		SetMapUniforms(shader, originx, originy, target, islandSize);
+		SetMapUniforms(shader, area, target);
 		glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, input);
 		target.BindImage(0, GL_WRITE_ONLY);
 		DispatchTiles(shader, target.GetWidth(), target.GetHeight());
@@ -147,16 +149,16 @@ void GpuHeightGenerator::PollMeasure(double& ms)
 	}
 }
 
-void GpuHeightGenerator::GenerateNoise(const noise::NoiseConfigParameters& config, float originx, float originy, TextureClass& target, glm::ivec2 islandSize)
+void GpuHeightGenerator::GenerateNoise(const noise::NoiseConfigParameters& config, const MapArea& area, TextureClass& target)
 {
 	//Uninitialized on purpose: the shader reads only what is set for the mode
 	auto input = std::make_unique_for_overwrite<GpuHeightInput>();
 	SetNoise(input->noises, input->permutations, 0, config);
 	glNamedBufferSubData(heightInput, 0, offsetof(GpuHeightInput, splines), input.get());
-	RunHeightShader(*heightShader, heightInput, MODE_NOISE, originx, originy, target, islandSize);
+	RunHeightShader(*heightShader, heightInput, MODE_NOISE, area, target);
 }
 
-void GpuHeightGenerator::GenerateTerrain(const TerrainConfig& config, float originx, float originy, TextureClass& target, glm::ivec2 islandSize)
+void GpuHeightGenerator::GenerateTerrain(const TerrainConfig& config, const MapArea& area, TextureClass& target)
 {
 	auto input = std::make_unique_for_overwrite<GpuHeightInput>();
 	SetNoise(input->noises, input->permutations, 0, config.continentalness);
@@ -174,11 +176,11 @@ void GpuHeightGenerator::GenerateTerrain(const TerrainConfig& config, float orig
 		SetSpline(*input, 2, config.weirdnessSpline);
 	}
 	glNamedBufferSubData(heightInput, 0, mode == MODE_SPLINE ? sizeof(GpuHeightInput) : offsetof(GpuHeightInput, splines), input.get());
-	RunHeightShader(*heightShader, heightInput, mode, originx, originy, target, islandSize);
+	RunHeightShader(*heightShader, heightInput, mode, area, target);
 }
 
-void GpuHeightGenerator::GenerateBiomes(const BiomeConfig& biomes, const TerrainConfig& terrain, const std::vector<biome::Biome>& table, float originx, float originy,
-	TextureClass& colors, TextureClass& ids, glm::ivec2 islandSize)
+void GpuHeightGenerator::GenerateBiomes(const BiomeConfig& biomes, const TerrainConfig& terrain, const std::vector<biome::Biome>& table, const MapArea& area,
+	TextureClass& colors, TextureClass& ids)
 {
 	auto input = std::make_unique_for_overwrite<GpuBiomeInput>();
 	SetNoise(input->noises, input->permutations, 0, terrain.continentalness);
@@ -212,7 +214,7 @@ void GpuHeightGenerator::GenerateBiomes(const BiomeConfig& biomes, const Terrain
 
 	biomeShader->SetUniform1i("biomeCount", static_cast<int>(entries.size()));
 	biomeShader->SetUniform3fv("fallbackColor", fallbackColor);
-	SetMapUniforms(*biomeShader, originx, originy, colors, islandSize);
+	SetMapUniforms(*biomeShader, area, colors);
 	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, biomeInput);
 	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, biomeLevels);
 	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 2, biomeTable);
