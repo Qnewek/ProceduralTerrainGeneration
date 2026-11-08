@@ -30,6 +30,8 @@ private:
 	glm::mat4 view, projection;
 
 	void UpdateCameraVectors(CameraMovement movement);
+	glm::mat4 ComputeView() const;
+	glm::mat4 ComputeProjection() const;
 public:
 	Camera(const unsigned int ScreenWidth, const unsigned int ScreenHeight, glm::vec3 _position, float cameraSpeed, float renderDistance);
 	~Camera();
@@ -42,6 +44,8 @@ public:
 	glm::mat4* GetViewMatrix();
 	glm::mat4* GetProjectionMatrix();
 	glm::vec3 GetPosition() const { return position; }
+	//projection * view as SetUniforms will set them for the current position and settings
+	glm::mat4 GetViewProjection() const { return ComputeProjection() * ComputeView(); }
 
 	void EnableMouseControl(GLFWwindow* window);
 	void DisableMouseControl(GLFWwindow* window);

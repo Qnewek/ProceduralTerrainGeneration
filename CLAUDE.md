@@ -64,6 +64,7 @@ ProceduralTerrainGenerator/
       Erosion.*                  erozja kroplowa (CPU, lista jednokierunkowa kropel)
       SurfaceDerivatives.*       gradient i laplasjan mapy wysokości (CPU, wzorzec dla GpuSurfacePass) + normalna/nachylenie/krzywizna
       Grid.h, Parallel.h         mapy Grid<T>; ParallelFor po wierszach
+      Frustum.h                  płaszczyzny frustum z macierzy i test AABB (culling chunków)
       Preset.*                   zapis/odczyt WorldConfig i NoiseMapConfig jako JSON + walidacja
       HeightmapExport.*          zapis mapy jako PNG 16-bit lub RAW R16; FileIO.* = zapis przez plik tymczasowy
       HeightmapImport.*          odczyt mapy z PNG lub R16/RAW; format po rozszerzeniu, nowy = czytnik i rozszerzenie w tym pliku
@@ -183,7 +184,8 @@ Wartości szumów są w [-1, 1]. Konwencja indeksowania: `map[y * width + x]`.
   Checksumy benchmarku dotyczą tylko CPU; wynik GPU nie jest z nimi porównywany.
 - LOD chunków: poziom L bierze co 2^L-tą próbkę (`MapArea::step`, potęga dwójki, więc próbki poziomów się pokrywają). Siatka chunka jest jedna, skalowana w XZ uniformem
   `meshScale` (VS), a skirty (wierzchołki z `aPos.y = -1`) TES opuszcza o `skirtDepth`; `SetFrameUniforms` ustawia oba na neutralne (1 i 0) dla `TerrainView`.
-  Nie skaluj `model` niejednorodnie — `normalMatrix` i mapa pochodnych (liczona z krokiem `worldUnitsPerTexel · 2^L`) zakładają jednostki świata. Wcześniejsza próba chunków (klasa `Chunk`, nigdy nie scalona) jest pod tagiem
+  Culling (chunki na CPU w `ChunkWorld`, patche w TCS) zakłada |wysokość| ≤ 1,5 (`heightBound` w `ChunkWorld.cpp` = `HEIGHT_BOUND` w TCS); mapa o większych
+  wartościach wymaga zmiany obu, inaczej teren przy krawędzi ekranu zniknie. Nie skaluj `model` niejednorodnie — `normalMatrix` i mapa pochodnych (liczona z krokiem `worldUnitsPerTexel · 2^L`) zakładają jednostki świata. Wcześniejsza próba chunków (klasa `Chunk`, nigdy nie scalona) jest pod tagiem
   `archive/infinite-terrain-chunks`; stara roślinność — w historii (`fb8b840`), opis w ROADMAP, Faza 4.
 
 ## Kierunek rozwoju (skrót z ROADMAP)
