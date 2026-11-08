@@ -46,8 +46,6 @@ class NoiseBasedGenerationSys
 		bool chunksShown = false;
 		//The noise changed while the chunks were shown, so the finite map needs regenerating
 		bool finiteOutdated = false;
-		//Map size an island fills in the chunks: the last valid map size
-		glm::ivec2 islandSize = glm::ivec2(0);
 
 		//Eroded map shown and read by the UI, touched only by the main thread.
 		//A job works on its own copy, which replaces this one when finished

@@ -110,13 +110,13 @@ namespace {
 		const auto addNoise = [&](const std::string& name, const noise::NoiseConfigParameters& config, float tolerance = noiseTolerance, float originx = 0.0f, float originy = 0.0f) {
 			cases.push_back({ "noise: " + name,
 				[=](HeightField& out) { return CpuNoise(config, originx, originy, out); },
-				[=, &gpu](TextureClass& target) { gpu.GenerateNoise(config, originx, originy, target); },
+				[=, &gpu](TextureClass& target) { gpu.GenerateNoise(config, MapArea{ glm::vec2(originx, originy) }, target); },
 				tolerance });
 		};
 		const auto addTerrain = [&](const std::string& name, const TerrainConfig& config, float tolerance, float originx = 0.0f, float originy = 0.0f) {
 			cases.push_back({ "terrain: " + name,
 				[=](HeightField& out) { return CpuTerrain(config, originx, originy, out); },
-				[=, &gpu](TextureClass& target) { gpu.GenerateTerrain(config, originx, originy, target); },
+				[=, &gpu](TextureClass& target) { gpu.GenerateTerrain(config, MapArea{ glm::vec2(originx, originy) }, target); },
 				tolerance });
 		};
 
@@ -192,7 +192,7 @@ namespace {
 		}
 
 		TextureClass colors(width, height, GL_RGBA32F), ids(width, height, GL_R32I);
-		gpu.GenerateBiomes(biomes, terrain, biome::DefaultBiomes(), 0.0f, 0.0f, colors, ids);
+		gpu.GenerateBiomes(biomes, terrain, biome::DefaultBiomes(), MapArea{}, colors, ids);
 		BiomeMap gpuMap(width, height);
 		ids.Read(GL_RED_INTEGER, GL_INT, static_cast<int>(gpuMap.Size() * sizeof(int)), gpuMap.Data());
 
@@ -265,47 +265,51 @@ namespace {
 		return ok;
 	}
 
-	//A chunk is a part of the map generated on its own, with an origin and the island size of the whole map.
-	//It has to equal the same part of the whole map exactly, or chunk borders would show seams
+	//A chunk is a part of the map generated on its own, with an origin and the island size of the whole map; a coarser
+	//level of detail also takes every step-th sample. It has to equal the same samples of the whole map exactly,
+	//or chunk borders would show seams and levels would not meet
 	bool CheckChunks(GpuHeightGenerator& gpu, int width, int height)
 	{
-		constexpr int partWidth = 131, partHeight = 67;
-		const glm::ivec2 corner(700, 150);
-		const glm::ivec2 island(width, height);
+		constexpr int partWidth = 131, partHeight = 50;
+		const glm::ivec2 corner(300, 30);
 		bool allOk = true;
-		const auto check = [&](const std::string& name, GLenum format, GLenum type, int components, int bytes, const std::function<void(float, float, TextureClass&, glm::ivec2)>& generate) {
-			const GLenum internalFormat = format == GL_RED_INTEGER ? GL_R32I : components == 4 ? GL_RGBA32F : GL_R32F;
-			TextureClass whole(width, height, internalFormat), part(partWidth, partHeight, internalFormat);
-			generate(0.0f, 0.0f, whole, glm::ivec2(0));
-			generate(static_cast<float>(corner.x), static_cast<float>(corner.y), part, island);
+		const auto check = [&](const std::string& name, GLenum format, GLenum type, const std::function<void(const MapArea&, TextureClass&)>& generate) {
+			constexpr int bytes = 4;
+			const GLenum internalFormat = format == GL_RED_INTEGER ? GL_R32I : GL_R32F;
+			TextureClass whole(width, height, internalFormat);
+			generate(MapArea{}, whole);
 			std::vector<unsigned char> wholeData(static_cast<size_t>(width) * height * bytes), partData(static_cast<size_t>(partWidth) * partHeight * bytes);
 			whole.Read(format, type, static_cast<int>(wholeData.size()), wholeData.data());
-			part.Read(format, type, static_cast<int>(partData.size()), partData.data());
-			int different = 0;
-			for (int y = 0; y < partHeight; y++) {
-				const unsigned char* a = &wholeData[(static_cast<size_t>(y + corner.y) * width + corner.x) * bytes];
-				const unsigned char* b = &partData[static_cast<size_t>(y) * partWidth * bytes];
-				for (int x = 0; x < partWidth; x++) {
-					different += std::memcmp(a + x * bytes, b + x * bytes, bytes) != 0 ? 1 : 0;
+			for (int step : { 1, 2, 4 }) {
+				TextureClass part(partWidth, partHeight, internalFormat);
+				generate(MapArea{ glm::vec2(corner), static_cast<float>(step), glm::ivec2(width, height) }, part);
+				part.Read(format, type, static_cast<int>(partData.size()), partData.data());
+				int different = 0;
+				for (int y = 0; y < partHeight; y++) {
+					for (int x = 0; x < partWidth; x++) {
+						const unsigned char* a = &wholeData[(static_cast<size_t>(corner.y + y * step) * width + corner.x + x * step) * bytes];
+						const unsigned char* b = &partData[(static_cast<size_t>(y) * partWidth + x) * bytes];
+						different += std::memcmp(a, b, bytes) != 0 ? 1 : 0;
+					}
 				}
+				const bool ok = different == 0;
+				allOk = allOk && ok;
+				std::cout << std::left << std::setw(37) << (name + ", step " + std::to_string(step)) << different << " of " << partWidth * partHeight << " texels differ   " << (ok ? "ok" : "SEAMS") << "\n";
 			}
-			const bool ok = different == 0;
-			allOk = allOk && ok;
-			std::cout << std::left << std::setw(37) << name << different << " of " << partWidth * partHeight << " texels differ   " << (ok ? "ok" : "SEAMS") << "\n";
 		};
 
 		noise::NoiseConfigParameters n;
 		n.island = true;
 		n.mixPower = 0.6f;
-		check("chunk: noise with island", GL_RED, GL_FLOAT, 1, 4, [&](float x, float y, TextureClass& t, glm::ivec2 s) { gpu.GenerateNoise(n, x, y, t, s); });
+		check("chunk: noise with island", GL_RED, GL_FLOAT, [&](const MapArea& area, TextureClass& t) { gpu.GenerateNoise(n, area, t); });
 		TerrainConfig terrain = TerrainConfig::Default();
 		terrain.method = EvaluationMethod::SPLINE_COMBINE;
-		check("chunk: terrain", GL_RED, GL_FLOAT, 1, 4, [&](float x, float y, TextureClass& t, glm::ivec2 s) { gpu.GenerateTerrain(terrain, x, y, t, s); });
+		check("chunk: terrain", GL_RED, GL_FLOAT, [&](const MapArea& area, TextureClass& t) { gpu.GenerateTerrain(terrain, area, t); });
 		const BiomeConfig biomes = BiomeConfig::Default();
 		const std::vector<biome::Biome> table = biome::DefaultBiomes();
-		check("chunk: biome ids", GL_RED_INTEGER, GL_INT, 1, 4, [&](float x, float y, TextureClass& ids, glm::ivec2 s) {
+		check("chunk: biome ids", GL_RED_INTEGER, GL_INT, [&](const MapArea& area, TextureClass& ids) {
 			TextureClass colors(ids.GetWidth(), ids.GetHeight(), GL_RGBA32F);
-			gpu.GenerateBiomes(biomes, terrain, table, x, y, colors, ids, s);
+			gpu.GenerateBiomes(biomes, terrain, table, area, colors, ids);
 		});
 		return allOk;
 	}
@@ -386,7 +390,7 @@ namespace {
 		for (int size : { 512, 1024, 2048, 4096 }) {
 			TextureClass target(size, size, GL_R32F);
 			const double gpuMs = MedianMs([&] {
-				gpu.GenerateTerrain(config, 0.0f, 0.0f, target);
+				gpu.GenerateTerrain(config, MapArea{}, target);
 				glFinish();
 			}, 9);
 			HeightField cpuMap(size, size);
@@ -398,7 +402,7 @@ namespace {
 		std::cout << "\nsurface map               CPU [ms]   GPU [ms]\n";
 		for (int size : { 512, 1024, 2048, 4096 }) {
 			TextureClass height(size, size, GL_R32F), target(size, size, GL_RGBA32F);
-			gpu.GenerateTerrain(config, 0.0f, 0.0f, height);
+			gpu.GenerateTerrain(config, MapArea{}, height);
 			const double gpuMs = MedianMs([&] {
 				surfacePass.Run(height, surfaceTexelSize, target);
 				glFinish();

@@ -14,6 +14,7 @@ uniform sampler2D surfaceMap;   //gradient and Laplacian of heightMap per world 
 uniform int displayMode;
 uniform float heightScale;
 uniform vec2 texelWorldSize;    //size of one height map texel in world units (x, z), before model
+uniform float skirtDepth;       //how far below the surface a skirt reaches (world units before model); 0 without skirts
 #include "../common/transform.glsl"
 #include "../common/surface.glsl"
 
@@ -47,13 +48,11 @@ void main()
     vec4 p10 = gl_in[2].gl_Position;
     vec4 p11 = gl_in[3].gl_Position;
 
-    vec4 uVec = p01 - p00;
-    vec4 vVec = p10 - p00;
-    vec4 normal = normalize( vec4(cross(vVec.xyz, uVec.xyz), 0) );
-
+    //Patches lie in the XZ plane, except skirts, which hang from a border down to y = -1 (before skirtDepth)
     vec4 p0 = (p01 - p00) * u + p00;
     vec4 p1 = (p11 - p10) * u + p10;
-    vec4 p = (p1 - p0) * v + p0 + normal * Height;
+    vec4 p = (p1 - p0) * v + p0;
+    p.y = p.y * skirtDepth + Height;
 
 
     if(displayMode == 0){

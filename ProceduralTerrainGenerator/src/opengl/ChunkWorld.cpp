@@ -4,6 +4,7 @@
 #include <cmath>
 #include <iostream>
 
+#include "imgui.h"
 #include "glm/gtc/matrix_transform.hpp"
 
 namespace {
@@ -11,10 +12,22 @@ namespace {
 	constexpr int texelsPerPatch = 16;
 	constexpr int patchesPerSide = ChunkWorld::chunkSize / texelsPerPatch;
 	static_assert(ChunkWorld::chunkSize % texelsPerPatch == 0);
-	//Plan looks at most this many chunks away from the camera, whatever the view distance
-	constexpr int maxChunkRadius = 32;
 	//Freed chunks whose textures are kept for reuse
 	constexpr size_t maxSpare = 32;
+	//Depth of the skirts, as a part of heightScale for a level 0 chunk; doubles with every level, like the distance between samples
+	constexpr float skirtPart = 0.01f;
+	constexpr float maxSkirtPart = 0.5f;
+	//Bits of a chunk coordinate in a key
+	constexpr int coordBits = 28;
+	constexpr uint64_t coordMask = (uint64_t(1) << coordBits) - 1;
+
+	const glm::ivec2 childOffsets[4] = { { 0, 0 }, { 1, 0 }, { 0, 1 }, { 1, 1 } };
+
+	//Distance from a point to a square
+	float DistanceToSquare(glm::vec2 point, glm::vec2 cornerMin, float size)
+	{
+		return glm::length(point - glm::clamp(point, cornerMin, cornerMin + size));
+	}
 }
 
 bool ChunkWorld::Initialize()
@@ -42,21 +55,44 @@ bool ChunkWorld::ReloadShader()
 	return shader->Reload();
 }
 
+void ChunkWorld::ImGuiDraw()
+{
+	ImGui::SliderFloat("Detail distance", &lodDistance, 1.5f, 6.0f, "%.1f chunks");
+	ImGui::SetItemTooltip("A chunk nearer to the camera than this many of its sizes is drawn as four chunks with twice the detail");
+}
+
 //Patches in the order of utilities::GenerateVerticesForResolution: (x, z), (x + 1, z), (x, z + 1), (x + 1, z + 1).
-//Vertices sit on texels: chunk texel t is texel t + 1 of the textures, sampled at its center
+//Vertices sit on texels: chunk texel t is texel t + 1 of the textures, sampled at its center. Along the borders hang
+//skirts: patches from the border down to y = -1, which the TES moves skirtDepth below the surface. They cover the
+//gaps between chunks of different levels, whose borders do not match between the samples of the coarser one
 void ChunkWorld::BuildMesh()
 {
 	const float step = texelsPerPatch * TerrainView::worldUnitsPerTexel;
 	const auto texCoord = [](int patch) { return (static_cast<float>(patch * texelsPerPatch) + 1.5f) / static_cast<float>(textureSize); };
 	std::vector<float> vertices;
+	const auto vertex = [&](int i, float y, int j) {
+		vertices.insert(vertices.end(), { i * step, y, j * step, texCoord(i), texCoord(j) });
+	};
 	for (int i = 0; i < patchesPerSide; i++) {
 		for (int j = 0; j < patchesPerSide; j++) {
-			for (auto [di, dj] : { std::pair{ 0, 0 }, { 1, 0 }, { 0, 1 }, { 1, 1 } }) {
-				vertices.insert(vertices.end(), { (i + di) * step, 0.0f, (j + dj) * step, texCoord(i + di), texCoord(j + dj) });
+			for (const glm::ivec2 d : childOffsets) {
+				vertex(i + d.x, 0.0f, j + d.y);
 			}
 		}
 	}
-	patchCount = patchesPerSide * patchesPerSide;
+	//Skirt patches: the border segment from a to b on top, the same segment at the bottom
+	for (int k = 0; k < patchesPerSide; k++) {
+		for (const auto& [a, b] : { std::pair{ glm::ivec2(k, 0), glm::ivec2(k + 1, 0) },
+				{ glm::ivec2(k, patchesPerSide), glm::ivec2(k + 1, patchesPerSide) },
+				{ glm::ivec2(0, k), glm::ivec2(0, k + 1) },
+				{ glm::ivec2(patchesPerSide, k), glm::ivec2(patchesPerSide, k + 1) } }) {
+			vertex(a.x, 0.0f, a.y);
+			vertex(b.x, 0.0f, b.y);
+			vertex(a.x, -1.0f, a.y);
+			vertex(b.x, -1.0f, b.y);
+		}
+	}
+	patchCount = patchesPerSide * patchesPerSide + 4 * patchesPerSide;
 	vertexBuffer = std::make_unique<VertexBuffer>(vertices.data(), static_cast<unsigned int>(vertices.size() * sizeof(float)));
 	vao->AddBuffer(*vertexBuffer, layout);
 }
@@ -80,9 +116,22 @@ void ChunkWorld::AlignWithMap(int width, int height)
 	Invalidate();
 }
 
-uint64_t ChunkWorld::Key(glm::ivec2 coord)
+uint64_t ChunkWorld::Key(int level, glm::ivec2 coord)
 {
-	return (static_cast<uint64_t>(static_cast<uint32_t>(coord.x)) << 32) | static_cast<uint32_t>(coord.y);
+	return (static_cast<uint64_t>(level) << (2 * coordBits))
+		| ((static_cast<uint64_t>(static_cast<uint32_t>(coord.x)) & coordMask) << coordBits)
+		| (static_cast<uint64_t>(static_cast<uint32_t>(coord.y)) & coordMask);
+}
+
+float ChunkWorld::NodeSize(int level)
+{
+	return static_cast<float>(chunkSize << level) * TerrainView::worldUnitsPerTexel;
+}
+
+ChunkWorld::Chunk* ChunkWorld::Find(int level, glm::ivec2 coord)
+{
+	const auto found = chunks.find(Key(level, coord));
+	return found == chunks.end() ? nullptr : &found->second;
 }
 
 int ChunkWorld::Plan(glm::vec2 center, float radius)
@@ -90,44 +139,34 @@ int ChunkWorld::Plan(glm::vec2 center, float radius)
 	frame++;
 	visible.clear();
 	pending.clear();
+	visited = 0;
+	coarsestLevel = 0;
 
-	const float size = ChunkWorldSize();
-	radius = std::clamp(radius, 0.0f, maxChunkRadius * size);
+	radius = std::clamp(radius, 0.0f, NodeSize(maxLevel));
 	lastCenter = center;
 	lastRadius = radius;
 
-	//Camera relative to map texel (0, 0)
+	//The roots are the smallest chunks larger than the view distance, so at most 3 x 3 of them are in range
+	int rootLevel = 0;
+	while (rootLevel < maxLevel && NodeSize(rootLevel) < radius) {
+		rootLevel++;
+	}
+	const float rootSize = NodeSize(rootLevel);
 	const glm::vec2 local = center - mapOrigin;
-	const glm::ivec2 low(glm::floor((local - radius) / size));
-	const glm::ivec2 high(glm::floor((local + radius) / size));
-	size_t inRange = 0;
+	const glm::ivec2 low(glm::floor((local - radius) / rootSize));
+	const glm::ivec2 high(glm::floor((local + radius) / rootSize));
 	for (int z = low.y; z <= high.y; z++) {
 		for (int x = low.x; x <= high.x; x++) {
-			const glm::vec2 cornerMin = glm::vec2(x, z) * size;
-			const float distance = glm::length(local - glm::clamp(local, cornerMin, cornerMin + size));
-			if (distance > radius) {
-				continue;
-			}
-			inRange++;
-			const auto found = chunks.find(Key({ x, z }));
-			if (found == chunks.end()) {
-				pending.push_back({ { x, z }, distance });
-				continue;
-			}
-			Chunk& chunk = found->second;
-			chunk.lastSeen = frame;
-			if (chunk.version != 0) {
-				visible.push_back(&chunk);
-			}
-			if (chunk.version != worldVersion) {
-				pending.push_back({ { x, z }, distance });
-			}
+			Select(rootLevel, { x, z }, local, radius);
 		}
 	}
-	std::sort(pending.begin(), pending.end(), [](const PendingChunk& a, const PendingChunk& b) { return a.distance < b.distance; });
+	//Chunks that leave holes first, then nearest first; a parent is never farther than its children, so coarse chunks come before fine ones
+	std::sort(pending.begin(), pending.end(), [](const PendingChunk& a, const PendingChunk& b) {
+		return a.distance < b.distance || (a.distance == b.distance && a.level > b.level);
+	});
 
 	//Keeps half as many chunks out of range as in it, longest unseen go first
-	const size_t limit = inRange + inRange / 2 + 16;
+	const size_t limit = visited + visited / 2 + 16;
 	if (chunks.size() > limit) {
 		std::vector<std::pair<uint64_t, uint64_t>> unseen;
 		for (const auto& [key, chunk] : chunks) {
@@ -147,9 +186,64 @@ int ChunkWorld::Plan(glm::vec2 center, float radius)
 	return static_cast<int>(pending.size());
 }
 
-ChunkWorld::Chunk& ChunkWorld::Obtain(glm::ivec2 coord)
+void ChunkWorld::Select(int level, glm::ivec2 coord, glm::vec2 local, float radius)
 {
-	const uint64_t key = Key(coord);
+	const float size = NodeSize(level);
+	const float distance = DistanceToSquare(local, glm::vec2(coord) * size, size);
+	if (distance > radius) {
+		return;
+	}
+	visited++;
+	Chunk* chunk = Find(level, coord);
+	if (chunk) {
+		chunk->lastSeen = frame;
+	}
+	const bool drawable = chunk && chunk->version != 0;
+
+	if (level > 0 && distance < lodDistance * size) {
+		//The children replace this chunk only all at once, so nothing is left uncovered while they are generated
+		const float childSize = size / 2.0f;
+		bool ready = true;
+		for (const glm::ivec2 offset : childOffsets) {
+			const glm::ivec2 childCoord = coord * 2 + offset;
+			const float childDistance = DistanceToSquare(local, glm::vec2(childCoord) * childSize, childSize);
+			if (childDistance > radius) {
+				continue;
+			}
+			Chunk* child = Find(level - 1, childCoord);
+			if (child) {
+				child->lastSeen = frame;
+				visited++;
+			}
+			if (!child || child->version == 0) {
+				ready = false;
+				//Children are requested once there is a parent to show meanwhile
+				if (drawable) {
+					pending.push_back({ level - 1, childCoord, childDistance });
+				}
+			}
+		}
+		if (ready) {
+			for (const glm::ivec2 offset : childOffsets) {
+				Select(level - 1, coord * 2 + offset, local, radius);
+			}
+			return;
+		}
+	}
+
+	if (drawable) {
+		visible.push_back(chunk);
+		coarsestLevel = std::max(coarsestLevel, level);
+	}
+	if (!chunk || chunk->version != worldVersion) {
+		//A chunk with nothing shown in its place goes before all others
+		pending.push_back({ level, coord, drawable ? distance : -1.0f });
+	}
+}
+
+ChunkWorld::Chunk& ChunkWorld::Obtain(int level, glm::ivec2 coord)
+{
+	const uint64_t key = Key(level, coord);
 	auto found = chunks.find(key);
 	if (found != chunks.end()) {
 		return found->second;
@@ -159,6 +253,7 @@ ChunkWorld::Chunk& ChunkWorld::Obtain(glm::ivec2 coord)
 		chunk = std::move(spare.back());
 		spare.pop_back();
 	}
+	chunk.level = level;
 	chunk.coord = coord;
 	chunk.version = 0;
 	chunk.lastSeen = frame;
@@ -185,14 +280,16 @@ void ChunkWorld::GenerateNext(const GenerateFn& generate)
 {
 	const int count = std::min(static_cast<int>(pending.size()), maxChunksPerFrame);
 	for (int i = 0; i < count; i++) {
-		Chunk& chunk = Obtain(pending[i].coord);
+		const PendingChunk& request = pending[i];
+		Chunk& chunk = Obtain(request.level, request.coord);
 		AllocateTextures(chunk);
-		const glm::ivec2 origin = chunk.coord * chunkSize - 1;
-		generate(static_cast<float>(origin.x), static_cast<float>(origin.y), *chunk.height, chunk.colors.get(), chunk.ids.get());
-		surfacePass.Run(*chunk.height, TerrainView::worldUnitsPerTexel, *chunk.surface);
-		if (chunk.version == 0) {
-			visible.push_back(&chunk);
-		}
+		const int step = 1 << chunk.level;
+		MapArea area;
+		area.origin = glm::vec2(chunk.coord * chunkSize * step - step);
+		area.step = static_cast<float>(step);
+		area.islandSize = alignedSize;
+		generate(area, *chunk.height, chunk.colors.get(), chunk.ids.get());
+		surfacePass.Run(*chunk.height, TerrainView::worldUnitsPerTexel * step, *chunk.surface);
 		chunk.version = worldVersion;
 		chunk.generation = ++generationCounter;
 	}
@@ -211,10 +308,13 @@ void ChunkWorld::Draw(Renderer& renderer, Camera& camera, LightSource& light, co
 	if (settings.wireFrame) {
 		glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
 	}
-	const float size = ChunkWorldSize();
 	for (const Chunk* chunk : visible) {
-		const glm::vec2 corner = mapOrigin + glm::vec2(chunk->coord) * size;
+		const float step = static_cast<float>(1 << chunk->level);
+		const glm::vec2 corner = mapOrigin + glm::vec2(chunk->coord) * NodeSize(chunk->level);
 		shader->SetModel(glm::translate(scale, glm::vec3(corner.x, 0.0f, corner.y)));
+		shader->SetUniform1f("meshScale", step);
+		shader->SetUniform2f("texelWorldSize", TerrainView::worldUnitsPerTexel * step, TerrainView::worldUnitsPerTexel * step);
+		shader->SetUniform1f("skirtDepth", std::min(skirtPart * step, maxSkirtPart) * std::abs(settings.heightScale));
 		chunk->height->Bind(0);
 		(chunk->colors ? *chunk->colors : *noBiomes).Bind(static_cast<unsigned int>(TerrainView::Layer::BIOMES));
 		chunk->surface->Bind(TerrainView::surfaceUnit);
@@ -230,20 +330,26 @@ int ChunkWorld::BiomeAt(glm::vec2 position)
 	if (!biomes) {
 		return -1;
 	}
-	const glm::ivec2 texel(glm::floor((position - mapOrigin) / TerrainView::worldUnitsPerTexel + 0.5f));
-	const glm::ivec2 coord(glm::floor(glm::vec2(texel) / static_cast<float>(chunkSize)));
-	const uint64_t key = Key(coord);
-	const auto found = chunks.find(key);
-	if (found == chunks.end() || found->second.version == 0 || !found->second.ids) {
-		return -1;
+	const glm::vec2 texelPosition = (position - mapOrigin) / TerrainView::worldUnitsPerTexel;
+	for (int level = 0; level <= maxLevel; level++) {
+		const int step = 1 << level;
+		//Nearest sample of this level
+		const glm::ivec2 sample(glm::floor(texelPosition / static_cast<float>(step) + 0.5f));
+		const glm::ivec2 coord(glm::floor(glm::vec2(sample) / static_cast<float>(chunkSize)));
+		const uint64_t key = Key(level, coord);
+		const auto found = chunks.find(key);
+		if (found == chunks.end() || found->second.version == 0 || !found->second.ids) {
+			continue;
+		}
+		const Chunk& chunk = found->second;
+		if (biomeCopy.Empty() || biomeCopyKey != key || biomeCopyGeneration != chunk.generation) {
+			biomeCopy.Resize(textureSize, textureSize);
+			chunk.ids->Read(GL_RED_INTEGER, GL_INT, static_cast<int>(biomeCopy.Size() * sizeof(int)), biomeCopy.Data());
+			biomeCopyKey = key;
+			biomeCopyGeneration = chunk.generation;
+		}
+		const glm::ivec2 inChunk = sample - coord * chunkSize + 1;
+		return biomeCopy.At(inChunk.x, inChunk.y);
 	}
-	const Chunk& chunk = found->second;
-	if (biomeCopy.Empty() || biomeCopyKey != key || biomeCopyGeneration != chunk.generation) {
-		biomeCopy.Resize(textureSize, textureSize);
-		chunk.ids->Read(GL_RED_INTEGER, GL_INT, static_cast<int>(biomeCopy.Size() * sizeof(int)), biomeCopy.Data());
-		biomeCopyKey = key;
-		biomeCopyGeneration = chunk.generation;
-	}
-	const glm::ivec2 inChunk = texel - coord * chunkSize + 1;
-	return biomeCopy.At(inChunk.x, inChunk.y);
+	return -1;
 }
