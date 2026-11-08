@@ -19,8 +19,8 @@ struct MapArea {
 	glm::ivec2 islandSize = glm::ivec2(0);
 };
 
-//Generates the maps shown by the application in compute shaders. The CPU generators do the same work and remain for
-//the benchmark and for --gpu-check. Maps go to textures of any size, row y = 0 first, like HeightField. Only for the thread owning the GL context.
+//Generates all maps of the application in compute shaders (the only implementation of the generation; --gpu-check tests it).
+//Maps go to textures of any size, row y = 0 first, like HeightField. Only for the thread owning the GL context.
 //The result can be sampled or read back right after a call; the work itself may still be running on the GPU.
 class GpuHeightGenerator
 {
@@ -35,14 +35,15 @@ public:
 	bool Initialize();
 	void ReloadShaders();
 
-	//GPU version of SimplexNoiseClass::GenerateFractalNoise
+	//Fractal simplex noise (height_compute.shader, common/noise.glsl)
 	//@param target - GL_R32F
 	void GenerateNoise(const noise::NoiseConfigParameters& config, const MapArea& area, TextureClass& target);
-	//GPU version of TerrainGenerator::GenerateTerrain. Unlike the CPU, it does not report noise values below -1
-	//as an error, and a spline takes its end value for a noise outside [-1, 1] instead of extrapolating
+	//Terrain height from the three terrain noises by config.method. A spline is sampled into a table of 1024 values
+	//and takes its end value for a noise outside [-1, 1]
 	//@param target - GL_R32F
 	void GenerateTerrain(const TerrainConfig& config, const MapArea& area, TextureClass& target);
-	//GPU version of BiomeGenerator::Biomify, including its noises. Biomes are tried in the order of the table
+	//Biome of every texel from the levels of its five noises (biome_compute.shader). Biomes are tried in the order of the table,
+	//id 0 where none matches
 	//@param colors - GL_RGBA32F, color of the biome of every texel
 	//@param ids - GL_R32I of the same size, id of the biome of every texel
 	void GenerateBiomes(const BiomeConfig& biomes, const TerrainConfig& terrain, const std::vector<biome::Biome>& table, const MapArea& area,

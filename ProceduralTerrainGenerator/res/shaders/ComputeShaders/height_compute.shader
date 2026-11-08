@@ -1,7 +1,6 @@
 #version 450 core
 
-// Generates a noise or terrain height map; GLSL version of TerrainGenerator::GenerateTerrain.
-// A change in the generation has to be repeated here; ProceduralTerrainGenerator.exe --gpu-check compares both.
+// Generates a noise or terrain height map. After a change run ProceduralTerrainGenerator.exe --gpu-check.
 
 layout(local_size_x = 32, local_size_y = 32) in;
 

@@ -52,7 +52,7 @@ struct TerrainConfig {
 	}
 	const SplinePoints& Spline(WorldGenParameter p) const { return const_cast<TerrainConfig*>(this)->Spline(p); }
 
-	//Default terrain used at startup and by the benchmark
+	//Default terrain used at startup and by --gpu-check
 	static TerrainConfig Default() {
 		TerrainConfig c;
 		c.continentalness.seed = 623;

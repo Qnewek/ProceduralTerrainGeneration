@@ -5,8 +5,8 @@
 #include "Shader.h"
 #include "TextureClass.h"
 
-//Computes the gradient and Laplacian of a height map in a compute shader; GPU version of surface::Compute
-//(SurfaceDerivatives.h), texel layout as surface::Derivatives. Only for the thread owning the GL context.
+//Computes the gradient and Laplacian of a height map in a compute shader (surface_compute.shader): every texel holds
+//(dx, dy, Laplacian, 0) per world unit. Only for the thread owning the GL context.
 class GpuSurfacePass
 {
 public:

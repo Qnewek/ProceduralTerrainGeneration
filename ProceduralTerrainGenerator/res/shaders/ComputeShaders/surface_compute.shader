@@ -1,7 +1,6 @@
 #version 450 core
 
-// Gradient and Laplacian of a height map; GLSL version of surface::Compute (SurfaceDerivatives.cpp).
-// A change has to be repeated there; ProceduralTerrainGenerator.exe --gpu-check compares both.
+// Gradient and Laplacian of a height map; ProceduralTerrainGenerator.exe --gpu-check tests it on maps with known derivatives.
 // Output: x = dh/dx, y = dh/dy per world unit, z = Laplacian per world unit squared, w = 0.
 
 layout(local_size_x = 16, local_size_y = 16) in;

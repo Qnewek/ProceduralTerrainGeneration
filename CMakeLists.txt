@@ -37,18 +37,15 @@ add_library(ptg_vendor STATIC
 )
 target_include_directories(ptg_vendor SYSTEM PUBLIC ${PTG_SRC}/vendor ${Stb_INCLUDE_DIR})
 
-# Terrain generation without OpenGL/ImGui - used by the app, the benchmark and tests
+# World parameters, presets, erosion and map files, without OpenGL/ImGui - used by the app and tests.
+# Generation itself runs only in compute shaders (res/shaders/ComputeShaders)
 add_library(ptg_core STATIC
 	${PTG_SRC}/terrainGeneration/Biome.cpp
-	${PTG_SRC}/terrainGeneration/BiomeGenerator.cpp
 	${PTG_SRC}/terrainGeneration/Erosion.cpp
 	${PTG_SRC}/terrainGeneration/FileIO.cpp
 	${PTG_SRC}/terrainGeneration/HeightmapExport.cpp
 	${PTG_SRC}/terrainGeneration/HeightmapImport.cpp
-	${PTG_SRC}/terrainGeneration/Noise.cpp
 	${PTG_SRC}/terrainGeneration/Preset.cpp
-	${PTG_SRC}/terrainGeneration/SurfaceDerivatives.cpp
-	${PTG_SRC}/terrainGeneration/TerrainGenerator.cpp
 )
 target_include_directories(ptg_core PUBLIC ${PTG_SRC}/terrainGeneration)
 target_link_libraries(ptg_core PUBLIC ptg_vendor glm::glm)
@@ -111,11 +108,9 @@ add_executable(ptg_tests
 	${PTG_DIR}/tests/GridTests.cpp
 	${PTG_DIR}/tests/HeightmapExportTests.cpp
 	${PTG_DIR}/tests/HeightmapImportTests.cpp
-	${PTG_DIR}/tests/NoiseTests.cpp
+	${PTG_DIR}/tests/PermutationTests.cpp
 	${PTG_DIR}/tests/PresetTests.cpp
 	${PTG_DIR}/tests/RollingStatsTests.cpp
-	${PTG_DIR}/tests/SurfaceTests.cpp
-	${PTG_DIR}/tests/TerrainTests.cpp
 	${PTG_DIR}/tests/TestMain.cpp
 )
 target_include_directories(ptg_tests PRIVATE ${PTG_SRC}/utility)
