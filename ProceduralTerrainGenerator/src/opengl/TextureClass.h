@@ -33,6 +33,8 @@ public:
 	//@param access - GL_READ_ONLY, GL_WRITE_ONLY or GL_READ_WRITE
 	void BindImage(unsigned int unit, GLenum access) const;
 
+	//OpenGL name of the texture, e.g. for ImGui::Image
+	inline unsigned int GetID() const { return m_RendererID; }
 	inline int GetWidth() const { return m_Width; }
 	inline int GetHeight() const { return m_Height; }
 };
