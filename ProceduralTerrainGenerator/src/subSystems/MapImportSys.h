@@ -21,6 +21,8 @@ public:
 	void Update();
 
 	void Draw(Renderer& renderer, Camera& camera, LightSource& light);
+	//true while the 2D map is shown instead of the 3D view
+	bool FlatView() const { return renderSettings.map2d; }
 	void ReloadShaders() { view.ReloadShader(); }
 	void ImGuiRightPanel();
 	void ImGuiLeftPanel();

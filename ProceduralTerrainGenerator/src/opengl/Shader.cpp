@@ -235,14 +235,6 @@ void Shader::SetUniform3fv(const std::string& name, glm::vec3 v) {
     GLCALL(glUniform3fv(GetUniformLocation(name), 1, &v[0]));
 }
 
-void Shader::SetLightUniforms(glm::vec3 lightPos, glm::vec3 ambient, glm::vec3 diffuse, glm::vec3 specular) {
-    this->Bind();
-    this->SetUniform3fv("light.ambient", ambient);
-    this->SetUniform3fv("light.diffuse", diffuse);
-    this->SetUniform3fv("light.specular", specular);
-    this->SetUniform3fv("light.position", lightPos);
-}
-
 void Shader::SetMaterialUniforms(glm::vec3 ambient, glm::vec3 diffuse, glm::vec3 specular, float shininess) {
 	this->Bind();
 	this->SetUniform3fv("material.ambient", ambient);

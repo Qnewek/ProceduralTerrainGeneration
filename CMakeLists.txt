@@ -57,6 +57,7 @@ ptg_set_warnings(ptg_core)
 
 add_executable(ProceduralTerrainGenerator
 	${PTG_SRC}/Application.cpp
+	${PTG_SRC}/opengl/ChunkWorld.cpp
 	${PTG_SRC}/opengl/GpuHeightCheck.cpp
 	${PTG_SRC}/opengl/GpuHeightGenerator.cpp
 	${PTG_SRC}/opengl/GpuQuery.cpp
@@ -78,6 +79,7 @@ add_executable(ProceduralTerrainGenerator
 	${PTG_SRC}/utility/FrameMetrics.cpp
 	${PTG_SRC}/utility/LightSource.cpp
 	${PTG_SRC}/utility/PresetPanel.cpp
+	${PTG_SRC}/utility/Sky.cpp
 	${PTG_SRC}/utility/utilities.cpp
 )
 target_include_directories(ProceduralTerrainGenerator PRIVATE
