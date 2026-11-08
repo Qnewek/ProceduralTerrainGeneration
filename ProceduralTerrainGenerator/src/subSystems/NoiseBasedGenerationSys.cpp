@@ -21,14 +21,14 @@ bool NoiseBasedGenerationSys::Initialize(int _width, int _height, float _heightS
 	config.width = _width;
 	config.height = _height;
 	renderSettings.heightScale = _heightScale;
-	if (!view.Initialize(config.width, config.height) || !gpu.Initialize()) {
+	if (!view.Initialize(config.width, config.height) || !chunks.Initialize() || !gpu.Initialize()) {
 		return false;
 	}
 	eroded = std::make_unique<erosion::Erosion>(1, 1);
 
 	//The first frame needs a map
-	RequestNoise(0.0f, 0.0f);
-	Update();
+	RequestNoise();
+	GenerateFinite();
 
 	std::cout << "[LOG] NoiseBasedGenerationSys initialized\n";
 	return true;
@@ -58,7 +58,7 @@ NoiseBasedGenerationSys::ErosionResult NoiseBasedGenerationSys::RunErosion(std::
 	return result;
 }
 
-void NoiseBasedGenerationSys::Update()
+void NoiseBasedGenerationSys::Update(Camera& camera)
 {
 	gpu.PollMeasure(lastGenerationMs);
 
@@ -66,22 +66,75 @@ void NoiseBasedGenerationSys::Update()
 		InstallResult(*result);
 	}
 
-	if (pending.noise) {
-		if (config.width >= 2 && config.height >= 2 && config.width <= 8192 && config.height <= 8192) {
-			view.Resize(config.width, config.height);
-			gpu.BeginMeasure();
-			gpu.GenerateNoise(config.noise, pending.originx, pending.originy, view.LayerTexture(TerrainView::Layer::TERRAIN, config.width, config.height));
-			gpu.EndMeasure();
-		}
-		else {
-			std::cout << "[ERROR] Map size must be between 2 and 8192, keeping the previous map" << std::endl;
-		}
-		pending.noise = false;
+	const bool leftInfinite = chunksShown && !infiniteGeneration;
+	chunksShown = infiniteGeneration;
+	//The noise changed while only the chunks were shown
+	if (leftInfinite && finiteOutdated) {
+		RequestNoise();
+		finiteOutdated = false;
+	}
+	if (infiniteGeneration) {
+		UpdateChunks(camera);
+	}
+	else {
+		GenerateFinite();
+	}
+	//After generating: the map size may have changed meanwhile
+	if (leftInfinite) {
+		view.BringCameraToMap(camera, renderSettings);
 	}
 
 	if (!job.IsRunning() && pending.Any()) {
 		StartJob();
 	}
+}
+
+namespace {
+	bool ValidMapSize(int width, int height)
+	{
+		return width >= 2 && height >= 2 && width <= 8192 && height <= 8192;
+	}
+}
+
+void NoiseBasedGenerationSys::GenerateFinite()
+{
+	if (!pending.noise) {
+		return;
+	}
+	if (ValidMapSize(config.width, config.height)) {
+		view.Resize(config.width, config.height);
+		gpu.BeginMeasure();
+		gpu.GenerateNoise(config.noise, 0.0f, 0.0f, view.LayerTexture(TerrainView::Layer::TERRAIN, config.width, config.height));
+		gpu.EndMeasure();
+	}
+	else {
+		std::cout << "[ERROR] Map size must be between 2 and 8192, keeping the previous map" << std::endl;
+	}
+	pending.noise = false;
+}
+
+void NoiseBasedGenerationSys::UpdateChunks(const Camera& camera)
+{
+	if (pending.noise) {
+		chunks.Invalidate();
+		pending.noise = false;
+		finiteOutdated = true;
+	}
+	//An invalid size waiting in the UI keeps the previous one
+	if (ValidMapSize(config.width, config.height)) {
+		chunks.AlignWithMap(config.width, config.height);
+		islandSize = glm::ivec2(config.width, config.height);
+	}
+
+	const glm::vec3 position = camera.GetPosition() / renderSettings.modelScale;
+	if (chunks.Plan(glm::vec2(position.x, position.z), camera.GetRenderDistance() / renderSettings.modelScale) == 0) {
+		return;
+	}
+	gpu.BeginMeasure();
+	chunks.GenerateNext([&](float originx, float originy, TextureClass& height, TextureClass*, TextureClass*) {
+		gpu.GenerateNoise(config.noise, originx, originy, height, islandSize);
+	});
+	gpu.EndMeasure();
 }
 
 void NoiseBasedGenerationSys::StartJob()
@@ -114,11 +167,9 @@ void NoiseBasedGenerationSys::InstallResult(ErosionResult& result)
 	}
 }
 
-void NoiseBasedGenerationSys::RequestNoise(float originx, float originy)
+void NoiseBasedGenerationSys::RequestNoise()
 {
 	pending.noise = true;
-	pending.originx = originx;
-	pending.originy = originy;
 	pending.resetErosion = true;
 	erosionDraw = false;
 }
@@ -160,18 +211,14 @@ void NoiseBasedGenerationSys::ApplyConfig(const NoiseMapConfig& loaded)
 {
 	config = loaded;
 	pending.erode = false;
-	//In infinite mode the map stays centered on the camera
-	RequestNoise(infiniteGeneration ? oldCamPos.x : 0.0f, infiniteGeneration ? oldCamPos.z : 0.0f);
+	RequestNoise();
 }
 
 void NoiseBasedGenerationSys::Draw(Renderer& renderer, Camera& camera, LightSource& light)
 {
-	if (infiniteGeneration) {
-		if(oldCamPos.x != camera.GetPosition().x || oldCamPos.z != camera.GetPosition().z) {
-			RequestNoise(camera.GetPosition().x, camera.GetPosition().z);
-			oldCamPos = camera.GetPosition();
-		}
-		camera.CameraAnchor(true);
+	if (chunksShown) {
+		chunks.Draw(renderer, camera, light, renderSettings);
+		return;
 	}
 	//Eroded map next to the base one along X, separated by a 5% gap; the 2D view frames both
 	float shift = view.GetWorldWidth() * 1.05f;
@@ -192,18 +239,23 @@ void NoiseBasedGenerationSys::Draw(Renderer& renderer, Camera& camera, LightSour
 void NoiseBasedGenerationSys::ImGuiRightPanel()
 {
 	if(utilities::MapSizeImGui(config.width, config.height)) {
-		RequestNoise(0.0f, 0.0f);
+		RequestNoise();
 	}
 
 	bool regen = utilities::NoiseImGui(config.noise);
 	ImGui::Checkbox("Instant Update", &instantUpdate);
 	if (!instantUpdate) {
 		if (ImGui::Button("Generate new noise")) {
-			RequestNoise(0.0f, 0.0f);
+			RequestNoise();
 		}
 	}
 	else if(regen){
-		RequestNoise(0.0f, 0.0f);
+		RequestNoise();
+	}
+	if (infiniteGeneration) {
+		ImGui::TextDisabled("Erosion and saving work on the finite map (Partial generation)");
+		PresetsImGui();
+		return;
 	}
 	ErosionImGui();
 	PresetsImGui();
@@ -260,6 +312,11 @@ void NoiseBasedGenerationSys::ErosionImGui()
 
 void NoiseBasedGenerationSys::ImGuiOutput()
 {
+	if (chunksShown) {
+		ImGui::Text("Last generation (GPU): %.2f ms (up to %d chunks of %dx%d)", lastGenerationMs, ChunkWorld::maxChunksPerFrame, ChunkWorld::chunkSize, ChunkWorld::chunkSize);
+		ImGui::Text("Chunks: %d in view, %d cached, %d waiting", chunks.GetVisibleCount(), chunks.GetCachedCount(), chunks.GetPendingCount());
+		return;
+	}
 	ImGui::Text("Last generation (GPU): %.2f ms (%dx%d)", lastGenerationMs, view.GetMapWidth(), view.GetMapHeight());
 	ImGui::Text("Last erosion (CPU): %.1f ms%s", lastErosionMs, job.IsRunning() ? "  [eroding...]" : "");
 }

@@ -1,5 +1,6 @@
 // GLSL version of SimplexNoiseClass::Evaluate; a change there must be repeated here (--gpu-check compares both).
-// The including file provides: NoiseParams noises[], uint permutations[] (256 entries per noise) and uniform ivec2 mapSize.
+// The including file provides: NoiseParams noises[], uint permutations[] (256 entries per noise) and uniform ivec2 islandSize
+// (size of the map the island fills, from map position (0, 0); the CPU uses the size of its map).
 
 int permAt(int table, int i)
 {
@@ -63,8 +64,8 @@ float evaluateNoise(int index, float x, float y)
 	}
 
 	if (n.island != 0) {
-		float nx = float(int(x) * 2) / float(mapSize.x) - 1.0;
-		float ny = float(int(y) * 2) / float(mapSize.y) - 1.0;
+		float nx = float(int(x) * 2) / float(islandSize.x) - 1.0;
+		float ny = float(int(y) * 2) / float(islandSize.y) - 1.0;
 		elevation = abs(mix(elevation, 1.0 - islandDistance(n.islandType, nx, ny), n.mixPower));
 	}
 

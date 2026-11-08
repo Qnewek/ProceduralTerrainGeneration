@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <chrono>
 #include <cmath>
+#include <cstring>
 #include <functional>
 #include <iomanip>
 #include <iostream>
@@ -191,7 +192,7 @@ namespace {
 		}
 
 		TextureClass colors(width, height, GL_RGBA32F), ids(width, height, GL_R32I);
-		gpu.GenerateBiomes(biomes, terrain, biome::DefaultBiomes(), colors, ids);
+		gpu.GenerateBiomes(biomes, terrain, biome::DefaultBiomes(), 0.0f, 0.0f, colors, ids);
 		BiomeMap gpuMap(width, height);
 		ids.Read(GL_RED_INTEGER, GL_INT, static_cast<int>(gpuMap.Size() * sizeof(int)), gpuMap.Data());
 
@@ -264,6 +265,51 @@ namespace {
 		return ok;
 	}
 
+	//A chunk is a part of the map generated on its own, with an origin and the island size of the whole map.
+	//It has to equal the same part of the whole map exactly, or chunk borders would show seams
+	bool CheckChunks(GpuHeightGenerator& gpu, int width, int height)
+	{
+		constexpr int partWidth = 131, partHeight = 67;
+		const glm::ivec2 corner(700, 150);
+		const glm::ivec2 island(width, height);
+		bool allOk = true;
+		const auto check = [&](const std::string& name, GLenum format, GLenum type, int components, int bytes, const std::function<void(float, float, TextureClass&, glm::ivec2)>& generate) {
+			const GLenum internalFormat = format == GL_RED_INTEGER ? GL_R32I : components == 4 ? GL_RGBA32F : GL_R32F;
+			TextureClass whole(width, height, internalFormat), part(partWidth, partHeight, internalFormat);
+			generate(0.0f, 0.0f, whole, glm::ivec2(0));
+			generate(static_cast<float>(corner.x), static_cast<float>(corner.y), part, island);
+			std::vector<unsigned char> wholeData(static_cast<size_t>(width) * height * bytes), partData(static_cast<size_t>(partWidth) * partHeight * bytes);
+			whole.Read(format, type, static_cast<int>(wholeData.size()), wholeData.data());
+			part.Read(format, type, static_cast<int>(partData.size()), partData.data());
+			int different = 0;
+			for (int y = 0; y < partHeight; y++) {
+				const unsigned char* a = &wholeData[(static_cast<size_t>(y + corner.y) * width + corner.x) * bytes];
+				const unsigned char* b = &partData[static_cast<size_t>(y) * partWidth * bytes];
+				for (int x = 0; x < partWidth; x++) {
+					different += std::memcmp(a + x * bytes, b + x * bytes, bytes) != 0 ? 1 : 0;
+				}
+			}
+			const bool ok = different == 0;
+			allOk = allOk && ok;
+			std::cout << std::left << std::setw(37) << name << different << " of " << partWidth * partHeight << " texels differ   " << (ok ? "ok" : "SEAMS") << "\n";
+		};
+
+		noise::NoiseConfigParameters n;
+		n.island = true;
+		n.mixPower = 0.6f;
+		check("chunk: noise with island", GL_RED, GL_FLOAT, 1, 4, [&](float x, float y, TextureClass& t, glm::ivec2 s) { gpu.GenerateNoise(n, x, y, t, s); });
+		TerrainConfig terrain = TerrainConfig::Default();
+		terrain.method = EvaluationMethod::SPLINE_COMBINE;
+		check("chunk: terrain", GL_RED, GL_FLOAT, 1, 4, [&](float x, float y, TextureClass& t, glm::ivec2 s) { gpu.GenerateTerrain(terrain, x, y, t, s); });
+		const BiomeConfig biomes = BiomeConfig::Default();
+		const std::vector<biome::Biome> table = biome::DefaultBiomes();
+		check("chunk: biome ids", GL_RED_INTEGER, GL_INT, 1, 4, [&](float x, float y, TextureClass& ids, glm::ivec2 s) {
+			TextureClass colors(ids.GetWidth(), ids.GetHeight(), GL_RGBA32F);
+			gpu.GenerateBiomes(biomes, terrain, table, x, y, colors, ids, s);
+		});
+		return allOk;
+	}
+
 	bool RunComparison(GpuHeightGenerator& gpu, GpuSurfacePass& surfacePass)
 	{
 		//Not square, so swapped axes are detected; larger than one part of a dispatch along X
@@ -298,6 +344,9 @@ namespace {
 		biomes.humidityLevels = { -1.0f, -0.2f, 0.1f, 0.4f, 1.01f };
 		biomes.continentalnessLevels = { -1.0f, -0.4f, -0.1f, 0.2f, 0.5f, 1.01f };
 		allOk = CheckBiomes(gpu, "biomes: other seed and levels", terrain, biomes, width, height) && allOk;
+
+		std::cout << "\n";
+		allOk = CheckChunks(gpu, width, height) && allOk;
 
 		std::cout << "\nsurface map: largest difference in height units, in steps of float at the largest height\n";
 		HeightField input(width, height);

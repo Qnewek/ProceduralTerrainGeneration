@@ -1,7 +1,7 @@
 #version 450 core
 
 // Assigns a biome to every texel; GLSL version of BiomeGenerator::Biomify, which reads maps generated earlier.
-// Here the five noises are evaluated in place, always from world origin (0, 0), like the maps on the CPU.
+// Here the five noises are evaluated in place; the CPU maps always start at map position (0, 0), which is origin = (0, 0) here.
 
 layout(local_size_x = 32, local_size_y = 32) in;
 
@@ -39,6 +39,8 @@ uniform ivec2 levelRanges[5];	// first entry in levels and number of entries of 
 uniform vec3 fallbackColor;		// biome 0, used where no biome matches
 uniform ivec2 mapSize;
 uniform ivec2 tileOrigin;		// first texel of this dispatch, large maps are generated in parts
+uniform vec2 origin;			// map position of texel (0, 0)
+uniform ivec2 islandSize;		// see noise.glsl
 
 #include "../common/noise.glsl"
 
@@ -62,7 +64,7 @@ void main()
 
 	float parameterLevels[5];
 	for (int i = 0; i < 5; i++) {
-		parameterLevels[i] = float(determineLevel(i, evaluateNoise(i, float(texel.x), float(texel.y))));
+		parameterLevels[i] = float(determineLevel(i, evaluateNoise(i, float(texel.x) + origin.x, float(texel.y) + origin.y)));
 	}
 
 	int id = 0;

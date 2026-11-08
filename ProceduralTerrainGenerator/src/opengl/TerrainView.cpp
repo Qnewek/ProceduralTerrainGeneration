@@ -21,7 +21,7 @@ bool TerrainView::Initialize(int _width, int _height)
 		return false;
 	}
 	vao = std::make_unique<VertexArray>();
-	shader = std::make_unique<Shader>("res/shaders/TerrainShaders/Terrain_vertex.shader", "res/shaders/TerrainShaders/Terrain_fragment.shader", "res/shaders/TerrainShaders/Terrain_controlTes.shader", "res/shaders/TerrainShaders/Terrain_evalTes.shader");
+	shader = CreateTerrainShader();
 	if (!surfacePass.Initialize()) {
 		return false;
 	}
@@ -69,31 +69,79 @@ void TerrainView::ResetFlatViewBounds()
 	SetFlatViewBounds(-half, half);
 }
 
-void TerrainView::SetFlatCameraUniforms(const TerrainRenderSettings& settings)
+void TerrainView::BringCameraToMap(Camera& camera, const TerrainRenderSettings& settings) const
 {
-	//Bounds are given before modelScale; model = scale * translate(offset), so scaling them is enough
-	glm::vec2 min = flatMin * settings.modelScale;
-	glm::vec2 max = flatMax * settings.modelScale;
-	glm::vec2 center = (min + max) * 0.5f;
-	glm::vec2 half = (max - min) * 0.5f * 1.02f;	//small margin
-
-	//Keep the aspect ratio of the viewport
-	GLint viewport[4];
-	glGetIntegerv(GL_VIEWPORT, viewport);
-	float aspect = viewport[3] > 0 ? static_cast<float>(viewport[2]) / viewport[3] : 1.0f;
-	if (half.x < half.y * aspect) {
-		half.x = half.y * aspect;
+	const glm::vec2 half = glm::vec2(GetWorldWidth(), GetWorldHeight()) * 0.5f * settings.modelScale;
+	const glm::vec3 position = camera.GetPosition();
+	if (std::abs(position.x) <= half.x && std::abs(position.z) <= half.y) {
+		return;
 	}
-	else {
-		half.y = half.x / aspect;
-	}
+	//Looks down at 35 degrees from 1.5 map radii away, or less if the far plane would cut the near half of the map off
+	const float distance = std::min(std::max(half.x, half.y) * 1.5f, camera.GetRenderDistance() * 0.6f);
+	const float elevation = glm::radians(35.0f);
+	const glm::vec3 target(0.0f, 0.25f * settings.heightScale * settings.modelScale, 0.0f);
+	camera.LookAt(target + glm::vec3(0.0f, std::sin(elevation), std::cos(elevation)) * distance, target);
+}
 
-	//Camera above the highest possible point looking straight down; +X to the right, -Z up
-	float top = std::abs(settings.heightScale * settings.modelScale) + 1.0f;
-	glm::mat4 flatView = glm::lookAt(glm::vec3(center.x, top, center.y), glm::vec3(center.x, 0.0f, center.y), glm::vec3(0.0f, 0.0f, -1.0f));
-	glm::mat4 flatProjection = glm::ortho(-half.x, half.x, -half.y, half.y, 0.0f, 2.0f * top);
-	shader->SetView(flatView);
-	shader->SetProjection(flatProjection);
+std::unique_ptr<Shader> TerrainView::CreateTerrainShader()
+{
+	return std::make_unique<Shader>("res/shaders/TerrainShaders/Terrain_vertex.shader", "res/shaders/TerrainShaders/Terrain_fragment.shader",
+		"res/shaders/TerrainShaders/Terrain_controlTes.shader", "res/shaders/TerrainShaders/Terrain_evalTes.shader");
+}
+
+namespace {
+	//Sets view/projection of a top-down orthographic camera framing the given area
+	void SetFlatCameraUniforms(Shader& shader, const TerrainRenderSettings& settings, glm::vec2 flatMin, glm::vec2 flatMax)
+	{
+		//Bounds are given before modelScale; model = scale * translate(offset), so scaling them is enough
+		glm::vec2 min = flatMin * settings.modelScale;
+		glm::vec2 max = flatMax * settings.modelScale;
+		glm::vec2 center = (min + max) * 0.5f;
+		glm::vec2 half = (max - min) * 0.5f * 1.02f;	//small margin
+
+		//Keep the aspect ratio of the viewport
+		GLint viewport[4];
+		glGetIntegerv(GL_VIEWPORT, viewport);
+		float aspect = viewport[3] > 0 ? static_cast<float>(viewport[2]) / viewport[3] : 1.0f;
+		if (half.x < half.y * aspect) {
+			half.x = half.y * aspect;
+		}
+		else {
+			half.y = half.x / aspect;
+		}
+
+		//Camera above the highest possible point looking straight down; +X to the right, -Z up
+		float top = std::abs(settings.heightScale * settings.modelScale) + 1.0f;
+		glm::mat4 flatView = glm::lookAt(glm::vec3(center.x, top, center.y), glm::vec3(center.x, 0.0f, center.y), glm::vec3(0.0f, 0.0f, -1.0f));
+		glm::mat4 flatProjection = glm::ortho(-half.x, half.x, -half.y, half.y, 0.0f, 2.0f * top);
+		shader.SetView(flatView);
+		shader.SetProjection(flatProjection);
+	}
+}
+
+void TerrainView::SetFrameUniforms(Shader& shader, Camera& camera, LightSource& light, const TerrainRenderSettings& settings,
+	const glm::mat4& model, int heightUnit, glm::vec2 flatMin, glm::vec2 flatMax)
+{
+	shader.Bind();
+	light.SetLightUniforms(shader);
+	camera.SetUniforms(shader);
+	//The fog needs the perspective camera, so the 2D map has none; it ends where the far plane cuts the terrain off
+	shader.SetUniform1i("fogOn", light.IsFogOn() && !settings.map2d);
+	shader.SetUniform1f("fogStart", light.GetFogStart(camera.GetRenderDistance()));
+	shader.SetUniform1f("fogDistance", camera.GetRenderDistance());
+	if (settings.map2d) {
+		SetFlatCameraUniforms(shader, settings, flatMin, flatMax);
+	}
+	shader.SetModel(model);
+	shader.SetUniformMat3f("normalMatrix", glm::transpose(glm::inverse(glm::mat3(model))));
+	shader.SetUniform1i("displayMode", static_cast<int>(settings.displayMode));
+	shader.SetUniform1f("step", settings.topoStep);
+	shader.SetUniform1f("bandWidth", settings.topoBandWidth);
+	shader.SetUniform1f("heightScale", settings.heightScale);
+	shader.SetUniform2f("texelWorldSize", worldUnitsPerTexel, worldUnitsPerTexel);
+	shader.SetUniform1i("heightMap", heightUnit);
+	shader.SetUniform1i("biomeMap", static_cast<int>(Layer::BIOMES));
+	shader.SetUniform1i("surfaceMap", surfaceUnit);
 }
 
 void TerrainView::SetLayer(Layer layer, const HeightField& map)
@@ -149,22 +197,7 @@ void TerrainView::Draw(Renderer& renderer, Camera& camera, LightSource& light, c
 	model = glm::scale(model, glm::vec3(settings.modelScale));
 	model = glm::translate(model, offset);
 
-	shader->Bind();
-	light.SetLightUniforms(*shader);
-	camera.SetUniforms(*shader);
-	if (settings.map2d) {
-		SetFlatCameraUniforms(settings);
-	}
-	shader->SetModel(model);
-	shader->SetUniformMat3f("normalMatrix", glm::transpose(glm::inverse(glm::mat3(model))));
-	shader->SetUniform1i("displayMode", static_cast<int>(settings.displayMode));
-	shader->SetUniform1f("step", settings.topoStep);
-	shader->SetUniform1f("bandWidth", settings.topoBandWidth);
-	shader->SetUniform1f("heightScale", settings.heightScale);
-	shader->SetUniform2f("texelWorldSize", worldUnitsPerTexel, worldUnitsPerTexel);
-	shader->SetUniform1i("heightMap", static_cast<int>(heightLayer));
-	shader->SetUniform1i("biomeMap", static_cast<int>(Layer::BIOMES));
-	shader->SetUniform1i("surfaceMap", surfaceUnit);
+	SetFrameUniforms(*shader, camera, light, settings, model, static_cast<int>(heightLayer), flatMin, flatMax);
 
 	for (int i = 0; i < 3; i++) {
 		if (textures[i]) {
