@@ -90,6 +90,14 @@ namespace {
 		t.continentalnessSpline.cubic = t.mountainousnessSpline.cubic = t.weirdnessSpline.cubic = true;
 		//A cubic spline overshoots between its points
 		cases.push_back({ "terrain: cubic splines", [=, &gpu](TextureClass& target) { gpu.GenerateTerrain(t, MapArea{}, target); }, -0.1f, 1.1f });
+		t = TerrainConfig::Default();
+		t.method = EvaluationMethod::LAYERED;
+		cases.push_back({ "terrain: layered", [=, &gpu](TextureClass& target) { gpu.GenerateTerrain(t, MapArea{}, target); }, 0.0f, 1.0f });
+		t.mountainShare = 1.0f;
+		cases.push_back({ "terrain: layered, only mountains", [=, &gpu](TextureClass& target) { gpu.GenerateTerrain(t, MapArea{}, target); }, 0.0f, 1.0f });
+		t.mountainShare = 0.6f;
+		t.continentalnessSpline.cubic = t.mountainousnessSpline.cubic = t.peaksSpline.cubic = true;
+		cases.push_back({ "terrain: layered, cubic splines", [=, &gpu](TextureClass& target) { gpu.GenerateTerrain(t, MapArea{}, target); }, -0.1f, 1.1f });
 
 		std::cout << "values: finite and within the range of the configuration\n";
 		TextureClass target(mapWidth, mapHeight, GL_R32F);
@@ -175,6 +183,42 @@ namespace {
 		return allOk && same;
 	}
 
+	//Layered terrain: no mountains below sea level, never lower than the base on land, and mountains present inland
+	bool CheckLayered(GpuHeightGenerator& gpu)
+	{
+		TextureClass target(mapWidth, mapHeight, GL_R32F);
+		TerrainConfig t = TerrainConfig::Default();
+		t.method = EvaluationMethod::LAYERED;
+		const float share = t.mountainShare;
+		//With no share for mountains the map is the base spline itself
+		t.mountainShare = 0.0f;
+		gpu.GenerateTerrain(t, MapArea{}, target);
+		const HeightField base = ReadHeight(target);
+		t.mountainShare = share;
+		gpu.GenerateTerrain(t, MapArea{}, target);
+		const HeightField map = ReadHeight(target);
+
+		size_t sea = 0, wrongSea = 0, inland = 0, belowBase = 0, raised = 0;
+		for (size_t i = 0; i < map.Size(); i++) {
+			const float floor = base[i] * (1.0f - share);
+			if (base[i] < t.seaLevel) {
+				sea++;
+				wrongSea += std::abs(map[i] - floor) > 1e-6f ? 1 : 0;
+			}
+			else if (base[i] >= t.seaLevel + t.coastWidth) {
+				inland++;
+				belowBase += map[i] < floor - 1e-6f ? 1 : 0;
+				raised += map[i] > floor + 1e-3f ? 1 : 0;
+			}
+		}
+		std::cout << "\nlayered terrain: mountains only on land\n";
+		const bool seaOk = sea > 0 && wrongSea == 0;
+		Report("layered: sea", std::to_string(wrongSea) + " of " + std::to_string(sea) + " texels with relief", seaOk);
+		const bool landOk = inland > 0 && belowBase == 0 && raised > inland / 10;
+		Report("layered: inland", std::to_string(raised) + " of " + std::to_string(inland) + " raised, " + std::to_string(belowBase) + " below base", landOk);
+		return seaOk && landOk;
+	}
+
 	//Ids come from the table and every color belongs to the id next to it
 	bool CheckBiomes(GpuHeightGenerator& gpu)
 	{
@@ -251,6 +295,9 @@ namespace {
 		TerrainConfig terrain = TerrainConfig::Default();
 		terrain.method = EvaluationMethod::SPLINE_COMBINE;
 		check("chunk: terrain", GL_RED, GL_FLOAT, [&](const MapArea& area, TextureClass& t) { gpu.GenerateTerrain(terrain, area, t); });
+		TerrainConfig layered = TerrainConfig::Default();
+		layered.method = EvaluationMethod::LAYERED;
+		check("chunk: layered terrain", GL_RED, GL_FLOAT, [&](const MapArea& area, TextureClass& t) { gpu.GenerateTerrain(layered, area, t); });
 		const BiomeConfig biomes = BiomeConfig::Default();
 		const std::vector<biome::Biome> table = biome::DefaultBiomes();
 		check("chunk: biome ids", GL_RED_INTEGER, GL_INT, [&](const MapArea& area, TextureClass& ids) {
@@ -395,6 +442,7 @@ int RunGpuHeightCheck()
 			bool ok = CheckRanges(gpu);
 			ok = CheckDeterminism(gpu) && ok;
 			ok = CheckShapeOperations(gpu) && ok;
+			ok = CheckLayered(gpu) && ok;
 			ok = CheckBiomes(gpu) && ok;
 			ok = CheckChunks(gpu) && ok;
 			ok = CheckSurface(surfacePass) && ok;

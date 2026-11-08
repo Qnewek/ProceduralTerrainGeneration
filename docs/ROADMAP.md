@@ -290,9 +290,11 @@ Biomy (Faza 3, pkt 3–4) opierają się na wysokości i znaczeniu szumów C/M/W
    współrzędnych 4-oktawowym szumem z tej samej tablicy permutacji), fBm tłumiony gradientem (`slopeErosion`; analityczne pochodne `simplex2Grad`, oktawa dzielona
    przez 1 + k·|∇ niższych oktaw|²), tarasy (`terraceSteps`, `terraceSharpness`; na końcu, po redystrybucji). Przy wyłączonych warpie i tłumieniu działa stara pętla,
    więc istniejące światy są identyczne bit w bit (sprawdza `--gpu-check`, sekcja `shape:`). Warp i tłumienie nie działają z `symmetrical`.
-2. **Metoda warstwowa** (nowa `EvaluationMethod` obok LINEAR i SPLINE): `h = podstawa(C) + maskaLądu(C) · amplituda(M) · kształt(PV)`,
-   `pv = 1 − |3|W| − 2|` (grzbiety i doliny jak „peaks and valleys” w Minecraft 1.18), jawny `seaLevel`; podpisy osi w edytorze splajnów zależne od metody.
-   Przy zmianie zakresu wysokości: `heightmap::terrainRange` i `heightBound` cullingu.
+2. ✅ 2026-11-08 **Metoda warstwowa** (`EvaluationMethod::LAYERED`, zastąpiła nieużywane `C`): `h = podstawa · (1 − mountainShare) + ląd · amplituda · kształt · mountainShare`,
+   podstawa = splajn C, amplituda = splajn M, kształt = nowy `peaksSpline` po W, ląd = `smoothstep(seaLevel, seaLevel + coastWidth, podstawa)`. Fałd PV
+   `1 − |3|W| − 2|` to dokładnie Ridge szumu weirdness z gain 3 i offset 1 (domyślny), więc shader go nie powtarza. Wynik zostaje w [0, 1], bez zmian
+   `terrainRange` i `heightBound`. `seaLevel` jest w jednostkach splajnu podstawy; powierzchnia wody leży na wysokości `seaLevel · (1 − mountainShare)` (pod wodę w Fazie 5 i biomy w Fazie 3).
+   Edytor splajnów: podpisy osi i przycisk „Peaks & valleys” zależne od metody (`TerrainConfig::MethodSpline`). Doliny rzeczne (odejmowanie wysokości) — nie, do pkt 3 lub Fazy 5.
 3. Opcjonalnie później: zagnieżdżone splajny (punkty splajnu C są splajnami po M), wypiekane do tekstury LUT dla GPU.
 
 ### Faza 3 — biomy 2.0 (2–3 tygodnie)

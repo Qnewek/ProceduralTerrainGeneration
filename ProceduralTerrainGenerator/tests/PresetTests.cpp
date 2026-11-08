@@ -88,6 +88,10 @@ static WorldConfig DistinctWorld()
 	c.terrain.continentalnessSpline = { {-1.0, 0.1, 1.0}, {0.0, 0.2, 1.0}, true };
 	c.terrain.mountainousnessSpline = { {-1.0, 0.3, 1.0}, {0.0, 0.4, 1.0}, false };
 	c.terrain.weirdnessSpline = { {-1.0, 0.5, 1.0}, {1.0, 0.6, 0.0}, true };
+	c.terrain.seaLevel = 0.42f;
+	c.terrain.coastWidth = 0.07f;
+	c.terrain.mountainShare = 0.33f;
+	c.terrain.peaksSpline = { {-1.0, 0.7, 1.0}, {0.1, 0.8, 0.9}, true };
 	c.biomes.temperature = DistinctNoise(4);
 	c.biomes.humidity = DistinctNoise(5);
 	c.biomes.temperatureLevels = { -1.0f, 0.11f, 1.01f };
@@ -122,6 +126,10 @@ TEST_CASE("A world preset keeps every field")
 	CheckSameSpline(loaded.terrain.continentalnessSpline, original.terrain.continentalnessSpline);
 	CheckSameSpline(loaded.terrain.mountainousnessSpline, original.terrain.mountainousnessSpline);
 	CheckSameSpline(loaded.terrain.weirdnessSpline, original.terrain.weirdnessSpline);
+	CHECK(loaded.terrain.seaLevel == original.terrain.seaLevel);
+	CHECK(loaded.terrain.coastWidth == original.terrain.coastWidth);
+	CHECK(loaded.terrain.mountainShare == original.terrain.mountainShare);
+	CheckSameSpline(loaded.terrain.peaksSpline, original.terrain.peaksSpline);
 	CheckSameNoise(loaded.biomes.temperature, original.biomes.temperature);
 	CheckSameNoise(loaded.biomes.humidity, original.biomes.humidity);
 	CHECK(loaded.biomes.temperatureLevels == original.biomes.temperatureLevels);
@@ -129,6 +137,18 @@ TEST_CASE("A world preset keeps every field")
 	CHECK(loaded.biomes.continentalnessLevels == original.biomes.continentalnessLevels);
 	CHECK(loaded.biomes.mountainousnessLevels == original.biomes.mountainousnessLevels);
 	CHECK(loaded.biomes.weirdnessLevels == original.biomes.weirdnessLevels);
+}
+
+TEST_CASE("Every terrain method survives saving")
+{
+	for (EvaluationMethod method : { EvaluationMethod::LINEAR_COMBINE, EvaluationMethod::SPLINE_COMBINE, EvaluationMethod::LAYERED }) {
+		WorldConfig original = DistinctWorld();
+		original.terrain.method = method;
+		WorldConfig loaded;
+		std::string error;
+		REQUIRE_MESSAGE(preset::FromJson(preset::ToJson(original), loaded, error), error);
+		CHECK(loaded.terrain.method == method);
+	}
 }
 
 TEST_CASE("A noise preset keeps every field")
@@ -246,6 +266,10 @@ TEST_CASE("Invalid presets are rejected and the config stays unchanged")
 		{ "float out of range", Replaced(valid, "\"scale\": 1.3", "\"scale\": 1e300") },
 		{ "zero octaves", Replaced(valid, "\"octaves\": 3", "\"octaves\": 0") },
 		{ "zero resolution", Replaced(valid, "\"resolution\": 301", "\"resolution\": 0") },
+		{ "sea level above 1", Replaced(valid, "\"seaLevel\": 0.42", "\"seaLevel\": 1.5") },
+		{ "zero coast width", Replaced(valid, "\"coastWidth\": 0.07", "\"coastWidth\": 0.0") },
+		{ "negative mountain share", Replaced(valid, "\"mountainShare\": 0.33", "\"mountainShare\": -0.1") },
+		{ "peaks spline y out of range", Replaced(valid, "0.8,", "1.8,") },
 		{ "negative slope erosion", Replaced(valid, "\"slopeErosion\": 2.5", "\"slopeErosion\": -1.0") },
 		{ "negative terrace steps", Replaced(valid, "\"terraceSteps\": 6", "\"terraceSteps\": -1") },
 		{ "too many terrace steps", Replaced(valid, "\"terraceSteps\": 6", "\"terraceSteps\": 1000") },

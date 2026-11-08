@@ -17,7 +17,7 @@ namespace {
 	//A long dispatch can trigger the Windows GPU watchdog and freezes the desktop, so large maps go in parts
 	constexpr int tileSize = 1024;
 
-	enum Mode { MODE_NOISE = 0, MODE_LINEAR = 1, MODE_SPLINE = 2, MODE_ZERO = 3 };
+	enum Mode { MODE_NOISE = 0, MODE_LINEAR = 1, MODE_SPLINE = 2, MODE_LAYERED = 3 };
 
 	//Layout of NoiseParams in the shaders (std430)
 	struct GpuNoiseParams {
@@ -168,17 +168,16 @@ void GpuHeightGenerator::GenerateTerrain(const TerrainConfig& config, const MapA
 	SetNoise(input->noises, input->permutations, 1, config.mountainousness);
 	SetNoise(input->noises, input->permutations, 2, config.weirdness);
 
-	int mode = MODE_ZERO;
-	if (config.method == EvaluationMethod::LINEAR_COMBINE) {
-		mode = MODE_LINEAR;
+	int mode = MODE_LINEAR;
+	if (config.method != EvaluationMethod::LINEAR_COMBINE) {
+		mode = config.method == EvaluationMethod::LAYERED ? MODE_LAYERED : MODE_SPLINE;
+		SetSpline(*input, 0, config.MethodSpline(WorldGenParameter::CONTINENTALNESS));
+		SetSpline(*input, 1, config.MethodSpline(WorldGenParameter::MOUNTAINOUSNESS));
+		SetSpline(*input, 2, config.MethodSpline(WorldGenParameter::WEIRDNESS));
 	}
-	else if (config.method == EvaluationMethod::SPLINE_COMBINE) {
-		mode = MODE_SPLINE;
-		SetSpline(*input, 0, config.continentalnessSpline);
-		SetSpline(*input, 1, config.mountainousnessSpline);
-		SetSpline(*input, 2, config.weirdnessSpline);
-	}
-	glNamedBufferSubData(heightInput, 0, mode == MODE_SPLINE ? sizeof(GpuHeightInput) : offsetof(GpuHeightInput, splines), input.get());
+	glNamedBufferSubData(heightInput, 0, mode == MODE_LINEAR ? offsetof(GpuHeightInput, splines) : sizeof(GpuHeightInput), input.get());
+	heightShader->Bind();
+	heightShader->SetUniform3fv("layered", glm::vec3(config.seaLevel, config.coastWidth, config.mountainShare));
 	RunHeightShader(*heightShader, heightInput, mode, area, target);
 }
 
