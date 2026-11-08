@@ -26,7 +26,7 @@ struct TerrainRenderSettings {
 
 //Renders a height field as a tessellated patch grid. Owns the mesh, the shader and the textures,
 //so generation subsystems only hand it finished maps. Every height layer has a surface map (gradient and Laplacian,
-//surface::Derivatives) for normals, slope and curvature; Draw recomputes it on the GPU after the layer changes.
+//GpuSurfacePass) for normals, slope and curvature; Draw recomputes it on the GPU after the layer changes.
 class TerrainView
 {
 public:

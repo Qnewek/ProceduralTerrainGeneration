@@ -7,7 +7,7 @@
 #include <string>
 
 #include "Preset.h"
-#include "TerrainGenerator.h"
+#include "WorldConfig.h"
 
 //Every field differs from its default, so a field left out of saving or loading fails the comparison
 static noise::NoiseConfigParameters DistinctNoise(int base)
@@ -163,23 +163,6 @@ TEST_CASE("A noise preset keeps every field")
 	CHECK(l.initialWater == e.initialWater);
 	CHECK(l.initialVelocity == e.initialVelocity);
 	CHECK(l.initialCapacity == e.initialCapacity);
-}
-
-TEST_CASE("A loaded preset generates the same terrain")
-{
-	WorldConfig original;
-	original.width = 64;
-	original.height = 32;
-	WorldConfig loaded;
-	std::string error;
-	REQUIRE_MESSAGE(preset::FromJson(preset::ToJson(original), loaded, error), error);
-
-	TerrainGenerator a, b;
-	REQUIRE(a.Initialize(original.width, original.height));
-	REQUIRE(b.Initialize(loaded.width, loaded.height));
-	REQUIRE(a.GenerateTerrain(original.terrain, 0.0f, 0.0f));
-	REQUIRE(b.GenerateTerrain(loaded.terrain, 0.0f, 0.0f));
-	CHECK(std::memcmp(a.GetHeightField().Data(), b.GetHeightField().Data(), a.GetHeightField().Size() * sizeof(float)) == 0);
 }
 
 TEST_CASE("Floats survive saving exactly and are written in a short form")

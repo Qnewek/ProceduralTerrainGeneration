@@ -278,6 +278,21 @@ Jedyne odstępstwo: 4 klatki z dziurą — chunki wchodzące w zasięg na jego g
 generacja na GPU mieści się w 30 ms od zmiany do pełnego widoku, a generatory CPU już istnieją (benchmark, `--gpu-check`, testy). Zostają jako możliwe usprawnienia,
 podobnie jak z pkt 4: teselacja wg rozmiaru na ekranie, morfowanie między poziomami LOD, wysokość kamery w wyborze poziomu; z pkt 3: budżet w ms, floating origin.
 
+### Teren 2.0 — przed Fazą 3 (decyzja właściciela 2026-11-08)
+Biomy (Faza 3, pkt 3–4) opierają się na wysokości i znaczeniu szumów C/M/W, więc kształt terenu poprawiamy przed nimi.
+
+0. ✅ 2026-11-08 **Usunięcie generacji na CPU** (decyzja właściciela): każda nowa operacja wymagałaby wersji C++ i GLSL. Usunięte `SimplexNoiseClass`,
+   `TerrainGenerator`, `BiomeGenerator`, `SurfaceDerivatives`, `Parallel.h`, tryb `--benchmark` i checksumy w CI oraz ich testy (ostatnia wersja z nimi: `56eae39`).
+   Zostały configi, tablica permutacji (`makePermutation`) i `tk::spline` do tablicy splajnu dla GPU, tabela biomów i jej testy. Pkt 7 Fazy 2 (CPU fallback) odpada.
+   `--gpu-check` sprawdza teraz same wyniki GPU: zakresy i skończoność dla każdej opcji, determinizm, biomy, chunki/LOD bit w bit, pochodne na mapach analitycznych.
+   Strata: CI nie sprawdza generacji (brak GPU na runnerach); ewentualnie później Mesa llvmpipe (programowy GL 4.5 z compute shaderami).
+1. **Operacje na szumie** (nowe pola `NoiseConfigParameters`, domyślnie wyłączone): domain warping (przesunięcie współrzędnych drugim szumem — naturalne
+   linie brzegowe, skręcone pasma), fBm tłumiony gradientem (oktawy słabną na stromych zboczach — wygląd erozji), tarasy / wygładzone obcięcie.
+2. **Metoda warstwowa** (nowa `EvaluationMethod` obok LINEAR i SPLINE): `h = podstawa(C) + maskaLądu(C) · amplituda(M) · kształt(PV)`,
+   `pv = 1 − |3|W| − 2|` (grzbiety i doliny jak „peaks and valleys” w Minecraft 1.18), jawny `seaLevel`; podpisy osi w edytorze splajnów zależne od metody.
+   Przy zmianie zakresu wysokości: `heightmap::terrainRange` i `heightBound` cullingu.
+3. Opcjonalnie później: zagnieżdżone splajny (punkty splajnu C są splajnami po M), wypiekane do tekstury LUT dla GPU.
+
 ### Faza 3 — biomy 2.0 (2–3 tygodnie)
 Cel: realistyczne, płynne przejścia i biomy wpływające na kształt terenu.
 

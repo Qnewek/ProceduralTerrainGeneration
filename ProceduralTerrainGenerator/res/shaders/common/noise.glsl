@@ -1,6 +1,6 @@
-// GLSL version of SimplexNoiseClass::Evaluate; a change there must be repeated here (--gpu-check compares both).
+// Fractal simplex noise configured by noise::NoiseConfigParameters (the only implementation; parameters come from GpuHeightGenerator::SetNoise).
 // The including file provides: NoiseParams noises[], uint permutations[] (256 entries per noise) and uniform ivec2 islandSize
-// (size of the map the island fills, from map position (0, 0); the CPU uses the size of its map).
+// (size of the map the island fills, from map position (0, 0)).
 
 int permAt(int table, int i)
 {
