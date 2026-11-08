@@ -296,9 +296,24 @@ Biomy (Faza 3, pkt 3–4) opierają się na wysokości i znaczeniu szumów C/M/W
    `terrainRange` i `heightBound`. `seaLevel` jest w jednostkach splajnu podstawy; powierzchnia wody leży na wysokości `seaLevel · (1 − mountainShare)` (pod wodę w Fazie 5 i biomy w Fazie 3).
    Edytor splajnów: podpisy osi i przycisk „Peaks & valleys” zależne od metody (`TerrainConfig::MethodSpline`). Doliny rzeczne (odejmowanie wysokości) — nie, do pkt 3 lub Fazy 5.
 3. ➡️ Przeniesione do Fazy 5 (decyzja właściciela 2026-11-08): zagnieżdżone splajny — razem z rzekami, które i tak wymagają obniżania terenu.
+4. ✅ 2026-11-08 **Edytory TerrainGen** (poza planem, na prośbę właściciela):
+   - Edycja szumu składowego na żywo: widok zawsze pokazuje teren wynikowy, a edytowany szum widać jako mapę 2D w panelu (`NoisePreview`, ≤ 512 tekseli,
+     do 220 px wysokości); edytory szumu, splajnów i biomów otwarte jednocześnie (osobny wybrany składnik dla szumu i splajnu). „Sampling resolution” na żywo.
+     Panele boczne mają stały pasek przewijania — inaczej treść o szerokości panelu (podgląd) migotała.
+   - Edytor splajnów: zmiany na żywo w configu (bez „Set new spline points”), wykres pokazuje krzywą z `SampleSpline` (tą samą co GPU), dodawanie punktu
+     dwuklikiem, usuwanie prawym, checkbox „Smooth (cubic)”; przy metodzie Linear przyciski zmiany metody. Domyślna metoda terenu: LAYERED.
+   - Splajn kubiczny = monotoniczny PCHIP (Fritsch–Carlson, `SplineSampling.cpp`): nie wychodzi poza wartości sąsiednich punktów, więc wynik zostaje w [0, 1]
+     (dawny naturalny splajn przestrzeliwał: odwrócone garby w metodzie Spline, doły w Layered). tk::spline usunięty z `vendor/`.
+   - Nie zrobione: znacznik wartości szumu pod kamerą na wykresie splajnu (wymaga odczytu z GPU).
 
 ### Faza 3 — biomy 2.0 (2–3 tygodnie)
 Cel: realistyczne, płynne przejścia i biomy wpływające na kształt terenu.
+
+**Kolejność ustalona z właścicielem 2026-11-08:** pkt 1 + 2 (zrobione) → **pkt 6 edytor biomów (następny)** → pkt 4 klimat zależny od wysokości →
+pkt 3 biomy modyfikują teren → pkt 5 teksturowanie (na koniec, najwięcej pracy z assetami). Po każdym kroku nowe przypadki w `--gpu-check`.
+Pkt 6 w szczegółach: lista biomów (dodaj/usuń, nazwa, kolor, 5 zakresów suwakami), diagram Whittakera (temperatura × wilgotność, prostokąty biomów w ImPlot),
+podgląd mapy biomów 2D; tabela nie może być pusta (ostatniego biomu nie da się usunąć); id = indeks, więc usunięcie przesuwa id kolejnych biomów.
+Pkt 4 wymaga, żeby shader biomów liczył też wysokość terenu (splajny w buforze jak w `height_compute.shader`).
 
 1. ✅ 2026-11-08 **Ciągła przestrzeń parametrów** zamiast dyskretnych poziomów: biom = zakresy wartości 5 szumów (C, M, W, T, H) w `BiomeConfig::table`,
    wybór = najbliższy biom (odległość = długość wyjścia poza zakresy, remis → pierwszy w tabeli), jak multi-noise Minecraft 1.18. Brak dziur w pokryciu
