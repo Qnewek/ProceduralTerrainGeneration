@@ -2,6 +2,7 @@
 
 #include <vector>
 
+#include "Biome.h"
 #include "Noise.h"
 
 //Plain data describing the generated world. The UI edits it, generators only read it (passed by const reference),
@@ -147,25 +148,14 @@ enum class BiomeParameter {
 struct BiomeConfig {
 	noise::NoiseConfigParameters temperature, humidity;
 
-	//Ascending boundaries splitting a parameter value into integer levels: level i covers [levels[i], levels[i + 1]).
-	//The first boundary is the fixed lower bound -1, the last one is just above the maximal value.
-	std::vector<float> temperatureLevels, humidityLevels, continentalnessLevels, mountainousnessLevels, weirdnessLevels;
+	//Biomes as ranges of the five noise values (see Biome.h); never empty. A biome id is its index here
+	std::vector<biome::Biome> table = biome::DefaultBiomes();
+	//Distance in the parameter space over which a biome fades into the nearest one; 0 = sharp borders
+	float blendWidth = 0.08f;
 
 	//Noise of a biome-only parameter (TEMPERATURE or HUMIDITY; anything else returns temperature)
 	noise::NoiseConfigParameters& Noise(BiomeParameter p) { return p == BiomeParameter::HUMIDITY ? humidity : temperature; }
 	const noise::NoiseConfigParameters& Noise(BiomeParameter p) const { return p == BiomeParameter::HUMIDITY ? humidity : temperature; }
-
-	std::vector<float>& Levels(BiomeParameter p) {
-		switch (p) {
-		case BiomeParameter::HUMIDITY: return humidityLevels;
-		case BiomeParameter::CONTINENTALNESS: return continentalnessLevels;
-		case BiomeParameter::MOUNTAINOUSNESS: return mountainousnessLevels;
-		case BiomeParameter::WEIRDNESS: return weirdnessLevels;
-		case BiomeParameter::TEMPERATURE:
-		default: return temperatureLevels;
-		}
-	}
-	const std::vector<float>& Levels(BiomeParameter p) const { return const_cast<BiomeConfig*>(this)->Levels(p); }
 
 	//Default biome parameters used at startup
 	static BiomeConfig Default() {
@@ -180,12 +170,6 @@ struct BiomeConfig {
 		c.humidity.option = noise::Options::NOTHING;
 		c.humidity.scale = 0.3f;
 		c.humidity.constrast = 1.5f;
-
-		c.temperatureLevels = { -1.0f, -0.5f, 0.0f, 0.5f, 1.01f };
-		c.humidityLevels = { -1.0f, -0.5f, 0.0f, 0.5f, 1.01f };
-		c.continentalnessLevels = { -1.0f, -0.7f, -0.2f, 0.03f, 0.3f, 1.01f };
-		c.mountainousnessLevels = { -1.0f, -0.78f, -0.37f, -0.2f, 0.05f, 0.45f, 0.55f, 1.01f };
-		c.weirdnessLevels = { -1.0f, 1.1f };
 		return c;
 	}
 };

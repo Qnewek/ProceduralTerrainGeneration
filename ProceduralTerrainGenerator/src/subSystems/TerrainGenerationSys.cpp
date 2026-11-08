@@ -76,7 +76,7 @@ void TerrainGenerationSys::UpdateChunks(const Camera& camera)
 	chunks.GenerateNext([&](const MapArea& area, TextureClass& height, TextureClass* colors, TextureClass* ids) {
 		gpu.GenerateTerrain(world.terrain, area, height);
 		if (colors && ids) {
-			gpu.GenerateBiomes(world.biomes, world.terrain, biomeTable, area, *colors, *ids);
+			gpu.GenerateBiomes(world.biomes, world.terrain, area, *colors, *ids);
 		}
 	});
 	gpu.EndMeasure();
@@ -105,7 +105,7 @@ void TerrainGenerationSys::GenerateFinite()
 		if (!biomeIds || biomeIds->GetWidth() != width || biomeIds->GetHeight() != height) {
 			biomeIds = std::make_unique<TextureClass>(width, height, GL_R32I);
 		}
-		gpu.GenerateBiomes(world.biomes, world.terrain, biomeTable, MapArea{}, view.LayerTexture(TerrainView::Layer::BIOMES, width, height), *biomeIds);
+		gpu.GenerateBiomes(world.biomes, world.terrain, MapArea{}, view.LayerTexture(TerrainView::Layer::BIOMES, width, height), *biomeIds);
 	}
 	gpu.EndMeasure();
 
@@ -306,11 +306,9 @@ void TerrainGenerationSys::ImGuiOutput(glm::vec3 pos) {
 			}
 		}
 	}
-	if (id >= 0) {
-		auto found = std::find_if(biomeTable.begin(), biomeTable.end(), [id](const biome::Biome& b) { return b.GetId() == id; });
-		if (found != biomeTable.end()) {
-			ImGui::Text("Biome at camera position: %s", found->GetName().c_str());
-		}
+	//Ids are indices in the table; one generated before the table shrank may be out of range for a frame
+	if (id >= 0 && id < static_cast<int>(world.biomes.table.size())) {
+		ImGui::Text("Biome at camera position: %s", world.biomes.table[id].name.c_str());
 	}
 }
 
@@ -398,8 +396,11 @@ void TerrainGenerationSys::BiomesEditor()
 	}
 	if (biomesGeneration) {
 		if (ImGui::CollapsingHeader("Biome generation settings", ImGuiTreeNodeFlags_DefaultOpen)) {
+			if (ImGui::SliderFloat("Blend width", &world.biomes.blendWidth, 0.0f, 0.5f)) {
+				RequestBiomes();
+			}
+			ImGui::SetItemTooltip("How far (in noise values) a biome fades into the nearest one; 0 = sharp borders");
 			BiomeNoisesEditor();
-			NoisesLevelsForBiomes();
 		}
 	}
 }
@@ -560,61 +561,4 @@ void TerrainGenerationSys::SplineEditor()
 			}
 		}
 	}
-}
-void TerrainGenerationSys::NoisesLevelsForBiomes() {
-	if (ImGui::CollapsingHeader("Biome levels editor", ImGuiTreeNodeFlags_DefaultOpen)) {
-		bool levelsChanged = SegmentDrag(world.biomes.temperatureLevels, "Temperature levels");
-		levelsChanged |= SegmentDrag(world.biomes.humidityLevels, "Humidity levels");
-		levelsChanged |= SegmentDrag(world.biomes.continentalnessLevels, "Continentalness levels");
-		levelsChanged |= SegmentDrag(world.biomes.mountainousnessLevels, "Mountainousness levels");
-		levelsChanged |= SegmentDrag(world.biomes.weirdnessLevels, "Weirdness levels");
-		if (levelsChanged) {
-			RequestBiomes();
-		}
-	}
-}
-
-//Plot with draggable level boundaries
-//@return true if a boundary was moved this frame
-bool TerrainGenerationSys::SegmentDrag(std::vector<float>& boundaries, std::string s)
-{
-	bool changed = false;
-	if (ImPlot::BeginPlot(s.c_str(), ImVec2(-1, 80), ImPlotFlags_NoLegend)) {
-		ImPlot::SetupAxes("Value", "", ImPlotAxisFlags_NoDecorations, ImPlotAxisFlags_NoDecorations);
-		ImPlot::SetupAxisLimits(ImAxis_X1, -1, 1, ImGuiCond_Always);
-		ImPlot::SetupAxisLimits(ImAxis_Y1, 0, 1, ImGuiCond_Always);
-
-		for (size_t i = 0; i < boundaries.size()-1; i++) {
-			double xs[4] = { boundaries[i], boundaries[i + 1], boundaries[i + 1], boundaries[i] };
-			double ys[4] = { 0, 0, 1, 1 };
-
-			ImPlot::PlotShaded(std::to_string(i).c_str(), xs, ys, 4);
-			ImPlot::PlotLine(std::to_string(i).c_str(), xs, ys, 4);
-
-			double mid = 0.5 * (boundaries[i] + boundaries[i + 1]);
-			ImPlot::Annotation(mid, 0.5, ImVec4(1, 1, 1, 1), ImVec2(0, 0), true, "%d", static_cast<int>(i));
-		}
-
-		for (size_t i = 1; i < boundaries.size() - 1; i++) {
-			double tmp = boundaries[i];
-			if (ImPlot::DragLineX((int)i, &tmp, ImVec4(1, 0, 0, 1), 1.5f)) {
-				boundaries[i] = std::clamp((float)tmp, -1.0f, 1.0f);
-				changed = true;
-			}
-			if (boundaries[i] > boundaries[i + 1]) {
-				boundaries[i + 1] = boundaries[i];
-			}
-			//Boundary 0 is the fixed lower bound (-1), dragged values are clamped to it
-			int j = static_cast<int>(i) - 1;
-			while(j > 0 && boundaries[j] > boundaries[i]) {
-				boundaries[j] = boundaries[i];
-				j--;
-			}
-
-			ImPlot::Annotation(boundaries[i], 1.02, ImVec4(0, 0.5f, 1, 1), ImVec2(0, 0), true, "%.2f", boundaries[i]);
-		}
-
-		ImPlot::EndPlot();
-	}
-	return changed;
 }

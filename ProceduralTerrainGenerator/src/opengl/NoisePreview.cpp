@@ -55,8 +55,10 @@ void NoisePreview::ImGuiDraw() const
 	if (!colors) {
 		return;
 	}
-	const float width = ImGui::GetContentRegionAvail().x;
-	const float height = width * colors->GetHeight() / colors->GetWidth();
+	//As wide as the panel, but not taller than maxDrawHeight, so the noise settings below stay in view
+	const float aspect = static_cast<float>(colors->GetHeight()) / colors->GetWidth();
+	const float width = std::min(ImGui::GetContentRegionAvail().x, maxDrawHeight / aspect);
+	const float height = width * aspect;
 	ImGui::Image(static_cast<ImTextureID>(static_cast<uintptr_t>(colors->GetID())), ImVec2(width, height));
 	ImGui::TextDisabled("black = -1, gray = 0, white = 1");
 }

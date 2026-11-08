@@ -42,11 +42,10 @@ namespace {
 
 	//Layout of BiomeEntry in the biome shader (std430)
 	struct GpuBiomeEntry {
-		float levelRanges[10];
-		int32_t id;
+		float ranges[2 * biome::PARAMETER_COUNT];
 		float r, g, b;
 	};
-	static_assert(sizeof(GpuBiomeEntry) == 56);
+	static_assert(sizeof(GpuBiomeEntry) == 52);
 
 	void SetNoise(GpuNoiseParams* noises, uint32_t* permutations, int index, const noise::NoiseConfigParameters& n)
 	{
@@ -115,8 +114,8 @@ namespace {
 
 GpuHeightGenerator::~GpuHeightGenerator()
 {
-	const unsigned int buffers[] = { heightInput, biomeInput, biomeLevels, biomeTable };
-	glDeleteBuffers(4, buffers);
+	const unsigned int buffers[] = { heightInput, biomeInput, biomeTable };
+	glDeleteBuffers(3, buffers);
 }
 
 bool GpuHeightGenerator::Initialize()
@@ -131,8 +130,6 @@ bool GpuHeightGenerator::Initialize()
 	glNamedBufferStorage(heightInput, sizeof(GpuHeightInput), nullptr, GL_DYNAMIC_STORAGE_BIT);
 	glCreateBuffers(1, &biomeInput);
 	glNamedBufferStorage(biomeInput, sizeof(GpuBiomeInput), nullptr, GL_DYNAMIC_STORAGE_BIT);
-	//The number of levels and biomes can change, so these two get new storage on every use
-	glCreateBuffers(1, &biomeLevels);
 	glCreateBuffers(1, &biomeTable);
 	timer = std::make_unique<GpuQuery>(GL_TIME_ELAPSED);
 	return true;
@@ -181,9 +178,9 @@ void GpuHeightGenerator::GenerateTerrain(const TerrainConfig& config, const MapA
 	RunHeightShader(*heightShader, heightInput, mode, area, target);
 }
 
-void GpuHeightGenerator::GenerateBiomes(const BiomeConfig& biomes, const TerrainConfig& terrain, const std::vector<biome::Biome>& table, const MapArea& area,
-	TextureClass& colors, TextureClass& ids)
+void GpuHeightGenerator::GenerateBiomes(const BiomeConfig& biomes, const TerrainConfig& terrain, const MapArea& area, TextureClass& colors, TextureClass& ids)
 {
+	//The noises in the order of biome::Parameter
 	auto input = std::make_unique_for_overwrite<GpuBiomeInput>();
 	SetNoise(input->noises, input->permutations, 0, terrain.continentalness);
 	SetNoise(input->noises, input->permutations, 1, terrain.mountainousness);
@@ -192,34 +189,26 @@ void GpuHeightGenerator::GenerateBiomes(const BiomeConfig& biomes, const Terrain
 	SetNoise(input->noises, input->permutations, 4, biomes.humidity);
 	glNamedBufferSubData(biomeInput, 0, sizeof(GpuBiomeInput), input.get());
 
-	biomeShader->Bind();
-
-	const std::vector<float>* parameterLevels[5] = { &biomes.continentalnessLevels, &biomes.mountainousnessLevels, &biomes.weirdnessLevels, &biomes.temperatureLevels, &biomes.humidityLevels };
-	std::vector<float> levels;
-	for (int i = 0; i < 5; i++) {
-		biomeShader->SetUniform2i("levelRanges[" + std::to_string(i) + "]", static_cast<int>(levels.size()), static_cast<int>(parameterLevels[i]->size()));
-		levels.insert(levels.end(), parameterLevels[i]->begin(), parameterLevels[i]->end());
-	}
-	glNamedBufferData(biomeLevels, levels.size() * sizeof(float), levels.data(), GL_DYNAMIC_DRAW);
-
-	glm::vec3 fallbackColor(0.0f);
 	std::vector<GpuBiomeEntry> entries;
-	for (const biome::Biome& b : table) {
-		const glm::vec2 c = b.GetContinentalnessLevel(), m = b.GetMountainousnessLevel(), w = b.GetWeirdnessLevel(), t = b.GetTemperatureLevel(), h = b.GetHumidityLevel();
-		const glm::vec3 color = b.GetColor();
-		entries.push_back({ { c.x, c.y, m.x, m.y, w.x, w.y, t.x, t.y, h.x, h.y }, b.GetId(), color.r, color.g, color.b });
-		if (b.GetId() == 0) {
-			fallbackColor = color;
+	for (const biome::Biome& b : biomes.table) {
+		GpuBiomeEntry& e = entries.emplace_back();
+		for (int i = 0; i < biome::PARAMETER_COUNT; i++) {
+			e.ranges[i * 2] = b.ranges[i].min;
+			e.ranges[i * 2 + 1] = b.ranges[i].max;
 		}
+		e.r = b.color.r;
+		e.g = b.color.g;
+		e.b = b.color.b;
 	}
+	//The number of biomes can change, so the buffer gets new storage on every use
 	glNamedBufferData(biomeTable, entries.size() * sizeof(GpuBiomeEntry), entries.data(), GL_DYNAMIC_DRAW);
 
+	biomeShader->Bind();
 	biomeShader->SetUniform1i("biomeCount", static_cast<int>(entries.size()));
-	biomeShader->SetUniform3fv("fallbackColor", fallbackColor);
+	biomeShader->SetUniform1f("blendWidth", biomes.blendWidth);
 	SetMapUniforms(*biomeShader, area, colors);
 	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, biomeInput);
-	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, biomeLevels);
-	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 2, biomeTable);
+	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, biomeTable);
 	colors.BindImage(0, GL_WRITE_ONLY);
 	ids.BindImage(1, GL_WRITE_ONLY);
 	DispatchTiles(*biomeShader, colors.GetWidth(), colors.GetHeight());

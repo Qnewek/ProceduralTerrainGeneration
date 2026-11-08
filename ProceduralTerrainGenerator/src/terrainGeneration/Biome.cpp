@@ -1,42 +1,55 @@
 #include "Biome.h"
 
-namespace biome{
-	Biome::Biome() : id(-1), name(""), temperatureLevel(), humidityLevel(), continentalnessLevel(), mountainousnessLevel(), weirdnessLevel(), vegetationLevel(0)
+#include <algorithm>
+#include <cmath>
+
+namespace biome {
+	float Biome::Distance(const ParameterValues& values) const
 	{
+		float sum = 0.0f;
+		for (int i = 0; i < PARAMETER_COUNT; i++) {
+			const float outside = std::max({ ranges[i].min - values[i], values[i] - ranges[i].max, 0.0f });
+			sum += outside * outside;
+		}
+		return std::sqrt(sum);
 	}
 
-	Biome::Biome(int _id, std::string _name) : id(_id), name(_name), temperatureLevel(), humidityLevel(), continentalnessLevel(), mountainousnessLevel(), weirdnessLevel(), vegetationLevel(0)
+	int Nearest(const std::vector<Biome>& table, const ParameterValues& values)
 	{
+		int nearest = 0;
+		float best = table[0].Distance(values);
+		for (int i = 1; i < static_cast<int>(table.size()); i++) {
+			const float distance = table[i].Distance(values);
+			if (distance < best) {
+				best = distance;
+				nearest = i;
+			}
+		}
+		return nearest;
 	}
 
-	Biome::Biome(int _id, std::string _name, glm::vec2 _temperatureLevel, glm::vec2 _humidityLevel, glm::vec2 _continentalnessLevel, glm::vec2 _mountainousnessLevel, glm::vec2 _weirdnessLevel, glm::vec3 _color, float _vegetationLevel) : id(_id), name(_name),
-		temperatureLevel(_temperatureLevel), humidityLevel(_humidityLevel), continentalnessLevel(_continentalnessLevel), mountainousnessLevel(_mountainousnessLevel), weirdnessLevel(_weirdnessLevel), color(_color), vegetationLevel(_vegetationLevel)
+	float BlendWeight(float distance, float nearestDistance, float blendWidth)
 	{
-		isSpecified = true;
-	}
-
-	Biome::~Biome()
-	{
-	}
-
-	bool Biome::VerifyBiome(const int& T, const int& H, const int& C, const int& M, const int& W) const
-	{
-		return T >= temperatureLevel.x && T < temperatureLevel.y &&
-			H >= humidityLevel.x && H < humidityLevel.y &&
-			C >= continentalnessLevel.x && C < continentalnessLevel.y &&
-			M >= mountainousnessLevel.x && M < mountainousnessLevel.y &&
-			W >= weirdnessLevel.x && W < weirdnessLevel.y;
+		if (blendWidth <= 0.0f) {
+			return distance <= nearestDistance ? 1.0f : 0.0f;
+		}
+		const float t = std::clamp((distance - nearestDistance) / blendWidth, 0.0f, 1.0f);
+		//1 - smoothstep(0, 1, t)
+		return 1.0f - t * t * (3.0f - 2.0f * t);
 	}
 
 	std::vector<Biome> DefaultBiomes()
 	{
+		//Order of ranges: continentalness, mountainousness, weirdness, temperature, humidity.
+		//Converted from the discrete levels used before 2026-11-08, so the default world looks as it did
+		const Range all{ -1.0f, 1.0f };
 		return {
-			Biome(0, "Grassplains",	{1, 2}, {1, 4}, {3, 5}, {0, 3}, {0, 1}, glm::vec3(0.2f, 0.8f, 0.2f), 1.0f),
-			Biome(1, "Desert",		{2, 4}, {0, 1}, {3, 5}, {0, 4}, {0, 1}, glm::vec3(0.95f, 0.1f, 0.1f), 1.0f),
-			Biome(2, "Snow",		{0, 1}, {0, 4}, {3, 5}, {0, 4}, {0, 1}, glm::vec3(0.95f, 0.95f, 0.95f), 1.0f),
-			Biome(3, "Sand",		{0, 4}, {0, 4}, {2, 3}, {0, 7}, {0, 1}, glm::vec3(0.93f, 0.82f, 0.55f), 1.0f),
-			Biome(4, "Mountain",	{0, 4}, {0, 4}, {4, 5}, {4, 7}, {0, 1}, glm::vec3(0.5f, 0.5f, 0.5f), 1.0f),
-			Biome(5, "Ocean",		{0, 4}, {0, 4}, {0, 2}, {0, 7}, {0, 1}, glm::vec3(0.2f, 0.4f, 0.85f), 1.0f)
+			{ "Grassplains", glm::vec3(0.2f, 0.8f, 0.2f),	{ Range{ 0.03f, 1.0f }, Range{ -1.0f, -0.2f }, all, Range{ -0.5f, 0.0f }, Range{ -0.5f, 1.0f } } },
+			{ "Desert", glm::vec3(0.95f, 0.1f, 0.1f),		{ Range{ 0.03f, 1.0f }, Range{ -1.0f, 0.05f }, all, Range{ 0.0f, 1.0f }, Range{ -1.0f, -0.5f } } },
+			{ "Snow", glm::vec3(0.95f, 0.95f, 0.95f),		{ Range{ 0.03f, 1.0f }, Range{ -1.0f, 0.05f }, all, Range{ -1.0f, -0.5f }, all } },
+			{ "Sand", glm::vec3(0.93f, 0.82f, 0.55f),		{ Range{ -0.2f, 0.03f }, all, all, all, all } },
+			{ "Mountain", glm::vec3(0.5f, 0.5f, 0.5f),		{ Range{ 0.3f, 1.0f }, Range{ 0.05f, 1.0f }, all, all, all } },
+			{ "Ocean", glm::vec3(0.2f, 0.4f, 0.85f),		{ Range{ -1.0f, -0.2f }, all, all, all, all } },
 		};
 	}
 }
