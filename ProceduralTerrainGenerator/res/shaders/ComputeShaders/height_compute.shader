@@ -24,6 +24,7 @@ uniform int mode;
 uniform ivec2 mapSize;
 uniform ivec2 tileOrigin;	// first texel of this dispatch, large maps are generated in parts
 uniform vec2 origin;		// map position of texel (0, 0)
+uniform float sampleStep;	// map distance between neighbouring texels (MapArea::step)
 uniform ivec2 islandSize;	// see noise.glsl
 
 #include "../common/noise.glsl"
@@ -60,5 +61,6 @@ void main()
 	if (any(greaterThanEqual(texel, mapSize))) {
 		return;
 	}
-	imageStore(outputMap, texel, vec4(evaluateHeight(float(texel.x) + origin.x, float(texel.y) + origin.y)));
+	vec2 position = vec2(texel) * sampleStep + origin;
+	imageStore(outputMap, texel, vec4(evaluateHeight(position.x, position.y)));
 }

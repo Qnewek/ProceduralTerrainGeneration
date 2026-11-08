@@ -44,8 +44,6 @@ private:
 	bool chunksShown = false;
 	//Noise the chunks show instead of the terrain, nullptr for the terrain
 	const noise::NoiseConfigParameters* chunkPreview = nullptr;
-	//Map size an island fills in the chunks: the last valid world size
-	glm::ivec2 islandSize = glm::ivec2(0);
 
 	//World parameters (map size, terrain, biomes) edited by the UI; generators only read them
 	WorldConfig world;

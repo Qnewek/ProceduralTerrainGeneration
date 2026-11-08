@@ -40,6 +40,7 @@ uniform vec3 fallbackColor;		// biome 0, used where no biome matches
 uniform ivec2 mapSize;
 uniform ivec2 tileOrigin;		// first texel of this dispatch, large maps are generated in parts
 uniform vec2 origin;			// map position of texel (0, 0)
+uniform float sampleStep;		// map distance between neighbouring texels (MapArea::step)
 uniform ivec2 islandSize;		// see noise.glsl
 
 #include "../common/noise.glsl"
@@ -62,9 +63,10 @@ void main()
 		return;
 	}
 
+	vec2 position = vec2(texel) * sampleStep + origin;
 	float parameterLevels[5];
 	for (int i = 0; i < 5; i++) {
-		parameterLevels[i] = float(determineLevel(i, evaluateNoise(i, float(texel.x) + origin.x, float(texel.y) + origin.y)));
+		parameterLevels[i] = float(determineLevel(i, evaluateNoise(i, position.x, position.y)));
 	}
 
 	int id = 0;

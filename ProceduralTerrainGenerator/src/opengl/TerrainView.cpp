@@ -139,6 +139,8 @@ void TerrainView::SetFrameUniforms(Shader& shader, Camera& camera, LightSource& 
 	shader.SetUniform1f("bandWidth", settings.topoBandWidth);
 	shader.SetUniform1f("heightScale", settings.heightScale);
 	shader.SetUniform2f("texelWorldSize", worldUnitsPerTexel, worldUnitsPerTexel);
+	shader.SetUniform1f("meshScale", 1.0f);
+	shader.SetUniform1f("skirtDepth", 0.0f);
 	shader.SetUniform1i("heightMap", heightUnit);
 	shader.SetUniform1i("biomeMap", static_cast<int>(Layer::BIOMES));
 	shader.SetUniform1i("surfaceMap", surfaceUnit);

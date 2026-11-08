@@ -140,7 +140,8 @@ void Camera::ImGuiDraw() {
 		ImGui::SliderFloat("Camera speed", &initSpeed, 0.1f, 200.0f);
 		ImGui::SliderFloat("Camera FOV", &fov, 1.0f, 120.0f);
 		ImGui::SliderFloat("Camera sensitivity", &sensitivity, 0.01f, 1.0f);
-		ImGui::SliderFloat("Render distance", &viewDist.y, 1.0f, 5000.0f);
+		//Chunks of the infinite world get coarser with distance, so they can be seen far away
+		ImGui::SliderFloat("Render distance", &viewDist.y, 1.0f, 50000.0f, "%.0f", ImGuiSliderFlags_Logarithmic);
 	}
 }
 
@@ -157,7 +158,8 @@ glm::mat4* Camera::GetViewMatrix() {
 }
 glm::mat4* Camera::GetProjectionMatrix() {
 	projection = glm::mat4(1.0f);
-	projection = glm::perspective(glm::radians(fov), (float)screenWidth / (float)screenHeight, viewDist.x, viewDist.y);
+	//The near plane moves away with a long render distance, or the depth buffer would lack precision far away
+	projection = glm::perspective(glm::radians(fov), (float)screenWidth / (float)screenHeight, std::max(viewDist.x, viewDist.y / 20000.0f), viewDist.y);
 	return &projection;
 }
 void Camera::EnableMouseControl(GLFWwindow* window) {

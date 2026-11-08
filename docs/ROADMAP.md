@@ -44,7 +44,7 @@ biomy, roślinność i kolejne feature'y.**
 | ~~A2~~ ✅ | Ręczne zarządzanie pamięcią (`new[]`/`delete[]`, raw pointers), brak rule-of-5 | Błędy B9, trudne refaktory — **Zrobione 2026-10-29:** mapy w `Grid<T>` (`std::vector`) |
 | ~~A3~~ ✅ | Logika generacji, stan UI i rendering wymieszane w subsystemach (`TerrainGenerationSys` = 420 linii UI+GL+logika) | Nie da się przenieść generacji na wątek/GPU ani testować bez okna — **Zrobione 2026-10-29:** config w `WorldConfig.h`, generatory bezstanowe względem configu, GL w `TerrainView` |
 | ~~A4~~ ✅ | Duplikacja: dwa subsystemy z identycznym `Initialize/Draw/Resize`, dwa zestawy shaderów różniące się kilkoma liniami | Każdą poprawkę (np. B6) trzeba robić 2× — **Zrobione 2026-10-29:** wspólny `TerrainView`, jeden zestaw shaderów |
-| A5 | Brak modelu „świata”: mapa = jeden prostokąt `width×height` przypięty do kamery; brak chunków, LOD, cache | Infinite terrain i duże światy są niewykonalne wydajnie — **Częściowo:** chunki z cache (2026-11-08); brak LOD (Faza 2 pkt 4) |
+| A5 | Brak modelu „świata”: mapa = jeden prostokąt `width×height` przypięty do kamery; brak chunków, LOD, cache | Infinite terrain i duże światy są niewykonalne wydajnie — ✅ chunki z cache i LOD (quadtree), 2026-11-08 |
 | A6 | Biomy oparte o dyskretne poziomy `int` i pierwszy pasujący biom z `unordered_map` (kolejność nieokreślona!) | Ostre granice, niedeterministyczny wybór przy nakładaniu się zakresów, brak blendingu, trudne do konfiguracji |
 | A7 | Brak serializacji (presety, konfiguracje biomów, eksport) — „Saving” to placeholder | Nie da się zapisać efektu pracy ani porównać ustawień — **Częściowo:** presety JSON i eksport heightmapy (2026-11-03); brak konfiguracji biomów z pliku (Faza 3) |
 | A8 | Brak testów, CI, profilera; brak menedżera zależności (binarki w repo) | Regresje niewykrywalne; aktualizacje bibliotek ręczne — **Częściowo:** CMake + vcpkg, CI z kontrolą checksum (2026-10-30), testy jednostkowe (2026-11-02), panel pomiarów (2026-11-03); Tracy odłożony (Faza 1 pkt 8) |
@@ -231,6 +231,17 @@ Cel: **edycja w czasie rzeczywistym przy 60+ FPS** i nieskończony świat.
    z mgłą terenu w kolorze nieba przy granicy zasięgu (ukrywa też doładowywanie chunków) oraz przeniesienie kamery nad skończoną mapę po wyłączeniu trybu infinite.
 4. **LOD:** quadtree chunków (lub geometry clipmaps) + teselacja w TCS oparta o rozmiar krawędzi w pikselach ekranu
    (zamiast stałych `MIN/MAX_DISTANCE`); morfowanie/skirts przeciw szczelinom między poziomami.
+
+   ✅ 2026-11-08 (bez teselacji wg pikseli ekranu i bez morfowania): quadtree chunków w `ChunkWorld`. Chunk poziomu L obejmuje 128·2^L tekseli tymi samymi teksturami 131²,
+   czyli bierze co 2^L-tą próbkę (`MapArea::step` w generatorze GPU). Próbki leżą na pozycjach całkowitych, więc tam, gdzie poziomy się stykają, są równe;
+   `--gpu-check` sprawdza kroki 1, 2 i 4 bit w bit względem pełnej mapy. Chunk bliżej kamery niż „Detail distance” × jego rozmiar (domyślnie 3) jest zastępowany przez czworo
+   dzieci, ale dopiero gdy wszystkie są wygenerowane, więc w widoku nie ma dziur. Najpierw generowane są chunki, które zostawiłyby dziurę, potem najbliższe (rodzic przed dziećmi),
+   więc po zmianie parametru teren pojawia się od zgrubnego do szczegółowego. Korzeń = najmniejszy poziom większy od zasięgu (najwyżej 10).
+   Szczeliny między poziomami zakrywają skirts: patche wzdłuż brzegów chunka, które TES opuszcza o `skirtDepth` (1% `heightScale` na poziomie 0, podwajane z poziomem, maks. 50%).
+   Siatka jest jedna (poziom 0), skalowana w XZ uniformem `meshScale` w VS, więc `model` i `normalMatrix` zostają jednorodne; mapa pochodnych liczona z krokiem
+   `worldUnitsPerTexel · 2^L`, więc normalne, nachylenie i krzywizna są w jednostkach świata. TES nie bierze już normalnej z patcha (skirt jest pionowy), tylko dodaje wysokość do y.
+   „Render distance” do 50000 (suwak logarytmiczny); bliska płaszczyzna odsuwa się do 1/20000 zasięgu, żeby nie brakło precyzji głębi.
+   Odległość do chunka liczona w XZ, bez wysokości kamery. Zostało: teselacja wg rozmiaru na ekranie, morfowanie między poziomami (przejścia są skokowe), uwzględnienie wysokości kamery.
 5. **Culling:** frustum culling chunków na CPU + odrzucanie patchy w TCS (`gl_TessLevelOuter = 0`), opcjonalnie
    `glMultiDrawArraysIndirect` dla wszystkich chunków jednym wywołaniem.
 6. **Inkrementalna regeneracja:** dirty-flagi per warstwa (zmiana szumu temperatury nie przelicza wysokości),
