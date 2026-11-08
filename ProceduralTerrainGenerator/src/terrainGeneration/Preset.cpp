@@ -51,10 +51,10 @@ namespace preset {
 			{ noise::IslandType::TRIG, "TRIG" },
 		};
 
-		//EvaluationMethod::C is left out on purpose: it only produces a flat map and the UI cannot display it
 		constexpr EnumName<EvaluationMethod> methodNames[] = {
 			{ EvaluationMethod::LINEAR_COMBINE, "LINEAR_COMBINE" },
 			{ EvaluationMethod::SPLINE_COMBINE, "SPLINE_COMBINE" },
+			{ EvaluationMethod::LAYERED, "LAYERED" },
 		};
 
 		template<typename E, size_t N>
@@ -346,6 +346,11 @@ namespace preset {
 			ReadSpline(r, "continentalnessSpline", t.continentalnessSpline);
 			ReadSpline(r, "mountainousnessSpline", t.mountainousnessSpline);
 			ReadSpline(r, "weirdnessSpline", t.weirdnessSpline);
+			//Missing in presets saved before the layered method existed; the defaults are kept
+			r.Read("seaLevel", t.seaLevel);
+			r.Read("coastWidth", t.coastWidth);
+			r.Read("mountainShare", t.mountainShare);
+			ReadSpline(r, "peaksSpline", t.peaksSpline);
 		}
 
 		void ReadBiomes(const Reader& parent, const char* key, BiomeConfig& b)
@@ -418,15 +423,23 @@ namespace preset {
 		void Check(const WorldConfig& c)
 		{
 			CheckSize(c.width, c.height);
-			if (c.terrain.method != EvaluationMethod::LINEAR_COMBINE && c.terrain.method != EvaluationMethod::SPLINE_COMBINE) {
-				throw std::runtime_error("Unsupported terrain method");
-			}
 			CheckNoise(c.terrain.continentalness, "Continentalness");
 			CheckNoise(c.terrain.mountainousness, "Mountainousness");
 			CheckNoise(c.terrain.weirdness, "Weirdness");
 			CheckSpline(c.terrain.continentalnessSpline, "Continentalness");
 			CheckSpline(c.terrain.mountainousnessSpline, "Mountainousness");
 			CheckSpline(c.terrain.weirdnessSpline, "Weirdness");
+			CheckSpline(c.terrain.peaksSpline, "Peaks");
+			if (!(c.terrain.seaLevel >= 0.0f && c.terrain.seaLevel <= 1.0f)) {
+				throw std::runtime_error("seaLevel must be between 0 and 1");
+			}
+			//smoothstep in the shader is undefined for edges in the wrong order or equal
+			if (!(c.terrain.coastWidth > 0.0f && c.terrain.coastWidth <= 1.0f)) {
+				throw std::runtime_error("coastWidth must be greater than 0 and at most 1");
+			}
+			if (!(c.terrain.mountainShare >= 0.0f && c.terrain.mountainShare <= 1.0f)) {
+				throw std::runtime_error("mountainShare must be between 0 and 1");
+			}
 			CheckNoise(c.biomes.temperature, "Temperature");
 			CheckNoise(c.biomes.humidity, "Humidity");
 			CheckLevels(c.biomes.temperatureLevels, "Temperature");
@@ -534,6 +547,10 @@ namespace preset {
 		terrain["continentalnessSpline"] = SplineToJson(c.terrain.continentalnessSpline);
 		terrain["mountainousnessSpline"] = SplineToJson(c.terrain.mountainousnessSpline);
 		terrain["weirdnessSpline"] = SplineToJson(c.terrain.weirdnessSpline);
+		terrain["seaLevel"] = ReadableFloat(c.terrain.seaLevel);
+		terrain["coastWidth"] = ReadableFloat(c.terrain.coastWidth);
+		terrain["mountainShare"] = ReadableFloat(c.terrain.mountainShare);
+		terrain["peaksSpline"] = SplineToJson(c.terrain.peaksSpline);
 		root["terrain"] = std::move(terrain);
 
 		json biomes;
