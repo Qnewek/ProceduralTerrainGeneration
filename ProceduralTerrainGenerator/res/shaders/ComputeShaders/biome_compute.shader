@@ -1,6 +1,8 @@
 #version 450 core
 
-// Assigns a biome to every texel from the levels of its five noises, evaluated in place.
+// Biome of every texel from its five noise values, evaluated in place; the same rules as biome::Nearest and biome::BlendWeight (Biome.h):
+// the id is the nearest biome (first on ties), the color mixes all biomes closer than blendWidth to the nearest one.
+// After a change run ProceduralTerrainGenerator.exe --gpu-check.
 
 layout(local_size_x = 32, local_size_y = 32) in;
 
@@ -9,8 +11,8 @@ layout(r32i, binding = 1) uniform writeonly iimage2D idMap;
 
 #include "../common/noise_params.glsl"
 
-// Order of noises and levels: continentalness, mountainousness, weirdness, temperature, humidity
-const int CONTINENTALNESS = 0, MOUNTAINOUSNESS = 1, WEIRDNESS = 2, TEMPERATURE = 3, HUMIDITY = 4;
+// Order of noises and ranges (biome::Parameter): continentalness, mountainousness, weirdness, temperature, humidity
+const int PARAMETER_COUNT = 5;
 
 // Matches GpuBiomeInput in GpuHeightGenerator.cpp
 layout(std430, binding = 0) readonly buffer BiomeInput {
@@ -18,24 +20,18 @@ layout(std430, binding = 0) readonly buffer BiomeInput {
 	uint permutations[5 * 256];
 };
 
-layout(std430, binding = 1) readonly buffer BiomeLevels {
-	float levels[];
-};
-
 // Matches GpuBiomeEntry in GpuHeightGenerator.cpp
 struct BiomeEntry {
-	float levelRanges[10];	// from and to (exclusive) of every parameter, order as above
-	int id;
+	float ranges[2 * PARAMETER_COUNT];	// min and max of every parameter, order as above
 	float r, g, b;
 };
 
-layout(std430, binding = 2) readonly buffer BiomeTable {
+layout(std430, binding = 1) readonly buffer BiomeTable {
 	BiomeEntry biomes[];
 };
 
 uniform int biomeCount;
-uniform ivec2 levelRanges[5];	// first entry in levels and number of entries of every parameter
-uniform vec3 fallbackColor;		// biome 0, used where no biome matches
+uniform float blendWidth;		// 0 = only the nearest biome
 uniform ivec2 mapSize;
 uniform ivec2 tileOrigin;		// first texel of this dispatch, large maps are generated in parts
 uniform vec2 origin;			// map position of texel (0, 0)
@@ -44,15 +40,15 @@ uniform ivec2 islandSize;		// see noise.glsl
 
 #include "../common/noise.glsl"
 
-int determineLevel(int parameter, float value)
+// biome::Biome::Distance
+float biomeDistance(int b, float values[PARAMETER_COUNT])
 {
-	ivec2 range = levelRanges[parameter];
-	for (int i = 0; i < range.y; i++) {
-		if (value < levels[range.x + i]) {
-			return i - 1;
-		}
+	float sum = 0.0;
+	for (int i = 0; i < PARAMETER_COUNT; i++) {
+		float outside = max(max(biomes[b].ranges[i * 2] - values[i], values[i] - biomes[b].ranges[i * 2 + 1]), 0.0);
+		sum += outside * outside;
 	}
-	return -2;
+	return sqrt(sum);
 }
 
 void main()
@@ -63,23 +59,34 @@ void main()
 	}
 
 	vec2 position = vec2(texel) * sampleStep + origin;
-	float parameterLevels[5];
-	for (int i = 0; i < 5; i++) {
-		parameterLevels[i] = float(determineLevel(i, evaluateNoise(i, position.x, position.y)));
+	float values[PARAMETER_COUNT];
+	for (int i = 0; i < PARAMETER_COUNT; i++) {
+		values[i] = evaluateNoise(i, position.x, position.y);
 	}
 
 	int id = 0;
-	vec3 color = fallbackColor;
-	for (int b = 0; b < biomeCount; b++) {
-		bool matches = true;
-		for (int i = 0; i < 5 && matches; i++) {
-			matches = parameterLevels[i] >= biomes[b].levelRanges[i * 2] && parameterLevels[i] < biomes[b].levelRanges[i * 2 + 1];
+	float nearest = biomeDistance(0, values);
+	for (int b = 1; b < biomeCount; b++) {
+		float distance = biomeDistance(b, values);
+		if (distance < nearest) {
+			nearest = distance;
+			id = b;
 		}
-		if (matches) {
-			id = biomes[b].id;
-			color = vec3(biomes[b].r, biomes[b].g, biomes[b].b);
-			break;
+	}
+
+	// All biomes take part, so a biome passing another in distance changes the color continuously
+	vec3 color = vec3(biomes[id].r, biomes[id].g, biomes[id].b);
+	if (blendWidth > 0.0) {
+		vec3 sum = vec3(0.0);
+		float total = 0.0;
+		for (int b = 0; b < biomeCount; b++) {
+			// biome::BlendWeight
+			float weight = 1.0 - smoothstep(0.0, 1.0, (biomeDistance(b, values) - nearest) / blendWidth);
+			sum += weight * vec3(biomes[b].r, biomes[b].g, biomes[b].b);
+			total += weight;
 		}
+		// total >= 1: the nearest biome has weight 1
+		color = sum / total;
 	}
 	imageStore(colorMap, texel, vec4(color, 1.0));
 	imageStore(idMap, texel, ivec4(id));

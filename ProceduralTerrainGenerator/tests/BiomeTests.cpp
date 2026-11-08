@@ -1,74 +1,104 @@
 #include "doctest/doctest.h"
 
+#include <algorithm>
+
 #include "Biome.h"
 
-//Ids of the default biomes from biome::DefaultBiomes
+//Ids (indices) of the default biomes from biome::DefaultBiomes
 constexpr int GRASSPLAINS = 0, DESERT = 1, SNOW = 2, SAND = 3, MOUNTAIN = 4, OCEAN = 5;
 
 namespace {
-	//Biome chosen for the levels as in biome_compute.shader: the first match in the order of the table, id 0 if none matches
-	int FirstMatch(const std::vector<biome::Biome>& table, int T, int H, int C, int M, int W)
+	//Values in the order of biome::Parameter
+	biome::ParameterValues Values(float c, float m, float w, float t, float h)
 	{
-		for (const biome::Biome& b : table) {
-			if (b.VerifyBiome(T, H, C, M, W)) {
-				return b.GetId();
-			}
-		}
-		return 0;
+		return { c, m, w, t, h };
 	}
 }
 
-TEST_CASE("VerifyBiome uses half-open ranges on every parameter")
+TEST_CASE("Distance is 0 inside the ranges and grows with how far a value lies outside")
 {
-	const biome::Biome b(7, "Test", { 1, 2 }, { 0, 2 }, { 3, 5 }, { 0, 1 }, { 0, 1 }, glm::vec3(0.0f), 1.0f);
+	biome::Biome b;
+	b.ranges[biome::CONTINENTALNESS] = { 0.0f, 0.5f };
+	b.ranges[biome::TEMPERATURE] = { -0.5f, 0.0f };
 
-	CHECK(b.VerifyBiome(1, 1, 4, 0, 0));
-	CHECK_FALSE(b.VerifyBiome(2, 1, 4, 0, 0));
-	CHECK_FALSE(b.VerifyBiome(1, 2, 4, 0, 0));
-	CHECK_FALSE(b.VerifyBiome(1, 1, 5, 0, 0));
-	CHECK_FALSE(b.VerifyBiome(1, 1, 4, 1, 0));
-	CHECK_FALSE(b.VerifyBiome(1, 1, 4, 0, 1));
+	CHECK(b.Distance(Values(0.25f, 0.0f, 0.0f, -0.25f, 0.0f)) == 0.0f);
+	//On the border of a range
+	CHECK(b.Distance(Values(0.5f, 0.0f, 0.0f, -0.5f, 0.0f)) == 0.0f);
+	//Below and above a range
+	CHECK(b.Distance(Values(-0.3f, 0.0f, 0.0f, -0.25f, 0.0f)) == doctest::Approx(0.3f));
+	CHECK(b.Distance(Values(0.25f, 0.0f, 0.0f, 0.4f, 0.0f)) == doctest::Approx(0.4f));
+	//Outside two ranges: Euclidean length
+	CHECK(b.Distance(Values(0.8f, 0.0f, 0.0f, 0.4f, 0.0f)) == doctest::Approx(0.5f));
 }
 
 TEST_CASE("Default biomes are chosen by their parameters")
 {
 	const std::vector<biome::Biome> table = biome::DefaultBiomes();
 
-	//Arguments: temperature, humidity, continentalness, mountainousness, weirdness
-	CHECK(FirstMatch(table, 1, 1, 3, 0, 0) == GRASSPLAINS);
-	CHECK(FirstMatch(table, 3, 0, 3, 0, 0) == DESERT);
-	CHECK(FirstMatch(table, 0, 3, 3, 0, 0) == SNOW);
-	CHECK(FirstMatch(table, 3, 3, 2, 6, 0) == SAND);
-	CHECK(FirstMatch(table, 0, 0, 4, 4, 0) == MOUNTAIN);
-	CHECK(FirstMatch(table, 0, 0, 0, 0, 0) == OCEAN);
-	CHECK(FirstMatch(table, 3, 3, 1, 0, 0) == OCEAN);
+	//Arguments: continentalness, mountainousness, weirdness, temperature, humidity
+	CHECK(biome::Nearest(table, Values(0.5f, -0.5f, 0.0f, -0.25f, 0.0f)) == GRASSPLAINS);
+	CHECK(biome::Nearest(table, Values(0.5f, -0.5f, 0.0f, 0.5f, -0.8f)) == DESERT);
+	CHECK(biome::Nearest(table, Values(0.5f, -0.5f, 0.0f, -0.8f, 0.5f)) == SNOW);
+	CHECK(biome::Nearest(table, Values(-0.1f, 0.8f, 0.0f, 0.5f, 0.5f)) == SAND);
+	CHECK(biome::Nearest(table, Values(0.6f, 0.6f, 0.0f, 0.0f, 0.0f)) == MOUNTAIN);
+	CHECK(biome::Nearest(table, Values(-0.9f, 0.0f, 0.0f, 0.0f, 0.0f)) == OCEAN);
 }
 
-TEST_CASE("Combinations without a biome fall back to id 0")
+TEST_CASE("Every point gets the nearest biome, also where no biome contains it")
 {
-	//Hot and humid land - a known gap in the default table, to be redesigned with A6
-	CHECK(FirstMatch(biome::DefaultBiomes(), 3, 3, 3, 0, 0) == GRASSPLAINS);
+	const std::vector<biome::Biome> table = biome::DefaultBiomes();
+	//Hot and humid flat land lies in no default biome; grassplains are nearest (temperature 0.3 above its range)
+	const biome::ParameterValues values = Values(0.5f, -0.5f, 0.0f, 0.3f, 0.2f);
+	for (const biome::Biome& b : table) {
+		CHECK(b.Distance(values) > 0.0f);
+	}
+	CHECK(biome::Nearest(table, values) == GRASSPLAINS);
 }
 
-//With overlapping biomes the choice would depend on the order of the table (A6)
+TEST_CASE("On equal distances the first biome of the table wins")
+{
+	biome::Biome low, high;
+	low.ranges[biome::TEMPERATURE] = { -1.0f, -0.5f };
+	high.ranges[biome::TEMPERATURE] = { 0.5f, 1.0f };
+	const biome::ParameterValues middle = Values(0.0f, 0.0f, 0.0f, 0.0f, 0.0f);
+	CHECK(biome::Nearest({ low, high }, middle) == 0);
+	CHECK(biome::Nearest({ high, low }, middle) == 0);
+}
+
+TEST_CASE("Blend weight falls smoothly from 1 at the nearest biome to 0 at the blend width")
+{
+	CHECK(biome::BlendWeight(0.3f, 0.3f, 0.1f) == 1.0f);
+	CHECK(biome::BlendWeight(0.35f, 0.3f, 0.1f) == doctest::Approx(0.5f));
+	CHECK(biome::BlendWeight(0.4f, 0.3f, 0.1f) == 0.0f);
+	CHECK(biome::BlendWeight(0.9f, 0.3f, 0.1f) == 0.0f);
+	//Weights only fall with distance
+	float previous = 1.0f;
+	for (int i = 1; i <= 20; i++) {
+		const float weight = biome::BlendWeight(0.3f + 0.005f * i, 0.3f, 0.1f);
+		CHECK(weight <= previous);
+		previous = weight;
+	}
+	//Width 0: only the nearest biome
+	CHECK(biome::BlendWeight(0.3f, 0.3f, 0.0f) == 1.0f);
+	CHECK(biome::BlendWeight(0.31f, 0.3f, 0.0f) == 0.0f);
+}
+
+//Overlapping biomes would share an area; there the first one of the table always wins and the other only blends in
 TEST_CASE("Default biomes do not overlap")
 {
 	const std::vector<biome::Biome> table = biome::DefaultBiomes();
-
 	int overlapping = 0;
-	//Level counts of the default BiomeConfig
-	for (int t = 0; t < 4; t++) {
-		for (int h = 0; h < 4; h++) {
-			for (int c = 0; c < 5; c++) {
-				for (int m = 0; m < 7; m++) {
-					int matches = 0;
-					for (const biome::Biome& b : table) {
-						if (b.VerifyBiome(t, h, c, m, 0))
-							matches++;
-					}
-					if (matches > 1)
-						overlapping++;
-				}
+	for (size_t a = 0; a < table.size(); a++) {
+		for (size_t b = a + 1; b < table.size(); b++) {
+			bool overlap = true;
+			for (int p = 0; p < biome::PARAMETER_COUNT && overlap; p++) {
+				//Shared borders do not count
+				overlap = std::min(table[a].ranges[p].max, table[b].ranges[p].max) > std::max(table[a].ranges[p].min, table[b].ranges[p].min);
+			}
+			if (overlap) {
+				CAPTURE(table[a].name);
+				CAPTURE(table[b].name);
+				overlapping++;
 			}
 		}
 	}

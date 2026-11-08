@@ -295,16 +295,18 @@ Biomy (Faza 3, pkt 3–4) opierają się na wysokości i znaczeniu szumów C/M/W
    `1 − |3|W| − 2|` to dokładnie Ridge szumu weirdness z gain 3 i offset 1 (domyślny), więc shader go nie powtarza. Wynik zostaje w [0, 1], bez zmian
    `terrainRange` i `heightBound`. `seaLevel` jest w jednostkach splajnu podstawy; powierzchnia wody leży na wysokości `seaLevel · (1 − mountainShare)` (pod wodę w Fazie 5 i biomy w Fazie 3).
    Edytor splajnów: podpisy osi i przycisk „Peaks & valleys” zależne od metody (`TerrainConfig::MethodSpline`). Doliny rzeczne (odejmowanie wysokości) — nie, do pkt 3 lub Fazy 5.
-3. Opcjonalnie później: zagnieżdżone splajny (punkty splajnu C są splajnami po M), wypiekane do tekstury LUT dla GPU.
+3. ➡️ Przeniesione do Fazy 5 (decyzja właściciela 2026-11-08): zagnieżdżone splajny — razem z rzekami, które i tak wymagają obniżania terenu.
 
 ### Faza 3 — biomy 2.0 (2–3 tygodnie)
 Cel: realistyczne, płynne przejścia i biomy wpływające na kształt terenu.
 
-1. **Ciągła przestrzeń parametrów** zamiast dyskretnych poziomów: każdy biom = punkt/obszar w przestrzeni
-   (temperature, humidity, continentalness, erosion/mountainousness, weirdness); wybór = najbliższy biom
-   (jak multi-noise Minecraft 1.18) — deterministyczne, bez zależności od kolejności w `unordered_map` (**A6**).
-2. **Blending:** wagi K najbliższych biomów (np. 4) zapisywane do tekstury `RGBA8` (ID) + `RGBA8` (wagi);
-   płynne przejścia kolorów/tekstur/parametrów wysokości.
+1. ✅ 2026-11-08 **Ciągła przestrzeń parametrów** zamiast dyskretnych poziomów: biom = zakresy wartości 5 szumów (C, M, W, T, H) w `BiomeConfig::table`,
+   wybór = najbliższy biom (odległość = długość wyjścia poza zakresy, remis → pierwszy w tabeli), jak multi-noise Minecraft 1.18. Brak dziur w pokryciu
+   i biomu „zastępczego”; id = indeks w tabeli. Domyślne biomy przeliczone z dawnych poziomów. Tabela i `blendWidth` w presetach (wersja 2, decyzja właściciela:
+   format można było zmienić, starych presetów nie ma). Edytor poziomów usunięty.
+2. ✅ 2026-11-08 (kolory) **Blending:** kolor miesza wszystkie biomy z wagą `1 − smoothstep((d − d_min) / blendWidth)` — ciągłe także wtedy, gdy biomy zamieniają się
+   kolejnością. Mapa id zostaje ostra (nazwa biomu pod kamerą). Czas generacji biomów bez zmian. Tekstury K najbliższych id + wag dojdą razem z pkt 3 / 5,
+   kiedy będą potrzebne (modyfikatory terenu, splat mapping).
 3. **Biomy modyfikują teren:** per-biom modyfikatory (amplituda, offset, ridging, tarasowanie, wydmy)
    mieszane wagami — np. pustynia z wydmami, góry ostrzejsze, bagna spłaszczone.
 4. **Wpływ wysokości na klimat:** temperatura spada z wysokością (lapse rate), wilgotność rośnie przy wybrzeżu
@@ -341,6 +343,8 @@ przeniesienia wprost, ale reguły rozmieszczenia i UI są dobrym punktem wyjści
 - **Erozja na GPU:** hydrauliczna (pipe model / virtual pipes lub kroplowa w compute z atomics) + termiczna;
   tryb „bake” dla obszaru (erozja jest nielokalna — dla chunków: erozja na większym regionie z marginesem i zszywanie).
 - **Rzeki i jeziora:** flow accumulation / priority-flood na mapie niskiej rozdzielczości, rzeźbienie koryt, maska wilgotności dla biomów.
+- **Zagnieżdżone splajny** (z „Teren 2.0”, pkt 3): punkty splajnu C są splajnami po M (i dalej po PV), wypiekane do tekstury LUT 2D/3D próbkowanej jednym odczytem.
+  Daje klify tam, gdzie góry dochodzą do morza, płaskie plaże gdzie indziej, doliny wcięte poniżej podstawy. Najwięcej pracy: edytor UI (lista punktów C z wykresem po M, podgląd C×M jako mapa ciepła).
 - **Woda:** płaszczyzna oceanu z refleksją/refrakcją, głębia, piana przy brzegu.
 - **Atmosfera:** fog zależny od wysokości, skybox/atmospheric scattering, cykl dnia, cienie (cascaded shadow maps).
 - **Eksport:** heightmap 16-bit/EXR, splat mapy, mesh OBJ/glTF (z LOD), lista instancji roślinności (JSON) → import do Unity/Unreal/Godot.
