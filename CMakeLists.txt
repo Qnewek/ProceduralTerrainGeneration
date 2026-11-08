@@ -47,6 +47,7 @@ add_library(ptg_core STATIC
 	${PTG_SRC}/terrainGeneration/HeightmapImport.cpp
 	${PTG_SRC}/terrainGeneration/Noise.cpp
 	${PTG_SRC}/terrainGeneration/Preset.cpp
+	${PTG_SRC}/terrainGeneration/SurfaceDerivatives.cpp
 	${PTG_SRC}/terrainGeneration/TerrainGenerator.cpp
 )
 target_include_directories(ptg_core PUBLIC ${PTG_SRC}/terrainGeneration)
@@ -59,6 +60,7 @@ add_executable(ProceduralTerrainGenerator
 	${PTG_SRC}/opengl/GpuHeightCheck.cpp
 	${PTG_SRC}/opengl/GpuHeightGenerator.cpp
 	${PTG_SRC}/opengl/GpuQuery.cpp
+	${PTG_SRC}/opengl/GpuSurfacePass.cpp
 	${PTG_SRC}/opengl/IndexBuffer.cpp
 	${PTG_SRC}/opengl/Renderer.cpp
 	${PTG_SRC}/opengl/Shader.cpp
@@ -108,6 +110,7 @@ add_executable(ptg_tests
 	${PTG_DIR}/tests/NoiseTests.cpp
 	${PTG_DIR}/tests/PresetTests.cpp
 	${PTG_DIR}/tests/RollingStatsTests.cpp
+	${PTG_DIR}/tests/SurfaceTests.cpp
 	${PTG_DIR}/tests/TerrainTests.cpp
 	${PTG_DIR}/tests/TestMain.cpp
 )

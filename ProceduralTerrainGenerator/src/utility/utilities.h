@@ -8,12 +8,15 @@
 
 namespace utilities
 {
+    //Values match displayMode in Terrain_evalTes.shader
     enum class heightMapMode
     {
         GREYSCALE,
         TOPOGRAPHICAL,
         MONOCOLOR,
-        BIOMES
+        BIOMES,
+        SLOPE,
+        CURVATURE
 	};
 
 	void GenerateVerticesForResolution(float* vertices, const int& width, const int& height, int resolution, const unsigned int& stride, unsigned int posOffset, unsigned int texOffset);
