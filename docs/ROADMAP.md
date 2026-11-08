@@ -286,8 +286,10 @@ Biomy (Faza 3, pkt 3–4) opierają się na wysokości i znaczeniu szumów C/M/W
    Zostały configi, tablica permutacji (`makePermutation`) i `tk::spline` do tablicy splajnu dla GPU, tabela biomów i jej testy. Pkt 7 Fazy 2 (CPU fallback) odpada.
    `--gpu-check` sprawdza teraz same wyniki GPU: zakresy i skończoność dla każdej opcji, determinizm, biomy, chunki/LOD bit w bit, pochodne na mapach analitycznych.
    Strata: CI nie sprawdza generacji (brak GPU na runnerach); ewentualnie później Mesa llvmpipe (programowy GL 4.5 z compute shaderami).
-1. **Operacje na szumie** (nowe pola `NoiseConfigParameters`, domyślnie wyłączone): domain warping (przesunięcie współrzędnych drugim szumem — naturalne
-   linie brzegowe, skręcone pasma), fBm tłumiony gradientem (oktawy słabną na stromych zboczach — wygląd erozji), tarasy / wygładzone obcięcie.
+1. ✅ 2026-11-08 **Operacje na szumie** (nowe pola `NoiseConfigParameters`, domyślnie wyłączone): domain warping (`warpStrength`, `warpScale`; przesunięcie
+   współrzędnych 4-oktawowym szumem z tej samej tablicy permutacji), fBm tłumiony gradientem (`slopeErosion`; analityczne pochodne `simplex2Grad`, oktawa dzielona
+   przez 1 + k·|∇ niższych oktaw|²), tarasy (`terraceSteps`, `terraceSharpness`; na końcu, po redystrybucji). Przy wyłączonych warpie i tłumieniu działa stara pętla,
+   więc istniejące światy są identyczne bit w bit (sprawdza `--gpu-check`, sekcja `shape:`). Warp i tłumienie nie działają z `symmetrical`.
 2. **Metoda warstwowa** (nowa `EvaluationMethod` obok LINEAR i SPLINE): `h = podstawa(C) + maskaLądu(C) · amplituda(M) · kształt(PV)`,
    `pv = 1 − |3|W| − 2|` (grzbiety i doliny jak „peaks and valleys” w Minecraft 1.18), jawny `seaLevel`; podpisy osi w edytorze splajnów zależne od metody.
    Przy zmianie zakresu wysokości: `heightmap::terrainRange` i `heightBound` cullingu.
