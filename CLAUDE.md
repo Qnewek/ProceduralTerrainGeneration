@@ -67,6 +67,7 @@ ProceduralTerrainGenerator/
     opengl/                      cienkie wrappery: Shader, VertexArray/Buffer, IndexBuffer, TextureClass, Renderer, GpuQuery
       TerrainView.*              siatka + shader + tekstury (TERRAIN/OVERLAY/BIOMES), wspólny dla obu trybów
       GpuHeightGenerator.*       jedyna generacja: szum, teren i biomy w compute shaderach; GpuHeightCheck.* = testy generacji (--gpu-check)
+      NoisePreview.*             podgląd edytowanego szumu jako mapa 2D w panelu ImGui (≤ 512 tekseli na dłuższym boku, preview_compute.shader = skala szarości)
       GpuSurfacePass.*           mapa pochodnych (gradient + laplasjan) z mapy wysokości; uruchamia ją TerrainView i ChunkWorld
       ChunkWorld.*               „Infinite generation”: quadtree chunków 128² z LOD wokół kamery, kolejka wg odległości, cache, skirts, rysowanie shaderem terenu
     utility/
@@ -139,7 +140,8 @@ Wartości szumów są w [-1, 1]. Konwencja indeksowania: `map[y * width + x]`.
 - Splajny: domyślne są liniowe, a po „Set new spline points” edytowany splajn staje się kubiczny
   (`SplinePoints::cubic`) — zachowane z wersji sprzed A3. GPU dostaje splajn jako tablicę 1024 próbek (`SetSpline`).
 - Uniformy terenu ustawia wyłącznie `TerrainView::Draw` — subsystemy nie dotykają shadera. Wysokość bierze się
-  z warstwy podanej w `Draw` (`heightLayer`: TERRAIN = jednostka 0, OVERLAY = 1 dla podglądu szumu / erozji).
+  z warstwy podanej w `Draw` (`heightLayer`: TERRAIN = jednostka 0, OVERLAY = 1 dla podglądu szumu / erozji w Noise heightmap).
+  TerrainGen zawsze pokazuje teren wynikowy; edytowany szum składowy widać tylko w `NoisePreview` w panelu, a zmiany jego parametrów od razu regenerują teren (i biomy, jeśli są włączone).
 - Oświetlenie w world space: `FragPos = model * p`, normalna z gradientu `surfaceMap` (krok `worldUnitsPerTexel`)
   przez `normalMatrix`. Zmieniając skalę siatki, zmień `worldUnitsPerTexel`, nie shader. Światło to słońce (kierunek `light.direction`), więc nie zależy od położenia.
   Mgła: teren przechodzi w kolor nieba (`fogColor` z `sky.glsl`) od „Fog start” (część „Render distance”) do całego zasięgu; w widoku 2D mgły i nieba nie ma.
