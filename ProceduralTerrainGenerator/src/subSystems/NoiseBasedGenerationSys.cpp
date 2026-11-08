@@ -104,7 +104,7 @@ void NoiseBasedGenerationSys::GenerateFinite()
 	if (ValidMapSize(config.width, config.height)) {
 		view.Resize(config.width, config.height);
 		gpu.BeginMeasure();
-		gpu.GenerateNoise(config.noise, 0.0f, 0.0f, view.LayerTexture(TerrainView::Layer::TERRAIN, config.width, config.height));
+		gpu.GenerateNoise(config.noise, MapArea{}, view.LayerTexture(TerrainView::Layer::TERRAIN, config.width, config.height));
 		gpu.EndMeasure();
 	}
 	else {
@@ -123,7 +123,6 @@ void NoiseBasedGenerationSys::UpdateChunks(const Camera& camera)
 	//An invalid size waiting in the UI keeps the previous one
 	if (ValidMapSize(config.width, config.height)) {
 		chunks.AlignWithMap(config.width, config.height);
-		islandSize = glm::ivec2(config.width, config.height);
 	}
 
 	const glm::vec3 position = camera.GetPosition() / renderSettings.modelScale;
@@ -131,8 +130,8 @@ void NoiseBasedGenerationSys::UpdateChunks(const Camera& camera)
 		return;
 	}
 	gpu.BeginMeasure();
-	chunks.GenerateNext([&](float originx, float originy, TextureClass& height, TextureClass*, TextureClass*) {
-		gpu.GenerateNoise(config.noise, originx, originy, height, islandSize);
+	chunks.GenerateNext([&](const MapArea& area, TextureClass& height, TextureClass*, TextureClass*) {
+		gpu.GenerateNoise(config.noise, area, height);
 	});
 	gpu.EndMeasure();
 }
@@ -276,6 +275,9 @@ void NoiseBasedGenerationSys::ImGuiLeftPanel()
 			s.displayMode = utilities::heightMapMode::GREYSCALE;
 		}
 	}
+	if (infiniteGeneration) {
+		chunks.ImGuiDraw();
+	}
 }
 
 void NoiseBasedGenerationSys::ErosionImGui()
@@ -315,6 +317,7 @@ void NoiseBasedGenerationSys::ImGuiOutput()
 	if (chunksShown) {
 		ImGui::Text("Last generation (GPU): %.2f ms (up to %d chunks of %dx%d)", lastGenerationMs, ChunkWorld::maxChunksPerFrame, ChunkWorld::chunkSize, ChunkWorld::chunkSize);
 		ImGui::Text("Chunks: %d in view, %d cached, %d waiting", chunks.GetVisibleCount(), chunks.GetCachedCount(), chunks.GetPendingCount());
+		ImGui::Text("Coarsest level in view: %d (1 sample per %d texels)", chunks.GetCoarsestLevel(), 1 << chunks.GetCoarsestLevel());
 		return;
 	}
 	ImGui::Text("Last generation (GPU): %.2f ms (%dx%d)", lastGenerationMs, view.GetMapWidth(), view.GetMapHeight());

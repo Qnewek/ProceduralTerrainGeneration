@@ -72,7 +72,6 @@ void TerrainGenerationSys::UpdateChunks(const Camera& camera)
 	//An invalid size waiting in the UI keeps the previous one
 	if (world.width >= 2 && world.height >= 2 && world.width <= 8192 && world.height <= 8192) {
 		chunks.AlignWithMap(world.width, world.height);
-		islandSize = glm::ivec2(world.width, world.height);
 	}
 
 	const glm::vec3 position = camera.GetPosition() / renderSettings.modelScale;
@@ -80,15 +79,15 @@ void TerrainGenerationSys::UpdateChunks(const Camera& camera)
 		return;
 	}
 	gpu.BeginMeasure();
-	chunks.GenerateNext([&](float originx, float originy, TextureClass& height, TextureClass* colors, TextureClass* ids) {
+	chunks.GenerateNext([&](const MapArea& area, TextureClass& height, TextureClass* colors, TextureClass* ids) {
 		if (preview) {
-			gpu.GenerateNoise(*preview, originx, originy, height, islandSize);
+			gpu.GenerateNoise(*preview, area, height);
 		}
 		else {
-			gpu.GenerateTerrain(world.terrain, originx, originy, height, islandSize);
+			gpu.GenerateTerrain(world.terrain, area, height);
 		}
 		if (colors && ids) {
-			gpu.GenerateBiomes(world.biomes, world.terrain, biomeTable, originx, originy, *colors, *ids, islandSize);
+			gpu.GenerateBiomes(world.biomes, world.terrain, biomeTable, area, *colors, *ids);
 		}
 	});
 	gpu.EndMeasure();
@@ -111,7 +110,7 @@ void TerrainGenerationSys::GenerateFinite()
 
 	gpu.BeginMeasure();
 	if (request.terrain) {
-		gpu.GenerateTerrain(world.terrain, 0.0f, 0.0f, view.LayerTexture(TerrainView::Layer::TERRAIN, width, height));
+		gpu.GenerateTerrain(world.terrain, MapArea{}, view.LayerTexture(TerrainView::Layer::TERRAIN, width, height));
 	}
 	if (request.overlay) {
 		GenerateOverlay();
@@ -120,7 +119,7 @@ void TerrainGenerationSys::GenerateFinite()
 		if (!biomeIds || biomeIds->GetWidth() != width || biomeIds->GetHeight() != height) {
 			biomeIds = std::make_unique<TextureClass>(width, height, GL_R32I);
 		}
-		gpu.GenerateBiomes(world.biomes, world.terrain, biomeTable, 0.0f, 0.0f, view.LayerTexture(TerrainView::Layer::BIOMES, width, height), *biomeIds);
+		gpu.GenerateBiomes(world.biomes, world.terrain, biomeTable, MapArea{}, view.LayerTexture(TerrainView::Layer::BIOMES, width, height), *biomeIds);
 	}
 	gpu.EndMeasure();
 
@@ -145,7 +144,7 @@ void TerrainGenerationSys::GenerateOverlay()
 {
 	//Without an edited noise the layer must stay as it is: a new texture would have no contents to show
 	if (const noise::NoiseConfigParameters* edited = EditedNoise()) {
-		gpu.GenerateNoise(*edited, 0.0f, 0.0f, view.LayerTexture(TerrainView::Layer::OVERLAY, world.width, world.height));
+		gpu.GenerateNoise(*edited, MapArea{}, view.LayerTexture(TerrainView::Layer::OVERLAY, world.width, world.height));
 	}
 }
 
@@ -274,6 +273,9 @@ void TerrainGenerationSys::ImGuiLeftPanel() {
 			s.displayMode = utilities::heightMapMode::TOPOGRAPHICAL;
 		}
 	}
+	if (infiniteGeneration) {
+		chunks.ImGuiDraw();
+	}
 	PresetsImGui();
 	if (infiniteGeneration) {
 		ImGui::TextDisabled("Saving works on the finite map (Partial generation)");
@@ -289,6 +291,7 @@ void TerrainGenerationSys::ImGuiOutput(glm::vec3 pos) {
 	if (chunksShown) {
 		ImGui::Text("Last generation (GPU): %.2f ms (up to %d chunks of %dx%d)", lastGenerationMs, ChunkWorld::maxChunksPerFrame, ChunkWorld::chunkSize, ChunkWorld::chunkSize);
 		ImGui::Text("Chunks: %d in view, %d cached, %d waiting", chunks.GetVisibleCount(), chunks.GetCachedCount(), chunks.GetPendingCount());
+		ImGui::Text("Coarsest level in view: %d (1 sample per %d texels)", chunks.GetCoarsestLevel(), 1 << chunks.GetCoarsestLevel());
 		id = chunks.BiomeAt(position);
 	}
 	else {

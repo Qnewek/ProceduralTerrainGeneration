@@ -72,7 +72,7 @@ ProceduralTerrainGenerator/
       TerrainView.*              siatka + shader + tekstury (TERRAIN/OVERLAY/BIOMES), wspólny dla obu trybów
       GpuHeightGenerator.*       jedyna generacja w aplikacji: szum, teren i biomy w compute shaderach; GpuHeightCheck.* = porównanie z CPU (--gpu-check)
       GpuSurfacePass.*           mapa pochodnych (gradient + laplasjan) z mapy wysokości; uruchamia ją TerrainView i ChunkWorld
-      ChunkWorld.*               „Infinite generation”: chunki 128² wokół kamery, kolejka wg odległości, cache, rysowanie shaderem terenu
+      ChunkWorld.*               „Infinite generation”: quadtree chunków 128² z LOD wokół kamery, kolejka wg odległości, cache, skirts, rysowanie shaderem terenu
     utility/
       Camera.*                   kamera FPS (WASD, Space/Ctrl, M = mysz, Esc = zwolnij mysz)
       LightSource.*              słońce: światło kierunkowe (azymut, wysokość), ambient, przełącznik mgły
@@ -181,7 +181,9 @@ Wartości szumów są w [-1, 1]. Konwencja indeksowania: `map[y * width + x]`.
   pola configu trzeba powtórzyć w obu i w `GpuNoiseParams`/`SetNoise`, po czym uruchomić `--gpu-check` (CI go nie uruchamia, bo nie ma GPU). Tolerancje w `GpuHeightCheck.cpp`
   wynikają z pomiarów opisanych w ROADMAP (Faza 2, pkt 1); nie podnoś ich bez sprawdzenia, ile zmienia się sam wynik CPU po przesunięciu współrzędnej o najmniejszy krok `float`.
   Checksumy benchmarku dotyczą tylko CPU; wynik GPU nie jest z nimi porównywany.
-- LOD jeszcze nie istnieje (chunki mają jedną rozdzielczość). Wcześniejsza próba chunków (klasa `Chunk`, nigdy nie scalona) jest pod tagiem
+- LOD chunków: poziom L bierze co 2^L-tą próbkę (`MapArea::step`, potęga dwójki, więc próbki poziomów się pokrywają). Siatka chunka jest jedna, skalowana w XZ uniformem
+  `meshScale` (VS), a skirty (wierzchołki z `aPos.y = -1`) TES opuszcza o `skirtDepth`; `SetFrameUniforms` ustawia oba na neutralne (1 i 0) dla `TerrainView`.
+  Nie skaluj `model` niejednorodnie — `normalMatrix` i mapa pochodnych (liczona z krokiem `worldUnitsPerTexel · 2^L`) zakładają jednostki świata. Wcześniejsza próba chunków (klasa `Chunk`, nigdy nie scalona) jest pod tagiem
   `archive/infinite-terrain-chunks`; stara roślinność — w historii (`fb8b840`), opis w ROADMAP, Faza 4.
 
 ## Kierunek rozwoju (skrót z ROADMAP)
