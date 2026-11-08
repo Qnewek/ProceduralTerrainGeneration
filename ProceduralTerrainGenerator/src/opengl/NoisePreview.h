@@ -14,6 +14,8 @@ class NoisePreview
 {
 public:
 	static constexpr int maxSize = 512;
+	//Largest height of the picture in the UI, in pixels
+	static constexpr float maxDrawHeight = 220.0f;
 
 	//@return false if the shader could not be built
 	bool Initialize();

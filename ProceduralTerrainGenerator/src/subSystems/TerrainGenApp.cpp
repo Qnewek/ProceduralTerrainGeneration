@@ -134,6 +134,7 @@ void TerrainGenApp::Start()
         }
         else if (currentMode == mode::MAP_IMPORT) {
             mapImportSys.Update();
+
         }
 
 		Draw();
@@ -226,7 +227,9 @@ void TerrainGenApp::ImGuiRender()
     //Left panel
     ImGui::SetNextWindowPos(ImVec2(0, 0), ImGuiCond_Always);
     ImGui::SetNextWindowSize(ImVec2(leftPanelWidth, static_cast<float>(windowHeight)), ImGuiCond_Always);
-    ImGui::Begin("Main tools", nullptr, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_None);
+    //Side panels always show the scrollbar: one that comes and goes changes the width, and content sized to the width
+    //(e.g. the noise preview) then changes the height and toggles the scrollbar back - flickering every frame
+    ImGui::Begin("Main tools", nullptr, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_AlwaysVerticalScrollbar);
     leftPanelWidth = ImGui::GetWindowWidth() <= windowWidth / 2 ? ImGui::GetWindowWidth() : windowWidth / 2;
     if (ImGui::CollapsingHeader("A few words...", ImGuiTreeNodeFlags_DefaultOpen)) {
         ImGui::TextWrapped("Hi Dear User!\n"
@@ -252,7 +255,7 @@ void TerrainGenApp::ImGuiRender()
 	//Right panel
     ImGui::SetNextWindowPos(ImVec2(windowWidth - rightPanelWidth, 0), ImGuiCond_Always);
     ImGui::SetNextWindowSize(ImVec2(rightPanelWidth, static_cast<float>(windowHeight)), ImGuiCond_Always);
-    ImGui::Begin("Tools", nullptr, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_None);
+    ImGui::Begin("Tools", nullptr, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_AlwaysVerticalScrollbar);
     rightPanelWidth = ImGui::GetWindowWidth() <= windowWidth/2 ? ImGui::GetWindowWidth() : windowWidth/2;
 
     if (currentMode == mode::NOISE_HEIGHTMAP) {

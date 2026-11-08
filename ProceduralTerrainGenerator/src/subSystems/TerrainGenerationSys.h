@@ -51,7 +51,6 @@ private:
 	GpuHeightGenerator gpu;
 	WorldRequest pending;
 
-	std::vector<biome::Biome> biomeTable = biome::DefaultBiomes();
 	std::unique_ptr<TextureClass> biomeIds;
 	//Copy of biomeIds on the CPU, for the name of the biome under the camera
 	BiomeMap biomeMap;
@@ -112,7 +111,5 @@ public:
 	void BiomesEditor();
 	void BiomeNoisesEditor();
 	void SplineEditor();
-	void NoisesLevelsForBiomes();
-	bool SegmentDrag(std::vector<float>& boundaries, std::string s);
 };
 
