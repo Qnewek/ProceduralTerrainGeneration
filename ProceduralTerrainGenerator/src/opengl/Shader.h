@@ -43,7 +43,6 @@ public:
 	void SetUniformMat4f(const std::string& name, const glm::mat4& matrix);
 	void SetUniformMat3f(const std::string& name, const glm::mat3& matrix);
 
-	void SetLightUniforms(glm::vec3 lightPos, glm::vec3 ambient, glm::vec3 diffuse, glm::vec3 specular);
 	void SetMaterialUniforms(glm::vec3 ambient, glm::vec3 diffuse, glm::vec3 specular, float shininess);
 	void SetMVP(const glm::mat4& model, const glm::mat4& view, const glm::mat4& projection);
 	void SetViewPos(const glm::vec3& viewPos);

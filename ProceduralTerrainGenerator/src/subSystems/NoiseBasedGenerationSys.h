@@ -1,6 +1,7 @@
 #pragma once
 #include <memory>
 
+#include "ChunkWorld.h"
 #include "Erosion.h"
 #include "GenerationJob.h"
 #include "GpuHeightGenerator.h"
@@ -11,11 +12,10 @@
 #include "PresetPanel.h"
 #include "ExportPanel.h"
 
-//What has to be done. The noise map is generated on the GPU at the next Update;
+//What has to be done. The noise map is generated on the GPU at the next Update (with infinite generation: the chunks);
 //erosion runs on the CPU in a job, and requests made while it runs are done together afterwards
 struct NoiseRequest {
 	bool noise = false;
-	float originx = 0.0f, originy = 0.0f;
 	bool resetErosion = false;	//the next erosion starts from the noise map instead of accumulating
 	bool erode = false;
 
@@ -36,12 +36,18 @@ class NoiseBasedGenerationSys
 
 		bool erosionDraw = false, instantUpdate = true, infiniteGeneration = false;
 		double lastGenerationMs = 0.0, lastErosionMs = 0.0;
-		glm::vec3 oldCamPos = glm::vec3(0.0f, 0.0f, 0.0f);
 
-		//Rendering; the noise map lives in the TERRAIN layer of the view
+		//Rendering; the finite noise map lives in the TERRAIN layer of the view, the infinite one in chunks
 		TerrainView view;
+		ChunkWorld chunks;
 		TerrainRenderSettings renderSettings;
 		GpuHeightGenerator gpu;
+		//infiniteGeneration as of the last Update
+		bool chunksShown = false;
+		//The noise changed while the chunks were shown, so the finite map needs regenerating
+		bool finiteOutdated = false;
+		//Map size an island fills in the chunks: the last valid map size
+		glm::ivec2 islandSize = glm::ivec2(0);
 
 		//Eroded map shown and read by the UI, touched only by the main thread.
 		//A job works on its own copy, which replaces this one when finished
@@ -57,7 +63,11 @@ class NoiseBasedGenerationSys
 		void InstallResult(ErosionResult& result);
 
 		//New noise map; the erosion shown next to it is dropped and starts from the new map
-		void RequestNoise(float originx, float originy);
+		void RequestNoise();
+		//Finite map: generates a requested noise map
+		void GenerateFinite();
+		//Infinite generation: a noise request regenerates the chunks; generates the next chunks around the camera
+		void UpdateChunks(const Camera& camera);
 		void RequestErosion();
 
 		void PresetsImGui();
@@ -70,11 +80,14 @@ class NoiseBasedGenerationSys
 		~NoiseBasedGenerationSys();
 
 		bool Initialize(int _width, int _height, float _heightScale);
-		//Called every frame before Draw: generates a requested map, installs a finished erosion and starts the next one
-		void Update();
+		//Called every frame before Draw: generates a requested map or the chunks around the camera, installs a finished erosion and starts the next one
+		//@param camera - moved to the finite map when infinite generation is turned off
+		void Update(Camera& camera);
 
 		void Draw(Renderer& renderer, Camera& camera, LightSource& light);
-		void ReloadShaders() { view.ReloadShader(); gpu.ReloadShaders(); }
+		//true while the 2D map is shown instead of the 3D view
+		bool FlatView() const { return renderSettings.map2d; }
+		void ReloadShaders() { view.ReloadShader(); chunks.ReloadShader(); gpu.ReloadShaders(); }
 		void ImGuiRightPanel();
 		void ImGuiLeftPanel();
 		void ErosionImGui();

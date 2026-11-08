@@ -12,6 +12,7 @@
 #include "Noise.h"
 #include "Erosion.h"
 #include "LightSource.h"
+#include "Sky.h"
 #include "TerrainGenerator.h"
 
 #include "NoiseBasedGenerationSys.h"
@@ -66,7 +67,11 @@ private:
 	GLFWwindow* window;
 	Renderer renderer;
 	Camera camera;
+	//The sun
 	LightSource light;
+	Sky sky;
+	//true if the active mode shows the 2D map, which has no sky
+	bool FlatView() const;
 
 	enum class mode
 	{

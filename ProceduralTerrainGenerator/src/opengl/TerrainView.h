@@ -60,6 +60,10 @@ public:
 	void SetFlatViewBounds(glm::vec2 min, glm::vec2 max) { flatMin = min; flatMax = max; }
 	void ResetFlatViewBounds();
 
+	//If the camera is not above the map, moves it to a raised point beyond the +Z edge looking at the map center,
+	//no farther than allows the view distance (e.g. after leaving the infinite world far from the map)
+	void BringCameraToMap(Camera& camera, const TerrainRenderSettings& settings) const;
+
 	//Layer textures are allocated once per map size; same-size updates only upload the new data
 	void SetLayer(Layer layer, const HeightField& map);
 	//Texture of a layer with the given size, for writing to it directly (GL_RGBA32F for BIOMES, GL_R32F otherwise).
@@ -75,20 +79,26 @@ public:
 	void Draw(Renderer& renderer, Camera& camera, LightSource& light, const TerrainRenderSettings& settings,
 		Layer heightLayer = Layer::TERRAIN, glm::vec3 offset = glm::vec3(0.0f));
 
+	//One map texel spans this many world units
+	static constexpr float worldUnitsPerTexel = 4.0f;
+	//Texture unit of the surface map of the drawn height layer; biome colors use unit 2 (Layer::BIOMES)
+	static constexpr int surfaceUnit = 3;
+
+	//The terrain shader program; ChunkWorld draws with the same shaders
+	static std::unique_ptr<Shader> CreateTerrainShader();
+	//Binds the terrain shader and sets the uniforms that do not change between the maps drawn in a frame
+	//@param model - also gives normalMatrix; drawing several maps with one shader may change only its translation
+	//@param heightUnit - texture unit of the height map
+	//@param flatMin, flatMax - area (XZ, world units before modelScale) framed by the 2D map view
+	static void SetFrameUniforms(Shader& shader, Camera& camera, LightSource& light, const TerrainRenderSettings& settings,
+		const glm::mat4& model, int heightUnit, glm::vec2 flatMin, glm::vec2 flatMax);
+
 private:
 	void BuildMesh();
-	//Sets view/projection of a top-down orthographic camera framing the flat view bounds
-	void SetFlatCameraUniforms(const TerrainRenderSettings& settings);
 	//Recomputes the surface map of a height layer if the layer changed since the last time
 	void UpdateSurface(Layer heightLayer);
 
-	//Texture unit of the surface map of the drawn height layer
-	static constexpr int surfaceUnit = 3;
-
 	glm::vec2 flatMin = glm::vec2(0.0f), flatMax = glm::vec2(0.0f);
-
-	//One map texel spans this many world units
-	static constexpr float worldUnitsPerTexel = 4.0f;
 
 	int width = 0, height = 0;
 	int mapResolution = 50;

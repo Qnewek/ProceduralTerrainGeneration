@@ -23,7 +23,8 @@ const int MODE_NOISE = 0, MODE_LINEAR = 1, MODE_SPLINE = 2, MODE_ZERO = 3;
 uniform int mode;
 uniform ivec2 mapSize;
 uniform ivec2 tileOrigin;	// first texel of this dispatch, large maps are generated in parts
-uniform vec2 origin;		// world position of texel (0, 0)
+uniform vec2 origin;		// map position of texel (0, 0)
+uniform ivec2 islandSize;	// see noise.glsl
 
 #include "../common/noise.glsl"
 

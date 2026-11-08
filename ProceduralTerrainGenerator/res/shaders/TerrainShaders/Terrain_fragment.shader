@@ -7,27 +7,25 @@ in float Height;
 
 out vec4 FragColor;
 
-struct Material {
-    vec3 ambient;
-    vec3 diffuse;
-    vec3 specular;    
-    float shininess;
-}; 
-
+//The sun: a directional light, the same everywhere
 struct Light {
-    vec3 position;
-
+    vec3 direction;     //unit vector towards the sun
     vec3 ambient;
     vec3 diffuse;
-    vec3 specular;
 };
 
 uniform bool lightOn;
-uniform Material material;
 uniform Light light;
 //Isolines: darken a band of bandWidth every step units of height (bandWidth = 0 disables them)
 uniform float step;
 uniform float bandWidth;
+//Fog: the terrain fades into the sky color between fogStart and fogDistance from the camera
+uniform bool fogOn;
+uniform float fogStart;
+uniform float fogDistance;
+uniform vec3 viewPos;
+
+#include "../common/sky.glsl"
 
 void main()
 {
@@ -37,26 +35,20 @@ void main()
         baseColor *= 0.5;
     }
 
-    if(!lightOn){
-        FragColor = vec4(baseColor, 1.0);
-        return;
+    vec3 result = baseColor;
+    if (lightOn) {
+        vec3 norm = normalize(aNormal);
+        float diff = max(dot(norm, light.direction), 0.0);
+        //The colors set in the UI change with the sun height, like the sky does
+        vec3 ambient = light.ambient * ambientTint(light.direction);
+        vec3 sunlight = light.diffuse * sunlightTint(light.direction);
+        result = (ambient + sunlight * diff) * baseColor;
     }
 
-    vec3 ambient;
-    vec3 diffuse;
-    vec3 norm = normalize(aNormal);
-    vec3 lightDir = normalize(light.position - FragPos);
-
-    ambient = light.ambient * baseColor.rgb;
-    float diff = max(dot(norm, lightDir), 0.0);
-    diffuse = light.diffuse * diff * baseColor.rgb;
-
-    //vec3 viewDir = normalize(viewPos - FragPos);
-    //vec3 reflectDir = reflect(-lightDir, norm);  
-    //float spec = pow(max(dot(viewDir, reflectDir), 0.0), material.shininess);
-    //vec3 specular = light.specular * spec * baseColor.rgb;  
-
-    vec3 result = ambient + diffuse;// + specular;
-
+    if (fogOn) {
+        vec3 toFragment = FragPos - viewPos;
+        float fog = smoothstep(fogStart, fogDistance, length(toFragment));
+        result = mix(result, fogColor(toFragment, light.direction), fog);
+    }
     FragColor = vec4(result, 1.0);
 }

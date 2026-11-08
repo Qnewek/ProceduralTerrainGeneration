@@ -37,7 +37,7 @@ Plan napraw i rozwoju: `docs/ROADMAP.md` (ID zadań `B*`, `A*`, `F*` są tam zde
   (x64, 6 wątków), 512²: teren ≈ 36 ms, checksumy terrain `637427221ce26bfb`, noises `80cc02bb71d77ea4`,
   biomes `d676ca6dc3f85ac5`.
 - **Wielkość liter ścieżek = dokładnie taka jak w gicie** (`git ls-files`): `src/opengl`, `src/subSystems`,
-  `src/terrainGeneration`, `src/utility`, `src/vendor`, `res/shaders`, `res/textures`, `light_source_*.shader`.
+  `src/terrainGeneration`, `src/utility`, `src/vendor`, `res/shaders`, `res/textures`.
   Dotyczy kodu (`#include`, `"res/..."`), ścieżek w `CMakeLists.txt` i nazw katalogów na dysku.
   Windows i git (`core.ignorecase=true`) nie wyłapią rozjazdu — wyjdzie dopiero na Linuksie.
 - Nowy `.cpp` trzeba dopisać do odpowiedniego targetu w `CMakeLists.txt` (lista jawna, bez glob).
@@ -71,10 +71,12 @@ ProceduralTerrainGenerator/
     opengl/                      cienkie wrappery: Shader, VertexArray/Buffer, IndexBuffer, TextureClass, Renderer, GpuQuery
       TerrainView.*              siatka + shader + tekstury (TERRAIN/OVERLAY/BIOMES), wspólny dla obu trybów
       GpuHeightGenerator.*       jedyna generacja w aplikacji: szum, teren i biomy w compute shaderach; GpuHeightCheck.* = porównanie z CPU (--gpu-check)
-      GpuSurfacePass.*           mapa pochodnych (gradient + laplasjan) z mapy wysokości; uruchamia ją TerrainView
+      GpuSurfacePass.*           mapa pochodnych (gradient + laplasjan) z mapy wysokości; uruchamia ją TerrainView i ChunkWorld
+      ChunkWorld.*               „Infinite generation”: chunki 128² wokół kamery, kolejka wg odległości, cache, rysowanie shaderem terenu
     utility/
       Camera.*                   kamera FPS (WASD, Space/Ctrl, M = mysz, Esc = zwolnij mysz)
-      LightSource.*              punktowe światło + sześcian debug
+      LightSource.*              słońce: światło kierunkowe (azymut, wysokość), ambient, przełącznik mgły
+      Sky.*                      tło widoku 3D: proceduralne niebo zależne od wysokości słońca + tarcza słońca (fullscreen triangle)
       FrameMetrics.*             pomiary w panelu Output (czas klatki/CPU/GPU, trójkąty); RollingStats.h = średnia i maks. z ostatnich próbek
       PresetPanel.*              sekcja „Presets” w ImGui (lista plików, nazwa); zapis i odczyt wykonuje subsystem
       ExportPanel.*              sekcja „Saving” w ImGui; subsystem podaje mapy do zapisu i ich zakres wartości
@@ -85,6 +87,7 @@ ProceduralTerrainGenerator/
   res/shaders/
     TerrainShaders/              VS → TCS → TES → FS, jedyny zestaw dla terenu (oba tryby)
     ComputeShaders/              height_compute.shader (szum, teren), biome_compute.shader, surface_compute.shader; wspólne: common/noise.glsl, noise_params.glsl, simplex.glsl, surface.glsl
+    sky_vertex/fragment.shader   niebo; kolory nieba w common/sky.glsl, z których korzysta też mgła terenu
 CMakeLists.txt, CMakePresets.json, vcpkg.json   build; GLFW, GLEW, glm, ImGui, ImPlot, stb z vcpkg
 .github/workflows/build.yml      CI (Windows x64 Debug/Release + checksumy)
 ```
@@ -103,8 +106,10 @@ CMakeLists.txt, CMakePresets.json, vcpkg.json   build; GLFW, GLEW, glm, ImGui, I
    przesuwa wierzchołek o `height * heightScale`, bierze normalną z `surfaceMap`, koloruje wg `displayMode`
    (0 grey, 1 topo, 2 mono, 3 biomy z `biomeMap`, 4 nachylenie, 5 krzywizna). `surfaceMap` (gradient + laplasjan surowej wysokości, `RGBA32F`)
    liczy `TerrainView::Draw` przez `GpuSurfacePass`, tylko gdy warstwa wysokości zmieniła się od ostatniego razu (`LayerTexture` oznacza ją jako nieaktualną).
-5. Tryb „infinite”: przy każdej zmianie XZ kamery regeneruje **całą** mapę z originem = pozycja kamery,
-   a kamera jest „zakotwiczona” w (0, y, 0) (`Camera::CameraAnchor`).
+5. Tryb „infinite” (TerrainGen i Noise heightmap) to `ChunkWorld`: w `Update(camera)` subsystem woła `Plan` (chunki w zasięgu „Render distance”)
+   i `GenerateNext` z własną funkcją generującą (`GpuHeightGenerator` z originem chunka i `islandSize` = rozmiar mapy), a `Draw` rysuje chunki zamiast `TerrainView`.
+   Każde żądanie (`Request*`) w tym trybie unieważnia wszystkie chunki; skończona mapa jest odświeżana po powrocie do „Partial generation”. Eksport i erozja działają tylko na skończonej mapie.
+   Pozycja mapy p (teksele) leży w świecie w `mapOrigin + p * worldUnitsPerTexel`; `mapOrigin` ustawia świat tak, że pokrywa skończoną mapę (`AlignWithMap`).
 
 Wartości szumów są w [-1, 1]. Konwencja indeksowania: `map[y * width + x]`.
 
@@ -145,7 +150,14 @@ Wartości szumów są w [-1, 1]. Konwencja indeksowania: `map[y * width + x]`.
 - Uniformy terenu ustawia wyłącznie `TerrainView::Draw` — subsystemy nie dotykają shadera. Wysokość bierze się
   z warstwy podanej w `Draw` (`heightLayer`: TERRAIN = jednostka 0, OVERLAY = 1 dla podglądu szumu / erozji).
 - Oświetlenie w world space: `FragPos = model * p`, normalna z gradientu `surfaceMap` (krok `worldUnitsPerTexel`)
-  przez `normalMatrix`. Zmieniając skalę siatki, zmień `worldUnitsPerTexel`, nie shader.
+  przez `normalMatrix`. Zmieniając skalę siatki, zmień `worldUnitsPerTexel`, nie shader. Światło to słońce (kierunek `light.direction`), więc nie zależy od położenia.
+  Mgła: teren przechodzi w kolor nieba (`fogColor` z `sky.glsl`) od „Fog start” (część „Render distance”) do całego zasięgu; w widoku 2D mgły i nieba nie ma.
+  Kolory ambient i słońca z UI są w shaderze mnożone przez `ambientTint` / `sunlightTint` (`sky.glsl`), zależne od wysokości słońca.
+- Po wyłączeniu „Infinite generation” subsystem woła `TerrainView::BringCameraToMap` (kamera przenoszona tylko, gdy nie jest nad mapą), dlatego `Update` dostaje `Camera&`.
+- Chunki: tekstura ma margines 1 teksela (`textureSize = chunkSize + 3`, origin = `coord * chunkSize - 1`), a sąsiednie chunki dzielą teksele krawędzi.
+  Brak szwów wymaga, żeby generacja była funkcją samej pozycji mapy: `float(texel) + origin` musi być dokładne (liczby całkowite), a nic nie może zależeć od
+  rozmiaru tekstury — wyspa używa `islandSize`, nie `mapSize`. `--gpu-check` (sekcja `chunk:`) porównuje chunk z fragmentem pełnej mapy bit w bit.
+  Uniformy shadera terenu ustawia `TerrainView::SetFrameUniforms` dla obu (`TerrainView` i `ChunkWorld` używają tych samych plików shaderów).
 - Kto pisze do warstwy wysokości, musi wziąć teksturę przez `LayerTexture` / `SetLayer` (one oznaczają `surfaceMap` jako nieaktualną). Zapis inną drogą zostawi
   starą normalną. `surfaceMap` nie zależy od `heightScale`: skala jest stosowana w `surface.glsl`.
 - Tryb „2D map” nie ma osobnej gałęzi w shaderze — `TerrainView` podmienia `view`/`projection` na ortogonalną
@@ -156,7 +168,7 @@ Wartości szumów są w [-1, 1]. Konwencja indeksowania: `map[y * width + x]`.
 - MSVC/vcpkg nie znoszą ścieżek > 260 znaków — testowy clean build z eksportu repo rób w krótkiej ścieżce
   (np. `%TEMP%\ptg_cc`), nie w scratchpadzie.
 - Pomiary GPU: `GL_TIME_ELAPSED` nie może się zagnieżdżać, więc scena i UI mają osobne, kolejne zapytania — nie otwieraj
-  kolejnego w ich trakcie. Liczba trójkątów obejmuje też sześcian światła i podgląd erozji, i jest liczona przed przycinaniem.
+  kolejnego w ich trakcie. Liczba trójkątów obejmuje też trójkąt nieba i podgląd erozji, i jest liczona przed przycinaniem.
 - Presety (`Preset.cpp`): nowe pole w `WorldConfig.h` trzeba dopisać do zapisu i odczytu oraz do `tests/PresetTests.cpp` (funkcje `Distinct*` / `CheckSame*`).
   Nowe wymaganie generacji wobec wartości configu = nowy warunek w `Check*`, bo plik można edytować ręcznie. Nie zmieniaj nazw pól
   ani enumów w JSON bez podbicia `currentVersion`. Pliki trafiają do `presets/` względem katalogu roboczego (poza gitem).
@@ -169,7 +181,7 @@ Wartości szumów są w [-1, 1]. Konwencja indeksowania: `map[y * width + x]`.
   pola configu trzeba powtórzyć w obu i w `GpuNoiseParams`/`SetNoise`, po czym uruchomić `--gpu-check` (CI go nie uruchamia, bo nie ma GPU). Tolerancje w `GpuHeightCheck.cpp`
   wynikają z pomiarów opisanych w ROADMAP (Faza 2, pkt 1); nie podnoś ich bez sprawdzenia, ile zmienia się sam wynik CPU po przesunięciu współrzędnej o najmniejszy krok `float`.
   Checksumy benchmarku dotyczą tylko CPU; wynik GPU nie jest z nimi porównywany.
-- Planowane chunkowanie/LOD jeszcze nie istnieje. Wcześniejsza próba (klasa `Chunk`, nigdy nie scalona) jest pod tagiem
+- LOD jeszcze nie istnieje (chunki mają jedną rozdzielczość). Wcześniejsza próba chunków (klasa `Chunk`, nigdy nie scalona) jest pod tagiem
   `archive/infinite-terrain-chunks`; stara roślinność — w historii (`fb8b840`), opis w ROADMAP, Faza 4.
 
 ## Kierunek rozwoju (skrót z ROADMAP)

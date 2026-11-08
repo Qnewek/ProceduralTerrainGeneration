@@ -1,93 +1,40 @@
 #include "LightSource.h"
 
-#include "utilities.h"
+#include <cmath>
 
-#include "glm/glm.hpp"
-#include "glm/gtc/matrix_transform.hpp"
 #include "imgui.h"
 
-#include <iostream>
-
-LightSource::LightSource(glm::vec3 lightPos, float _size) : lightPos(lightPos), size(_size), ambient(0.7f, 0.7f, 0.7f), diffuse(0.9f, 0.9f, 0.9f), specular(1.0f, 1.0f, 1.0f)
+glm::vec3 LightSource::GetDirection() const
 {
-}
-
-LightSource::~LightSource()
-{
-
-}
-
-void LightSource::Initialize() {
-	float cubeVertices[] = {
-		// Front row
-		-1.0f, -1.0f,  1.0f,
-		 1.0f, -1.0f,  1.0f,
-		 1.0f,  1.0f,  1.0f,
-		-1.0f,  1.0f,  1.0f,
-		// Back row
-		-1.0f, -1.0f, -1.0f,
-		 1.0f, -1.0f, -1.0f,
-		 1.0f,  1.0f, -1.0f,
-		-1.0f,  1.0f, -1.0f
-	};
-
-	unsigned int cubeIndices[] = {
-		// Front
-		0, 1, 2, 0, 2, 3,
-		// Back 
-		4, 6, 5, 4, 7, 6,
-		// Left 
-		4, 0, 3, 4, 3, 7,
-		// Right
-		1, 5, 6, 1, 6, 2,
-		// Top (y = +1)
-		3, 2, 6, 3, 6, 7,
-		// Bottom 
-		4, 5, 1, 4, 1, 0
-	};
-
-	m_VAO = std::make_unique<VertexArray>();
-	m_VertexBuffer = std::make_unique<VertexBuffer>(cubeVertices, static_cast<unsigned int>(sizeof(cubeVertices)));
-	m_IndexBuffer = std::make_unique<IndexBuffer>(cubeIndices, 36);
-	m_Shader = std::make_unique<Shader>("res/shaders/light_source_vertex.shader", "res/shaders/light_source_fragment.shader");
-
-
-	VertexBufferLayout layout;
-	layout.Push<float>(3);
-
-	m_VAO->AddBuffer(*m_VertexBuffer, layout);
-	std::cout << "[LOG] Light source initialized" << std::endl;
-}
-
-void LightSource::Draw(Renderer& renderer, glm::mat4& view, glm::mat4& projection) {
-	if(!lightOn)
-		return;
-	m_Shader->Bind();
-	m_Shader->SetUniformMat4f("view", view);
-	m_Shader->SetUniformMat4f("projection", projection);
-
-	glm::mat4 model = glm::mat4(1.0f);
-	model = glm::translate(model, lightPos);
-	model = glm::scale(model, glm::vec3(size));
-	m_Shader->SetUniformMat4f("model", model);
-
-	renderer.DrawTriangles(*m_VAO, *m_IndexBuffer, *m_Shader);
-	m_Shader->Unbind();
+	const float a = glm::radians(azimuth), e = glm::radians(elevation);
+	return glm::vec3(std::cos(e) * std::cos(a), std::sin(e), std::cos(e) * std::sin(a));
 }
 
 void LightSource::ImGuiDraw() {
-	if (ImGui::CollapsingHeader("Light parameters:")) {
-		ImGui::DragFloat3("Light source position", (float*)&lightPos, 1.0f);
-		ImGui::DragFloat("Light size", &size, 0.01f, 0.01f, 10.0f);
-		ImGui::ColorEdit3("Ambient", (float*)&ambient);
-		ImGui::ColorEdit3("Diffuse", (float*)&diffuse);
-		ImGui::ColorEdit3("Specular", (float*)&specular);
-		ImGui::Checkbox("Light On/Off", &lightOn);
+	if (ImGui::CollapsingHeader("Sun and sky")) {
+		ImGui::SliderFloat("Sun azimuth", &azimuth, 0.0f, 360.0f, "%.0f deg");
+		//Past 90 degrees the sun goes over the zenith and down on the opposite side, like during a day
+		ImGui::SliderFloat("Sun elevation", &elevation, 0.0f, 180.0f, "%.0f deg");
+		//Both are tinted by the sun height in the shader (sky.glsl)
+		ImGui::ColorEdit3("Ambient", &ambient.x);
+		ImGui::ColorEdit3("Sunlight", &diffuse.x);
+		ImGui::Checkbox("Lighting", &lightOn);
+		ImGui::SameLine();
+		ImGui::Checkbox("Fog", &fog);
+		if (fog) {
+			//Stored as a share, shown in percent of the camera render distance
+			float percent = fogStart * 100.0f;
+			if (ImGui::SliderFloat("Fog start", &percent, 0.0f, 99.0f, "%.0f%% of render distance")) {
+				fogStart = percent / 100.0f;
+			}
+		}
 	}
 }
 
-void LightSource::SetLightUniforms(Shader& shader)
+void LightSource::SetLightUniforms(Shader& shader) const
 {
-	shader.SetLightUniforms(lightPos, ambient, diffuse, specular);
+	shader.SetUniform3fv("light.direction", GetDirection());
+	shader.SetUniform3fv("light.ambient", ambient);
+	shader.SetUniform3fv("light.diffuse", diffuse);
 	shader.SetUniform1i("lightOn", lightOn);
 }
