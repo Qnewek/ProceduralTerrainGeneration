@@ -1,12 +1,6 @@
 #pragma once
 
-#include "glm/glm.hpp"
-#include "Grid.h"
-
-#include <array>
-#include <cstdint>
-#include <vector>
-
+//Parameters of one fractal simplex noise. The noise itself is evaluated only in GLSL (res/shaders/common/noise.glsl)
 namespace noise
 {
 	enum class Options {
@@ -58,47 +52,5 @@ namespace noise
 			redistribution(redistribution), lacunarity(lacunarity), persistance(persistance), option(option), revertGain(revertGain),
 			Ridge(Ridge), RidgeGain(RidgeGain), RidgeOffset(RidgeOffset), island(island), islandType(islandType), mixPower(mixPower), 
 			symmetrical(symmetrical){}
-	};
-
-	//Evaluates fractal simplex noise for a given configuration and stores the last generated map.
-	//The configuration is not owned - it is passed to every call.
-	class SimplexNoiseClass
-	{
-	public:
-		SimplexNoiseClass();
-		~SimplexNoiseClass();
-
-		bool Initialize(int _width, int _height);
-		bool Resize(int _width, int _height);
-
-		//Fills the map in parallel (rows on the thread pool)
-		bool GenerateFractalNoise(const NoiseConfigParameters& config, float originx, float originy);
-		//Single sample; rebuilds the permutation table first if config.seed changed. Not thread-safe
-		float PointNoise(const NoiseConfigParameters& config, float x, float y);
-		//Single sample without touching the permutation table - safe to call from many threads at once.
-		//UpdatePermutation(config.seed) must be called before
-		float Evaluate(const NoiseConfigParameters& config, float x, float y) const;
-		bool MakeMapRidged(const NoiseConfigParameters& config);
-		float MakeIsland(const NoiseConfigParameters& config, float e, int x, int y) const;
-
-		//Rebuilds the permutation table if the seed changed since the last call
-		void UpdatePermutation(int seed);
-
-		float* GetMap() { return heightMap.Data(); }
-		const HeightField& GetField() const { return heightMap; }
-		float GetVal(int x, int y);
-		int GetWidth()  const { return width; }
-		int GetHeight() const { return height; }
-
-	private:
-		HeightField heightMap;
-		int width, height;
-
-		//Permutation table owned by this noise, rebuilt only when the seed changes
-		std::array<uint8_t, 256> perm{};
-		int permSeed = 0;
-		bool permReady = false;
-
-		float Ridge(float h, float offset, float gain) const;
 	};
 }

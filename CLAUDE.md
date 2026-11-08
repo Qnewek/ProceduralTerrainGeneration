@@ -19,23 +19,20 @@ Plan napraw i rozwoju: `docs/ROADMAP.md` (ID zadań `B*`, `A*`, `F*` są tam zde
   cmake --build --preset x64-release
   ```
   W VS: *Open Folder* na katalogu repo — VS czyta presety sam.
-- Targety: `ptg_vendor` (Simplex, stb_image impl., bez ostrzeżeń), `ptg_core` (`terrainGeneration/`, bez GL/ImGui —
-  pod testy i benchmark), `ProceduralTerrainGenerator` (exe). `/W4 /WX /permissive-` dla `ptg_core` i exe;
+- Targety: `ptg_vendor` (Simplex, stb_image impl., bez ostrzeżeń), `ptg_core` (`terrainGeneration/`: configi, presety, erozja,
+  pliki map, bez GL/ImGui — pod testy), `ProceduralTerrainGenerator` (exe). `/W4 /WX /permissive-` dla `ptg_core` i exe;
   nagłówki zależności są `SYSTEM` (`/external:W0`), więc ich ostrzeżenia nie przerywają buildu.
 - Shadery/tekstury czytane z `res/...` względem katalogu roboczego; jeśli go tam nie ma, `main` przechodzi do
   `PTG_RESOURCE_DIR` (= `ProceduralTerrainGenerator/` w źródłach, wpisany przez CMake). Hot-reload działa na źródłach.
-- CI: `.github/workflows/build.yml` — Windows, oba presety, vcpkg na commicie z baseline (cache binarek
-  w `actions/cache`), testy jednostkowe, w Release porównanie checksum benchmarku.
-  VS 2026 dawał inne checksumy niż VS 2022, dlatego CI działa na `windows-2022` (`windows-latest` i `windows-2025`
-  to VS 2026). Po usunięciu `std::shuffle` (B21) nie sprawdzono, czy różnica została. Zmiana VS lokalnie lub na CI może wymagać nowych wartości referencyjnych.
-- Testy: `ctest --preset x64-release` (doctest, target `ptg_tests`, kod w `ProceduralTerrainGenerator/tests/`, tylko `ptg_core`).
+- CI: `.github/workflows/build.yml` — Windows (`windows-2022` = VS 2022, jak lokalnie), oba presety, vcpkg na commicie z baseline
+  (cache binarek w `actions/cache`), testy jednostkowe. Generacji CI nie sprawdza: działa tylko na GPU, a runnery GPU nie mają.
+- Testy: `ctest --preset x64-release` (doctest, target `ptg_tests`, kod w `ProceduralTerrainGenerator/tests/`, `ptg_core` + nagłówki z `utility/`).
   Szczegóły doctesta: `out\build\x64-release\ptg_tests.exe`. Mapy testowe są niekwadratowe. Znany błąd = test z `doctest::should_fail()`
   i ID z ROADMAP; po naprawie błędu test zacznie zgłaszać niepowodzenie, wtedy usuń oznaczenie.
-- Benchmark CPU bez okna: `out\build\x64-release\ProceduralTerrainGenerator.exe --benchmark`.
-  Wypisuje medianę czasu szumów, terenu i biomów dla 256²/512²/1024² oraz **checksumy** heightmapy, map szumów
-  i mapy biomów — przy refaktorach generacji wszystkie muszą się zgadzać (CI to sprawdza). Stan 2026-11-02
-  (x64, 6 wątków), 512²: teren ≈ 36 ms, checksumy terrain `637427221ce26bfb`, noises `80cc02bb71d77ea4`,
-  biomes `d676ca6dc3f85ac5`.
+- **Test generacji: `out\build\x64-release\ProceduralTerrainGenerator.exe --gpu-check`** (ukryte okno, potrzebny GPU z OpenGL 4.5; uruchamiaj po każdej
+  zmianie shaderów generacji). Sprawdza: wartości skończone i w zakresie opcji (każda opcja, ridge, wyspy, metody terenu), determinizm i wpływ seeda,
+  zgodność id i kolorów biomów, chunki i poziomy LOD bit w bit z pełną mapą, mapę pochodnych na mapach o znanych pochodnych; potem czasy GPU.
+  Nowa opcja generacji = nowy przypadek w `CheckRanges` (`GpuHeightCheck.cpp`).
 - **Wielkość liter ścieżek = dokładnie taka jak w gicie** (`git ls-files`): `src/opengl`, `src/subSystems`,
   `src/terrainGeneration`, `src/utility`, `src/vendor`, `res/shaders`, `res/textures`.
   Dotyczy kodu (`#include`, `"res/..."`), ścieżek w `CMakeLists.txt` i nazw katalogów na dysku.
@@ -58,12 +55,10 @@ ProceduralTerrainGenerator/
       MapImportSys.*             tryb "Imported map": podgląd mapy wysokości z pliku, wczytywanej w tle
     terrainGeneration/
       WorldConfig.h              same dane: WorldConfig (TerrainConfig + BiomeConfig), NoiseMapConfig, ErosionConfig
-      Noise.*                    noise::SimplexNoiseClass + NoiseConfigParameters (fBm, ridge, island, redistribution)
-      TerrainGenerator.*         continentalness/mountainousness/weirdness → heightMap (LINEAR lub SPLINE)
-      BiomeGenerator.*, Biome.*  temperatura/wilgotność + 3 szumy terenu → poziomy (int) → id biomu
+      Noise.h                    noise::NoiseConfigParameters (fBm, ridge, island, redistribution); sam szum jest tylko w GLSL
+      Biome.*                    tabela biomów (zakresy poziomów 5 parametrów, kolor); przydział liczy biome_compute.shader
       Erosion.*                  erozja kroplowa (CPU, lista jednokierunkowa kropel)
-      SurfaceDerivatives.*       gradient i laplasjan mapy wysokości (CPU, wzorzec dla GpuSurfacePass) + normalna/nachylenie/krzywizna
-      Grid.h, Parallel.h         mapy Grid<T>; ParallelFor po wierszach
+      Grid.h                     mapy Grid<T>
       Frustum.h                  płaszczyzny frustum z macierzy i test AABB (culling chunków)
       Preset.*                   zapis/odczyt WorldConfig i NoiseMapConfig jako JSON + walidacja
       HeightmapExport.*          zapis mapy jako PNG 16-bit lub RAW R16; FileIO.* = zapis przez plik tymczasowy
@@ -71,7 +66,7 @@ ProceduralTerrainGenerator/
       GenerationJob.h            jedno zadanie generacji w tle (std::async + TryTake)
     opengl/                      cienkie wrappery: Shader, VertexArray/Buffer, IndexBuffer, TextureClass, Renderer, GpuQuery
       TerrainView.*              siatka + shader + tekstury (TERRAIN/OVERLAY/BIOMES), wspólny dla obu trybów
-      GpuHeightGenerator.*       jedyna generacja w aplikacji: szum, teren i biomy w compute shaderach; GpuHeightCheck.* = porównanie z CPU (--gpu-check)
+      GpuHeightGenerator.*       jedyna generacja: szum, teren i biomy w compute shaderach; GpuHeightCheck.* = testy generacji (--gpu-check)
       GpuSurfacePass.*           mapa pochodnych (gradient + laplasjan) z mapy wysokości; uruchamia ją TerrainView i ChunkWorld
       ChunkWorld.*               „Infinite generation”: quadtree chunków 128² z LOD wokół kamery, kolejka wg odległości, cache, skirts, rysowanie shaderem terenu
     utility/
@@ -84,14 +79,14 @@ ProceduralTerrainGenerator/
       ExportPanel.*              sekcja „Saving” w ImGui; subsystem podaje mapy do zapisu i ich zakres wartości
       FileDialog.*               systemowe okno wyboru pliku (tylko Windows, comdlg32); przy porcie na Linuksa do zastąpienia
       utilities.*                helpery ImGui (NoiseImGui, DisplayModeImGui...), siatka patchy, kolory biomów
-    vendor/                      SimplexNoise (z przeciążeniami perm), tk::spline, implementacja stb_image
+    vendor/                      SimplexNoise (z niego tylko makePermutation: tablice permutacji dla GPU), tk::spline (próbkowanie splajnów do tablicy dla GPU), stb_image
   tests/                         testy jednostkowe ptg_core (doctest)
   res/shaders/
     TerrainShaders/              VS → TCS → TES → FS, jedyny zestaw dla terenu (oba tryby)
     ComputeShaders/              height_compute.shader (szum, teren), biome_compute.shader, surface_compute.shader; wspólne: common/noise.glsl, noise_params.glsl, simplex.glsl, surface.glsl
     sky_vertex/fragment.shader   niebo; kolory nieba w common/sky.glsl, z których korzysta też mgła terenu
 CMakeLists.txt, CMakePresets.json, vcpkg.json   build; GLFW, GLEW, glm, ImGui, ImPlot, stb z vcpkg
-.github/workflows/build.yml      CI (Windows x64 Debug/Release + checksumy)
+.github/workflows/build.yml      CI (Windows x64 Debug/Release, build + testy jednostkowe)
 ```
 
 ## Przepływ danych (jak to działa)
@@ -99,7 +94,7 @@ CMakeLists.txt, CMakePresets.json, vcpkg.json   build; GLFW, GLEW, glm, ImGui, I
 1. Aplikacja generuje mapy wyłącznie na GPU (`GpuHeightGenerator`). UI ustawia flagi w `WorldRequest` / `NoiseRequest`, a `Update()` subsystemu
    (co klatkę, przed `Draw`, w wątku głównym) uruchamia compute shader, który pisze wprost do tekstury warstwy `TerrainView` (`LayerTexture`).
    Biomy liczą w shaderze wszystkie 5 szumów, więc nie ma osobnych tekstur szumów ani zależności między krokami.
-   Generatory CPU (`SimplexNoiseClass`, `TerrainGenerator`, `BiomeGenerator`) służą już tylko benchmarkowi, `--gpu-check` i testom.
+   Generacji na CPU nie ma (usunięta 2026-11-08; ostatnia wersja z nią: `56eae39`).
 2. Mapy na CPU powstają tylko na żądanie przez `TerrainView::ReadLayer`: eksport i start erozji. Erozja nadal działa na CPU, w tle (`GenerationJob`),
    a wynik wgrywa `TerrainView::SetLayer`; tak samo mapa z pliku w trybie Imported map. Tekstury mają niezmienny storage, nowa powstaje przy zmianie rozmiaru.
 3. Siatka (`TerrainView`): stała siatka `mapResolution × mapResolution` (50×50) patchy-quadów o rozmiarze
@@ -123,8 +118,7 @@ Wartości szumów są w [-1, 1]. Konwencja indeksowania: `map[y * width + x]`.
 - Mapy jako `Grid<T>` (`terrainGeneration/Grid.h`: `HeightField`, `BiomeMap`) — bez surowych `new[]/delete[]`.
   Do OpenGL przez `.Data()`. OpenGL obiekty w `std::unique_ptr`.
 - Warstwy (A3): parametry świata to same dane w `WorldConfig.h`, trzymane przez subsystem (`world` / `config`).
-  Generatory (`SimplexNoiseClass`, `TerrainGenerator`, `BiomeGenerator`, `Erosion`) **nie trzymają configu** —
-  dostają `const XxxConfig&` w każdej metodzie generującej, a same przechowują tylko wyniki (mapy).
+  Generatory (`GpuHeightGenerator`, `Erosion`) **nie trzymają configu** — dostają `const XxxConfig&` w każdym wywołaniu.
   UI (immediate-mode w subsystemach: `ImGuiLeftPanel/RightPanel/Output`) edytuje config i zgłasza żądanie (`Request*`),
   subsystem generuje w tle i przekazuje wynik do `TerrainView`. Stan edytorów (wybrany szum, wciśnięte przyciski) to nie config.
 - Includy własne po nazwie pliku (`#include "Noise.h"` — katalogi `src/*` są w include path targetów).
@@ -136,19 +130,14 @@ Wartości szumów są w [-1, 1]. Konwencja indeksowania: `map[y * width + x]`.
 
 - **Rozmiary zawsze jako `(width, height)`** (ujednolicone w B5) — nowe API też tak. Mapy niekwadratowe
   powinny działać; zmieniając generację sprawdź też taki przypadek.
-- Każdy `SimplexNoiseClass` ma własną tablicę permutacji (`perm`), budowaną leniwie w `PointNoise` przy zmianie
-  `config.seed`. Używaj przeciążeń `SimplexNoise::noise(perm, ...)`; globalne `reseed` / `noise(x, y)` zostały
-  tylko dla zgodności. `PointNoise` aktualizuje permutację leniwie i **nie jest thread-safe** — w pętlach równoległych
-  wołaj `UpdatePermutation(config.seed)` raz przed pętlą, a w środku `Evaluate` (const).
+- Tablica permutacji szumu zależy tylko od seeda (`SimplexNoise::makePermutation`, test z ustalonymi wartościami w `PermutationTests.cpp`);
+  zmiana tablicy lub tasowania zmienia każdy wygenerowany świat.
 - **Mapę po erozji (`NoiseBasedGenerationSys::eroded`) zmienia tylko instalacja wyniku zadania**, bo zadanie liczy na kopii. Kod w `RunErosion` działa na
   wątku roboczym: bez OpenGL, bez ImGui, bez pól subsystemu (jest `static`). OpenGL tylko w wątku głównym, więc `GpuHeightGenerator` działa w `Update()`.
 - Odczyt z GPU (`ReadLayer`, `TextureClass::Read`) czeka na zakończenie pracy GPU; nie wołaj go co klatkę. Wyjątek: identyfikatory biomów po każdej ich generacji, dla nazwy biomu pod kamerą.
 - `GpuHeightGenerator::BeginMeasure`/`EndMeasure` to `GL_TIME_ELAPSED`, więc nie mogą nachodzić na pomiary sceny; działają, bo `Update()` idzie przed `BeginScene`.
-- Generacja CPU idzie wierszami przez `ParallelFor` (`terrainGeneration/Parallel.h`, `std::execution::par`).
-  Iteracja może pisać tylko do swojego wiersza i czytać współdzielony stan; logowanie i błędy zbieraj po pętli
-  (np. `std::atomic<bool>`), nie `return` ze środka.
 - Splajny: domyślne są liniowe, a po „Set new spline points” edytowany splajn staje się kubiczny
-  (`SplinePoints::cubic`) — zachowane z wersji sprzed A3. Benchmark sprawdza tylko LINEAR_COMBINE.
+  (`SplinePoints::cubic`) — zachowane z wersji sprzed A3. GPU dostaje splajn jako tablicę 1024 próbek (`SetSpline`).
 - Uniformy terenu ustawia wyłącznie `TerrainView::Draw` — subsystemy nie dotykają shadera. Wysokość bierze się
   z warstwy podanej w `Draw` (`heightLayer`: TERRAIN = jednostka 0, OVERLAY = 1 dla podglądu szumu / erozji).
 - Oświetlenie w world space: `FragPos = model * p`, normalna z gradientu `surfaceMap` (krok `worldUnitsPerTexel`)
@@ -179,10 +168,8 @@ Wartości szumów są w [-1, 1]. Konwencja indeksowania: `map[y * width + x]`.
 - Import map: plik nie przechowuje zakresu wartości, więc wybiera go użytkownik (`valueRanges` w `MapImportSys.cpp`). `lodepng` nie zamienia koloru na szary
   ani niższej głębi na 16 bitów (błąd 56), dlatego PNG dekodujemy do RGBA o głębi pliku. Mapa żyje w `MapImportSys::map`, stąd pójdą przyszłe operacje na niej
   (jak w innych trybach: w tle, na kopii).
-- **Generacja istnieje w dwóch wersjach:** C++ (`Noise.cpp`, `TerrainGenerator.cpp`, `BiomeGenerator.cpp`, `SurfaceDerivatives.cpp`, `vendor/Simplex`) i GLSL (`ComputeShaders/`, `common/noise.glsl`, `common/simplex.glsl`, `common/surface.glsl`). Aplikacja używa tylko GLSL, ale CPU jest punktem odniesienia. Zmianę algorytmu lub
-  pola configu trzeba powtórzyć w obu i w `GpuNoiseParams`/`SetNoise`, po czym uruchomić `--gpu-check` (CI go nie uruchamia, bo nie ma GPU). Tolerancje w `GpuHeightCheck.cpp`
-  wynikają z pomiarów opisanych w ROADMAP (Faza 2, pkt 1); nie podnoś ich bez sprawdzenia, ile zmienia się sam wynik CPU po przesunięciu współrzędnej o najmniejszy krok `float`.
-  Checksumy benchmarku dotyczą tylko CPU; wynik GPU nie jest z nimi porównywany.
+- **Generacja jest tylko w GLSL** (`ComputeShaders/`, `common/noise.glsl`, `common/simplex.glsl`, `common/surface.glsl`). Nowe pole configu szumu trzeba
+  dopisać do `NoiseParams` (`noise_params.glsl`), `GpuNoiseParams`/`SetNoise` (`GpuHeightGenerator.cpp`), presetów i UI, a potem uruchomić `--gpu-check`.
 - LOD chunków: poziom L bierze co 2^L-tą próbkę (`MapArea::step`, potęga dwójki, więc próbki poziomów się pokrywają). Siatka chunka jest jedna, skalowana w XZ uniformem
   `meshScale` (VS), a skirty (wierzchołki z `aPos.y = -1`) TES opuszcza o `skirtDepth`; `SetFrameUniforms` ustawia oba na neutralne (1 i 0) dla `TerrainView`.
   Culling (chunki na CPU w `ChunkWorld`, patche w TCS) zakłada |wysokość| ≤ 1,5 (`heightBound` w `ChunkWorld.cpp` = `HEIGHT_BOUND` w TCS); mapa o większych
