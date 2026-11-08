@@ -94,12 +94,28 @@ static WorldConfig DistinctWorld()
 	c.terrain.peaksSpline = { {-1.0, 0.7, 1.0}, {0.1, 0.8, 0.9}, true };
 	c.biomes.temperature = DistinctNoise(4);
 	c.biomes.humidity = DistinctNoise(5);
-	c.biomes.temperatureLevels = { -1.0f, 0.11f, 1.01f };
-	c.biomes.humidityLevels = { -1.0f, 0.12f, 1.01f };
-	c.biomes.continentalnessLevels = { -1.0f, 0.13f, 1.01f };
-	c.biomes.mountainousnessLevels = { -1.0f, 0.14f, 1.01f };
-	c.biomes.weirdnessLevels = { -1.0f, 0.15f, 1.01f };
+	c.biomes.blendWidth = 0.17f;
+	//Unlike the default table: other count, names, colors and every range
+	biome::Biome alpha{ "Alpha", glm::vec3(0.31f, 0.32f, 0.33f),
+		{ biome::Range{ -0.41f, 0.42f }, biome::Range{ -0.43f, 0.44f }, biome::Range{ -0.45f, 0.46f }, biome::Range{ -0.47f, 0.48f }, biome::Range{ -0.49f, 0.51f } } };
+	biome::Biome beta{ "Beta", glm::vec3(0.61f, 0.62f, 0.63f),
+		{ biome::Range{ 0.52f, 0.53f }, biome::Range{ 0.54f, 0.55f }, biome::Range{ 0.56f, 0.57f }, biome::Range{ 0.58f, 0.59f }, biome::Range{ 0.64f, 0.65f } } };
+	c.biomes.table = { alpha, beta };
 	return c;
+}
+
+static void CheckSameBiomes(const std::vector<biome::Biome>& a, const std::vector<biome::Biome>& b)
+{
+	REQUIRE(a.size() == b.size());
+	for (size_t i = 0; i < a.size(); i++) {
+		CAPTURE(i);
+		CHECK(a[i].name == b[i].name);
+		CHECK(a[i].color == b[i].color);
+		for (int p = 0; p < biome::PARAMETER_COUNT; p++) {
+			CHECK(a[i].ranges[p].min == b[i].ranges[p].min);
+			CHECK(a[i].ranges[p].max == b[i].ranges[p].max);
+		}
+	}
 }
 
 //Replaces the first occurrence of from, which has to exist
@@ -132,11 +148,8 @@ TEST_CASE("A world preset keeps every field")
 	CheckSameSpline(loaded.terrain.peaksSpline, original.terrain.peaksSpline);
 	CheckSameNoise(loaded.biomes.temperature, original.biomes.temperature);
 	CheckSameNoise(loaded.biomes.humidity, original.biomes.humidity);
-	CHECK(loaded.biomes.temperatureLevels == original.biomes.temperatureLevels);
-	CHECK(loaded.biomes.humidityLevels == original.biomes.humidityLevels);
-	CHECK(loaded.biomes.continentalnessLevels == original.biomes.continentalnessLevels);
-	CHECK(loaded.biomes.mountainousnessLevels == original.biomes.mountainousnessLevels);
-	CHECK(loaded.biomes.weirdnessLevels == original.biomes.weirdnessLevels);
+	CHECK(loaded.biomes.blendWidth == original.biomes.blendWidth);
+	CheckSameBiomes(loaded.biomes.table, original.biomes.table);
 }
 
 TEST_CASE("Every terrain method survives saving")
@@ -221,21 +234,39 @@ TEST_CASE("A field missing from a preset keeps its default value")
 {
 	WorldConfig loaded;
 	std::string error;
-	REQUIRE_MESSAGE(preset::FromJson(R"({"kind": "world", "version": 1, "width": 64, "height": 32})", loaded, error), error);
+	REQUIRE_MESSAGE(preset::FromJson(R"({"kind": "world", "version": 2, "width": 64, "height": 32})", loaded, error), error);
 
 	const WorldConfig defaults;
 	CHECK(loaded.width == 64);
 	CHECK(loaded.height == 32);
 	CheckSameNoise(loaded.terrain.continentalness, defaults.terrain.continentalness);
 	CheckSameSpline(loaded.terrain.weirdnessSpline, defaults.terrain.weirdnessSpline);
-	CHECK(loaded.biomes.temperatureLevels == defaults.biomes.temperatureLevels);
+	CHECK(loaded.biomes.blendWidth == defaults.biomes.blendWidth);
+	CheckSameBiomes(loaded.biomes.table, defaults.biomes.table);
+}
+
+TEST_CASE("A biome missing fields in a preset keeps the values of a new biome")
+{
+	WorldConfig loaded;
+	std::string error;
+	REQUIRE_MESSAGE(preset::FromJson(R"({"kind": "world", "version": 2, "width": 64, "height": 32,
+		"biomes": {"table": [{"name": "Only", "humidity": [0.1, 0.2]}]}})", loaded, error), error);
+
+	REQUIRE(loaded.biomes.table.size() == 1);
+	const biome::Biome& b = loaded.biomes.table[0];
+	CHECK(b.name == "Only");
+	CHECK(b.color == glm::vec3(0.0f));
+	CHECK(b.ranges[biome::HUMIDITY].min == 0.1f);
+	CHECK(b.ranges[biome::HUMIDITY].max == 0.2f);
+	CHECK(b.ranges[biome::TEMPERATURE].min == -1.0f);
+	CHECK(b.ranges[biome::TEMPERATURE].max == 1.0f);
 }
 
 TEST_CASE("Unknown fields are ignored")
 {
 	WorldConfig loaded;
 	std::string error;
-	CHECK_MESSAGE(preset::FromJson(R"({"kind": "world", "version": 1, "width": 64, "height": 32, "fromTheFuture": [1]})", loaded, error), error);
+	CHECK_MESSAGE(preset::FromJson(R"({"kind": "world", "version": 2, "width": 64, "height": 32, "fromTheFuture": [1]})", loaded, error), error);
 }
 
 TEST_CASE("Invalid presets are rejected and the config stays unchanged")
@@ -249,11 +280,12 @@ TEST_CASE("Invalid presets are rejected and the config stays unchanged")
 	const Case cases[] = {
 		{ "not JSON", "{ not json" },
 		{ "not an object", "[1, 2]" },
-		{ "no kind", R"({"version": 1, "width": 64, "height": 32})" },
-		{ "preset of the other mode", R"({"kind": "noise", "version": 1, "width": 64, "height": 32})" },
+		{ "no kind", R"({"version": 2, "width": 64, "height": 32})" },
+		{ "preset of the other mode", R"({"kind": "noise", "version": 2, "width": 64, "height": 32})" },
 		{ "no version", R"({"kind": "world", "width": 64, "height": 32})" },
-		{ "newer version", Replaced(valid, "\"version\": 1", "\"version\": 2") },
-		{ "no size", R"({"kind": "world", "version": 1})" },
+		{ "newer version", Replaced(valid, "\"version\": 2", "\"version\": 3") },
+		{ "version 1 with biome levels", Replaced(valid, "\"version\": 2", "\"version\": 1") },
+		{ "no size", R"({"kind": "world", "version": 2})" },
 		{ "size too small", Replaced(valid, "\"width\": 123", "\"width\": 1") },
 		{ "size too large", Replaced(valid, "\"width\": 123", "\"width\": 100000") },
 		{ "fractional integer", Replaced(valid, "\"width\": 123", "\"width\": 123.5") },
@@ -276,8 +308,13 @@ TEST_CASE("Invalid presets are rejected and the config stays unchanged")
 		{ "spline sizes differ", Replaced(valid, "0.2,", "") },
 		{ "spline x not ascending", Replaced(valid, "0.1,", "-1.0,") },
 		{ "spline y out of range", Replaced(valid, "0.2,", "2.0,") },
-		{ "levels not ascending", Replaced(valid, "0.11,", "-2.0,") },
-		{ "levels not covering the range", Replaced(valid, "1.01", "0.9") },
+		{ "negative blend width", Replaced(valid, "\"blendWidth\": 0.17", "\"blendWidth\": -0.17") },
+		{ "empty biome table", Replaced(valid, "\"table\": [", "\"table\": [], \"unused\": [") },
+		{ "biome table not an array", Replaced(valid, "\"table\": [", "\"table\": 1, \"unused\": [") },
+		{ "reversed biome range", Replaced(valid, "-0.41", "0.9") },
+		{ "biome range of one number", Replaced(valid, "-0.41,", "") },
+		{ "biome color out of range", Replaced(valid, "0.31", "1.31") },
+		{ "biome name not a string", Replaced(valid, "\"Alpha\"", "7") },
 	};
 
 	for (const Case& c : cases) {

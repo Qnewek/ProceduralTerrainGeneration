@@ -42,12 +42,11 @@ public:
 	//and takes its end value for a noise outside [-1, 1]
 	//@param target - GL_R32F
 	void GenerateTerrain(const TerrainConfig& config, const MapArea& area, TextureClass& target);
-	//Biome of every texel from the levels of its five noises (biome_compute.shader). Biomes are tried in the order of the table,
-	//id 0 where none matches
-	//@param colors - GL_RGBA32F, color of the biome of every texel
-	//@param ids - GL_R32I of the same size, id of the biome of every texel
-	void GenerateBiomes(const BiomeConfig& biomes, const TerrainConfig& terrain, const std::vector<biome::Biome>& table, const MapArea& area,
-		TextureClass& colors, TextureClass& ids);
+	//Biome of every texel from its five noise values (biome_compute.shader): the nearest biome of biomes.table (biome::Nearest),
+	//and colors of all biomes mixed with biome::BlendWeight
+	//@param colors - GL_RGBA32F, blended color of every texel
+	//@param ids - GL_R32I of the same size, id (index in the table) of the nearest biome of every texel
+	void GenerateBiomes(const BiomeConfig& biomes, const TerrainConfig& terrain, const MapArea& area, TextureClass& colors, TextureClass& ids);
 
 	//Measure the GPU time of the Generate calls between them; cannot overlap another GL_TIME_ELAPSED query
 	void BeginMeasure() { timer->Begin(); }
@@ -57,6 +56,6 @@ public:
 
 private:
 	std::unique_ptr<Shader> heightShader, biomeShader;
-	unsigned int heightInput = 0, biomeInput = 0, biomeLevels = 0, biomeTable = 0;
+	unsigned int heightInput = 0, biomeInput = 0, biomeTable = 0;
 	std::unique_ptr<GpuQuery> timer;
 };

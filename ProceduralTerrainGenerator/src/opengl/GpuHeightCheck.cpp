@@ -219,34 +219,88 @@ namespace {
 		return seaOk && landOk;
 	}
 
-	//Ids come from the table and every color belongs to the id next to it
-	bool CheckBiomes(GpuHeightGenerator& gpu)
+	struct BiomeResult {
+		BiomeMap ids;
+		std::vector<glm::vec4> colors;
+	};
+
+	BiomeResult GenerateBiomeMaps(GpuHeightGenerator& gpu, const BiomeConfig& biomes)
 	{
 		TextureClass colors(mapWidth, mapHeight, GL_RGBA32F), ids(mapWidth, mapHeight, GL_R32I);
-		const std::vector<biome::Biome> table = biome::DefaultBiomes();
-		gpu.GenerateBiomes(BiomeConfig::Default(), TerrainConfig::Default(), table, MapArea{}, colors, ids);
-		BiomeMap idMap(mapWidth, mapHeight);
-		ids.Read(GL_RED_INTEGER, GL_INT, static_cast<int>(idMap.Size() * sizeof(int)), idMap.Data());
-		std::vector<float> colorData(idMap.Size() * 4);
-		colors.Read(GL_RGBA, GL_FLOAT, static_cast<int>(colorData.size() * sizeof(float)), colorData.data());
+		gpu.GenerateBiomes(biomes, TerrainConfig::Default(), MapArea{}, colors, ids);
+		BiomeResult result{ BiomeMap(mapWidth, mapHeight), std::vector<glm::vec4>(static_cast<size_t>(mapWidth) * mapHeight) };
+		ids.Read(GL_RED_INTEGER, GL_INT, static_cast<int>(result.ids.Size() * sizeof(int)), result.ids.Data());
+		colors.Read(GL_RGBA, GL_FLOAT, static_cast<int>(result.colors.size() * sizeof(glm::vec4)), result.colors.data());
+		return result;
+	}
+
+	//Largest change of a color component between neighbouring texels
+	float LargestColorStep(const std::vector<glm::vec4>& colors)
+	{
+		float largest = 0.0f;
+		for (int y = 0; y < mapHeight; y++) {
+			for (int x = 0; x < mapWidth; x++) {
+				const glm::vec4& c = colors[static_cast<size_t>(y) * mapWidth + x];
+				if (x + 1 < mapWidth) {
+					const glm::vec4 d = glm::abs(colors[static_cast<size_t>(y) * mapWidth + x + 1] - c);
+					largest = std::max({ largest, d.r, d.g, d.b });
+				}
+				if (y + 1 < mapHeight) {
+					const glm::vec4 d = glm::abs(colors[static_cast<size_t>(y + 1) * mapWidth + x] - c);
+					largest = std::max({ largest, d.r, d.g, d.b });
+				}
+			}
+		}
+		return largest;
+	}
+
+	//Sharp borders: every id is an index in the table and its color is the color of that biome.
+	//Blending: the same ids, colors mixed only from colors of the table, and smaller color steps between texels
+	bool CheckBiomes(GpuHeightGenerator& gpu)
+	{
+		BiomeConfig config = BiomeConfig::Default();
+		const std::vector<biome::Biome>& table = config.table;
+		const float blendWidth = config.blendWidth;
+		config.blendWidth = 0.0f;
+		const BiomeResult sharp = GenerateBiomeMaps(gpu, config);
 
 		size_t unknown = 0, wrongColor = 0;
 		std::vector<size_t> counts(table.size(), 0);
-		for (size_t i = 0; i < idMap.Size(); i++) {
-			const auto found = std::find_if(table.begin(), table.end(), [&](const biome::Biome& b) { return b.GetId() == idMap[i]; });
-			if (found == table.end()) {
+		for (size_t i = 0; i < sharp.ids.Size(); i++) {
+			const int id = sharp.ids[i];
+			if (id < 0 || id >= static_cast<int>(table.size())) {
 				unknown++;
 				continue;
 			}
-			counts[found - table.begin()]++;
-			const glm::vec3 expected = found->GetColor();
-			wrongColor += expected.r != colorData[i * 4] || expected.g != colorData[i * 4 + 1] || expected.b != colorData[i * 4 + 2] ? 1 : 0;
+			counts[id]++;
+			wrongColor += glm::vec3(sharp.colors[i]) != table[id].color ? 1 : 0;
 		}
 		const size_t present = static_cast<size_t>(std::count_if(counts.begin(), counts.end(), [](size_t c) { return c > 0; }));
 		//The default world has more than one biome on a map this large
-		const bool ok = unknown == 0 && wrongColor == 0 && present > 1;
-		Report("biomes: default", std::to_string(present) + " biomes, " + std::to_string(unknown) + " unknown ids, " + std::to_string(wrongColor) + " wrong colors", ok);
-		return ok;
+		const bool sharpOk = unknown == 0 && wrongColor == 0 && present > 1;
+		Report("biomes: sharp borders", std::to_string(present) + " biomes, " + std::to_string(unknown) + " unknown ids, " + std::to_string(wrongColor) + " wrong colors", sharpOk);
+
+		config.blendWidth = blendWidth;
+		const BiomeResult blended = GenerateBiomeMaps(gpu, config);
+		const bool sameIds = std::memcmp(blended.ids.Data(), sharp.ids.Data(), sharp.ids.Size() * sizeof(int)) == 0;
+		glm::vec3 low(1.0f), high(0.0f);
+		for (const biome::Biome& b : table) {
+			low = glm::min(low, b.color);
+			high = glm::max(high, b.color);
+		}
+		size_t outside = 0, mixed = 0;
+		for (size_t i = 0; i < blended.colors.size(); i++) {
+			const glm::vec3 c(blended.colors[i]);
+			const bool inside = glm::all(glm::greaterThanEqual(c, low - 1e-5f)) && glm::all(glm::lessThanEqual(c, high + 1e-5f));
+			outside += inside ? 0 : 1;
+			mixed += c != glm::vec3(sharp.colors[i]) ? 1 : 0;
+		}
+		const float sharpStep = LargestColorStep(sharp.colors), blendedStep = LargestColorStep(blended.colors);
+		const bool blendOk = sameIds && outside == 0 && mixed > 0 && blendedStep < sharpStep;
+		std::ostringstream details;
+		details << mixed << " mixed, " << outside << " outside, step " << std::fixed << std::setprecision(2) << sharpStep << " -> " << blendedStep;
+		Report(std::string("biomes: blending, ids ") + (sameIds ? "same" : "DIFFERENT"), details.str(), blendOk);
+		return sharpOk && blendOk;
 	}
 
 	//A chunk is a part of the map generated on its own, with an origin and the island size of the whole map; a coarser
@@ -258,8 +312,8 @@ namespace {
 		const glm::ivec2 corner(300, 30);
 		bool allOk = true;
 		const auto check = [&](const std::string& name, GLenum format, GLenum type, const std::function<void(const MapArea&, TextureClass&)>& generate) {
-			constexpr int bytes = 4;
-			const GLenum internalFormat = format == GL_RED_INTEGER ? GL_R32I : GL_R32F;
+			const int bytes = format == GL_RGBA ? 16 : 4;
+			const GLenum internalFormat = format == GL_RED_INTEGER ? GL_R32I : format == GL_RGBA ? GL_RGBA32F : GL_R32F;
 			TextureClass whole(mapWidth, mapHeight, internalFormat);
 			generate(MapArea{}, whole);
 			std::vector<unsigned char> wholeData(static_cast<size_t>(mapWidth) * mapHeight * bytes), partData(static_cast<size_t>(partWidth) * partHeight * bytes);
@@ -299,10 +353,13 @@ namespace {
 		layered.method = EvaluationMethod::LAYERED;
 		check("chunk: layered terrain", GL_RED, GL_FLOAT, [&](const MapArea& area, TextureClass& t) { gpu.GenerateTerrain(layered, area, t); });
 		const BiomeConfig biomes = BiomeConfig::Default();
-		const std::vector<biome::Biome> table = biome::DefaultBiomes();
 		check("chunk: biome ids", GL_RED_INTEGER, GL_INT, [&](const MapArea& area, TextureClass& ids) {
 			TextureClass colors(ids.GetWidth(), ids.GetHeight(), GL_RGBA32F);
-			gpu.GenerateBiomes(biomes, terrain, table, area, colors, ids);
+			gpu.GenerateBiomes(biomes, terrain, area, colors, ids);
+		});
+		check("chunk: blended biome colors", GL_RGBA, GL_FLOAT, [&](const MapArea& area, TextureClass& colors) {
+			TextureClass ids(colors.GetWidth(), colors.GetHeight(), GL_R32I);
+			gpu.GenerateBiomes(biomes, terrain, area, colors, ids);
 		});
 		return allOk;
 	}
@@ -389,7 +446,6 @@ namespace {
 	{
 		const TerrainConfig config = TerrainConfig::Default();
 		const BiomeConfig biomes = BiomeConfig::Default();
-		const std::vector<biome::Biome> table = biome::DefaultBiomes();
 		std::cout << "\nGPU time [ms]   terrain   biomes   surface map\n";
 		for (int size : { 512, 1024, 2048, 4096 }) {
 			TextureClass height(size, size, GL_R32F), colors(size, size, GL_RGBA32F), ids(size, size, GL_R32I), surface(size, size, GL_RGBA32F);
@@ -398,7 +454,7 @@ namespace {
 				glFinish();
 			}, 9);
 			const double biomesMs = MedianMs([&] {
-				gpu.GenerateBiomes(biomes, config, table, MapArea{}, colors, ids);
+				gpu.GenerateBiomes(biomes, config, MapArea{}, colors, ids);
 				glFinish();
 			}, 9);
 			const double surfaceMs = MedianMs([&] {

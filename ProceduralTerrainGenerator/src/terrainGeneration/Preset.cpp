@@ -19,7 +19,9 @@ namespace preset {
 		//Keeps fields in the order they are written, so files stay easy to read and edit
 		using json = nlohmann::ordered_json;
 
-		constexpr int currentVersion = 1;
+		//Version 2 (2026-11-08): biomes as a table of value ranges instead of discrete levels; older presets are not read
+		constexpr int currentVersion = 2;
+		constexpr int minVersion = 2;
 		constexpr const char* worldKind = "world";
 		constexpr const char* noiseKind = "noise";
 
@@ -27,6 +29,10 @@ namespace preset {
 		constexpr int maxMapSize = 8192;
 		constexpr int maxOctaves = 32;
 		constexpr int maxTerraceSteps = 64;
+		constexpr size_t maxBiomes = 64;
+
+		//Keys of the biome ranges, in the order of biome::Parameter
+		constexpr const char* biomeParameterNames[biome::PARAMETER_COUNT] = { "continentalness", "mountainousness", "weirdness", "temperature", "humidity" };
 
 		template<typename E>
 		struct EnumName {
@@ -126,6 +132,17 @@ namespace preset {
 			return j;
 		}
 
+		json BiomeToJson(const biome::Biome& b)
+		{
+			json j;
+			j["name"] = b.name;
+			j["color"] = FloatArray({ b.color.r, b.color.g, b.color.b });
+			for (int i = 0; i < biome::PARAMETER_COUNT; i++) {
+				j[biomeParameterNames[i]] = FloatArray({ b.ranges[i].min, b.ranges[i].max });
+			}
+			return j;
+		}
+
 		json ErosionToJson(const erosion::ErosionConfig& e)
 		{
 			json j;
@@ -193,6 +210,32 @@ namespace preset {
 					throw std::runtime_error(PathOf(key) + " must be true or false");
 				}
 				value = field->get<bool>();
+			}
+
+			void Read(const char* key, std::string& value) const
+			{
+				const json* field = Find(key);
+				if (!field) {
+					return;
+				}
+				if (!field->is_string()) {
+					throw std::runtime_error(PathOf(key) + " must be a string");
+				}
+				value = field->get<std::string>();
+			}
+
+			//An array of exactly count numbers
+			void ReadFixed(const char* key, float* values, size_t count) const
+			{
+				std::vector<float> read;
+				Read(key, read);
+				if (!Find(key)) {
+					return;
+				}
+				if (read.size() != count) {
+					throw std::runtime_error(PathOf(key) + " must be an array of " + std::to_string(count) + " numbers");
+				}
+				std::copy(read.begin(), read.end(), values);
 			}
 
 			void Read(const char* key, std::vector<float>& values) const
@@ -362,15 +405,34 @@ namespace preset {
 			Reader r(*field, parent.PathOf(key));
 			ReadNoise(r, "temperature", b.temperature);
 			ReadNoise(r, "humidity", b.humidity);
-			r.Read("temperatureLevels", b.temperatureLevels);
-			r.Read("humidityLevels", b.humidityLevels);
-			r.Read("continentalnessLevels", b.continentalnessLevels);
-			r.Read("mountainousnessLevels", b.mountainousnessLevels);
-			r.Read("weirdnessLevels", b.weirdnessLevels);
+			r.Read("blendWidth", b.blendWidth);
+
+			//A table in the file replaces the default one; fields missing in an entry keep the values of a new Biome
+			const json* table = r.Find("table");
+			if (!table) {
+				return;
+			}
+			if (!table->is_array()) {
+				throw std::runtime_error(r.PathOf("table") + " must be an array of biomes");
+			}
+			b.table.clear();
+			for (size_t index = 0; index < table->size(); index++) {
+				const Reader entry((*table)[index], r.PathOf("table") + "[" + std::to_string(index) + "]");
+				biome::Biome& biome = b.table.emplace_back();
+				entry.Read("name", biome.name);
+				float color[3] = { biome.color.r, biome.color.g, biome.color.b };
+				entry.ReadFixed("color", color, 3);
+				biome.color = glm::vec3(color[0], color[1], color[2]);
+				for (int i = 0; i < biome::PARAMETER_COUNT; i++) {
+					float range[2] = { biome.ranges[i].min, biome.ranges[i].max };
+					entry.ReadFixed(biomeParameterNames[i], range, 2);
+					biome.ranges[i] = { range[0], range[1] };
+				}
+			}
 		}
 
 		//The Check functions throw on values generation cannot handle: division by zero in the noise, undefined
-		//behaviour in tk::spline, biome levels not covering the noise range (logged per cell from a parallel loop)
+		//behaviour in tk::spline or smoothstep, an empty biome table or reversed biome ranges
 		void CheckSize(int width, int height)
 		{
 			if (width < minMapSize || width > maxMapSize || height < minMapSize || height > maxMapSize) {
@@ -410,13 +472,27 @@ namespace preset {
 			}
 		}
 
-		void CheckLevels(const std::vector<float>& levels, const std::string& name)
+		void CheckBiomes(const BiomeConfig& b)
 		{
-			if (levels.size() < 2 || levels.front() > -1.0f || levels.back() <= 1.0f) {
-				throw std::runtime_error(name + " levels: must start at -1 or lower and end above 1");
+			if (!std::isfinite(b.blendWidth) || b.blendWidth < 0.0f) {
+				throw std::runtime_error("Biomes: blendWidth must not be negative");
 			}
-			if (!std::is_sorted(levels.begin(), levels.end())) {
-				throw std::runtime_error(name + " levels: must be ascending");
+			if (b.table.empty() || b.table.size() > maxBiomes) {
+				throw std::runtime_error("Biomes: the table must have between 1 and " + std::to_string(maxBiomes) + " biomes");
+			}
+			for (const biome::Biome& biome : b.table) {
+				const std::string name = "Biome \"" + biome.name + "\"";
+				for (int i = 0; i < 3; i++) {
+					if (!(biome.color[i] >= 0.0f && biome.color[i] <= 1.0f)) {
+						throw std::runtime_error(name + ": color components must be between 0 and 1");
+					}
+				}
+				for (int i = 0; i < biome::PARAMETER_COUNT; i++) {
+					const biome::Range& r = biome.ranges[i];
+					if (!std::isfinite(r.min) || !std::isfinite(r.max) || r.min > r.max) {
+						throw std::runtime_error(name + ": " + biomeParameterNames[i] + " must be a range [min, max] with min <= max");
+					}
+				}
 			}
 		}
 
@@ -442,11 +518,7 @@ namespace preset {
 			}
 			CheckNoise(c.biomes.temperature, "Temperature");
 			CheckNoise(c.biomes.humidity, "Humidity");
-			CheckLevels(c.biomes.temperatureLevels, "Temperature");
-			CheckLevels(c.biomes.humidityLevels, "Humidity");
-			CheckLevels(c.biomes.continentalnessLevels, "Continentalness");
-			CheckLevels(c.biomes.mountainousnessLevels, "Mountainousness");
-			CheckLevels(c.biomes.weirdnessLevels, "Weirdness");
+			CheckBiomes(c.biomes);
 		}
 
 		void Check(const NoiseMapConfig& c)
@@ -487,7 +559,7 @@ namespace preset {
 				}
 				int version = 0;
 				reader.Read("version", version);
-				if (version < 1 || version > currentVersion) {
+				if (version < minVersion || version > currentVersion) {
 					throw std::runtime_error("Unsupported preset version " + std::to_string(version));
 				}
 
@@ -556,11 +628,12 @@ namespace preset {
 		json biomes;
 		biomes["temperature"] = NoiseToJson(c.biomes.temperature);
 		biomes["humidity"] = NoiseToJson(c.biomes.humidity);
-		biomes["temperatureLevels"] = FloatArray(c.biomes.temperatureLevels);
-		biomes["humidityLevels"] = FloatArray(c.biomes.humidityLevels);
-		biomes["continentalnessLevels"] = FloatArray(c.biomes.continentalnessLevels);
-		biomes["mountainousnessLevels"] = FloatArray(c.biomes.mountainousnessLevels);
-		biomes["weirdnessLevels"] = FloatArray(c.biomes.weirdnessLevels);
+		biomes["blendWidth"] = ReadableFloat(c.biomes.blendWidth);
+		json table = json::array();
+		for (const biome::Biome& b : c.biomes.table) {
+			table.push_back(BiomeToJson(b));
+		}
+		biomes["table"] = std::move(table);
 		root["biomes"] = std::move(biomes);
 
 		return root.dump(2);

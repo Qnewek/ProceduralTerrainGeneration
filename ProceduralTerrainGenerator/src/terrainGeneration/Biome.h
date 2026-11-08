@@ -1,50 +1,42 @@
 #pragma once
 
-#include <vector>
+#include <array>
 #include <string>
+#include <vector>
 
 #include "glm/glm.hpp"
 
-#include "Noise.h"
-
+//Biomes as regions in the space of the five parameter noises, as the multi-noise biomes of Minecraft 1.18:
+//every point belongs to the nearest biome, and biomes closer than the blend width to the nearest one mix with it.
+//biome_compute.shader does the same on the GPU; the functions here describe it and are used by tests.
 namespace biome {
-	class Biome
-	{
-	private:
-		int id;
-		float vegetationLevel;
-		bool isSpecified = false;
-		std::string name;
-		glm::vec2 temperatureLevel,humidityLevel, continentalnessLevel, mountainousnessLevel, weirdnessLevel;
-		glm::vec3 color = glm::vec3(0.0f, 0.0f, 0.0f);
-	public:
-		Biome();
-		Biome(int _id, std::string _name);
-		Biome(int _id, std::string _name, glm::vec2 _temperatureLevel, glm::vec2 _humidityLevel, glm::vec2 _continentalnessLevel, glm::vec2 _mountainousnessLevel, glm::vec2 _weirdnessLevel, glm::vec3 _color, float _vegetationLevel);
-		Biome(const Biome& b) = default;
-		~Biome();
+	//Parameters a biome is described by, in the order of noises and ranges in biome_compute.shader
+	enum Parameter { CONTINENTALNESS, MOUNTAINOUSNESS, WEIRDNESS, TEMPERATURE, HUMIDITY, PARAMETER_COUNT };
 
-		bool IsSpecified() const { return isSpecified; };
-		bool VerifyBiome(const int& T, const int& H, const int& C, const int& M, const int& W) const;
-		
-		int GetId() const { return id; };
-		float GetVegetationLevel() const { return vegetationLevel; };
-		std::string GetName() const { return name; };
-		glm::vec2 GetTemperatureLevel() const { return temperatureLevel; };
-		glm::vec2 GetHumidityLevel() const { return humidityLevel; };
-		glm::vec2 GetContinentalnessLevel() const { return continentalnessLevel; };
-		glm::vec2 GetMountainousnessLevel() const { return mountainousnessLevel; };
-		glm::vec2 GetWeirdnessLevel() const { return weirdnessLevel; };
-		glm::vec3 GetColor() const { return color; };
-		
-		void SetTemperatureLevel(glm::vec2 _temperatureLevel) { temperatureLevel = _temperatureLevel; }
-		void SetHumidityLevel(glm::vec2 _humidityLevel) { humidityLevel = _humidityLevel; }
-		void SetContinentalnessLevel(glm::vec2 _continentalnessLevel) { continentalnessLevel = _continentalnessLevel; }
-		void SetMountainousnessLevel(glm::vec2 _mountainousnessLevel) { mountainousnessLevel = _mountainousnessLevel; }
-		void SetWeirdnessLevel(glm::vec2 _weirdnessLevel) { weirdnessLevel = _weirdnessLevel; }
-
+	//Range of a noise value (noises are in [-1, 1]); min <= max
+	struct Range {
+		float min = -1.0f, max = 1.0f;
 	};
 
-	//Biomes used by default, with id 0 as the one assigned where no biome matches
+	using ParameterValues = std::array<float, PARAMETER_COUNT>;
+
+	struct Biome {
+		std::string name;
+		glm::vec3 color = glm::vec3(0.0f);
+		std::array<Range, PARAMETER_COUNT> ranges;
+
+		//Distance in the parameter space from the ranges of the biome: 0 inside all of them, otherwise
+		//the Euclidean length of how far each value lies outside its range
+		float Distance(const ParameterValues& values) const;
+	};
+
+	//Index of the nearest biome, the first one on ties; the table must not be empty. Biome ids are indices in the table
+	int Nearest(const std::vector<Biome>& table, const ParameterValues& values);
+
+	//Weight of a biome distance more than the nearest one: 1 at the nearest, falling smoothly to 0 at blendWidth;
+	//blendWidth <= 0 = only the nearest biome
+	float BlendWeight(float distance, float nearestDistance, float blendWidth);
+
+	//Biomes used by default
 	std::vector<Biome> DefaultBiomes();
 }
