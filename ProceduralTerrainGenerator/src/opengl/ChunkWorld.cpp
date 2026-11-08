@@ -17,6 +17,8 @@ namespace {
 	//Depth of the skirts, as a part of heightScale for a level 0 chunk; doubles with every level, like the distance between samples
 	constexpr float skirtPart = 0.01f;
 	constexpr float maxSkirtPart = 0.5f;
+	//Largest absolute height of a map (noises are in [-1, 1]), with a margin; the same bound is used by the TCS
+	constexpr float heightBound = 1.5f;
 	//Bits of a chunk coordinate in a key
 	constexpr int coordBits = 28;
 	constexpr uint64_t coordMask = (uint64_t(1) << coordBits) - 1;
@@ -134,15 +136,19 @@ ChunkWorld::Chunk* ChunkWorld::Find(int level, glm::ivec2 coord)
 	return found == chunks.end() ? nullptr : &found->second;
 }
 
-int ChunkWorld::Plan(glm::vec2 center, float radius)
+int ChunkWorld::Plan(const View& requested)
 {
 	frame++;
 	visible.clear();
 	pending.clear();
 	visited = 0;
+	inRange = 0;
 	coarsestLevel = 0;
 
-	radius = std::clamp(radius, 0.0f, NodeSize(maxLevel));
+	View view = requested;
+	view.radius = std::clamp(view.radius, 0.0f, NodeSize(maxLevel));
+	const glm::vec2 center = view.center;
+	const float radius = view.radius;
 	lastCenter = center;
 	lastRadius = radius;
 
@@ -157,11 +163,14 @@ int ChunkWorld::Plan(glm::vec2 center, float radius)
 	const glm::ivec2 high(glm::floor((local + radius) / rootSize));
 	for (int z = low.y; z <= high.y; z++) {
 		for (int x = low.x; x <= high.x; x++) {
-			Select(rootLevel, { x, z }, local, radius);
+			Select(rootLevel, { x, z }, local, view);
 		}
 	}
-	//Chunks that leave holes first, then nearest first; a parent is never farther than its children, so coarse chunks come before fine ones
+	//By rank, then nearest first; a parent is never farther than its children, so coarse chunks come before fine ones
 	std::sort(pending.begin(), pending.end(), [](const PendingChunk& a, const PendingChunk& b) {
+		if (a.rank != b.rank) {
+			return a.rank < b.rank;
+		}
 		return a.distance < b.distance || (a.distance == b.distance && a.level > b.level);
 	});
 
@@ -186,14 +195,42 @@ int ChunkWorld::Plan(glm::vec2 center, float radius)
 	return static_cast<int>(pending.size());
 }
 
-void ChunkWorld::Select(int level, glm::ivec2 coord, glm::vec2 local, float radius)
+ChunkWorld::View ChunkWorld::ViewFrom(const Camera& camera, const TerrainRenderSettings& settings)
 {
+	View view;
+	const glm::vec3 position = camera.GetPosition() / settings.modelScale;
+	view.center = glm::vec2(position.x, position.z);
+	view.radius = camera.GetRenderDistance() / settings.modelScale;
+	view.heightScale = settings.heightScale;
+	//The 2D map shows the whole range from above, not what the camera sees
+	if (!settings.map2d) {
+		view.frustum.emplace(camera.GetViewProjection() * glm::scale(glm::mat4(1.0f), glm::vec3(settings.modelScale)));
+	}
+	return view;
+}
+
+bool ChunkWorld::InView(int level, glm::ivec2 coord, const View& view) const
+{
+	if (!view.frustum) {
+		return true;
+	}
+	const float size = NodeSize(level);
+	const glm::vec2 corner = mapOrigin + glm::vec2(coord) * size;
+	const float scale = std::abs(view.heightScale);
+	return view.frustum->Intersects(glm::vec3(corner.x, -(heightBound + maxSkirtPart) * scale, corner.y),
+		glm::vec3(corner.x + size, heightBound * scale, corner.y + size));
+}
+
+void ChunkWorld::Select(int level, glm::ivec2 coord, glm::vec2 local, const View& view)
+{
+	const float radius = view.radius;
 	const float size = NodeSize(level);
 	const float distance = DistanceToSquare(local, glm::vec2(coord) * size, size);
 	if (distance > radius) {
 		return;
 	}
 	visited++;
+	const bool inView = InView(level, coord, view);
 	Chunk* chunk = Find(level, coord);
 	if (chunk) {
 		chunk->lastSeen = frame;
@@ -219,25 +256,28 @@ void ChunkWorld::Select(int level, glm::ivec2 coord, glm::vec2 local, float radi
 				ready = false;
 				//Children are requested once there is a parent to show meanwhile
 				if (drawable) {
-					pending.push_back({ level - 1, childCoord, childDistance });
+					pending.push_back({ level - 1, childCoord, childDistance, inView && InView(level - 1, childCoord, view) ? 2 : 3 });
 				}
 			}
 		}
 		if (ready) {
 			for (const glm::ivec2 offset : childOffsets) {
-				Select(level - 1, coord * 2 + offset, local, radius);
+				Select(level - 1, coord * 2 + offset, local, view);
 			}
 			return;
 		}
 	}
 
 	if (drawable) {
-		visible.push_back(chunk);
-		coarsestLevel = std::max(coarsestLevel, level);
+		inRange++;
+		if (inView) {
+			visible.push_back(chunk);
+			coarsestLevel = std::max(coarsestLevel, level);
+		}
 	}
 	if (!chunk || chunk->version != worldVersion) {
 		//A chunk with nothing shown in its place goes before all others
-		pending.push_back({ level, coord, drawable ? distance : -1.0f });
+		pending.push_back({ level, coord, distance, (drawable ? 2 : 0) + (inView ? 0 : 1) });
 	}
 }
 
