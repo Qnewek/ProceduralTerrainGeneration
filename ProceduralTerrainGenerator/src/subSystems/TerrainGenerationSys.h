@@ -79,7 +79,6 @@ private:
 	WorldGenParameter editedSplineComponent = WorldGenParameter::CONTINENTALNESS;
 	BiomeParameter editedBiomeComponent = BiomeParameter::TEMPERATURE;
 	int samplingResolution = 500;
-	SplinePoints splinePlotPoints;	//copy of the edited spline, applied with "Set new spline points"
 
 	//Pressed editor buttons (0 = nothing selected)
 	int noisePressedButton = 0;
