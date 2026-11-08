@@ -5,6 +5,7 @@
 
 #include "glm/glm.hpp"
 
+#include "GpuSurfacePass.h"
 #include "Renderer.h"
 #include "VertexBufferLayout.h"
 #include "Camera.h"
@@ -24,7 +25,8 @@ struct TerrainRenderSettings {
 };
 
 //Renders a height field as a tessellated patch grid. Owns the mesh, the shader and the textures,
-//so generation subsystems only hand it finished maps.
+//so generation subsystems only hand it finished maps. Every height layer has a surface map (gradient and Laplacian,
+//surface::Derivatives) for normals, slope and curvature; Draw recomputes it on the GPU after the layer changes.
 class TerrainView
 {
 public:
@@ -42,8 +44,9 @@ public:
 	//Rebuilds the mesh if the map size changed
 	//@return true if the mesh was rebuilt
 	bool Resize(int _width, int _height);
-	//Rebuilds the terrain shader from its source files (hot-reload)
-	bool ReloadShader() { return shader->Reload(); }
+	//Rebuilds the terrain and surface shaders from their source files (hot-reload)
+	//@return true if the terrain shader was replaced
+	bool ReloadShader();
 
 	int GetMapWidth() const { return width; }
 	int GetMapHeight() const { return height; }
@@ -59,7 +62,8 @@ public:
 
 	//Layer textures are allocated once per map size; same-size updates only upload the new data
 	void SetLayer(Layer layer, const HeightField& map);
-	//Texture of a layer with the given size, for writing to it directly (GL_RGBA32F for BIOMES, GL_R32F otherwise)
+	//Texture of a layer with the given size, for writing to it directly (GL_RGBA32F for BIOMES, GL_R32F otherwise).
+	//Marks the surface map of a height layer as out of date, so write the new contents before the next Draw
 	TextureClass& LayerTexture(Layer layer, int _width, int _height);
 	//Copies a height layer to the CPU, waiting for the GPU; the layer must exist
 	HeightField ReadLayer(Layer layer) const;
@@ -75,6 +79,11 @@ private:
 	void BuildMesh();
 	//Sets view/projection of a top-down orthographic camera framing the flat view bounds
 	void SetFlatCameraUniforms(const TerrainRenderSettings& settings);
+	//Recomputes the surface map of a height layer if the layer changed since the last time
+	void UpdateSurface(Layer heightLayer);
+
+	//Texture unit of the surface map of the drawn height layer
+	static constexpr int surfaceUnit = 3;
 
 	glm::vec2 flatMin = glm::vec2(0.0f), flatMax = glm::vec2(0.0f);
 
@@ -91,4 +100,9 @@ private:
 	std::unique_ptr<VertexBuffer> vertexBuffer;
 	std::unique_ptr<Shader> shader;
 	std::unique_ptr<TextureClass> textures[3];
+
+	GpuSurfacePass surfacePass;
+	//Surface maps of TERRAIN and OVERLAY (GL_RGBA32F), indexed like the layers
+	std::unique_ptr<TextureClass> surfaces[2];
+	bool surfaceOutdated[2] = { true, true };
 };

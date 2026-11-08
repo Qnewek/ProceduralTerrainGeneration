@@ -206,6 +206,13 @@ Cel: **edycja w czasie rzeczywistym przy 60+ FPS** i nieskończony świat.
    przy lacunarity 3,1 daje 2,4e-3 na samym CPU (2,35e-3 między GPU i CPU), a szum 4D ma nieciągłości na granicach sympleksów, ok. 3,8e-4 (promień narożnika 0,6 zamiast 0,5).
    Splajn liniowy w tablicy: do 1,4e-4 na zagięciach. Różnice w zachowaniu: dla szumu spoza [-1, 1] tablica bierze wartość krańcową, a `tk::spline` ekstrapoluje; GPU nie zgłasza błędu przy szumie poniżej -1.
 2. **Normal/derived pass:** compute liczący normal map + slope + curvature (potrzebne do teksturowania i roślinności).
+
+   ✅ 2026-11-08: `opengl/GpuSurfacePass.*`, `ComputeShaders/surface_compute.shader`, `common/surface.glsl`; wersja CPU `terrainGeneration/SurfaceDerivatives.*` (testy, `--gpu-check`).
+   Mapa `RGBA32F` trzyma gradient (dx, dy) i laplasjan **surowej** wysokości na jednostkę świata, a nie gotową normalną. Normalna, nachylenie i krzywizna to te wartości razy `heightScale`
+   (funkcje w `surface.glsl` / `surface::Normal`, `Slope`, `Curvature`), więc zmiana skali pionowej nie wymaga przeliczenia mapy. `TerrainView` liczy mapę osobno dla TERRAIN i OVERLAY,
+   w `Draw`, tylko po zmianie warstwy (`LayerTexture` / `SetLayer` oznaczają ją jako nieaktualną). TES bierze normalną z tej mapy (1 odczyt zamiast 4); nowe tryby wyświetlania SLOPE i CURVATURE.
+   Na krawędziach mapy gradient jest jednostronny (wcześniej TES zaniżał go o połowę przez `CLAMP_TO_EDGE`). GPU i CPU dają te same wartości (0 ulp w `--gpu-check`).
+   Czas (RTX 2060): 512² 0,11 ms, 1024² 0,16 ms, 2048² 0,54 ms, 4096² 2,09 ms.
 3. **ChunkManager:** siatka chunków (np. 256×256 próbek, 1 próbka = 1 m), współrzędne świata, generacja tylko nowych chunków
    w kolejce priorytetowej (odległość od kamery + frustum), cache LRU, budżet ms/klatkę.
    Usuwa „kotwiczenie” kamery i regenerację całej mapy (**B7**, **A5**). Do rozważenia: floating origin dla dużych współrzędnych.

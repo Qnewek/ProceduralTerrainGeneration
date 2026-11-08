@@ -22,6 +22,9 @@ bool TerrainView::Initialize(int _width, int _height)
 	}
 	vao = std::make_unique<VertexArray>();
 	shader = std::make_unique<Shader>("res/shaders/TerrainShaders/Terrain_vertex.shader", "res/shaders/TerrainShaders/Terrain_fragment.shader", "res/shaders/TerrainShaders/Terrain_controlTes.shader", "res/shaders/TerrainShaders/Terrain_evalTes.shader");
+	if (!surfacePass.Initialize()) {
+		return false;
+	}
 	layout.Push<float>(3);
 	layout.Push<float>(2);
 
@@ -29,6 +32,14 @@ bool TerrainView::Initialize(int _width, int _height)
 	height = _height;
 	BuildMesh();
 	return true;
+}
+
+bool TerrainView::ReloadShader()
+{
+	surfacePass.ReloadShader();
+	//A changed surface shader has to show without regenerating the maps
+	surfaceOutdated[0] = surfaceOutdated[1] = true;
+	return shader->Reload();
 }
 
 bool TerrainView::Resize(int _width, int _height)
@@ -96,7 +107,25 @@ TextureClass& TerrainView::LayerTexture(Layer layer, int _width, int _height)
 	if (!texture || texture->GetWidth() != _width || texture->GetHeight() != _height) {
 		texture = std::make_unique<TextureClass>(_width, _height, layer == Layer::BIOMES ? GL_RGBA32F : GL_R32F);
 	}
+	if (layer != Layer::BIOMES) {
+		surfaceOutdated[static_cast<int>(layer)] = true;
+	}
 	return *texture;
+}
+
+void TerrainView::UpdateSurface(Layer heightLayer)
+{
+	const int index = static_cast<int>(heightLayer);
+	const TextureClass& heightMap = *textures[index];
+	std::unique_ptr<TextureClass>& surface = surfaces[index];
+	if (!surface || surface->GetWidth() != heightMap.GetWidth() || surface->GetHeight() != heightMap.GetHeight()) {
+		surface = std::make_unique<TextureClass>(heightMap.GetWidth(), heightMap.GetHeight(), GL_RGBA32F);
+		surfaceOutdated[index] = true;
+	}
+	if (surfaceOutdated[index]) {
+		surfacePass.Run(heightMap, worldUnitsPerTexel, *surface);
+		surfaceOutdated[index] = false;
+	}
 }
 
 HeightField TerrainView::ReadLayer(Layer layer) const
@@ -113,6 +142,8 @@ void TerrainView::Draw(Renderer& renderer, Camera& camera, LightSource& light, c
 	if (!HasLayer(heightLayer)) {
 		return;
 	}
+	//Before the terrain shader is bound: the pass binds its own program and textures
+	UpdateSurface(heightLayer);
 
 	glm::mat4 model = glm::mat4(1.0f);
 	model = glm::scale(model, glm::vec3(settings.modelScale));
@@ -133,12 +164,14 @@ void TerrainView::Draw(Renderer& renderer, Camera& camera, LightSource& light, c
 	shader->SetUniform2f("texelWorldSize", worldUnitsPerTexel, worldUnitsPerTexel);
 	shader->SetUniform1i("heightMap", static_cast<int>(heightLayer));
 	shader->SetUniform1i("biomeMap", static_cast<int>(Layer::BIOMES));
+	shader->SetUniform1i("surfaceMap", surfaceUnit);
 
 	for (int i = 0; i < 3; i++) {
 		if (textures[i]) {
 			textures[i]->Bind(i);
 		}
 	}
+	surfaces[static_cast<int>(heightLayer)]->Bind(surfaceUnit);
 
 	if (settings.wireFrame) {
 		glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);

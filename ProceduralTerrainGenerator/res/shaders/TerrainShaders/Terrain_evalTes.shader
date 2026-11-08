@@ -10,10 +10,17 @@ out vec3 aNormal;
 
 uniform sampler2D heightMap;
 uniform sampler2D biomeMap;
+uniform sampler2D surfaceMap;   //gradient and Laplacian of heightMap per world unit (surface_compute.shader)
 uniform int displayMode;
 uniform float heightScale;
 uniform vec2 texelWorldSize;    //size of one height map texel in world units (x, z), before model
 #include "../common/transform.glsl"
+#include "../common/surface.glsl"
+
+//Slope shown as fully red in the SLOPE mode, in radians
+const float SLOPE_RED = radians(60.0);
+//Height difference from the mean of the 4 neighbours (world units) shown as full color in the CURVATURE mode
+const float CURVATURE_FULL = 0.25;
 
 void main()
 {
@@ -31,16 +38,9 @@ void main()
 
     Height =  texture(heightMap, texCoord).r * heightScale;
 
-    //Normal from central differences; both the step and the height difference are in world units
-    vec2 texel = 1.0 / vec2(textureSize(heightMap, 0));
-    float hL = texture(heightMap, texCoord + vec2(-texel.x, 0)).r * heightScale;
-    float hR = texture(heightMap, texCoord + vec2( texel.x, 0)).r * heightScale;
-    float hD = texture(heightMap, texCoord + vec2(0, -texel.y)).r * heightScale;
-    float hU = texture(heightMap, texCoord + vec2(0,  texel.y)).r * heightScale;
-
-    vec3 dx = vec3(2.0 * texelWorldSize.x, hR - hL, 0.0);
-    vec3 dz = vec3(0.0, hU - hD, 2.0 * texelWorldSize.y);
-    aNormal = normalize(normalMatrix * cross(dz, dx));
+    //Map y goes along world +Z
+    vec4 derivatives = texture(surfaceMap, texCoord);
+    aNormal = normalize(normalMatrix * surfaceNormal(derivatives, heightScale));
 
     vec4 p00 = gl_in[0].gl_Position;
     vec4 p01 = gl_in[1].gl_Position;
@@ -78,6 +78,24 @@ void main()
     }
     else if(displayMode == 3){
         aColor = texture(biomeMap, texCoord).rgb;
+    }
+    else if(displayMode == 4){
+        //Green when flat, yellow at half of SLOPE_RED, red from SLOPE_RED up
+        float t = clamp(surfaceSlope(derivatives, heightScale) / SLOPE_RED, 0.0, 1.0);
+        if (t < 0.5)
+            aColor = mix(vec3(0.15, 0.6, 0.15), vec3(0.95, 0.85, 0.1), t * 2.0);
+        else
+            aColor = mix(vec3(0.95, 0.85, 0.1), vec3(0.8, 0.1, 0.1), (t - 0.5) * 2.0);
+    }
+    else if(displayMode == 5){
+        //Blue in hollows and valleys, red on hills and ridges, white where the surface is flat or evenly sloped;
+        //Laplacian * texel area / 4 = how far the point lies below the mean of its neighbours
+        float area = texelWorldSize.x * texelWorldSize.y;
+        float t = clamp(surfaceCurvature(derivatives, heightScale) * area / 4.0 / CURVATURE_FULL, -1.0, 1.0);
+        if (t >= 0.0)
+            aColor = mix(vec3(0.95), vec3(0.15, 0.3, 0.9), t);
+        else
+            aColor = mix(vec3(0.95), vec3(0.85, 0.15, 0.1), -t);
     }
     //Lighting is done in world space; the 2D map mode only swaps view/projection for a top-down orthographic camera
     vec4 worldPos = model * p;

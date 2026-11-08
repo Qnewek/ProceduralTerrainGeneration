@@ -149,7 +149,7 @@ namespace utilities
 			ImGui::SliderFloat("Step", &topoStep, 1.0f, heightScale);
 			ImGui::SliderFloat("Band width", &topoBandWidth, 0.1f, 1.0f);
 
-			static const char* displayOptions[] = { "GREYSCALE", "TOPOGRAPHICAL", "MONOCOLOR", "BIOMES"};
+			static const char* displayOptions[] = { "GREYSCALE", "TOPOGRAPHICAL", "MONOCOLOR", "BIOMES", "SLOPE", "CURVATURE" };
 			int currentDisplayOption = static_cast<int>(m);
 			bool change = false;
 
