@@ -18,7 +18,9 @@ enum class WorldGenParameter {
 enum class EvaluationMethod {
 	LINEAR_COMBINE,
 	SPLINE_COMBINE,
-	C
+	//Base land shape from continentalness with mountains on top: amplitude from mountainousness, shape from weirdness
+	//read as peaks and valleys (see TerrainConfig::seaLevel)
+	LAYERED
 };
 
 //Control points of a spline mapping a noise value [-1, 1] to a factor [0, 1]
@@ -31,6 +33,16 @@ struct TerrainConfig {
 	noise::NoiseConfigParameters continentalness, mountainousness, weirdness;
 	SplinePoints continentalnessSpline, mountainousnessSpline, weirdnessSpline;
 	EvaluationMethod method = EvaluationMethod::LINEAR_COMBINE;
+
+	//LAYERED: h = base * (1 - mountainShare) + land * amplitude * peaks * mountainShare, in [0, 1], where
+	//base = continentalnessSpline(C), amplitude = mountainousnessSpline(M), peaks = peaksSpline(W),
+	//land = smoothstep(seaLevel, seaLevel + coastWidth, base): mountains only grow inland from the coast.
+	//seaLevel is a value of the base spline; the water surface lies at height seaLevel * (1 - mountainShare).
+	//Weirdness with Ridge (gain 3, offset 1) is the fold 1 - |3|W| - 2| = peaks and valleys of Minecraft 1.18.
+	float seaLevel = 0.3f;
+	float coastWidth = 0.15f;
+	float mountainShare = 0.6f;
+	SplinePoints peaksSpline{ {-1.0, -0.5, 0.0, 0.5, 1.0}, {0.0, 0.05, 0.25, 0.7, 1.0} };
 
 	noise::NoiseConfigParameters& Noise(WorldGenParameter p) {
 		switch (p) {
@@ -51,6 +63,12 @@ struct TerrainConfig {
 		}
 	}
 	const SplinePoints& Spline(WorldGenParameter p) const { return const_cast<TerrainConfig*>(this)->Spline(p); }
+
+	//Spline the current method uses for a component: LAYERED reads weirdness through peaksSpline
+	SplinePoints& MethodSpline(WorldGenParameter p) {
+		return method == EvaluationMethod::LAYERED && p == WorldGenParameter::WEIRDNESS ? peaksSpline : Spline(p);
+	}
+	const SplinePoints& MethodSpline(WorldGenParameter p) const { return const_cast<TerrainConfig*>(this)->MethodSpline(p); }
 
 	//Default terrain used at startup and by --gpu-check
 	static TerrainConfig Default() {
