@@ -227,7 +227,7 @@ void TerrainGenerationSys::ImGuiRightPanel() {
 	if (ImGui::CollapsingHeader("Terrain settings", ImGuiTreeNodeFlags_DefaultOpen)) {
 		ImGui::Text("Evaluating method");
 		int evaluatingOption = static_cast<int>(world.terrain.method);
-		const char* methodOptions[] = { "Linear", "Spline" };
+		const char* methodOptions[] = { "Linear", "Spline", "Layered" };
 		if (ImGui::BeginCombo("Method: ", methodOptions[evaluatingOption]))
 		{
 			for (int n = 0; n < IM_ARRAYSIZE(methodOptions); n++)
@@ -237,11 +237,23 @@ void TerrainGenerationSys::ImGuiRightPanel() {
 					evaluatingOption = n;
 					world.terrain.method = static_cast<EvaluationMethod>(evaluatingOption);
 					changeTerrain = true;
+					//The method decides which spline weirdness uses, so an open editor takes the new one
+					if (splinePressedButton != 0) {
+						splinePlotPoints = world.terrain.MethodSpline(editedComponent);
+					}
 				}
 				if (is_selected)
 					ImGui::SetItemDefaultFocus();
 			}
 			ImGui::EndCombo();
+		}
+		if (world.terrain.method == EvaluationMethod::LAYERED) {
+			changeTerrain |= ImGui::SliderFloat("Sea level", &world.terrain.seaLevel, 0.0f, 1.0f);
+			ImGui::SetItemTooltip("Value of the continentalness spline where land begins; mountains grow only above it");
+			changeTerrain |= ImGui::SliderFloat("Coast width", &world.terrain.coastWidth, 0.01f, 1.0f);
+			ImGui::SetItemTooltip("How far inland (in continentalness spline values) mountains reach full height");
+			changeTerrain |= ImGui::SliderFloat("Mountain share", &world.terrain.mountainShare, 0.0f, 1.0f);
+			ImGui::SetItemTooltip("Part of the height range for mountains; the continentalness base takes the rest");
 		}
 		ImGui::SliderInt("Sampling resolution", &samplingResolution, 10, 1000);
 		if (ImGui::Button("Change resolution")) {
@@ -421,23 +433,31 @@ void TerrainGenerationSys::SplineEditor()
 	}
 	if (editSpline) {
 		if (ImGui::CollapsingHeader("Spline editor", ImGuiTreeNodeFlags_DefaultOpen)) {
+			const bool layered = world.terrain.method == EvaluationMethod::LAYERED;
+			if (world.terrain.method == EvaluationMethod::LINEAR_COMBINE) {
+				ImGui::TextDisabled("The Linear method uses no splines");
+			}
 			ImGui::Text("Select spline to edit:");
 			if (utilities::ImGuiButtonWrapper("Mountainousness", splinePressedButton == 1 ? true : false)) {
 				splinePressedButton = 1;
 				editedComponent = WorldGenParameter::MOUNTAINOUSNESS;
-				splinePlotPoints = world.terrain.Spline(editedComponent);
+				splinePlotPoints = world.terrain.MethodSpline(editedComponent);
 			}
 			ImGui::SameLine();
 			if (utilities::ImGuiButtonWrapper("Continentalness", splinePressedButton == 2 ? true : false)) {
 				splinePressedButton = 2;
 				editedComponent = WorldGenParameter::CONTINENTALNESS;
-				splinePlotPoints = world.terrain.Spline(editedComponent);
+				splinePlotPoints = world.terrain.MethodSpline(editedComponent);
 			}
 			ImGui::SameLine();
-			if (utilities::ImGuiButtonWrapper("Weirdness", splinePressedButton == 3 ? true : false)) {
+			if (utilities::ImGuiButtonWrapper(layered ? "Peaks & valleys" : "Weirdness", splinePressedButton == 3 ? true : false)) {
 				splinePressedButton = 3;
 				editedComponent = WorldGenParameter::WEIRDNESS;
-				splinePlotPoints = world.terrain.Spline(editedComponent);
+				splinePlotPoints = world.terrain.MethodSpline(editedComponent);
+			}
+			if (layered) {
+				ImGui::SetItemTooltip("Shape of mountains from weirdness: low = valleys, high = peaks.\n"
+					"Ridge on weirdness (gain 3, offset 1) folds it into peaks and valleys as in Minecraft 1.18");
 			}
 
 			if (splinePressedButton == 0) {
@@ -454,9 +474,20 @@ void TerrainGenerationSys::SplineEditor()
 			const double ymin = 0.0, ymax = 1.0;
 			const double pick_radius = 0.08;
 
+			//What the axes mean depends on the method: LAYERED gives each spline its own role
+			const char* xLabel = "Continentalness";
+			const char* yLabel = layered ? "Base height" : "Height factor";
+			if (editedComponent == WorldGenParameter::MOUNTAINOUSNESS) {
+				xLabel = "Mountainousness";
+				yLabel = layered ? "Mountain amplitude" : "Height factor";
+			}
+			else if (editedComponent == WorldGenParameter::WEIRDNESS) {
+				xLabel = layered ? "Weirdness (valleys -> peaks)" : "Weirdness";
+				yLabel = layered ? "Mountain shape" : "Height factor";
+			}
 			if (ImPlot::BeginPlot("##plot", ImVec2(-1, 320), ImPlotFlags_NoMenus)) {
-				ImPlot::SetupAxis(ImAxis_X1, "X", ImPlotAxisFlags_Lock);
-				ImPlot::SetupAxis(ImAxis_Y1, "Y", ImPlotAxisFlags_Lock);
+				ImPlot::SetupAxis(ImAxis_X1, xLabel, ImPlotAxisFlags_Lock);
+				ImPlot::SetupAxis(ImAxis_Y1, yLabel, ImPlotAxisFlags_Lock);
 				ImPlot::SetupAxisLimits(ImAxis_X1, xmin, xmax, ImGuiCond_Always);
 				ImPlot::SetupAxisLimits(ImAxis_Y1, ymin, ymax, ImGuiCond_Always);
 
@@ -510,7 +541,7 @@ void TerrainGenerationSys::SplineEditor()
 			if (ImGui::Button("Set new spline points")) {
 				//Edited splines are smoothed (cubic), the defaults are linear - behaviour kept from before A3
 				splinePlotPoints.cubic = true;
-				world.terrain.Spline(editedComponent) = splinePlotPoints;
+				world.terrain.MethodSpline(editedComponent) = splinePlotPoints;
 				changeTerrain = true;
 			}
 		}

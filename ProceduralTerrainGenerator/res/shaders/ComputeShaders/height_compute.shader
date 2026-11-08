@@ -17,9 +17,10 @@ layout(std430, binding = 0) readonly buffer HeightInput {
 	float splines[3 * SPLINE_SAMPLES];
 };
 
-const int MODE_NOISE = 0, MODE_LINEAR = 1, MODE_SPLINE = 2, MODE_ZERO = 3;
+const int MODE_NOISE = 0, MODE_LINEAR = 1, MODE_SPLINE = 2, MODE_LAYERED = 3;
 
 uniform int mode;
+uniform vec3 layered;		// MODE_LAYERED: seaLevel, coastWidth, mountainShare (TerrainConfig)
 uniform ivec2 mapSize;
 uniform ivec2 tileOrigin;	// first texel of this dispatch, large maps are generated in parts
 uniform vec2 origin;		// map position of texel (0, 0)
@@ -42,14 +43,18 @@ float evaluateHeight(float x, float y)
 	if (mode == MODE_NOISE) {
 		return evaluateNoise(0, x, y);
 	}
-	if (mode == MODE_ZERO) {
-		return 0.0;
-	}
 	float continentalness = evaluateNoise(0, x, y);
 	float mountainousness = evaluateNoise(1, x, y);
 	float weirdness = evaluateNoise(2, x, y);
 	if (mode == MODE_LINEAR) {
 		return (continentalness + 1.0) / 2.0 * ((mountainousness + 1.0) / 2.0) * (1.0 - (weirdness + 1.0) / 2.0);
+	}
+	if (mode == MODE_LAYERED) {
+		// Spline 2 holds peaksSpline here; see TerrainConfig::seaLevel for the formula
+		float base = evaluateSpline(0, continentalness);
+		float land = smoothstep(layered.x, layered.x + layered.y, base);
+		float relief = evaluateSpline(1, mountainousness) * evaluateSpline(2, weirdness);
+		return base * (1.0 - layered.z) + land * relief * layered.z;
 	}
 	return evaluateSpline(0, continentalness) * evaluateSpline(1, mountainousness) * evaluateSpline(2, weirdness);
 }
