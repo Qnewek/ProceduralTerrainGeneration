@@ -33,7 +33,7 @@ struct SplinePoints {
 struct TerrainConfig {
 	noise::NoiseConfigParameters continentalness, mountainousness, weirdness;
 	SplinePoints continentalnessSpline, mountainousnessSpline, weirdnessSpline;
-	EvaluationMethod method = EvaluationMethod::LINEAR_COMBINE;
+	EvaluationMethod method = EvaluationMethod::LAYERED;
 
 	//LAYERED: h = base * (1 - mountainShare) + land * amplitude * peaks * mountainShare, in [0, 1], where
 	//base = continentalnessSpline(C), amplitude = mountainousnessSpline(M), peaks = peaksSpline(W),

@@ -29,7 +29,7 @@ uniform ivec2 islandSize;	// see noise.glsl
 
 #include "../common/noise.glsl"
 
-// A value outside [-1, 1] takes the end of the table, while tk::spline on the CPU extrapolates
+// A value outside [-1, 1] takes the end of the table (SampleSpline in SplineSampling.cpp fills it)
 float evaluateSpline(int index, float value)
 {
 	float position = (clamp(value, -1.0, 1.0) + 1.0) * 0.5 * float(SPLINE_SAMPLES - 1);

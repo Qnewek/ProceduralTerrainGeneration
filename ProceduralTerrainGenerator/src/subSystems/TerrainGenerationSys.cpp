@@ -7,6 +7,7 @@
 #include "implot.h"
 
 #include "Preset.h"
+#include "SplineSampling.h"
 
 TerrainGenerationSys::TerrainGenerationSys() {
 	renderSettings.displayMode = utilities::heightMapMode::TOPOGRAPHICAL;
@@ -228,10 +229,6 @@ void TerrainGenerationSys::ImGuiRightPanel() {
 					evaluatingOption = n;
 					world.terrain.method = static_cast<EvaluationMethod>(evaluatingOption);
 					changeTerrain = true;
-					//The method decides which spline weirdness uses, so an open editor takes the new one
-					if (splinePressedButton != 0) {
-						splinePlotPoints = world.terrain.MethodSpline(editedSplineComponent);
-					}
 				}
 				if (is_selected)
 					ImGui::SetItemDefaultFocus();
@@ -450,25 +447,33 @@ void TerrainGenerationSys::SplineEditor()
 		if (ImGui::CollapsingHeader("Spline editor", ImGuiTreeNodeFlags_DefaultOpen)) {
 			const bool layered = world.terrain.method == EvaluationMethod::LAYERED;
 			if (world.terrain.method == EvaluationMethod::LINEAR_COMBINE) {
-				ImGui::TextDisabled("The Linear method uses no splines");
+				//Edits would change nothing, so the editor offers a method that uses them instead
+				ImGui::TextWrapped("The Linear method uses no splines. Switch to a method that does:");
+				if (ImGui::Button("Layered##splineMethod")) {
+					world.terrain.method = EvaluationMethod::LAYERED;
+					changeTerrain = true;
+				}
+				ImGui::SameLine();
+				if (ImGui::Button("Spline##splineMethod")) {
+					world.terrain.method = EvaluationMethod::SPLINE_COMBINE;
+					changeTerrain = true;
+				}
+				return;
 			}
 			ImGui::Text("Select spline to edit:");
 			if (utilities::ImGuiButtonWrapper("Mountainousness##spline", splinePressedButton == 1 ? true : false)) {
 				splinePressedButton = 1;
 				editedSplineComponent = WorldGenParameter::MOUNTAINOUSNESS;
-				splinePlotPoints = world.terrain.MethodSpline(editedSplineComponent);
 			}
 			ImGui::SameLine();
 			if (utilities::ImGuiButtonWrapper("Continentalness##spline", splinePressedButton == 2 ? true : false)) {
 				splinePressedButton = 2;
 				editedSplineComponent = WorldGenParameter::CONTINENTALNESS;
-				splinePlotPoints = world.terrain.MethodSpline(editedSplineComponent);
 			}
 			ImGui::SameLine();
 			if (utilities::ImGuiButtonWrapper(layered ? "Peaks & valleys" : "Weirdness##spline", splinePressedButton == 3 ? true : false)) {
 				splinePressedButton = 3;
 				editedSplineComponent = WorldGenParameter::WEIRDNESS;
-				splinePlotPoints = world.terrain.MethodSpline(editedSplineComponent);
 			}
 			if (layered) {
 				ImGui::SetItemTooltip("Shape of mountains from weirdness: low = valleys, high = peaks.\n"
@@ -480,14 +485,23 @@ void TerrainGenerationSys::SplineEditor()
 				return;
 			}
 
-			if (splinePlotPoints.x.size() < 3 || splinePlotPoints.x.size() != splinePlotPoints.y.size()) {
+			//Edited in place: every change regenerates the terrain at once. Which spline weirdness uses depends on the method
+			SplinePoints& spline = world.terrain.MethodSpline(editedSplineComponent);
+			if (spline.x.size() < 3 || spline.x.size() != spline.y.size()) {
 				std::cout << "[ERROR] Spline points not set correctly\n";
 				return;
 			}
+			changeTerrain |= ImGui::Checkbox("Smooth (cubic)", &spline.cubic);
+			ImGui::SetItemTooltip("Cubic: a smooth curve through the points, which can bend past them.\nOff: straight segments between the points");
+			ImGui::TextDisabled("Drag a point, double-click to add one, right-click a point to remove it");
 
 			const double xmin = -1.0, xmax = 1.0;
+			//Points stay in [0, 1]; the view shows a little more, where a cubic curve can overshoot
 			const double ymin = 0.0, ymax = 1.0;
-			const double pick_radius = 0.08;
+			//Distance in pixels at which the mouse picks a point
+			const float pickRadius = 10.0f;
+			//Smallest distance in x between neighbouring points, keeps x strictly ascending
+			const double minGap = 0.01;
 
 			//What the axes mean depends on the method: LAYERED gives each spline its own role
 			const char* xLabel = "Continentalness";
@@ -500,64 +514,77 @@ void TerrainGenerationSys::SplineEditor()
 				xLabel = layered ? "Weirdness (valleys -> peaks)" : "Weirdness";
 				yLabel = layered ? "Mountain shape" : "Height factor";
 			}
-			if (ImPlot::BeginPlot("##plot", ImVec2(-1, 320), ImPlotFlags_NoMenus)) {
+			if (ImPlot::BeginPlot("##plot", ImVec2(-1, 320), ImPlotFlags_NoMenus | ImPlotFlags_NoLegend)) {
 				ImPlot::SetupAxis(ImAxis_X1, xLabel, ImPlotAxisFlags_Lock);
 				ImPlot::SetupAxis(ImAxis_Y1, yLabel, ImPlotAxisFlags_Lock);
 				ImPlot::SetupAxisLimits(ImAxis_X1, xmin, xmax, ImGuiCond_Always);
-				ImPlot::SetupAxisLimits(ImAxis_Y1, ymin, ymax, ImGuiCond_Always);
+				ImPlot::SetupAxisLimits(ImAxis_Y1, ymin - 0.1, ymax + 0.1, ImGuiCond_Always);
 
-				std::vector<double> xs, ys; xs.reserve(splinePlotPoints.x.size()); ys.reserve(splinePlotPoints.y.size());
-				for (auto& p : splinePlotPoints.x) { xs.push_back(p); }
-				for (auto& p : splinePlotPoints.y) { ys.push_back(p); }
-				ImPlot::PlotLine("Spline (lin.)", xs.data(), ys.data(), (int)splinePlotPoints.x.size());
-				ImPlot::PlotScatter("Spline points", xs.data(), ys.data(), (int)splinePlotPoints.x.size());
+				//The curve the generation uses, sampled the same way as for the GPU
+				constexpr int curveSamples = 256;
+				const std::vector<float> curve = SampleSpline(spline, curveSamples);
+				std::vector<float> curveX(curveSamples);
+				for (int i = 0; i < curveSamples; i++) {
+					curveX[i] = -1.0f + 2.0f * i / (curveSamples - 1);
+				}
+				ImPlot::PlotLine("Spline", curveX.data(), curve.data(), curveSamples);
+				ImPlot::PlotScatter("Points", spline.x.data(), spline.y.data(), static_cast<int>(spline.x.size()));
 
-				ImPlotPoint mouse = ImPlot::GetPlotMousePos();
-				if (splineDraggedPoint == -1 && ImPlot::IsPlotHovered() && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
-					for (int i = 0; i < (int)splinePlotPoints.x.size(); ++i) {
-						double dx = (double)mouse.x - splinePlotPoints.x[i];
-						double dy = (double)mouse.y - splinePlotPoints.y[i];
-						if (dx * dx + dy * dy <= pick_radius * pick_radius) {
-							splineDraggedPoint = i;
+				const ImPlotPoint mouse = ImPlot::GetPlotMousePos();
+				const ImVec2 mousePixels = ImGui::GetMousePos();
+				//Point under the mouse, -1 if none; picked in pixels, since the axes have different scales
+				int hovered = -1;
+				if (ImPlot::IsPlotHovered()) {
+					for (int i = 0; i < static_cast<int>(spline.x.size()); i++) {
+						const ImVec2 p = ImPlot::PlotToPixels(spline.x[i], spline.y[i]);
+						const float dx = p.x - mousePixels.x, dy = p.y - mousePixels.y;
+						if (dx * dx + dy * dy <= pickRadius * pickRadius) {
+							hovered = i;
 							break;
 						}
 					}
 				}
+				const int last = static_cast<int>(spline.x.size()) - 1;
 
+				if (splineDraggedPoint == -1 && hovered != -1 && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
+					splineDraggedPoint = hovered;
+				}
 				if (splineDraggedPoint != -1) {
-					if (ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
-						if (splineDraggedPoint == 0 || splineDraggedPoint == (int)splinePlotPoints.x.size() - 1) {
-							splinePlotPoints.y[splineDraggedPoint] = std::clamp((double)mouse.y, ymin, ymax);
+					if (ImGui::IsMouseDown(ImGuiMouseButton_Left) && splineDraggedPoint <= last) {
+						//The end points stay at -1 and 1, so the spline covers the whole noise range
+						if (splineDraggedPoint != 0 && splineDraggedPoint != last) {
+							spline.x[splineDraggedPoint] = std::clamp(mouse.x, spline.x[splineDraggedPoint - 1] + minGap, spline.x[splineDraggedPoint + 1] - minGap);
 						}
-						else {
-							double xmin_drag = splinePlotPoints.x[splineDraggedPoint - 1] + 0.01;
-							double xmax_drag = splinePlotPoints.x[splineDraggedPoint + 1] - 0.01;
-
-							splinePlotPoints.x[splineDraggedPoint] = std::clamp((double)mouse.x, xmin_drag, xmax_drag);
-							splinePlotPoints.y[splineDraggedPoint] = std::clamp((double)mouse.y, ymin, ymax);
-						}
+						spline.y[splineDraggedPoint] = std::clamp(mouse.y, ymin, ymax);
+						changeTerrain = true;
 					}
 					else {
 						splineDraggedPoint = -1;
 					}
 				}
-
-				if (splineDraggedPoint == -1 && ImPlot::IsPlotHovered()) {
-					for (int i = 0; i < (int)splinePlotPoints.x.size(); i++) {
-						double dx = (double)mouse.x - splinePlotPoints.x[i], dy = (double)mouse.y - splinePlotPoints.y[i];
-						if (dx * dx + dy * dy <= pick_radius * pick_radius) {
-							ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
-							break;
-						}
+				else if (hovered != -1 && ImGui::IsMouseClicked(ImGuiMouseButton_Right)) {
+					//The end points and the minimum of 3 points stay
+					if (hovered != 0 && hovered != last && spline.x.size() > 3) {
+						spline.x.erase(spline.x.begin() + hovered);
+						spline.y.erase(spline.y.begin() + hovered);
+						changeTerrain = true;
 					}
 				}
+				else if (hovered == -1 && ImPlot::IsPlotHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
+					//Inserted where it keeps x ascending, if there is room next to the neighbours
+					const auto next = std::upper_bound(spline.x.begin(), spline.x.end(), mouse.x);
+					if (next != spline.x.begin() && next != spline.x.end() && mouse.x - *(next - 1) >= minGap && *next - mouse.x >= minGap) {
+						const auto index = next - spline.x.begin();
+						spline.x.insert(next, mouse.x);
+						spline.y.insert(spline.y.begin() + index, std::clamp(mouse.y, ymin, ymax));
+						changeTerrain = true;
+					}
+				}
+
+				if (splineDraggedPoint != -1 || hovered != -1) {
+					ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
+				}
 				ImPlot::EndPlot();
-			}
-			if (ImGui::Button("Set new spline points")) {
-				//Edited splines are smoothed (cubic), the defaults are linear - behaviour kept from before A3
-				splinePlotPoints.cubic = true;
-				world.terrain.MethodSpline(editedSplineComponent) = splinePlotPoints;
-				changeTerrain = true;
 			}
 		}
 	}

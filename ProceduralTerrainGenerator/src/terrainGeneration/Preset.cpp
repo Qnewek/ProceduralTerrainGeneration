@@ -432,7 +432,7 @@ namespace preset {
 		}
 
 		//The Check functions throw on values generation cannot handle: division by zero in the noise, undefined
-		//behaviour in tk::spline or smoothstep, an empty biome table or reversed biome ranges
+		//spline sampling (x not ascending) or smoothstep, an empty biome table or reversed biome ranges
 		void CheckSize(int width, int height)
 		{
 			if (width < minMapSize || width > maxMapSize || height < minMapSize || height > maxMapSize) {

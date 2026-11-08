@@ -8,7 +8,7 @@
 #include <string>
 
 #include "Simplex/SimplexNoise.h"
-#include "Splines/spline.h"
+#include "SplineSampling.h"
 
 namespace {
 	constexpr int splineSamples = 1024;
@@ -63,12 +63,8 @@ namespace {
 
 	void SetSpline(GpuHeightInput& input, int index, const SplinePoints& points)
 	{
-		tk::spline spline;
-		spline.set_points(points.x, points.y, points.cubic ? tk::spline::cspline : tk::spline::linear);
-		for (int i = 0; i < splineSamples; i++) {
-			const double x = -1.0 + 2.0 * i / (splineSamples - 1);
-			input.splines[index * splineSamples + i] = static_cast<float>(spline(x));
-		}
+		const std::vector<float> samples = SampleSpline(points, splineSamples);
+		std::copy(samples.begin(), samples.end(), input.splines + index * splineSamples);
 	}
 
 	//Runs the bound shader over the whole map in parts; it reads the part from the tileOrigin uniform
