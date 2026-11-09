@@ -42,8 +42,9 @@ public:
 	//and takes its end value for a noise outside [-1, 1]
 	//@param target - GL_R32F
 	void GenerateTerrain(const TerrainConfig& config, const MapArea& area, TextureClass& target);
-	//Biome of every texel from its five noise values (biome_compute.shader): the nearest biome of biomes.table (biome::Nearest),
-	//and colors of all biomes mixed with biome::BlendWeight
+	//Biome of every texel from its five noise values (biome_compute.shader): temperature and humidity changed by the terrain
+	//height (biome::ApplyClimate, the height computed as GenerateTerrain does), then the nearest biome of biomes.table (biome::Nearest),
+	//and colors of all biomes mixed with biome::BlendWeight. Depends on the whole terrain config, so a terrain change needs new biomes
 	//@param colors - GL_RGBA32F, blended color of every texel
 	//@param ids - GL_R32I of the same size, id (index in the table) of the nearest biome of every texel
 	void GenerateBiomes(const BiomeConfig& biomes, const TerrainConfig& terrain, const MapArea& area, TextureClass& colors, TextureClass& ids);

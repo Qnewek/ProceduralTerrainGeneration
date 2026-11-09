@@ -34,7 +34,7 @@ class NoiseBasedGenerationSys
 		//Map size, noise and erosion parameters edited by the UI; generators only read them
 		NoiseMapConfig config;
 
-		bool erosionDraw = false, instantUpdate = true, infiniteGeneration = false;
+		bool erosionDraw = false, instantUpdate = true, infiniteGeneration = true;
 		double lastGenerationMs = 0.0, lastErosionMs = 0.0;
 
 		//Rendering; the finite noise map lives in the TERRAIN layer of the view, the infinite one in chunks

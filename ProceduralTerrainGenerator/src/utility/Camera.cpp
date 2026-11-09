@@ -142,7 +142,7 @@ void Camera::ImGuiDraw() {
 		ImGui::SliderFloat("Camera FOV", &fov, 1.0f, 120.0f);
 		ImGui::SliderFloat("Camera sensitivity", &sensitivity, 0.01f, 1.0f);
 		//Chunks of the infinite world get coarser with distance, so they can be seen far away
-		ImGui::SliderFloat("Render distance", &viewDist.y, 1.0f, 50000.0f, "%.0f", ImGuiSliderFlags_Logarithmic);
+		ImGui::SliderFloat("Render distance", &viewDist.y, 500.0f, 50000.0f, "%.0f", ImGuiSliderFlags_Logarithmic);
 	}
 }
 
