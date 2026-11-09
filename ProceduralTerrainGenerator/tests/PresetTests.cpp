@@ -96,11 +96,16 @@ static WorldConfig DistinctWorld()
 	c.biomes.humidity = DistinctNoise(5);
 	c.biomes.blendWidth = 0.17f;
 	c.biomes.climate = { 1.7f, -0.23f, 0.11f };
-	//Unlike the default table: other count, names, colors and every range
+	c.biomes.modifyTerrain = false;
+	c.biomes.terrainBlendWidth = 0.27f;
+	c.biomes.detailSeed = 4321;
+	//Unlike the default table: other count, names, colors, every range and every terrain modifier
 	biome::Biome alpha{ "Alpha", glm::vec3(0.31f, 0.32f, 0.33f),
-		{ biome::Range{ -0.41f, 0.42f }, biome::Range{ -0.43f, 0.44f }, biome::Range{ -0.45f, 0.46f }, biome::Range{ -0.47f, 0.48f }, biome::Range{ -0.49f, 0.51f } } };
+		{ biome::Range{ -0.41f, 0.42f }, biome::Range{ -0.43f, 0.44f }, biome::Range{ -0.45f, 0.46f }, biome::Range{ -0.47f, 0.48f }, biome::Range{ -0.49f, 0.51f } },
+		biome::TerrainModifier{ 0.71f, 0.072f, 0.073f, 7.4f, true } };
 	biome::Biome beta{ "Beta", glm::vec3(0.61f, 0.62f, 0.63f),
-		{ biome::Range{ 0.52f, 0.53f }, biome::Range{ 0.54f, 0.55f }, biome::Range{ 0.56f, 0.57f }, biome::Range{ 0.58f, 0.59f }, biome::Range{ 0.64f, 0.65f } } };
+		{ biome::Range{ 0.52f, 0.53f }, biome::Range{ 0.54f, 0.55f }, biome::Range{ 0.56f, 0.57f }, biome::Range{ 0.58f, 0.59f }, biome::Range{ 0.64f, 0.65f } },
+		biome::TerrainModifier{ 1.31f, -0.032f, 0.033f, 33.0f, false } };
 	c.biomes.table = { alpha, beta };
 	return c;
 }
@@ -116,6 +121,11 @@ static void CheckSameBiomes(const std::vector<biome::Biome>& a, const std::vecto
 			CHECK(a[i].ranges[p].min == b[i].ranges[p].min);
 			CHECK(a[i].ranges[p].max == b[i].ranges[p].max);
 		}
+		CHECK(a[i].terrain.amplitude == b[i].terrain.amplitude);
+		CHECK(a[i].terrain.offset == b[i].terrain.offset);
+		CHECK(a[i].terrain.detailAmplitude == b[i].terrain.detailAmplitude);
+		CHECK(a[i].terrain.detailSize == b[i].terrain.detailSize);
+		CHECK(a[i].terrain.detailRidge == b[i].terrain.detailRidge);
 	}
 }
 
@@ -153,6 +163,9 @@ TEST_CASE("A world preset keeps every field")
 	CHECK(loaded.biomes.climate.lapseRate == original.biomes.climate.lapseRate);
 	CHECK(loaded.biomes.climate.coastHumidity == original.biomes.climate.coastHumidity);
 	CHECK(loaded.biomes.climate.coastRange == original.biomes.climate.coastRange);
+	CHECK(loaded.biomes.modifyTerrain == original.biomes.modifyTerrain);
+	CHECK(loaded.biomes.terrainBlendWidth == original.biomes.terrainBlendWidth);
+	CHECK(loaded.biomes.detailSeed == original.biomes.detailSeed);
 	CheckSameBiomes(loaded.biomes.table, original.biomes.table);
 }
 
@@ -317,6 +330,9 @@ TEST_CASE("Invalid presets are rejected and the config stays unchanged")
 		{ "negative blend width", Replaced(valid, "\"blendWidth\": 0.17", "\"blendWidth\": -0.17") },
 		{ "zero coast range", Replaced(valid, "\"coastRange\": 0.11", "\"coastRange\": 0") },
 		{ "climate not an object", Replaced(valid, "\"climate\": {", "\"climate\": 1, \"unused\": {") },
+		{ "zero terrain blend width", Replaced(valid, "\"terrainBlendWidth\": 0.27", "\"terrainBlendWidth\": 0") },
+		{ "zero detail size", Replaced(valid, "\"detailSize\": 7.4", "\"detailSize\": 0") },
+		{ "detail ridge not a bool", Replaced(valid, "\"detailRidge\": true", "\"detailRidge\": 1") },
 		{ "empty biome table", Replaced(valid, "\"table\": [", "\"table\": [], \"unused\": [") },
 		{ "biome table not an array", Replaced(valid, "\"table\": [", "\"table\": 1, \"unused\": [") },
 		{ "reversed biome range", Replaced(valid, "-0.41", "0.9") },

@@ -25,10 +25,20 @@ namespace biome {
 
 	using ParameterValues = std::array<float, PARAMETER_COUNT>;
 
+	//How a biome changes the terrain height (see ModifyHeight); the default changes nothing
+	struct TerrainModifier {
+		float amplitude = 1.0f;			//scales the height above (and depth below) the water surface: < 1 flattens, > 1 sharpens
+		float offset = 0.0f;			//added to the height
+		float detailAmplitude = 0.0f;	//height of the detail noise (dunes, rough rock); 0 = none
+		float detailSize = 16.0f;		//wavelength of the detail noise in map texels; must be > 0
+		bool detailRidge = false;		//sharp crests (1 - 2|n|) instead of the plain noise, e.g. dunes
+	};
+
 	struct Biome {
 		std::string name;
 		glm::vec3 color = glm::vec3(0.0f);
 		std::array<Range, PARAMETER_COUNT> ranges;
+		TerrainModifier terrain;
 
 		//Distance in the parameter space from the ranges of the biome: 0 inside all of them, otherwise
 		//the Euclidean length of how far each value lies outside its range
@@ -53,6 +63,14 @@ namespace biome {
 	//where above = max(height - waterHeight, 0); both clamped to [-1, 1], so biomes with ranges at -1 or 1 still contain them.
 	//The other values are kept. biome_compute.shader does the same
 	ParameterValues ApplyClimate(ParameterValues values, float height, float waterHeight, const Climate& climate);
+
+	//Terrain height changed by the biomes: their modifiers mixed with BlendWeight(distance, nearest, blendWidth) normalized to sum 1,
+	//h = water + (height - water) * amplitude + offset + sum of weight * detailAmplitude * detail, clamped to [0, 1].
+	//The biomes are chosen from the height before modifying (values after ApplyClimate), so there is no loop. blendWidth must be > 0,
+	//or the height would jump at biome borders. biome_compute.shader and height_compute.shader do the same
+	//@param detail - value of the detail noise of every biome at this point, in [-1, 1] (the shaders evaluate it)
+	float ModifyHeight(const std::vector<Biome>& table, const ParameterValues& values, float height, float waterHeight, float blendWidth,
+		const std::vector<float>& detail);
 
 	//Biomes used by default
 	std::vector<Biome> DefaultBiomes();

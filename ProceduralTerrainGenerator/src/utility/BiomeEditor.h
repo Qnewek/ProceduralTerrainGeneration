@@ -5,7 +5,7 @@
 #include "Biome.h"
 
 //ImGui editor of the biome table (BiomeConfig::table): list of biomes, adding, removing and reordering them,
-//and the name, color and the five value ranges of the selected one. It edits the table in place;
+//and the name, color, the five value ranges and the terrain modifier of the selected one. It edits the table in place;
 //the subsystem regenerates the biomes when ImGuiDraw reports a change.
 class BiomeEditor
 {
