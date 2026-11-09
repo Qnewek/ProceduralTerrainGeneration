@@ -1,22 +1,18 @@
 #version 450 core
 
-// Generates a noise or terrain height map. After a change run ProceduralTerrainGenerator.exe --gpu-check.
+// Generates a noise or terrain height map; the terrain optionally changed by the biome modifiers (common/biomes.glsl).
+// After a change run ProceduralTerrainGenerator.exe --gpu-check.
 
 layout(local_size_x = 32, local_size_y = 32) in;
 
 layout(r32f, binding = 0) uniform writeonly image2D outputMap;
 
 #include "../common/noise_params.glsl"
-
-// Matches GpuHeightInput in GpuHeightGenerator.cpp; 1024 = SPLINE_SAMPLES of terrain.glsl
-layout(std430, binding = 0) readonly buffer HeightInput {
-	NoiseParams noises[3];
-	uint permutations[3 * 256];
-	float splines[3 * 1024];
-};
+#include "../common/world_input.glsl"
 
 uniform int mode;
 uniform vec3 layered;		// MODE_LAYERED: seaLevel, coastWidth, mountainShare (TerrainConfig)
+uniform int modifyTerrain;	// 1 = the biome table is bound and its modifiers change the terrain
 uniform ivec2 mapSize;
 uniform ivec2 tileOrigin;	// first texel of this dispatch, large maps are generated in parts
 uniform vec2 origin;		// map position of texel (0, 0)
@@ -25,13 +21,24 @@ uniform ivec2 islandSize;	// see noise.glsl
 
 #include "../common/noise.glsl"
 #include "../common/terrain.glsl"
+#include "../common/biomes.glsl"
 
-float evaluateHeight(float x, float y)
+float evaluateHeight(vec2 position)
 {
 	if (mode == MODE_NOISE) {
-		return evaluateNoise(0, x, y);
+		return evaluateNoise(0, position.x, position.y);
 	}
-	return terrainHeight(evaluateNoise(0, x, y), evaluateNoise(1, x, y), evaluateNoise(2, x, y));
+	if (modifyTerrain == 0) {
+		return terrainHeight(evaluateNoise(0, position.x, position.y), evaluateNoise(1, position.x, position.y), evaluateNoise(2, position.x, position.y));
+	}
+	// As in biome_compute.shader: biomes chosen from the height before the modifiers
+	float values[PARAMETER_COUNT];
+	for (int i = 0; i < PARAMETER_COUNT; i++) {
+		values[i] = evaluateNoise(i, position.x, position.y);
+	}
+	float height = terrainHeight(values[0], values[1], values[2]);
+	applyClimate(values, height);
+	return modifyHeight(values, height, position);
 }
 
 void main()
@@ -41,5 +48,5 @@ void main()
 		return;
 	}
 	vec2 position = vec2(texel) * sampleStep + origin;
-	imageStore(outputMap, texel, vec4(evaluateHeight(position.x, position.y)));
+	imageStore(outputMap, texel, vec4(evaluateHeight(position)));
 }

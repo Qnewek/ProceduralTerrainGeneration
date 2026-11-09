@@ -1,6 +1,7 @@
 #include "doctest/doctest.h"
 
 #include <algorithm>
+#include <cmath>
 
 #include "Biome.h"
 
@@ -74,6 +75,52 @@ TEST_CASE("Climate: temperature falls with height above the water, humidity rise
 	CHECK(v[biome::HUMIDITY] == 1.0f);
 	v = biome::ApplyClimate(Values(0.0f, 0.0f, 0.0f, -0.9f, 0.9f), 1.0f, 0.0f, biome::Climate{ 5.0f, 0.5f, 0.1f });
 	CHECK(v[biome::TEMPERATURE] == -1.0f);
+}
+
+TEST_CASE("Modifiers: inside one biome its modifier alone changes the height")
+{
+	biome::Biome flat, other;
+	flat.ranges[biome::TEMPERATURE] = { -1.0f, 0.0f };
+	flat.terrain = { 0.5f, 0.1f, 0.2f, 16.0f, false };
+	other.ranges[biome::TEMPERATURE] = { 0.5f, 1.0f };
+	other.terrain = { 3.0f, -0.3f, 0.0f, 16.0f, false };
+	const std::vector<biome::Biome> table = { flat, other };
+	const std::vector<float> detail = { 0.5f, -1.0f };
+	//T = -0.5: deep inside "flat", "other" is 1.0 away, far beyond the blend width
+	const biome::ParameterValues values = Values(0.0f, 0.0f, 0.0f, -0.5f, 0.0f);
+	//water + (h - water) * 0.5 + 0.1 + 0.2 * 0.5
+	CHECK(biome::ModifyHeight(table, values, 0.6f, 0.2f, 0.1f, detail) == doctest::Approx(0.2f + 0.4f * 0.5f + 0.1f + 0.1f));
+	//The water surface stays where it is for amplitude alone
+	std::vector<biome::Biome> onlyAmplitude = table;
+	onlyAmplitude[0].terrain = { 0.5f, 0.0f, 0.0f, 16.0f, false };
+	CHECK(biome::ModifyHeight(onlyAmplitude, values, 0.2f, 0.2f, 0.1f, detail) == doctest::Approx(0.2f));
+	//Neutral modifiers keep the height
+	std::vector<biome::Biome> neutral = { biome::Biome{}, biome::Biome{} };
+	CHECK(biome::ModifyHeight(neutral, values, 0.37f, 0.2f, 0.1f, detail) == doctest::Approx(0.37f));
+	//Clamped to [0, 1]
+	CHECK(biome::ModifyHeight(table, values, 3.0f, 0.2f, 0.1f, detail) == 1.0f);
+}
+
+TEST_CASE("Modifiers: the height changes continuously across a biome border")
+{
+	biome::Biome low, high;
+	low.ranges[biome::TEMPERATURE] = { -1.0f, 0.0f };
+	low.terrain = { 0.3f, 0.0f, 0.0f, 16.0f, false };
+	high.ranges[biome::TEMPERATURE] = { 0.0f, 1.0f };
+	high.terrain = { 2.0f, 0.1f, 0.0f, 16.0f, false };
+	const std::vector<biome::Biome> table = { low, high };
+	const std::vector<float> detail = { 0.0f, 0.0f };
+	//Walking over the border at T = 0 in small steps: no step larger than a fraction of the full difference
+	const float lowHeight = biome::ModifyHeight(table, Values(0.0f, 0.0f, 0.0f, -0.5f, 0.0f), 0.6f, 0.2f, 0.2f, detail);
+	const float highHeight = biome::ModifyHeight(table, Values(0.0f, 0.0f, 0.0f, 0.5f, 0.0f), 0.6f, 0.2f, 0.2f, detail);
+	float previous = lowHeight, largestStep = 0.0f;
+	for (int i = -100; i <= 100; i++) {
+		const float h = biome::ModifyHeight(table, Values(0.0f, 0.0f, 0.0f, 0.005f * i, 0.0f), 0.6f, 0.2f, 0.2f, detail);
+		largestStep = std::max(largestStep, std::abs(h - previous));
+		previous = h;
+	}
+	CHECK(highHeight > lowHeight);
+	CHECK(largestStep < (highHeight - lowHeight) * 0.1f);
 }
 
 TEST_CASE("Climate: high mountains of the default table get snow")

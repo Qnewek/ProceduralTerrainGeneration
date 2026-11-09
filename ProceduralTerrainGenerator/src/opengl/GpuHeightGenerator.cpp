@@ -27,26 +27,30 @@ namespace {
 	};
 	static_assert(sizeof(GpuNoiseParams) == 92);
 
-	//Layout of the HeightInput block in the height shader (std430)
-	struct GpuHeightInput {
-		GpuNoiseParams noises[3];
-		uint32_t permutations[3 * 256];
-		float splines[3 * splineSamples];
-	};
-
-	//Layout of the BiomeInput block in the biome shader (std430); the splines give the terrain height for the climate
-	struct GpuBiomeInput {
+	//Layout of the WorldInput block of both shaders (common/world_input.glsl, std430): noises in the order of biome::Parameter,
+	//permutation table 5 for the detail noise of the biome modifiers, the three terrain splines
+	constexpr int detailTable = 5;
+	struct GpuWorldInput {
 		GpuNoiseParams noises[5];
-		uint32_t permutations[5 * 256];
+		uint32_t permutations[6 * 256];
 		float splines[3 * splineSamples];
 	};
 
-	//Layout of BiomeEntry in the biome shader (std430)
+	//Layout of BiomeEntry in common/biomes.glsl (std430)
 	struct GpuBiomeEntry {
 		float ranges[2 * biome::PARAMETER_COUNT];
 		float r, g, b;
+		float amplitude, offset, detailAmplitude, detailSize;
+		int32_t detailRidge;
 	};
-	static_assert(sizeof(GpuBiomeEntry) == 52);
+	static_assert(sizeof(GpuBiomeEntry) == 72);
+
+	void SetPermutation(uint32_t* permutations, int index, int seed)
+	{
+		std::array<uint8_t, 256> perm;
+		SimplexNoise::makePermutation(seed, perm.data());
+		std::copy(perm.begin(), perm.end(), permutations + index * 256);
+	}
 
 	void SetNoise(GpuNoiseParams* noises, uint32_t* permutations, int index, const noise::NoiseConfigParameters& n)
 	{
@@ -56,10 +60,7 @@ namespace {
 			n.resolution, n.octaves, static_cast<int32_t>(n.option), n.Ridge ? 1 : 0, n.island ? 1 : 0, static_cast<int32_t>(n.islandType), n.symmetrical ? 1 : 0,
 			n.terraceSteps
 		};
-
-		std::array<uint8_t, 256> perm;
-		SimplexNoise::makePermutation(n.seed, perm.data());
-		std::copy(perm.begin(), perm.end(), permutations + index * 256);
+		SetPermutation(permutations, index, n.seed);
 	}
 
 	//Fills the splines the terrain method uses (none for LINEAR_COMBINE)
@@ -107,21 +108,73 @@ namespace {
 		shader.SetUniform2i("islandSize", islandSize.x, islandSize.y);
 	}
 
-	void RunHeightShader(Shader& shader, unsigned int input, int mode, const MapArea& area, TextureClass& target)
+	//Fills the noises, permutation tables and splines of the terrain and, if given, of the biomes
+	//@return the mode of terrain.glsl for the terrain method
+	int FillWorldInput(GpuWorldInput& input, const TerrainConfig& terrain, const BiomeConfig* biomes)
 	{
-		shader.Bind();
-		shader.SetUniform1i("mode", mode);
-		SetMapUniforms(shader, area, target);
-		glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, input);
-		target.BindImage(0, GL_WRITE_ONLY);
-		DispatchTiles(shader, target.GetWidth(), target.GetHeight());
+		SetNoise(input.noises, input.permutations, 0, terrain.continentalness);
+		SetNoise(input.noises, input.permutations, 1, terrain.mountainousness);
+		SetNoise(input.noises, input.permutations, 2, terrain.weirdness);
+		if (biomes) {
+			SetNoise(input.noises, input.permutations, 3, biomes->temperature);
+			SetNoise(input.noises, input.permutations, 4, biomes->humidity);
+			SetPermutation(input.permutations, detailTable, biomes->detailSeed);
+		}
+		return SetTerrainSplines(input.splines, terrain);
 	}
+
+	//Sets the uniforms of the terrain method and of common/biomes.glsl; the shader must be bound
+	void SetWorldUniforms(Shader& shader, int mode, const TerrainConfig& terrain, const BiomeConfig& biomes)
+	{
+		shader.SetUniform1i("mode", mode);
+		shader.SetUniform3fv("layered", glm::vec3(terrain.seaLevel, terrain.coastWidth, terrain.mountainShare));
+		shader.SetUniform1i("biomeCount", static_cast<int>(biomes.table.size()));
+		shader.SetUniform1f("waterHeight", terrain.WaterHeight());
+		shader.SetUniform3fv("climate", glm::vec3(biomes.climate.lapseRate, biomes.climate.coastHumidity, biomes.climate.coastRange));
+	}
+}
+
+void GpuHeightGenerator::UploadBiomeTable(const BiomeConfig& biomes)
+{
+	std::vector<GpuBiomeEntry> entries;
+	for (const biome::Biome& b : biomes.table) {
+		GpuBiomeEntry& e = entries.emplace_back();
+		for (int i = 0; i < biome::PARAMETER_COUNT; i++) {
+			e.ranges[i * 2] = b.ranges[i].min;
+			e.ranges[i * 2 + 1] = b.ranges[i].max;
+		}
+		e.r = b.color.r;
+		e.g = b.color.g;
+		e.b = b.color.b;
+		e.amplitude = b.terrain.amplitude;
+		e.offset = b.terrain.offset;
+		e.detailAmplitude = b.terrain.detailAmplitude;
+		e.detailSize = b.terrain.detailSize;
+		e.detailRidge = b.terrain.detailRidge ? 1 : 0;
+	}
+	//The number of biomes can change, so the buffer gets new storage on every use
+	glNamedBufferData(biomeTable, entries.size() * sizeof(GpuBiomeEntry), entries.data(), GL_DYNAMIC_DRAW);
+}
+
+void GpuHeightGenerator::RunHeightShader(int mode, bool modify, const MapArea& area, TextureClass& target)
+{
+	Shader& shader = *heightShader;
+	shader.Bind();
+	shader.SetUniform1i("mode", mode);
+	shader.SetUniform1i("modifyTerrain", modify ? 1 : 0);
+	SetMapUniforms(shader, area, target);
+	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, worldInput);
+	if (modify) {
+		glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, biomeTable);
+	}
+	target.BindImage(0, GL_WRITE_ONLY);
+	DispatchTiles(shader, target.GetWidth(), target.GetHeight());
 }
 
 GpuHeightGenerator::~GpuHeightGenerator()
 {
-	const unsigned int buffers[] = { heightInput, biomeInput, biomeTable };
-	glDeleteBuffers(3, buffers);
+	const unsigned int buffers[] = { worldInput, biomeTable };
+	glDeleteBuffers(2, buffers);
 }
 
 bool GpuHeightGenerator::Initialize()
@@ -132,10 +185,9 @@ bool GpuHeightGenerator::Initialize()
 		std::cout << "[ERROR] GpuHeightGenerator: a compute shader could not be built" << std::endl;
 		return false;
 	}
-	glCreateBuffers(1, &heightInput);
-	glNamedBufferStorage(heightInput, sizeof(GpuHeightInput), nullptr, GL_DYNAMIC_STORAGE_BIT);
-	glCreateBuffers(1, &biomeInput);
-	glNamedBufferStorage(biomeInput, sizeof(GpuBiomeInput), nullptr, GL_DYNAMIC_STORAGE_BIT);
+	//One input buffer for both shaders; updating it after a dispatch waits for the dispatch (GL orders buffer updates)
+	glCreateBuffers(1, &worldInput);
+	glNamedBufferStorage(worldInput, sizeof(GpuWorldInput), nullptr, GL_DYNAMIC_STORAGE_BIT);
 	glCreateBuffers(1, &biomeTable);
 	timer = std::make_unique<GpuQuery>(GL_TIME_ELAPSED);
 	return true;
@@ -158,61 +210,41 @@ void GpuHeightGenerator::PollMeasure(double& ms)
 void GpuHeightGenerator::GenerateNoise(const noise::NoiseConfigParameters& config, const MapArea& area, TextureClass& target)
 {
 	//Uninitialized on purpose: the shader reads only what is set for the mode
-	auto input = std::make_unique_for_overwrite<GpuHeightInput>();
+	auto input = std::make_unique_for_overwrite<GpuWorldInput>();
 	SetNoise(input->noises, input->permutations, 0, config);
-	glNamedBufferSubData(heightInput, 0, offsetof(GpuHeightInput, splines), input.get());
-	RunHeightShader(*heightShader, heightInput, MODE_NOISE, area, target);
+	glNamedBufferSubData(worldInput, 0, sizeof(GpuWorldInput), input.get());
+	RunHeightShader(MODE_NOISE, false, area, target);
 }
 
-void GpuHeightGenerator::GenerateTerrain(const TerrainConfig& config, const MapArea& area, TextureClass& target)
+void GpuHeightGenerator::GenerateTerrain(const TerrainConfig& config, const MapArea& area, TextureClass& target, const BiomeConfig* biomes)
 {
-	auto input = std::make_unique_for_overwrite<GpuHeightInput>();
-	SetNoise(input->noises, input->permutations, 0, config.continentalness);
-	SetNoise(input->noises, input->permutations, 1, config.mountainousness);
-	SetNoise(input->noises, input->permutations, 2, config.weirdness);
-
-	const int mode = SetTerrainSplines(input->splines, config);
-	glNamedBufferSubData(heightInput, 0, mode == MODE_LINEAR ? offsetof(GpuHeightInput, splines) : sizeof(GpuHeightInput), input.get());
+	auto input = std::make_unique_for_overwrite<GpuWorldInput>();
+	const bool modify = biomes && biomes->modifyTerrain;
+	const int mode = FillWorldInput(*input, config, modify ? biomes : nullptr);
+	glNamedBufferSubData(worldInput, 0, sizeof(GpuWorldInput), input.get());
 	heightShader->Bind();
 	heightShader->SetUniform3fv("layered", glm::vec3(config.seaLevel, config.coastWidth, config.mountainShare));
-	RunHeightShader(*heightShader, heightInput, mode, area, target);
+	if (modify) {
+		UploadBiomeTable(*biomes);
+		SetWorldUniforms(*heightShader, mode, config, *biomes);
+		//Only the height shader uses it
+		heightShader->SetUniform1f("terrainBlendWidth", biomes->terrainBlendWidth);
+	}
+	RunHeightShader(mode, modify, area, target);
 }
 
 void GpuHeightGenerator::GenerateBiomes(const BiomeConfig& biomes, const TerrainConfig& terrain, const MapArea& area, TextureClass& colors, TextureClass& ids)
 {
-	//The noises in the order of biome::Parameter
-	auto input = std::make_unique_for_overwrite<GpuBiomeInput>();
-	SetNoise(input->noises, input->permutations, 0, terrain.continentalness);
-	SetNoise(input->noises, input->permutations, 1, terrain.mountainousness);
-	SetNoise(input->noises, input->permutations, 2, terrain.weirdness);
-	SetNoise(input->noises, input->permutations, 3, biomes.temperature);
-	SetNoise(input->noises, input->permutations, 4, biomes.humidity);
-	const int mode = SetTerrainSplines(input->splines, terrain);
-	glNamedBufferSubData(biomeInput, 0, mode == MODE_LINEAR ? offsetof(GpuBiomeInput, splines) : sizeof(GpuBiomeInput), input.get());
-
-	std::vector<GpuBiomeEntry> entries;
-	for (const biome::Biome& b : biomes.table) {
-		GpuBiomeEntry& e = entries.emplace_back();
-		for (int i = 0; i < biome::PARAMETER_COUNT; i++) {
-			e.ranges[i * 2] = b.ranges[i].min;
-			e.ranges[i * 2 + 1] = b.ranges[i].max;
-		}
-		e.r = b.color.r;
-		e.g = b.color.g;
-		e.b = b.color.b;
-	}
-	//The number of biomes can change, so the buffer gets new storage on every use
-	glNamedBufferData(biomeTable, entries.size() * sizeof(GpuBiomeEntry), entries.data(), GL_DYNAMIC_DRAW);
+	auto input = std::make_unique_for_overwrite<GpuWorldInput>();
+	const int mode = FillWorldInput(*input, terrain, &biomes);
+	glNamedBufferSubData(worldInput, 0, sizeof(GpuWorldInput), input.get());
+	UploadBiomeTable(biomes);
 
 	biomeShader->Bind();
-	biomeShader->SetUniform1i("biomeCount", static_cast<int>(entries.size()));
+	SetWorldUniforms(*biomeShader, mode, terrain, biomes);
 	biomeShader->SetUniform1f("blendWidth", biomes.blendWidth);
-	biomeShader->SetUniform1i("mode", mode);
-	biomeShader->SetUniform3fv("layered", glm::vec3(terrain.seaLevel, terrain.coastWidth, terrain.mountainShare));
-	biomeShader->SetUniform1f("waterHeight", terrain.WaterHeight());
-	biomeShader->SetUniform3fv("climate", glm::vec3(biomes.climate.lapseRate, biomes.climate.coastHumidity, biomes.climate.coastRange));
 	SetMapUniforms(*biomeShader, area, colors);
-	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, biomeInput);
+	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, worldInput);
 	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, biomeTable);
 	colors.BindImage(0, GL_WRITE_ONLY);
 	ids.BindImage(1, GL_WRITE_ONLY);

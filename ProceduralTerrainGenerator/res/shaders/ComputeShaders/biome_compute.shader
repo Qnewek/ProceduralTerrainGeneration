@@ -1,8 +1,8 @@
 #version 450 core
 
-// Biome of every texel from its five noise values, evaluated in place; the same rules as biome::ApplyClimate, biome::Nearest and
-// biome::BlendWeight (Biome.h): temperature and humidity changed by the terrain height, then the id is the nearest biome
-// (first on ties) and the color mixes all biomes closer than blendWidth to the nearest one.
+// Biome of every texel from its five noise values, evaluated in place, by the rules of common/biomes.glsl (= Biome.cpp):
+// temperature and humidity changed by the terrain height (before the biome modifiers, so there is no loop), then the id
+// is the nearest biome (first on ties) and the color mixes all biomes closer than blendWidth to the nearest one.
 // After a change run ProceduralTerrainGenerator.exe --gpu-check.
 
 layout(local_size_x = 32, local_size_y = 32) in;
@@ -11,28 +11,8 @@ layout(rgba32f, binding = 0) uniform writeonly image2D colorMap;
 layout(r32i, binding = 1) uniform writeonly iimage2D idMap;
 
 #include "../common/noise_params.glsl"
+#include "../common/world_input.glsl"
 
-// Order of noises and ranges (biome::Parameter): continentalness, mountainousness, weirdness, temperature, humidity
-const int PARAMETER_COUNT = 5;
-
-// Matches GpuBiomeInput in GpuHeightGenerator.cpp; splines of the terrain as in height_compute.shader
-layout(std430, binding = 0) readonly buffer BiomeInput {
-	NoiseParams noises[5];
-	uint permutations[5 * 256];
-	float splines[3 * 1024];
-};
-
-// Matches GpuBiomeEntry in GpuHeightGenerator.cpp
-struct BiomeEntry {
-	float ranges[2 * PARAMETER_COUNT];	// min and max of every parameter, order as above
-	float r, g, b;
-};
-
-layout(std430, binding = 1) readonly buffer BiomeTable {
-	BiomeEntry biomes[];
-};
-
-uniform int biomeCount;
 uniform float blendWidth;		// 0 = only the nearest biome
 uniform ivec2 mapSize;
 uniform ivec2 tileOrigin;		// first texel of this dispatch, large maps are generated in parts
@@ -41,31 +21,10 @@ uniform float sampleStep;		// map distance between neighbouring texels (MapArea:
 uniform ivec2 islandSize;		// see noise.glsl
 uniform int mode;				// terrain method (MODE_* of terrain.glsl), never MODE_NOISE
 uniform vec3 layered;			// MODE_LAYERED: seaLevel, coastWidth, mountainShare (TerrainConfig)
-uniform float waterHeight;		// TerrainConfig::WaterHeight
-uniform vec3 climate;			// lapseRate, coastHumidity, coastRange (biome::Climate)
 
 #include "../common/noise.glsl"
 #include "../common/terrain.glsl"
-
-// biome::ApplyClimate
-void applyClimate(inout float values[PARAMETER_COUNT], float height)
-{
-	float above = max(height - waterHeight, 0.0);
-	float coast = 1.0 - smoothstep(0.0, climate.z, above);
-	values[3] = clamp(values[3] - climate.x * above, -1.0, 1.0);
-	values[4] = clamp(values[4] + climate.y * coast, -1.0, 1.0);
-}
-
-// biome::Biome::Distance
-float biomeDistance(int b, float values[PARAMETER_COUNT])
-{
-	float sum = 0.0;
-	for (int i = 0; i < PARAMETER_COUNT; i++) {
-		float outside = max(max(biomes[b].ranges[i * 2] - values[i], values[i] - biomes[b].ranges[i * 2 + 1]), 0.0);
-		sum += outside * outside;
-	}
-	return sqrt(sum);
-}
+#include "../common/biomes.glsl"
 
 void main()
 {
@@ -81,15 +40,8 @@ void main()
 	}
 	applyClimate(values, terrainHeight(values[0], values[1], values[2]));
 
-	int id = 0;
-	float nearest = biomeDistance(0, values);
-	for (int b = 1; b < biomeCount; b++) {
-		float distance = biomeDistance(b, values);
-		if (distance < nearest) {
-			nearest = distance;
-			id = b;
-		}
-	}
+	float nearest;
+	int id = nearestBiome(values, nearest);
 
 	// All biomes take part, so a biome passing another in distance changes the color continuously
 	vec3 color = vec3(biomes[id].r, biomes[id].g, biomes[id].b);
@@ -97,8 +49,7 @@ void main()
 		vec3 sum = vec3(0.0);
 		float total = 0.0;
 		for (int b = 0; b < biomeCount; b++) {
-			// biome::BlendWeight
-			float weight = 1.0 - smoothstep(0.0, 1.0, (biomeDistance(b, values) - nearest) / blendWidth);
+			float weight = blendWeight(biomeDistance(b, values), nearest, blendWidth);
 			sum += weight * vec3(biomes[b].r, biomes[b].g, biomes[b].b);
 			total += weight;
 		}

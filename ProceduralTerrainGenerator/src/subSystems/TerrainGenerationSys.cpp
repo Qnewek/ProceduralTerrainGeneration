@@ -75,7 +75,7 @@ void TerrainGenerationSys::UpdateChunks(const Camera& camera)
 	}
 	gpu.BeginMeasure();
 	chunks.GenerateNext([&](const MapArea& area, TextureClass& height, TextureClass* colors, TextureClass* ids) {
-		gpu.GenerateTerrain(world.terrain, area, height);
+		gpu.GenerateTerrain(world.terrain, area, height, biomesGeneration ? &world.biomes : nullptr);
 		if (colors && ids) {
 			gpu.GenerateBiomes(world.biomes, world.terrain, area, *colors, *ids);
 		}
@@ -100,7 +100,7 @@ void TerrainGenerationSys::GenerateFinite()
 
 	gpu.BeginMeasure();
 	if (request.terrain) {
-		gpu.GenerateTerrain(world.terrain, MapArea{}, view.LayerTexture(TerrainView::Layer::TERRAIN, width, height));
+		gpu.GenerateTerrain(world.terrain, MapArea{}, view.LayerTexture(TerrainView::Layer::TERRAIN, width, height), biomesGeneration ? &world.biomes : nullptr);
 	}
 	if (request.biomes) {
 		if (!biomeIds || biomeIds->GetWidth() != width || biomeIds->GetHeight() != height) {
@@ -157,6 +157,10 @@ void TerrainGenerationSys::RequestTerrain()
 void TerrainGenerationSys::RequestBiomes()
 {
 	pending.biomes = true;
+	//The biome modifiers change the terrain, so any biome change may change it
+	if (world.biomes.modifyTerrain) {
+		pending.terrain = true;
+	}
 }
 
 void TerrainGenerationSys::PresetsImGui()
@@ -394,6 +398,10 @@ void TerrainGenerationSys::BiomesEditor()
 		}
 		else {
 			renderSettings.displayMode = utilities::heightMapMode::TOPOGRAPHICAL;
+			//Without biomes the terrain loses their modifiers
+			if (world.biomes.modifyTerrain) {
+				RequestTerrain();
+			}
 		}
 	}
 	if (biomesGeneration) {
@@ -416,6 +424,24 @@ void TerrainGenerationSys::BiomesEditor()
 					ImGui::TextDisabled("This terrain method has no sea: heights are measured from 0");
 				}
 				if (climateChanged) {
+					RequestBiomes();
+				}
+				ImGui::TreePop();
+			}
+			if (ImGui::TreeNodeEx("Terrain modifiers", ImGuiTreeNodeFlags_DefaultOpen)) {
+				BiomeConfig& b = world.biomes;
+				if (ImGui::Checkbox("Biomes modify the terrain", &b.modifyTerrain)) {
+					//Turning them off has to remove them from the terrain too
+					RequestTerrain();
+				}
+				ImGui::SetItemTooltip("Each biome changes the terrain by its modifiers (in the biome table), mixed across borders");
+				ImGui::BeginDisabled(!b.modifyTerrain);
+				bool modifiersChanged = ImGui::SliderFloat("Terrain blend width", &b.terrainBlendWidth, 0.01f, 0.5f, "%.3f", ImGuiSliderFlags_AlwaysClamp);
+				ImGui::SetItemTooltip("How far (in noise values) the modifiers of neighbouring biomes mix.\n"
+					"Always above 0, so the terrain does not jump at biome borders even with sharp colors");
+				modifiersChanged |= ImGui::InputInt("Detail seed", &b.detailSeed);
+				ImGui::EndDisabled();
+				if (modifiersChanged) {
 					RequestBiomes();
 				}
 				ImGui::TreePop();
