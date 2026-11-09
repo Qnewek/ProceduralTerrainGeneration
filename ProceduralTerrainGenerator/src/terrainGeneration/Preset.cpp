@@ -29,7 +29,7 @@ namespace preset {
 		constexpr int maxMapSize = 8192;
 		constexpr int maxOctaves = 32;
 		constexpr int maxTerraceSteps = 64;
-		constexpr size_t maxBiomes = 64;
+		using biome::maxBiomes;
 
 		//Keys of the biome ranges, in the order of biome::Parameter
 		constexpr const char* biomeParameterNames[biome::PARAMETER_COUNT] = { "continentalness", "mountainousness", "weirdness", "temperature", "humidity" };
@@ -406,6 +406,13 @@ namespace preset {
 			ReadNoise(r, "temperature", b.temperature);
 			ReadNoise(r, "humidity", b.humidity);
 			r.Read("blendWidth", b.blendWidth);
+			//Missing in presets saved before the climate existed; the defaults are kept
+			if (const json* climate = r.Find("climate")) {
+				const Reader c(*climate, r.PathOf("climate"));
+				c.Read("lapseRate", b.climate.lapseRate);
+				c.Read("coastHumidity", b.climate.coastHumidity);
+				c.Read("coastRange", b.climate.coastRange);
+			}
 
 			//A table in the file replaces the default one; fields missing in an entry keep the values of a new Biome
 			const json* table = r.Find("table");
@@ -476,6 +483,13 @@ namespace preset {
 		{
 			if (!std::isfinite(b.blendWidth) || b.blendWidth < 0.0f) {
 				throw std::runtime_error("Biomes: blendWidth must not be negative");
+			}
+			if (!std::isfinite(b.climate.lapseRate) || !std::isfinite(b.climate.coastHumidity)) {
+				throw std::runtime_error("Biomes: climate lapseRate and coastHumidity must be numbers");
+			}
+			//Divides the height above the water
+			if (!std::isfinite(b.climate.coastRange) || b.climate.coastRange <= 0.0f) {
+				throw std::runtime_error("Biomes: climate coastRange must be greater than 0");
 			}
 			if (b.table.empty() || b.table.size() > maxBiomes) {
 				throw std::runtime_error("Biomes: the table must have between 1 and " + std::to_string(maxBiomes) + " biomes");
@@ -629,6 +643,11 @@ namespace preset {
 		biomes["temperature"] = NoiseToJson(c.biomes.temperature);
 		biomes["humidity"] = NoiseToJson(c.biomes.humidity);
 		biomes["blendWidth"] = ReadableFloat(c.biomes.blendWidth);
+		json climate;
+		climate["lapseRate"] = ReadableFloat(c.biomes.climate.lapseRate);
+		climate["coastHumidity"] = ReadableFloat(c.biomes.climate.coastHumidity);
+		climate["coastRange"] = ReadableFloat(c.biomes.climate.coastRange);
+		biomes["climate"] = std::move(climate);
 		json table = json::array();
 		for (const biome::Biome& b : c.biomes.table) {
 			table.push_back(BiomeToJson(b));

@@ -8,16 +8,12 @@ layout(r32f, binding = 0) uniform writeonly image2D outputMap;
 
 #include "../common/noise_params.glsl"
 
-const int SPLINE_SAMPLES = 1024;
-
-// Matches GpuHeightInput in GpuHeightGenerator.cpp
+// Matches GpuHeightInput in GpuHeightGenerator.cpp; 1024 = SPLINE_SAMPLES of terrain.glsl
 layout(std430, binding = 0) readonly buffer HeightInput {
 	NoiseParams noises[3];
 	uint permutations[3 * 256];
-	float splines[3 * SPLINE_SAMPLES];
+	float splines[3 * 1024];
 };
-
-const int MODE_NOISE = 0, MODE_LINEAR = 1, MODE_SPLINE = 2, MODE_LAYERED = 3;
 
 uniform int mode;
 uniform vec3 layered;		// MODE_LAYERED: seaLevel, coastWidth, mountainShare (TerrainConfig)
@@ -28,35 +24,14 @@ uniform float sampleStep;	// map distance between neighbouring texels (MapArea::
 uniform ivec2 islandSize;	// see noise.glsl
 
 #include "../common/noise.glsl"
-
-// A value outside [-1, 1] takes the end of the table (SampleSpline in SplineSampling.cpp fills it)
-float evaluateSpline(int index, float value)
-{
-	float position = (clamp(value, -1.0, 1.0) + 1.0) * 0.5 * float(SPLINE_SAMPLES - 1);
-	int sampleIndex = min(int(position), SPLINE_SAMPLES - 2);
-	int first = index * SPLINE_SAMPLES + sampleIndex;
-	return mix(splines[first], splines[first + 1], position - float(sampleIndex));
-}
+#include "../common/terrain.glsl"
 
 float evaluateHeight(float x, float y)
 {
 	if (mode == MODE_NOISE) {
 		return evaluateNoise(0, x, y);
 	}
-	float continentalness = evaluateNoise(0, x, y);
-	float mountainousness = evaluateNoise(1, x, y);
-	float weirdness = evaluateNoise(2, x, y);
-	if (mode == MODE_LINEAR) {
-		return (continentalness + 1.0) / 2.0 * ((mountainousness + 1.0) / 2.0) * (1.0 - (weirdness + 1.0) / 2.0);
-	}
-	if (mode == MODE_LAYERED) {
-		// Spline 2 holds peaksSpline here; see TerrainConfig::seaLevel for the formula
-		float base = evaluateSpline(0, continentalness);
-		float land = smoothstep(layered.x, layered.x + layered.y, base);
-		float relief = evaluateSpline(1, mountainousness) * evaluateSpline(2, weirdness);
-		return base * (1.0 - layered.z) + land * relief * layered.z;
-	}
-	return evaluateSpline(0, continentalness) * evaluateSpline(1, mountainousness) * evaluateSpline(2, weirdness);
+	return terrainHeight(evaluateNoise(0, x, y), evaluateNoise(1, x, y), evaluateNoise(2, x, y));
 }
 
 void main()

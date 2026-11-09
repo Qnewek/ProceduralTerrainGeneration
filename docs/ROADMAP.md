@@ -309,8 +309,8 @@ Biomy (Faza 3, pkt 3–4) opierają się na wysokości i znaczeniu szumów C/M/W
 ### Faza 3 — biomy 2.0 (2–3 tygodnie)
 Cel: realistyczne, płynne przejścia i biomy wpływające na kształt terenu.
 
-**Kolejność ustalona z właścicielem 2026-11-08:** pkt 1 + 2 (zrobione) → **pkt 6 edytor biomów (następny)** → pkt 4 klimat zależny od wysokości →
-pkt 3 biomy modyfikują teren → pkt 5 teksturowanie (na koniec, najwięcej pracy z assetami). Po każdym kroku nowe przypadki w `--gpu-check`.
+**Kolejność ustalona z właścicielem 2026-11-08:** pkt 1 + 2 (zrobione) → pkt 6 edytor biomów (zrobione 2026-11-09) → pkt 4 klimat zależny od wysokości (zrobione 2026-11-09) →
+**pkt 3 biomy modyfikują teren (następny)** → pkt 5 teksturowanie (na koniec, najwięcej pracy z assetami). Po każdym kroku nowe przypadki w `--gpu-check`.
 Pkt 6 w szczegółach: lista biomów (dodaj/usuń, nazwa, kolor, 5 zakresów suwakami), diagram Whittakera (temperatura × wilgotność, prostokąty biomów w ImPlot),
 podgląd mapy biomów 2D; tabela nie może być pusta (ostatniego biomu nie da się usunąć); id = indeks, więc usunięcie przesuwa id kolejnych biomów.
 Pkt 4 wymaga, żeby shader biomów liczył też wysokość terenu (splajny w buforze jak w `height_compute.shader`).
@@ -324,12 +324,27 @@ Pkt 4 wymaga, żeby shader biomów liczył też wysokość terenu (splajny w buf
    kiedy będą potrzebne (modyfikatory terenu, splat mapping).
 3. **Biomy modyfikują teren:** per-biom modyfikatory (amplituda, offset, ridging, tarasowanie, wydmy)
    mieszane wagami — np. pustynia z wydmami, góry ostrzejsze, bagna spłaszczone.
-4. **Wpływ wysokości na klimat:** temperatura spada z wysokością (lapse rate), wilgotność rośnie przy wybrzeżu
-   (odległość od oceanu z continentalness) → śnieg na szczytach, plaże przy morzu bez osobnych reguł.
+4. ✅ 2026-11-09 **Wpływ wysokości na klimat:** `biome::Climate` w `BiomeConfig::climate` (presety: `biomes.climate`), `biome::ApplyClimate` (CPU, testy) =
+   `applyClimate` w `biome_compute.shader`. above = max(h − `TerrainConfig::WaterHeight()`, 0) (LAYERED: seaLevel · (1 − mountainShare), inne metody: 0);
+   T −= lapseRate · above, H += coastHumidity · (1 − smoothstep(0, coastRange, above)), oba przycięte do [-1, 1]. Domyślnie 1,0 / 0,3 / 0,05.
+   Wysokość liczy shader biomów sam, tą samą funkcją co teren (`common/terrain.glsl`, splajny w `BiomeInput`), bez czytania tekstury wysokości —
+   C/M/W i tak liczy, więc koszt to tylko splajny. Dlatego biomy zależą od całego `TerrainConfig`: `RequestTerrain` przy włączonych biomach przelicza też biomy.
+   Wilgotność przy wybrzeżu liczona z wysokości nad wodą, nie z continentalness (w LAYERED podstawa terenu = splajn C, więc wychodzi na to samo).
+   Nowy domyślny biom „Snowy peaks” (C ≥ 0,3, M ≥ 0,05, T ≤ -0,5) przed „Mountain” (teraz T ≥ -0,5). UI: sekcja „Climate” w ustawieniach biomów.
+   `--gpu-check`: sekcja `climate:` (skrajny lapse rate → nad wodą tylko biomy z T = -1, skrajna wilgotność → przy brzegu tylko biomy z H = 1, klimat zmienia biomy).
 5. **Teksturowanie:** splat mapping (texture arrays: trawa, skała, piasek, śnieg, ziemia), reguły per biom +
    slope/height (skała na stromych zboczach), triplanar mapping dla klifów, detail normal maps, mieszanie height-based.
-6. **Edytor biomów w UI:** tabela biomów (dodaj/usuń/edytuj), wizualizacja Whittaker-diagramu (ImPlot: temp × humidity),
-   podgląd mapy biomów 2D, zapis do JSON.
+6. ✅ 2026-11-09 **Edytor biomów w UI:** `utility/BiomeEditor.*`, sekcja „Biome table” w „Biome generation settings” (szumy T/H w zwijanej sekcji obok).
+   Lista biomów (kolor + nazwa), „Add copy” (kopia pod zaznaczonym — nic nie zmienia, bo oryginał wygrywa remisy), „Remove” (ostatniego nie da się usunąć),
+   strzałki kolejności (remis → wyższy na liście), nazwa, kolor i 5 zakresów (`DragFloatRange2`, [-1, 1], min ≤ max). Diagram Whittakera (ImPlot, T × H):
+   prostokąty biomów, klik zaznacza najmniejszy pod kursorem, zaznaczony przeciągany `DragRect` (krawędzie, rogi, całość zatrzymuje się na brzegu).
+   Każda zmiana poza nazwą od razu przelicza biomy. Limit `biome::maxBiomes` = 64 wspólny z presetami; zapis do JSON przez presety (było).
+   Podgląd mapy biomów 2D w panelu pominięty (decyzja właściciela): widok główny „Biomes” + „2D map” pokazuje to samo.
+   **Odłożone** (decyzja właściciela, wrócić przy rozbudowanej liście biomów z sensownymi wartościami):
+   - Diagram to tylko rzut na T × H, więc biomy niezależne od klimatu (Ocean, Sand, Mountain — pełne T i H) zakrywają cały wykres. Pomysł: wybór osi
+     (2 z 5 parametrów) i przekrój — suwaki wartości pozostałych 3 parametrów, na wykresie tylko biomy obejmujące ten punkt (opcja „pokaż wszystkie”).
+   - Nakładanie się biomów w 5D (wspólny obszar → wygrywa wyższy na liście): raczej ostrzegać niż blokować (blokada psuje „Add copy”, przeciąganie
+     zacinałoby się na niewidocznej osi, nakładanie bywa celowe). Pomysł: „Overlaps with: …” przy zaznaczonym, ⚠ na liście, opcjonalnie „Resolve” (przycięcie).
 
 **Kryterium:** brak ostrych granic biomów; zmiana definicji biomu widoczna natychmiast; konfiguracja biomów ładowana z pliku.
 

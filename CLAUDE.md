@@ -79,13 +79,15 @@ ProceduralTerrainGenerator/
                                  FlightRecord.h = „Record flight” (prędkość, klatki > 20 ms, klatki z dziurą), pomiar kryterium Fazy 2
       PresetPanel.*              sekcja „Presets” w ImGui (lista plików, nazwa); zapis i odczyt wykonuje subsystem
       ExportPanel.*              sekcja „Saving” w ImGui; subsystem podaje mapy do zapisu i ich zakres wartości
+      BiomeEditor.*              edytor tabeli biomów (lista, zakresy, diagram Whittakera T × H); edytuje tabelę w miejscu, subsystem przelicza biomy
       FileDialog.*               systemowe okno wyboru pliku (tylko Windows, comdlg32); przy porcie na Linuksa do zastąpienia
       utilities.*                helpery ImGui (NoiseImGui, DisplayModeImGui...), siatka patchy, kolory biomów
     vendor/                      SimplexNoise (z niego tylko makePermutation: tablice permutacji dla GPU), stb_image
   tests/                         testy jednostkowe ptg_core (doctest)
   res/shaders/
     TerrainShaders/              VS → TCS → TES → FS, jedyny zestaw dla terenu (oba tryby)
-    ComputeShaders/              height_compute.shader (szum, teren), biome_compute.shader, surface_compute.shader; wspólne: common/noise.glsl, noise_params.glsl, simplex.glsl, surface.glsl
+    ComputeShaders/              height_compute.shader (szum, teren), biome_compute.shader, surface_compute.shader; wspólne: common/noise.glsl, noise_params.glsl, simplex.glsl, surface.glsl,
+                                 terrain.glsl (wysokość terenu z C/M/W, używana przez teren i biomy)
     sky_vertex/fragment.shader   niebo; kolory nieba w common/sky.glsl, z których korzysta też mgła terenu
 CMakeLists.txt, CMakePresets.json, vcpkg.json   build; GLFW, GLEW, glm, ImGui, ImPlot, stb z vcpkg
 .github/workflows/build.yml      CI (Windows x64 Debug/Release, build + testy jednostkowe)
@@ -168,6 +170,8 @@ Wartości szumów są w [-1, 1]. Konwencja indeksowania: `map[y * width + x]`.
 - Biomy (Faza 3): tabela w `BiomeConfig::table` (w presetach), id biomu = indeks w tabeli. Każdy texel dostaje najbliższy biom w przestrzeni (C, M, W, T, H),
   odległość = długość wektora wyjścia poza zakresy; kolor miesza wszystkie biomy wagą `BlendWeight` (`blendWidth`), więc mapa id ma ostre granice, a kolory płynne.
   Reguły są dwa razy: `Biome.cpp` (testy) i `biome_compute.shader` — zmiana w jednym wymaga zmiany w drugim. Tabela nie może być pusta (sprawdza `Check`).
+  Przed wyborem biomu T i H zmienia klimat (`biome::ApplyClimate`: lapse rate i wilgotność przy brzegu, od wysokości nad `TerrainConfig::WaterHeight()`);
+  shader biomów liczy wysokość sam (`common/terrain.glsl`), więc biomy zależą od całego `TerrainConfig` — `RequestTerrain` przy włączonych biomach przelicza też biomy.
 - Presety (`Preset.cpp`): nowe pole w `WorldConfig.h` trzeba dopisać do zapisu i odczytu oraz do `tests/PresetTests.cpp` (funkcje `Distinct*` / `CheckSame*`).
   Wersja 2 (2026-11-08, tabela biomów zamiast poziomów); wersja 1 nie jest już czytana (`minVersion`).
   Nowe wymaganie generacji wobec wartości configu = nowy warunek w `Check*`, bo plik można edytować ręcznie. Nie zmieniaj nazw pól

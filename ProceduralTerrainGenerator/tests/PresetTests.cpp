@@ -95,6 +95,7 @@ static WorldConfig DistinctWorld()
 	c.biomes.temperature = DistinctNoise(4);
 	c.biomes.humidity = DistinctNoise(5);
 	c.biomes.blendWidth = 0.17f;
+	c.biomes.climate = { 1.7f, -0.23f, 0.11f };
 	//Unlike the default table: other count, names, colors and every range
 	biome::Biome alpha{ "Alpha", glm::vec3(0.31f, 0.32f, 0.33f),
 		{ biome::Range{ -0.41f, 0.42f }, biome::Range{ -0.43f, 0.44f }, biome::Range{ -0.45f, 0.46f }, biome::Range{ -0.47f, 0.48f }, biome::Range{ -0.49f, 0.51f } } };
@@ -149,6 +150,9 @@ TEST_CASE("A world preset keeps every field")
 	CheckSameNoise(loaded.biomes.temperature, original.biomes.temperature);
 	CheckSameNoise(loaded.biomes.humidity, original.biomes.humidity);
 	CHECK(loaded.biomes.blendWidth == original.biomes.blendWidth);
+	CHECK(loaded.biomes.climate.lapseRate == original.biomes.climate.lapseRate);
+	CHECK(loaded.biomes.climate.coastHumidity == original.biomes.climate.coastHumidity);
+	CHECK(loaded.biomes.climate.coastRange == original.biomes.climate.coastRange);
 	CheckSameBiomes(loaded.biomes.table, original.biomes.table);
 }
 
@@ -242,6 +246,8 @@ TEST_CASE("A field missing from a preset keeps its default value")
 	CheckSameNoise(loaded.terrain.continentalness, defaults.terrain.continentalness);
 	CheckSameSpline(loaded.terrain.weirdnessSpline, defaults.terrain.weirdnessSpline);
 	CHECK(loaded.biomes.blendWidth == defaults.biomes.blendWidth);
+	CHECK(loaded.biomes.climate.lapseRate == defaults.biomes.climate.lapseRate);
+	CHECK(loaded.biomes.climate.coastRange == defaults.biomes.climate.coastRange);
 	CheckSameBiomes(loaded.biomes.table, defaults.biomes.table);
 }
 
@@ -309,6 +315,8 @@ TEST_CASE("Invalid presets are rejected and the config stays unchanged")
 		{ "spline x not ascending", Replaced(valid, "0.1,", "-1.0,") },
 		{ "spline y out of range", Replaced(valid, "0.2,", "2.0,") },
 		{ "negative blend width", Replaced(valid, "\"blendWidth\": 0.17", "\"blendWidth\": -0.17") },
+		{ "zero coast range", Replaced(valid, "\"coastRange\": 0.11", "\"coastRange\": 0") },
+		{ "climate not an object", Replaced(valid, "\"climate\": {", "\"climate\": 1, \"unused\": {") },
 		{ "empty biome table", Replaced(valid, "\"table\": [", "\"table\": [], \"unused\": [") },
 		{ "biome table not an array", Replaced(valid, "\"table\": [", "\"table\": 1, \"unused\": [") },
 		{ "reversed biome range", Replaced(valid, "-0.41", "0.9") },
