@@ -14,7 +14,7 @@
 TerrainGenApp::TerrainGenApp() : window(nullptr), windowWidth(0), windowHeight(0), deltaTime(0.0f), lastFrame(0.0),
 rightPanelWidth(400.0f),topPanelHeight(30.0f), bottomPanelHeight(280.0f), leftPanelWidth(400.0f),
 width(250), height(250), heightScale(256.0f),
-camera(1920, 1080, glm::vec3(0.0f, heightScale, 0.0f), 100.0f, 1000.0f), renderer(),
+camera(1920, 1080, glm::vec3(0.0f, heightScale, 0.0f), 100.0f, 5000.0f), renderer(),
 noiseGenSys(), currentMode(mode::NOISE_HEIGHTMAP)
 {
 }

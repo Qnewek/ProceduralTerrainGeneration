@@ -148,6 +148,10 @@ void TerrainGenerationSys::RequestPreview()
 void TerrainGenerationSys::RequestTerrain()
 {
 	pending.terrain = true;
+	//The climate of biomes depends on the terrain height
+	if (biomesGeneration) {
+		pending.biomes = true;
+	}
 }
 
 void TerrainGenerationSys::RequestBiomes()
@@ -191,6 +195,7 @@ void TerrainGenerationSys::ApplyWorld(const WorldConfig& loaded)
 	splinePressedButton = 0;
 	splineDraggedPoint = -1;
 	changeTerrain = false;
+	biomeEditor.Reset();
 
 	RequestPreview();
 	RequestTerrain();
@@ -397,7 +402,34 @@ void TerrainGenerationSys::BiomesEditor()
 				RequestBiomes();
 			}
 			ImGui::SetItemTooltip("How far (in noise values) a biome fades into the nearest one; 0 = sharp borders");
-			BiomeNoisesEditor();
+			if (ImGui::TreeNodeEx("Climate", ImGuiTreeNodeFlags_DefaultOpen)) {
+				biome::Climate& climate = world.biomes.climate;
+				bool climateChanged = ImGui::SliderFloat("Lapse rate", &climate.lapseRate, 0.0f, 3.0f);
+				ImGui::SetItemTooltip("Temperature drop per unit of terrain height above the water (heights are in [0, 1]).\n"
+					"Makes high mountains cold: snowy peaks without a rule of their own");
+				climateChanged |= ImGui::SliderFloat("Coast humidity", &climate.coastHumidity, -1.0f, 1.0f);
+				ImGui::SetItemTooltip("Humidity added at the water surface, fading out with height");
+				//Divides the height in the shader, so it stays above 0
+				climateChanged |= ImGui::SliderFloat("Coast range", &climate.coastRange, 0.005f, 0.5f, "%.3f", ImGuiSliderFlags_AlwaysClamp);
+				ImGui::SetItemTooltip("Height above the water where the coast humidity fades to 0");
+				if (world.terrain.method != EvaluationMethod::LAYERED) {
+					ImGui::TextDisabled("This terrain method has no sea: heights are measured from 0");
+				}
+				if (climateChanged) {
+					RequestBiomes();
+				}
+				ImGui::TreePop();
+			}
+			if (ImGui::TreeNodeEx("Biome table", ImGuiTreeNodeFlags_DefaultOpen)) {
+				if (biomeEditor.ImGuiDraw(world.biomes.table)) {
+					RequestBiomes();
+				}
+				ImGui::TreePop();
+			}
+			if (ImGui::TreeNode("Temperature and humidity noises")) {
+				BiomeNoisesEditor();
+				ImGui::TreePop();
+			}
 		}
 	}
 }

@@ -38,17 +38,29 @@ namespace biome {
 		return 1.0f - t * t * (3.0f - 2.0f * t);
 	}
 
+	ParameterValues ApplyClimate(ParameterValues values, float height, float waterHeight, const Climate& climate)
+	{
+		const float above = std::max(height - waterHeight, 0.0f);
+		const float t = std::clamp(above / climate.coastRange, 0.0f, 1.0f);
+		const float coast = 1.0f - t * t * (3.0f - 2.0f * t);
+		values[TEMPERATURE] = std::clamp(values[TEMPERATURE] - climate.lapseRate * above, -1.0f, 1.0f);
+		values[HUMIDITY] = std::clamp(values[HUMIDITY] + climate.coastHumidity * coast, -1.0f, 1.0f);
+		return values;
+	}
+
 	std::vector<Biome> DefaultBiomes()
 	{
 		//Order of ranges: continentalness, mountainousness, weirdness, temperature, humidity.
-		//Converted from the discrete levels used before 2026-11-08, so the default world looks as it did
+		//Converted from the discrete levels used before 2026-11-08; Snowy peaks added with the climate (2026-11-09):
+		//mountains cold enough after the lapse rate
 		const Range all{ -1.0f, 1.0f };
 		return {
 			{ "Grassplains", glm::vec3(0.2f, 0.8f, 0.2f),	{ Range{ 0.03f, 1.0f }, Range{ -1.0f, -0.2f }, all, Range{ -0.5f, 0.0f }, Range{ -0.5f, 1.0f } } },
 			{ "Desert", glm::vec3(0.95f, 0.1f, 0.1f),		{ Range{ 0.03f, 1.0f }, Range{ -1.0f, 0.05f }, all, Range{ 0.0f, 1.0f }, Range{ -1.0f, -0.5f } } },
 			{ "Snow", glm::vec3(0.95f, 0.95f, 0.95f),		{ Range{ 0.03f, 1.0f }, Range{ -1.0f, 0.05f }, all, Range{ -1.0f, -0.5f }, all } },
 			{ "Sand", glm::vec3(0.93f, 0.82f, 0.55f),		{ Range{ -0.2f, 0.03f }, all, all, all, all } },
-			{ "Mountain", glm::vec3(0.5f, 0.5f, 0.5f),		{ Range{ 0.3f, 1.0f }, Range{ 0.05f, 1.0f }, all, all, all } },
+			{ "Snowy peaks", glm::vec3(0.85f, 0.9f, 1.0f),	{ Range{ 0.3f, 1.0f }, Range{ 0.05f, 1.0f }, all, Range{ -1.0f, -0.5f }, all } },
+			{ "Mountain", glm::vec3(0.5f, 0.5f, 0.5f),		{ Range{ 0.3f, 1.0f }, Range{ 0.05f, 1.0f }, all, Range{ -0.5f, 1.0f }, all } },
 			{ "Ocean", glm::vec3(0.2f, 0.4f, 0.85f),		{ Range{ -1.0f, -0.2f }, all, all, all, all } },
 		};
 	}

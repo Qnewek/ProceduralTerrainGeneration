@@ -5,7 +5,7 @@
 #include "Biome.h"
 
 //Ids (indices) of the default biomes from biome::DefaultBiomes
-constexpr int GRASSPLAINS = 0, DESERT = 1, SNOW = 2, SAND = 3, MOUNTAIN = 4, OCEAN = 5;
+constexpr int GRASSPLAINS = 0, DESERT = 1, SNOW = 2, SAND = 3, SNOWY_PEAKS = 4, MOUNTAIN = 5, OCEAN = 6;
 
 namespace {
 	//Values in the order of biome::Parameter
@@ -41,7 +41,49 @@ TEST_CASE("Default biomes are chosen by their parameters")
 	CHECK(biome::Nearest(table, Values(0.5f, -0.5f, 0.0f, -0.8f, 0.5f)) == SNOW);
 	CHECK(biome::Nearest(table, Values(-0.1f, 0.8f, 0.0f, 0.5f, 0.5f)) == SAND);
 	CHECK(biome::Nearest(table, Values(0.6f, 0.6f, 0.0f, 0.0f, 0.0f)) == MOUNTAIN);
+	CHECK(biome::Nearest(table, Values(0.6f, 0.6f, 0.0f, -0.7f, 0.0f)) == SNOWY_PEAKS);
 	CHECK(biome::Nearest(table, Values(-0.9f, 0.0f, 0.0f, 0.0f, 0.0f)) == OCEAN);
+}
+
+TEST_CASE("Climate: temperature falls with height above the water, humidity rises at the coast")
+{
+	const biome::Climate climate{ 1.0f, 0.3f, 0.1f };
+	const biome::ParameterValues values = Values(0.1f, 0.2f, 0.3f, 0.4f, -0.2f);
+	const float water = 0.2f;
+
+	//At and below the water surface: temperature kept, full coastal humidity
+	for (float height : { 0.0f, water }) {
+		const biome::ParameterValues v = biome::ApplyClimate(values, height, water, climate);
+		CHECK(v[biome::TEMPERATURE] == doctest::Approx(0.4f));
+		CHECK(v[biome::HUMIDITY] == doctest::Approx(0.1f));
+	}
+	//Halfway through the coast range: smoothstep gives half of the humidity
+	biome::ParameterValues v = biome::ApplyClimate(values, water + 0.05f, water, climate);
+	CHECK(v[biome::TEMPERATURE] == doctest::Approx(0.35f));
+	CHECK(v[biome::HUMIDITY] == doctest::Approx(-0.05f));
+	//Inland and high: no added humidity, temperature down by lapseRate * height above the water
+	v = biome::ApplyClimate(values, water + 0.5f, water, climate);
+	CHECK(v[biome::TEMPERATURE] == doctest::Approx(-0.1f));
+	CHECK(v[biome::HUMIDITY] == doctest::Approx(-0.2f));
+	//The terrain noises are kept
+	CHECK(v[biome::CONTINENTALNESS] == 0.1f);
+	CHECK(v[biome::MOUNTAINOUSNESS] == 0.2f);
+	CHECK(v[biome::WEIRDNESS] == 0.3f);
+	//Clamped to the noise range
+	v = biome::ApplyClimate(Values(0.0f, 0.0f, 0.0f, -0.9f, 0.9f), 0.0f, 0.5f, biome::Climate{ 5.0f, 0.5f, 0.1f });
+	CHECK(v[biome::HUMIDITY] == 1.0f);
+	v = biome::ApplyClimate(Values(0.0f, 0.0f, 0.0f, -0.9f, 0.9f), 1.0f, 0.0f, biome::Climate{ 5.0f, 0.5f, 0.1f });
+	CHECK(v[biome::TEMPERATURE] == -1.0f);
+}
+
+TEST_CASE("Climate: high mountains of the default table get snow")
+{
+	const std::vector<biome::Biome> table = biome::DefaultBiomes();
+	const biome::Climate climate;
+	//A mountain in a mild climate: grey low down, snowy high up
+	const biome::ParameterValues mountain = Values(0.6f, 0.6f, 0.0f, 0.0f, 0.0f);
+	CHECK(biome::Nearest(table, biome::ApplyClimate(mountain, 0.3f, 0.1f, climate)) == MOUNTAIN);
+	CHECK(biome::Nearest(table, biome::ApplyClimate(mountain, 0.9f, 0.1f, climate)) == SNOWY_PEAKS);
 }
 
 TEST_CASE("Every point gets the nearest biome, also where no biome contains it")

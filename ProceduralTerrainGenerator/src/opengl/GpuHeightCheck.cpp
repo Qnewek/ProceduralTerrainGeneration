@@ -307,6 +307,54 @@ namespace {
 		return sharpOk && blendOk;
 	}
 
+	//The climate uses the height of the terrain map: with an extreme lapse rate every texel clearly above the water is as cold
+	//as it gets, and with an extreme coast humidity every texel just above the water is as humid as it gets. The chosen biome
+	//has to contain that value; heights near the thresholds are skipped, the biome shader computes them on its own
+	bool CheckClimate(GpuHeightGenerator& gpu)
+	{
+		std::cout << "\nclimate: temperature and humidity follow the terrain height\n";
+		const TerrainConfig terrain = TerrainConfig::Default();
+		const float water = terrain.WaterHeight();
+		TextureClass heightTexture(mapWidth, mapHeight, GL_R32F);
+		gpu.GenerateTerrain(terrain, MapArea{}, heightTexture);
+		HeightField height(mapWidth, mapHeight);
+		heightTexture.Read(GL_RED, GL_FLOAT, static_cast<int>(height.Size() * sizeof(float)), height.Data());
+
+		BiomeConfig config = BiomeConfig::Default();
+		const auto check = [&](const std::string& name, const biome::Climate& climate, auto selected, biome::Parameter parameter, float value) {
+			config.climate = climate;
+			const BiomeResult result = GenerateBiomeMaps(gpu, config);
+			size_t texels = 0, wrong = 0;
+			for (size_t i = 0; i < height.Size(); i++) {
+				if (!selected(height[i] - water)) {
+					continue;
+				}
+				texels++;
+				const biome::Range& r = config.table[result.ids[i]].ranges[parameter];
+				wrong += value >= r.min && value <= r.max ? 0 : 1;
+			}
+			const bool ok = texels > 100 && wrong == 0;
+			Report(name, std::to_string(wrong) + " of " + std::to_string(texels) + " texels in a biome without " + std::to_string(value).substr(0, 4), ok);
+			return ok;
+		};
+		const biome::Climate cold{ 1000.0f, 0.0f, 0.05f }, humid{ 0.0f, 100.0f, 0.05f };
+		bool ok = check("climate: cold above the water", cold, [](float above) { return above > 0.01f; }, biome::TEMPERATURE, -1.0f);
+		ok = check("climate: humid at the coast", humid, [](float above) { return above > 0.001f && above < 0.02f; }, biome::HUMIDITY, 1.0f) && ok;
+
+		//No climate gives other biomes than the extreme one, so the climate takes part at all
+		config.climate = cold;
+		const BiomeResult withClimate = GenerateBiomeMaps(gpu, config);
+		config.climate = biome::Climate{ 0.0f, 0.0f, 0.05f };
+		const BiomeResult without = GenerateBiomeMaps(gpu, config);
+		size_t different = 0;
+		for (size_t i = 0; i < without.ids.Size(); i++) {
+			different += without.ids[i] != withClimate.ids[i] ? 1 : 0;
+		}
+		const bool differs = different > 0;
+		Report("climate: changes biomes", std::to_string(different) + " texels differ from no climate", differs);
+		return ok && differs;
+	}
+
 	//A chunk is a part of the map generated on its own, with an origin and the island size of the whole map; a coarser
 	//level of detail also takes every step-th sample. It has to equal the same samples of the whole map exactly,
 	//or chunk borders would show seams and levels would not meet
@@ -504,6 +552,7 @@ int RunGpuHeightCheck()
 			ok = CheckShapeOperations(gpu) && ok;
 			ok = CheckLayered(gpu) && ok;
 			ok = CheckBiomes(gpu) && ok;
+			ok = CheckClimate(gpu) && ok;
 			ok = CheckChunks(gpu) && ok;
 			ok = CheckSurface(surfacePass) && ok;
 			RunTimings(gpu, surfacePass);
