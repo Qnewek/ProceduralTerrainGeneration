@@ -310,7 +310,7 @@ Biomy (Faza 3, pkt 3–4) opierają się na wysokości i znaczeniu szumów C/M/W
 Cel: realistyczne, płynne przejścia i biomy wpływające na kształt terenu.
 
 **Kolejność ustalona z właścicielem 2026-11-08:** pkt 1 + 2 (zrobione) → pkt 6 edytor biomów (zrobione 2026-11-09) → pkt 4 klimat zależny od wysokości (zrobione 2026-11-09) →
-**pkt 3 biomy modyfikują teren (następny)** → pkt 5 teksturowanie (na koniec, najwięcej pracy z assetami). Po każdym kroku nowe przypadki w `--gpu-check`.
+pkt 3 biomy modyfikują teren (zrobione 2026-11-09) → **pkt 5 teksturowanie (następny)** (na koniec, najwięcej pracy z assetami). Po każdym kroku nowe przypadki w `--gpu-check`.
 Pkt 6 w szczegółach: lista biomów (dodaj/usuń, nazwa, kolor, 5 zakresów suwakami), diagram Whittakera (temperatura × wilgotność, prostokąty biomów w ImPlot),
 podgląd mapy biomów 2D; tabela nie może być pusta (ostatniego biomu nie da się usunąć); id = indeks, więc usunięcie przesuwa id kolejnych biomów.
 Pkt 4 wymaga, żeby shader biomów liczył też wysokość terenu (splajny w buforze jak w `height_compute.shader`).
@@ -322,8 +322,17 @@ Pkt 4 wymaga, żeby shader biomów liczył też wysokość terenu (splajny w buf
 2. ✅ 2026-11-08 (kolory) **Blending:** kolor miesza wszystkie biomy z wagą `1 − smoothstep((d − d_min) / blendWidth)` — ciągłe także wtedy, gdy biomy zamieniają się
    kolejnością. Mapa id zostaje ostra (nazwa biomu pod kamerą). Czas generacji biomów bez zmian. Tekstury K najbliższych id + wag dojdą razem z pkt 3 / 5,
    kiedy będą potrzebne (modyfikatory terenu, splat mapping).
-3. **Biomy modyfikują teren:** per-biom modyfikatory (amplituda, offset, ridging, tarasowanie, wydmy)
-   mieszane wagami — np. pustynia z wydmami, góry ostrzejsze, bagna spłaszczone.
+3. ✅ 2026-11-09 **Biomy modyfikują teren:** `biome::TerrainModifier` w każdym biomie (amplitude, offset, detailAmplitude, detailSize, detailRidge),
+   `biome::ModifyHeight` (CPU, testy) = `modifyHeight` w `common/biomes.glsl`. Pętlę teren ↔ biom przerywa wysokość bazowa: h0 z C/M/W → klimat(h0) → wagi biomów →
+   h = clamp(water + (h0 − water) · Σw·amplitude + Σw·offset + Σw·detailAmplitude · detail, 0, 1) (wagi znormalizowane). Biomy i kolory dalej z h0.
+   Wagi = `BlendWeight` z osobnym `BiomeConfig::terrainBlendWidth` (> 0, domyślnie 0,15), więc przy ostrych kolorach teren i tak przechodzi płynnie.
+   Detail noise: 3 oktawy simplex, długość fali `detailSize` tekseli, ridged = 1 − 2|n|, jedna tablica permutacji (`BiomeConfig::detailSeed`).
+   Teren z modyfikatorami liczy wszystkie 5 szumów i tabelę biomów w `height_compute.shader` (osobno od `biome_compute.shader`, ~1,5× czasu terenu);
+   oba shadery dzielą `common/world_input.glsl` (jeden bufor wejściowy) i `common/biomes.glsl`. Działa tylko przy włączonych biomach i `modifyTerrain`;
+   zmiana biomu przelicza wtedy też teren. Domyślne: równiny 0,8, śnieg 0,9, wydmy na pustyni (0,012 / 10 tekseli, ridged), góry 1,15 + skała (0,015 / 20, ridged).
+   UI: sekcja „Terrain modifiers” (włącznik, blend width, seed) i „Terrain modifier” zaznaczonego biomu w edytorze. Tarasowanie per biom odłożone.
+   `--gpu-check`: sekcja `biome modifiers:` (neutralne, amplitude 0, offset, wyłączone, blending zmniejsza skoki, domyślna tabela) + chunk z modyfikatorami bit w bit.
+   **Do zrobienia później:** teren i biomy w jednym przebiegu (oba liczą to samo), wtedy łączny koszt jak dziś same biomy.
 4. ✅ 2026-11-09 **Wpływ wysokości na klimat:** `biome::Climate` w `BiomeConfig::climate` (presety: `biomes.climate`), `biome::ApplyClimate` (CPU, testy) =
    `applyClimate` w `biome_compute.shader`. above = max(h − `TerrainConfig::WaterHeight()`, 0) (LAYERED: seaLevel · (1 − mountainShare), inne metody: 0);
    T −= lapseRate · above, H += coastHumidity · (1 − smoothstep(0, coastRange, above)), oba przycięte do [-1, 1]. Domyślnie 1,0 / 0,3 / 0,05.

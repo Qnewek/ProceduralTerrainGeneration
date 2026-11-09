@@ -140,6 +140,13 @@ namespace preset {
 			for (int i = 0; i < biome::PARAMETER_COUNT; i++) {
 				j[biomeParameterNames[i]] = FloatArray({ b.ranges[i].min, b.ranges[i].max });
 			}
+			json terrain;
+			terrain["amplitude"] = ReadableFloat(b.terrain.amplitude);
+			terrain["offset"] = ReadableFloat(b.terrain.offset);
+			terrain["detailAmplitude"] = ReadableFloat(b.terrain.detailAmplitude);
+			terrain["detailSize"] = ReadableFloat(b.terrain.detailSize);
+			terrain["detailRidge"] = b.terrain.detailRidge;
+			j["terrain"] = std::move(terrain);
 			return j;
 		}
 
@@ -413,6 +420,9 @@ namespace preset {
 				c.Read("coastHumidity", b.climate.coastHumidity);
 				c.Read("coastRange", b.climate.coastRange);
 			}
+			r.Read("modifyTerrain", b.modifyTerrain);
+			r.Read("terrainBlendWidth", b.terrainBlendWidth);
+			r.Read("detailSeed", b.detailSeed);
 
 			//A table in the file replaces the default one; fields missing in an entry keep the values of a new Biome
 			const json* table = r.Find("table");
@@ -434,6 +444,15 @@ namespace preset {
 					float range[2] = { biome.ranges[i].min, biome.ranges[i].max };
 					entry.ReadFixed(biomeParameterNames[i], range, 2);
 					biome.ranges[i] = { range[0], range[1] };
+				}
+				//Missing in presets saved before the modifiers existed: the biome keeps the terrain as it is
+				if (const json* terrain = entry.Find("terrain")) {
+					const Reader t(*terrain, entry.PathOf("terrain"));
+					t.Read("amplitude", biome.terrain.amplitude);
+					t.Read("offset", biome.terrain.offset);
+					t.Read("detailAmplitude", biome.terrain.detailAmplitude);
+					t.Read("detailSize", biome.terrain.detailSize);
+					t.Read("detailRidge", biome.terrain.detailRidge);
 				}
 			}
 		}
@@ -491,6 +510,10 @@ namespace preset {
 			if (!std::isfinite(b.climate.coastRange) || b.climate.coastRange <= 0.0f) {
 				throw std::runtime_error("Biomes: climate coastRange must be greater than 0");
 			}
+			//Without blending the modifiers would make cliffs at biome borders
+			if (!std::isfinite(b.terrainBlendWidth) || b.terrainBlendWidth <= 0.0f) {
+				throw std::runtime_error("Biomes: terrainBlendWidth must be greater than 0");
+			}
 			if (b.table.empty() || b.table.size() > maxBiomes) {
 				throw std::runtime_error("Biomes: the table must have between 1 and " + std::to_string(maxBiomes) + " biomes");
 			}
@@ -506,6 +529,14 @@ namespace preset {
 					if (!std::isfinite(r.min) || !std::isfinite(r.max) || r.min > r.max) {
 						throw std::runtime_error(name + ": " + biomeParameterNames[i] + " must be a range [min, max] with min <= max");
 					}
+				}
+				const biome::TerrainModifier& t = biome.terrain;
+				if (!std::isfinite(t.amplitude) || !std::isfinite(t.offset) || !std::isfinite(t.detailAmplitude)) {
+					throw std::runtime_error(name + ": terrain amplitude, offset and detailAmplitude must be numbers");
+				}
+				//The detail noise divides the position by it
+				if (!std::isfinite(t.detailSize) || t.detailSize <= 0.0f) {
+					throw std::runtime_error(name + ": terrain detailSize must be greater than 0");
 				}
 			}
 		}
@@ -648,6 +679,9 @@ namespace preset {
 		climate["coastHumidity"] = ReadableFloat(c.biomes.climate.coastHumidity);
 		climate["coastRange"] = ReadableFloat(c.biomes.climate.coastRange);
 		biomes["climate"] = std::move(climate);
+		biomes["modifyTerrain"] = c.biomes.modifyTerrain;
+		biomes["terrainBlendWidth"] = ReadableFloat(c.biomes.terrainBlendWidth);
+		biomes["detailSeed"] = c.biomes.detailSeed;
 		json table = json::array();
 		for (const biome::Biome& b : c.biomes.table) {
 			table.push_back(BiomeToJson(b));

@@ -355,6 +355,98 @@ namespace {
 		return ok && differs;
 	}
 
+	//Largest height difference between neighbouring texels
+	float LargestHeightStep(const HeightField& map)
+	{
+		float largest = 0.0f;
+		for (int y = 0; y < map.GetHeight(); y++) {
+			for (int x = 0; x < map.GetWidth(); x++) {
+				if (x + 1 < map.GetWidth()) {
+					largest = std::max(largest, std::abs(map.At(x + 1, y) - map.At(x, y)));
+				}
+				if (y + 1 < map.GetHeight()) {
+					largest = std::max(largest, std::abs(map.At(x, y + 1) - map.At(x, y)));
+				}
+			}
+		}
+		return largest;
+	}
+
+	//Biome modifiers: tables with known results (neutral, flat, raised), then the default table: values in [0, 1], the terrain
+	//changed, and blending the modifiers makes the steps between texels smaller than switching them at the borders
+	bool CheckModifiers(GpuHeightGenerator& gpu)
+	{
+		std::cout << "\nbiome modifiers: terrain changed by the biomes\n";
+		const TerrainConfig terrain = TerrainConfig::Default();
+		const float water = terrain.WaterHeight();
+		TextureClass target(mapWidth, mapHeight, GL_R32F);
+		gpu.GenerateTerrain(terrain, MapArea{}, target);
+		const HeightField base = ReadHeight(target);
+		const auto generate = [&](const BiomeConfig& biomes) {
+			gpu.GenerateTerrain(terrain, MapArea{}, target, &biomes);
+			return ReadHeight(target);
+		};
+		//Largest difference from expected(base height)
+		const auto largestError = [&](const HeightField& map, const std::function<float(float)>& expected) {
+			float worst = 0.0f;
+			for (size_t i = 0; i < map.Size(); i++) {
+				worst = std::isfinite(map[i]) ? std::max(worst, std::abs(map[i] - expected(base[i]))) : INFINITY;
+			}
+			return worst;
+		};
+		const auto report = [](const std::string& name, float error) {
+			std::ostringstream details;
+			details << "largest error " << std::scientific << std::setprecision(1) << error;
+			//Mixing equal modifiers divides and multiplies by the sum of weights, so a rounding or two
+			const bool ok = error <= 1e-5f;
+			Report(name, details.str(), ok);
+			return ok;
+		};
+
+		BiomeConfig biomes = BiomeConfig::Default();
+		const std::vector<biome::Biome> defaults = biomes.table;
+		const auto setAll = [&](const biome::TerrainModifier& m) {
+			for (biome::Biome& b : biomes.table) {
+				b.terrain = m;
+			}
+		};
+		setAll(biome::TerrainModifier{});
+		bool ok = report("modifiers: neutral keep the terrain", largestError(generate(biomes), [](float h) { return h; }));
+		setAll(biome::TerrainModifier{ 0.0f, 0.0f, 0.0f, 16.0f, false });
+		ok = report("modifiers: amplitude 0 = water level", largestError(generate(biomes), [&](float) { return water; })) && ok;
+		setAll(biome::TerrainModifier{ 1.0f, 0.1f, 0.0f, 16.0f, false });
+		ok = report("modifiers: offset raises", largestError(generate(biomes), [](float h) { return std::min(h + 0.1f, 1.0f); })) && ok;
+		biomes.modifyTerrain = false;
+		ok = report("modifiers: turned off", largestError(generate(biomes), [](float h) { return h; })) && ok;
+		biomes.modifyTerrain = true;
+
+		//The default table without the detail noise, so only the mixing of amplitudes and offsets makes steps
+		biomes.table = defaults;
+		for (biome::Biome& b : biomes.table) {
+			b.terrain.detailAmplitude = 0.0f;
+		}
+		const float blendWidth = biomes.terrainBlendWidth;
+		biomes.terrainBlendWidth = 1e-4f;
+		const float sharpStep = LargestHeightStep(generate(biomes));
+		biomes.terrainBlendWidth = blendWidth;
+		const float blendedStep = LargestHeightStep(generate(biomes));
+		std::ostringstream blendDetails;
+		blendDetails << "step " << std::fixed << std::setprecision(4) << sharpStep << " -> " << blendedStep;
+		const bool blendOk = blendedStep < sharpStep;
+		Report("modifiers: blending smooths borders", blendDetails.str(), blendOk);
+
+		biomes.table = defaults;
+		const HeightField modified = generate(biomes);
+		size_t outside = 0, changed = 0;
+		for (size_t i = 0; i < modified.Size(); i++) {
+			outside += std::isfinite(modified[i]) && modified[i] >= 0.0f && modified[i] <= 1.0f ? 0 : 1;
+			changed += std::abs(modified[i] - base[i]) > 1e-4f ? 1 : 0;
+		}
+		const bool defaultOk = outside == 0 && changed > modified.Size() / 10;
+		Report("modifiers: default table", std::to_string(changed) + " texels changed, " + std::to_string(outside) + " outside [0, 1]", defaultOk);
+		return ok && blendOk && defaultOk;
+	}
+
 	//A chunk is a part of the map generated on its own, with an origin and the island size of the whole map; a coarser
 	//level of detail also takes every step-th sample. It has to equal the same samples of the whole map exactly,
 	//or chunk borders would show seams and levels would not meet
@@ -405,6 +497,7 @@ namespace {
 		layered.method = EvaluationMethod::LAYERED;
 		check("chunk: layered terrain", GL_RED, GL_FLOAT, [&](const MapArea& area, TextureClass& t) { gpu.GenerateTerrain(layered, area, t); });
 		const BiomeConfig biomes = BiomeConfig::Default();
+		check("chunk: biome modifiers", GL_RED, GL_FLOAT, [&](const MapArea& area, TextureClass& t) { gpu.GenerateTerrain(layered, area, t, &biomes); });
 		check("chunk: biome ids", GL_RED_INTEGER, GL_INT, [&](const MapArea& area, TextureClass& ids) {
 			TextureClass colors(ids.GetWidth(), ids.GetHeight(), GL_RGBA32F);
 			gpu.GenerateBiomes(biomes, terrain, area, colors, ids);
@@ -498,11 +591,16 @@ namespace {
 	{
 		const TerrainConfig config = TerrainConfig::Default();
 		const BiomeConfig biomes = BiomeConfig::Default();
-		std::cout << "\nGPU time [ms]   terrain   biomes   surface map\n";
+		std::cout << "\nGPU time [ms]   terrain   modified   biomes   surface map\n";
 		for (int size : { 512, 1024, 2048, 4096 }) {
 			TextureClass height(size, size, GL_R32F), colors(size, size, GL_RGBA32F), ids(size, size, GL_R32I), surface(size, size, GL_RGBA32F);
 			const double terrainMs = MedianMs([&] {
 				gpu.GenerateTerrain(config, MapArea{}, height);
+				glFinish();
+			}, 9);
+			//Terrain with the biome modifiers (all five noises and the biome table)
+			const double modifiedMs = MedianMs([&] {
+				gpu.GenerateTerrain(config, MapArea{}, height, &biomes);
 				glFinish();
 			}, 9);
 			const double biomesMs = MedianMs([&] {
@@ -514,7 +612,7 @@ namespace {
 				glFinish();
 			}, 9);
 			std::cout << std::left << std::setw(14) << (std::to_string(size) + "x" + std::to_string(size)) << std::right << std::fixed << std::setprecision(2)
-				<< std::setw(10) << terrainMs << std::setw(9) << biomesMs << std::setw(14) << surfaceMs << std::defaultfloat << "\n" << std::left;
+				<< std::setw(10) << terrainMs << std::setw(11) << modifiedMs << std::setw(9) << biomesMs << std::setw(14) << surfaceMs << std::defaultfloat << "\n" << std::left;
 		}
 	}
 }
@@ -553,6 +651,7 @@ int RunGpuHeightCheck()
 			ok = CheckLayered(gpu) && ok;
 			ok = CheckBiomes(gpu) && ok;
 			ok = CheckClimate(gpu) && ok;
+			ok = CheckModifiers(gpu) && ok;
 			ok = CheckChunks(gpu) && ok;
 			ok = CheckSurface(surfacePass) && ok;
 			RunTimings(gpu, surfacePass);
