@@ -17,6 +17,7 @@
 #include "TerrainView.h"
 #include "PresetPanel.h"
 #include "ExportPanel.h"
+#include "BiomeEditor.h"
 
 //What has to be regenerated at the next Update; with infinite generation a terrain or biome request regenerates the chunks
 struct WorldRequest {
@@ -32,7 +33,7 @@ class TerrainGenerationSys
 private:
 	bool changeTerrain = false;
 	bool biomesGeneration = false;
-	bool editNoise = false, editSpline = false, infiniteGeneration = false;
+	bool editNoise = false, editSpline = false, infiniteGeneration = true;
 	//The edited noise is shown as a 2D picture in the panel; the view always shows the resulting terrain
 	bool showNoisePreview = true;
 	NoisePreview noisePreview;
@@ -73,6 +74,7 @@ private:
 	void ApplyWorld(const WorldConfig& loaded);
 	PresetPanel presets{ "presets/world" };
 	ExportPanel exporter{ "exports" };
+	BiomeEditor biomeEditor;
 
 	//Editor UI state; the noise and spline editors are open together, so each has its own component
 	WorldGenParameter editedComponent = WorldGenParameter::CONTINENTALNESS;

@@ -1,7 +1,8 @@
 #version 450 core
 
-// Biome of every texel from its five noise values, evaluated in place; the same rules as biome::Nearest and biome::BlendWeight (Biome.h):
-// the id is the nearest biome (first on ties), the color mixes all biomes closer than blendWidth to the nearest one.
+// Biome of every texel from its five noise values, evaluated in place; the same rules as biome::ApplyClimate, biome::Nearest and
+// biome::BlendWeight (Biome.h): temperature and humidity changed by the terrain height, then the id is the nearest biome
+// (first on ties) and the color mixes all biomes closer than blendWidth to the nearest one.
 // After a change run ProceduralTerrainGenerator.exe --gpu-check.
 
 layout(local_size_x = 32, local_size_y = 32) in;
@@ -14,10 +15,11 @@ layout(r32i, binding = 1) uniform writeonly iimage2D idMap;
 // Order of noises and ranges (biome::Parameter): continentalness, mountainousness, weirdness, temperature, humidity
 const int PARAMETER_COUNT = 5;
 
-// Matches GpuBiomeInput in GpuHeightGenerator.cpp
+// Matches GpuBiomeInput in GpuHeightGenerator.cpp; splines of the terrain as in height_compute.shader
 layout(std430, binding = 0) readonly buffer BiomeInput {
 	NoiseParams noises[5];
 	uint permutations[5 * 256];
+	float splines[3 * 1024];
 };
 
 // Matches GpuBiomeEntry in GpuHeightGenerator.cpp
@@ -37,8 +39,22 @@ uniform ivec2 tileOrigin;		// first texel of this dispatch, large maps are gener
 uniform vec2 origin;			// map position of texel (0, 0)
 uniform float sampleStep;		// map distance between neighbouring texels (MapArea::step)
 uniform ivec2 islandSize;		// see noise.glsl
+uniform int mode;				// terrain method (MODE_* of terrain.glsl), never MODE_NOISE
+uniform vec3 layered;			// MODE_LAYERED: seaLevel, coastWidth, mountainShare (TerrainConfig)
+uniform float waterHeight;		// TerrainConfig::WaterHeight
+uniform vec3 climate;			// lapseRate, coastHumidity, coastRange (biome::Climate)
 
 #include "../common/noise.glsl"
+#include "../common/terrain.glsl"
+
+// biome::ApplyClimate
+void applyClimate(inout float values[PARAMETER_COUNT], float height)
+{
+	float above = max(height - waterHeight, 0.0);
+	float coast = 1.0 - smoothstep(0.0, climate.z, above);
+	values[3] = clamp(values[3] - climate.x * above, -1.0, 1.0);
+	values[4] = clamp(values[4] + climate.y * coast, -1.0, 1.0);
+}
 
 // biome::Biome::Distance
 float biomeDistance(int b, float values[PARAMETER_COUNT])
@@ -63,6 +79,7 @@ void main()
 	for (int i = 0; i < PARAMETER_COUNT; i++) {
 		values[i] = evaluateNoise(i, position.x, position.y);
 	}
+	applyClimate(values, terrainHeight(values[0], values[1], values[2]));
 
 	int id = 0;
 	float nearest = biomeDistance(0, values);

@@ -74,6 +74,7 @@ add_executable(ProceduralTerrainGenerator
 	${PTG_SRC}/subSystems/TerrainGenerationSys.cpp
 	${PTG_SRC}/utility/Camera.cpp
 	${PTG_SRC}/utility/ExportPanel.cpp
+	${PTG_SRC}/utility/BiomeEditor.cpp
 	${PTG_SRC}/utility/FileDialog.cpp
 	${PTG_SRC}/utility/FrameMetrics.cpp
 	${PTG_SRC}/utility/LightSource.cpp

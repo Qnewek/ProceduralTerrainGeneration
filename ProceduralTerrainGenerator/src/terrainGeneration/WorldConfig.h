@@ -45,6 +45,10 @@ struct TerrainConfig {
 	float mountainShare = 0.6f;
 	SplinePoints peaksSpline{ {-1.0, -0.5, 0.0, 0.5, 1.0}, {0.0, 0.05, 0.25, 0.7, 1.0} };
 
+	//Height of the water surface the climate of biomes is measured from: seaLevel * (1 - mountainShare) for LAYERED;
+	//the other methods have no sea, so heights are measured from 0
+	float WaterHeight() const { return method == EvaluationMethod::LAYERED ? seaLevel * (1.0f - mountainShare) : 0.0f; }
+
 	noise::NoiseConfigParameters& Noise(WorldGenParameter p) {
 		switch (p) {
 		case WorldGenParameter::MOUNTAINOUSNESS: return mountainousness;
@@ -152,6 +156,8 @@ struct BiomeConfig {
 	std::vector<biome::Biome> table = biome::DefaultBiomes();
 	//Distance in the parameter space over which a biome fades into the nearest one; 0 = sharp borders
 	float blendWidth = 0.08f;
+	//Temperature and humidity changed by the terrain height before choosing biomes (see biome::ApplyClimate)
+	biome::Climate climate;
 
 	//Noise of a biome-only parameter (TEMPERATURE or HUMIDITY; anything else returns temperature)
 	noise::NoiseConfigParameters& Noise(BiomeParameter p) { return p == BiomeParameter::HUMIDITY ? humidity : temperature; }

@@ -34,10 +34,11 @@ namespace {
 		float splines[3 * splineSamples];
 	};
 
-	//Layout of the BiomeInput block in the biome shader (std430)
+	//Layout of the BiomeInput block in the biome shader (std430); the splines give the terrain height for the climate
 	struct GpuBiomeInput {
 		GpuNoiseParams noises[5];
 		uint32_t permutations[5 * 256];
+		float splines[3 * splineSamples];
 	};
 
 	//Layout of BiomeEntry in the biome shader (std430)
@@ -61,10 +62,19 @@ namespace {
 		std::copy(perm.begin(), perm.end(), permutations + index * 256);
 	}
 
-	void SetSpline(GpuHeightInput& input, int index, const SplinePoints& points)
+	//Fills the splines the terrain method uses (none for LINEAR_COMBINE)
+	//@return the mode of terrain.glsl for the method
+	int SetTerrainSplines(float* splines, const TerrainConfig& config)
 	{
-		const std::vector<float> samples = SampleSpline(points, splineSamples);
-		std::copy(samples.begin(), samples.end(), input.splines + index * splineSamples);
+		if (config.method == EvaluationMethod::LINEAR_COMBINE) {
+			return MODE_LINEAR;
+		}
+		const WorldGenParameter components[] = { WorldGenParameter::CONTINENTALNESS, WorldGenParameter::MOUNTAINOUSNESS, WorldGenParameter::WEIRDNESS };
+		for (int i = 0; i < 3; i++) {
+			const std::vector<float> samples = SampleSpline(config.MethodSpline(components[i]), splineSamples);
+			std::copy(samples.begin(), samples.end(), splines + i * splineSamples);
+		}
+		return config.method == EvaluationMethod::LAYERED ? MODE_LAYERED : MODE_SPLINE;
 	}
 
 	//Runs the bound shader over the whole map in parts; it reads the part from the tileOrigin uniform
@@ -161,13 +171,7 @@ void GpuHeightGenerator::GenerateTerrain(const TerrainConfig& config, const MapA
 	SetNoise(input->noises, input->permutations, 1, config.mountainousness);
 	SetNoise(input->noises, input->permutations, 2, config.weirdness);
 
-	int mode = MODE_LINEAR;
-	if (config.method != EvaluationMethod::LINEAR_COMBINE) {
-		mode = config.method == EvaluationMethod::LAYERED ? MODE_LAYERED : MODE_SPLINE;
-		SetSpline(*input, 0, config.MethodSpline(WorldGenParameter::CONTINENTALNESS));
-		SetSpline(*input, 1, config.MethodSpline(WorldGenParameter::MOUNTAINOUSNESS));
-		SetSpline(*input, 2, config.MethodSpline(WorldGenParameter::WEIRDNESS));
-	}
+	const int mode = SetTerrainSplines(input->splines, config);
 	glNamedBufferSubData(heightInput, 0, mode == MODE_LINEAR ? offsetof(GpuHeightInput, splines) : sizeof(GpuHeightInput), input.get());
 	heightShader->Bind();
 	heightShader->SetUniform3fv("layered", glm::vec3(config.seaLevel, config.coastWidth, config.mountainShare));
@@ -183,7 +187,8 @@ void GpuHeightGenerator::GenerateBiomes(const BiomeConfig& biomes, const Terrain
 	SetNoise(input->noises, input->permutations, 2, terrain.weirdness);
 	SetNoise(input->noises, input->permutations, 3, biomes.temperature);
 	SetNoise(input->noises, input->permutations, 4, biomes.humidity);
-	glNamedBufferSubData(biomeInput, 0, sizeof(GpuBiomeInput), input.get());
+	const int mode = SetTerrainSplines(input->splines, terrain);
+	glNamedBufferSubData(biomeInput, 0, mode == MODE_LINEAR ? offsetof(GpuBiomeInput, splines) : sizeof(GpuBiomeInput), input.get());
 
 	std::vector<GpuBiomeEntry> entries;
 	for (const biome::Biome& b : biomes.table) {
@@ -202,6 +207,10 @@ void GpuHeightGenerator::GenerateBiomes(const BiomeConfig& biomes, const Terrain
 	biomeShader->Bind();
 	biomeShader->SetUniform1i("biomeCount", static_cast<int>(entries.size()));
 	biomeShader->SetUniform1f("blendWidth", biomes.blendWidth);
+	biomeShader->SetUniform1i("mode", mode);
+	biomeShader->SetUniform3fv("layered", glm::vec3(terrain.seaLevel, terrain.coastWidth, terrain.mountainShare));
+	biomeShader->SetUniform1f("waterHeight", terrain.WaterHeight());
+	biomeShader->SetUniform3fv("climate", glm::vec3(biomes.climate.lapseRate, biomes.climate.coastHumidity, biomes.climate.coastRange));
 	SetMapUniforms(*biomeShader, area, colors);
 	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, biomeInput);
 	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, biomeTable);
