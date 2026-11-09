@@ -117,6 +117,27 @@ bool BiomeEditor::ImGuiDraw(std::vector<biome::Biome>& table)
 		changed = true;
 	}
 	ImGui::SetItemTooltip("Set all five ranges to [-1, 1]");
+
+	ImGui::SeparatorText("Terrain modifier");
+	biome::TerrainModifier& t = b.terrain;
+	changed |= ImGui::SliderFloat("Amplitude", &t.amplitude, 0.0f, 3.0f);
+	ImGui::SetItemTooltip("Scales the height above (and depth below) the water: < 1 flattens (swamps, plains), > 1 sharpens (mountains)");
+	changed |= ImGui::SliderFloat("Offset", &t.offset, -0.3f, 0.3f, "%.3f");
+	ImGui::SetItemTooltip("Raises or lowers the whole biome (plateaus, basins)");
+	changed |= ImGui::SliderFloat("Detail height", &t.detailAmplitude, 0.0f, 0.1f, "%.4f");
+	ImGui::SetItemTooltip("Height of an extra small noise: dunes, rough rock; 0 = none");
+	ImGui::BeginDisabled(t.detailAmplitude == 0.0f);
+	//Divides the position in the shader, so it stays above 0
+	changed |= ImGui::SliderFloat("Detail size", &t.detailSize, 2.0f, 256.0f, "%.1f texels", ImGuiSliderFlags_Logarithmic | ImGuiSliderFlags_AlwaysClamp);
+	ImGui::SetItemTooltip("Wavelength of the detail noise in map texels");
+	changed |= ImGui::Checkbox("Sharp crests", &t.detailRidge);
+	ImGui::SetItemTooltip("Ridged detail noise (1 - 2|n|): sharp crests like dunes or rock ridges");
+	ImGui::EndDisabled();
+	if (ImGui::Button("No modifier")) {
+		t = biome::TerrainModifier{};
+		changed = true;
+	}
+	ImGui::SetItemTooltip("The biome keeps the terrain as it is");
 	return changed;
 }
 

@@ -41,7 +41,8 @@ public:
 	//Terrain height from the three terrain noises by config.method. A spline is sampled into a table of 1024 values
 	//and takes its end value for a noise outside [-1, 1]
 	//@param target - GL_R32F
-	void GenerateTerrain(const TerrainConfig& config, const MapArea& area, TextureClass& target);
+	//@param biomes - if given and biomes->modifyTerrain, the height is changed by the biome modifiers (biome::ModifyHeight)
+	void GenerateTerrain(const TerrainConfig& config, const MapArea& area, TextureClass& target, const BiomeConfig* biomes = nullptr);
 	//Biome of every texel from its five noise values (biome_compute.shader): temperature and humidity changed by the terrain
 	//height (biome::ApplyClimate, the height computed as GenerateTerrain does), then the nearest biome of biomes.table (biome::Nearest),
 	//and colors of all biomes mixed with biome::BlendWeight. Depends on the whole terrain config, so a terrain change needs new biomes
@@ -56,7 +57,11 @@ public:
 	void PollMeasure(double& ms);
 
 private:
+	void UploadBiomeTable(const BiomeConfig& biomes);
+	//Runs height_compute.shader with the world input bound (and the biome table if modify)
+	void RunHeightShader(int mode, bool modify, const MapArea& area, TextureClass& target);
+
 	std::unique_ptr<Shader> heightShader, biomeShader;
-	unsigned int heightInput = 0, biomeInput = 0, biomeTable = 0;
+	unsigned int worldInput = 0, biomeTable = 0;
 	std::unique_ptr<GpuQuery> timer;
 };

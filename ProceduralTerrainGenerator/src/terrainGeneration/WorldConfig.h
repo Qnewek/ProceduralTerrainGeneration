@@ -158,6 +158,12 @@ struct BiomeConfig {
 	float blendWidth = 0.08f;
 	//Temperature and humidity changed by the terrain height before choosing biomes (see biome::ApplyClimate)
 	biome::Climate climate;
+	//Biomes change the terrain by their modifiers (see biome::ModifyHeight); only while biomes are generated
+	bool modifyTerrain = true;
+	//Distance in the parameter space over which the modifiers of biomes mix; must be > 0, or the terrain would jump at borders
+	float terrainBlendWidth = 0.15f;
+	//Seed of the detail noise of the modifiers (one permutation table for all biomes)
+	int detailSeed = 1234;
 
 	//Noise of a biome-only parameter (TEMPERATURE or HUMIDITY; anything else returns temperature)
 	noise::NoiseConfigParameters& Noise(BiomeParameter p) { return p == BiomeParameter::HUMIDITY ? humidity : temperature; }
