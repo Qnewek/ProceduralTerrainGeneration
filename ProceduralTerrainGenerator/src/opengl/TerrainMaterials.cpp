@@ -277,6 +277,9 @@ void TerrainMaterials::UploadBlock()
 	block.cliffSlopeEnd = glm::radians(cliffSlopeEnd);
 	block.heightInfluence = heightInfluence;
 	block.blendDepth = heightBlending ? blendDepth : 0.0f;
+	block.triplanarStart = glm::radians(triplanarStart);
+	block.triplanarEnd = glm::radians(triplanarEnd);
+	block.specularStrength = specularStrength;
 	glNamedBufferSubData(blockBuffer, 0, sizeof(Block), &block);
 	blockOutdated = false;
 }
@@ -356,4 +359,15 @@ void TerrainMaterials::ImGuiDraw()
 	}
 	ImGui::SetItemTooltip("Width of the transition: small = sharp edges around stones, large = soft");
 	ImGui::EndDisabled();
+
+	ImGui::SeparatorText("Projection and lighting");
+	if (ImGui::DragFloatRange2("Triplanar slope", &triplanarStart, &triplanarEnd, 0.2f, 0.0f, 90.0f, "%.1f deg", nullptr, ImGuiSliderFlags_AlwaysClamp)) {
+		blockOutdated = true;
+	}
+	ImGui::SetItemTooltip("Slopes over which the textures are also projected from the sides, so steep rock is not stretched.\n"
+		"Below the first angle only the projection from above (cheapest)");
+	if (ImGui::SliderFloat("Specular", &specularStrength, 0.0f, 2.0f)) {
+		blockOutdated = true;
+	}
+	ImGui::SetItemTooltip("Strength of the sun highlights; smooth materials (low roughness) shine more and sharper");
 }

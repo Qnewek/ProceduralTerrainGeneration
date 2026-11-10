@@ -46,8 +46,9 @@ const int SAMPLED_MATERIALS = 4;
 //2. cliffs: on slopes between cliffSlopeStart and cliffSlopeEnd each material hands its weight over to its cliff material
 //3. the SAMPLED_MATERIALS strongest materials, mixed by height-based blending (score = weight + heightInfluence * texture height,
 //   only materials within blendDepth of the best score show), or by their weights if blendDepth is 0
-void texturedSurface(vec3 surfaceNormal, out vec3 albedo, out vec3 normal, out float occlusion)
+void texturedSurface(SurfaceSampling p, out vec3 albedo, out vec3 normal, out float occlusion, out float roughness)
 {
+    vec3 surfaceNormal = p.normal;
     float w[MAX_MATERIALS];
     float total = 0.0;
     for (int m = 0; m < MAX_MATERIALS; m++) {
@@ -115,7 +116,7 @@ void texturedSurface(vec3 surfaceNormal, out vec3 albedo, out vec3 normal, out f
             continue;
         }
         weights[i] /= chosenTotal;
-        samples[i] = sampleMaterial(ids[i], TerrainPos, surfaceNormal);
+        samples[i] = sampleMaterial(ids[i], p);
         scores[i] = weights[i] + heightInfluence * samples[i].height;
         bestScore = max(bestScore, scores[i]);
     }
@@ -123,6 +124,7 @@ void texturedSurface(vec3 surfaceNormal, out vec3 albedo, out vec3 normal, out f
     albedo = vec3(0.0);
     normal = vec3(0.0);
     occlusion = 0.0;
+    roughness = 0.0;
     float sum = 0.0;
     for (int i = 0; i < SAMPLED_MATERIALS; i++) {
         if (weights[i] <= 0.0) {
@@ -132,12 +134,24 @@ void texturedSurface(vec3 surfaceNormal, out vec3 albedo, out vec3 normal, out f
         albedo += b * samples[i].albedo;
         normal += b * samples[i].normal;
         occlusion += b * samples[i].occlusion;
+        roughness += b * samples[i].roughness;
         sum += b;
     }
     //sum > 0: the best material has b = blendDepth (or its weight)
     albedo /= sum;
     normal = normalize(normal);
     occlusion /= sum;
+    roughness /= sum;
+}
+
+//Blinn-Phong highlight of the sun, sharper and stronger on smooth surfaces (wet sand, polished rock, snow crust);
+//most terrain materials are rough, so it stays a faint sheen there
+float sunSpecular(vec3 n, vec3 toLight, vec3 toViewer, float roughness)
+{
+    float smoothness = 1.0 - roughness;
+    float shininess = exp2(1.0 + 10.0 * smoothness);
+    vec3 h = normalize(toLight + toViewer);
+    return specularStrength * smoothness * pow(max(dot(n, h), 0.0), shininess);
 }
 
 void main()
@@ -145,8 +159,11 @@ void main()
     vec3 baseColor = aColor;
     vec3 norm = normalize(aNormal);
     float occlusion = 1.0;
-    if (displayMode == MODE_TEXTURED) {
-        texturedSurface(norm, baseColor, norm, occlusion);
+    float roughness = 1.0;
+    bool textured = displayMode == MODE_TEXTURED;
+    if (textured) {
+        //displayMode is uniform, so the derivatives inside surfaceSampling are taken in uniform control flow
+        texturedSurface(surfaceSampling(TerrainPos, norm), baseColor, norm, occlusion, roughness);
     }
     else {
         float modHeight = mod(Height, step);
@@ -162,6 +179,9 @@ void main()
         vec3 ambient = light.ambient * ambientTint(light.direction);
         vec3 sunlight = light.diffuse * sunlightTint(light.direction);
         result = (ambient * occlusion + sunlight * diff) * baseColor;
+        if (textured && diff > 0.0) {
+            result += sunlight * diff * sunSpecular(norm, light.direction, normalize(viewPos - FragPos), roughness);
+        }
     }
 
     if (fogOn) {
