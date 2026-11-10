@@ -280,6 +280,15 @@ void TerrainMaterials::UploadBlock()
 	block.triplanarStart = glm::radians(triplanarStart);
 	block.triplanarEnd = glm::radians(triplanarEnd);
 	block.specularStrength = specularStrength;
+	//Off = no second scale, no macro variation and averages so far away they never show
+	block.farUvScale = farUvScale;
+	block.farUvMix = antiTiling ? farUvMix : 0.0f;
+	block.farUvStart = farUvStart;
+	block.farUvEnd = farUvEnd;
+	block.averageStart = antiTiling ? averageStart : 1.0e30f;
+	block.averageEnd = antiTiling ? averageEnd : 2.0e30f;
+	block.macroStrength = antiTiling ? macroStrength : 0.0f;
+	block.macroSize = macroSize;
 	glNamedBufferSubData(blockBuffer, 0, sizeof(Block), &block);
 	blockOutdated = false;
 }
@@ -370,4 +379,37 @@ void TerrainMaterials::ImGuiDraw()
 		blockOutdated = true;
 	}
 	ImGui::SetItemTooltip("Strength of the sun highlights; smooth materials (low roughness) shine more and sharper");
+
+	ImGui::SeparatorText("Anti-tiling");
+	if (ImGui::Checkbox("Anti-tiling", &antiTiling)) {
+		blockOutdated = true;
+	}
+	ImGui::SetItemTooltip("Hides the repeats of the textures: a second texture scale with distance,\n"
+		"average colors far away and large-scale brightness/hue variation");
+	ImGui::BeginDisabled(!antiTiling);
+	if (ImGui::SliderFloat("Far scale", &farUvScale, 0.05f, 1.0f, "%.3f", ImGuiSliderFlags_AlwaysClamp)) {
+		blockOutdated = true;
+	}
+	ImGui::SetItemTooltip("Size of the second texture scale relative to the first (0.27 = 3.7 times larger repeats)");
+	if (ImGui::SliderFloat("Far mix", &farUvMix, 0.0f, 1.0f)) {
+		blockOutdated = true;
+	}
+	ImGui::SetItemTooltip("Share of the second scale far away; costs a second texture read beyond the first distance");
+	if (ImGui::DragFloatRange2("Far distance", &farUvStart, &farUvEnd, 1.0f, 0.0f, 5000.0f, "%.0f", nullptr, ImGuiSliderFlags_AlwaysClamp)) {
+		blockOutdated = true;
+	}
+	ImGui::SetItemTooltip("Distance (world units) over which the second scale is mixed in");
+	if (ImGui::DragFloatRange2("Average distance", &averageStart, &averageEnd, 5.0f, 0.0f, 20000.0f, "%.0f", nullptr, ImGuiSliderFlags_AlwaysClamp)) {
+		blockOutdated = true;
+	}
+	ImGui::SetItemTooltip("Distance over which the materials fade into their average colors; beyond it the textures are not read");
+	if (ImGui::SliderFloat("Macro variation", &macroStrength, 0.0f, 0.5f)) {
+		blockOutdated = true;
+	}
+	ImGui::SetItemTooltip("Brightness and hue variation over large areas; 0 = off");
+	if (ImGui::SliderFloat("Macro size", &macroSize, 10.0f, 2000.0f, "%.0f", ImGuiSliderFlags_AlwaysClamp | ImGuiSliderFlags_Logarithmic)) {
+		blockOutdated = true;
+	}
+	ImGui::SetItemTooltip("Wavelength of the macro variation in world units");
+	ImGui::EndDisabled();
 }
