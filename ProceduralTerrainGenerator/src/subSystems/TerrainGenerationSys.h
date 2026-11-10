@@ -103,6 +103,8 @@ public:
 	//Infinite generation shows chunks with part of the view not generated yet
 	bool HoleInView() const { return chunksShown && chunks.HasHoleInView(); }
 	void ReloadShaders() { view.ReloadShader(); chunks.ReloadShader(); gpu.ReloadShaders(); noisePreview.ReloadShader(); }
+	//Names of the surface materials for the biome editor, in the order of their ids
+	void SetMaterialNames(std::vector<std::string> names) { biomeEditor.SetMaterialNames(std::move(names)); }
 	void ImGuiRightPanel();
 	void ImGuiLeftPanel();
 	void ImGuiOutput(glm::vec3 pos);

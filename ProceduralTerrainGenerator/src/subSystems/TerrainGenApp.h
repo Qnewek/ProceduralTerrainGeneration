@@ -13,6 +13,7 @@
 #include "Erosion.h"
 #include "LightSource.h"
 #include "Sky.h"
+#include "TerrainMaterials.h"
 
 #include "NoiseBasedGenerationSys.h"
 #include "TerrainGenerationSys.h"
@@ -48,6 +49,8 @@ private:
 	//Performance panel data; holds OpenGL objects, so it is released before the context
 	std::unique_ptr<FrameMetrics> metrics;
 	bool vsync = true;
+	//Textures of the terrain materials, shared by all modes; released before the context like metrics
+	std::unique_ptr<TerrainMaterials> materials;
 
 	//F5 state in the previous frame, so a held key reloads shaders once
 	bool reloadKeyWasDown = false;

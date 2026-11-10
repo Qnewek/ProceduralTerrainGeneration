@@ -3,12 +3,16 @@
 // Biome of every texel from its five noise values, evaluated in place, by the rules of common/biomes.glsl (= Biome.cpp):
 // temperature and humidity changed by the terrain height (before the biome modifiers, so there is no loop), then the id
 // is the nearest biome (first on ties) and the color mixes all biomes closer than blendWidth to the nearest one.
+// With writeSplat also the share of every surface material (mixMaterials), 4 materials per layer of splatMap.
 // After a change run ProceduralTerrainGenerator.exe --gpu-check.
 
 layout(local_size_x = 32, local_size_y = 32) in;
 
 layout(rgba32f, binding = 0) uniform writeonly image2D colorMap;
 layout(r32i, binding = 1) uniform writeonly iimage2D idMap;
+// Layer l holds the weights of materials 4l to 4l + 3 (MAX_MATERIALS / 4 layers)
+layout(rgba8, binding = 2) uniform writeonly image2DArray splatMap;
+uniform bool writeSplat;
 
 #include "../common/noise_params.glsl"
 #include "../common/world_input.glsl"
@@ -58,4 +62,12 @@ void main()
 	}
 	imageStore(colorMap, texel, vec4(color, 1.0));
 	imageStore(idMap, texel, ivec4(id));
+
+	if (writeSplat) {
+		float weights[MAX_MATERIALS];
+		mixMaterials(values, position, weights);
+		for (int l = 0; l < MAX_MATERIALS / 4; l++) {
+			imageStore(splatMap, ivec3(texel, l), vec4(weights[l * 4], weights[l * 4 + 1], weights[l * 4 + 2], weights[l * 4 + 3]));
+		}
+	}
 }

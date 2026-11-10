@@ -72,6 +72,11 @@ public:
 	//Copies a height layer to the CPU, waiting for the GPU; the layer must exist
 	HeightField ReadLayer(Layer layer) const;
 	bool HasLayer(Layer layer) const { return textures[static_cast<int>(layer)] != nullptr; }
+	//Splat map (share of every surface material, GpuHeightGenerator::GenerateBiomes) with the given size, for writing to it directly.
+	//Without one the TEXTURED mode draws the material chosen in TerrainMaterials
+	TextureClass& SplatTexture(int _width, int _height);
+	//Drops the splat map, e.g. when biomes are turned off
+	void ReleaseSplat() { splat.reset(); }
 
 	//Draws the patch grid displaced by the selected height layer
 	//@param heightLayer - TERRAIN or OVERLAY, the layer used as the height map
@@ -83,6 +88,8 @@ public:
 	static constexpr float worldUnitsPerTexel = 4.0f;
 	//Texture unit of the surface map of the drawn height layer; biome colors use unit 2 (Layer::BIOMES)
 	static constexpr int surfaceUnit = 3;
+	//Texture unit of the splat map (units 4 and 5 hold the material arrays, TerrainMaterials)
+	static constexpr int splatUnit = 6;
 
 	//The terrain shader program; ChunkWorld draws with the same shaders
 	static std::unique_ptr<Shader> CreateTerrainShader();
@@ -90,6 +97,7 @@ public:
 	//@param model - also gives normalMatrix; drawing several maps with one shader may change only its translation
 	//@param heightUnit - texture unit of the height map
 	//@param flatMin, flatMax - area (XZ, world units before modelScale) framed by the 2D map view
+	//Sets useSplat to false; a map with a splat map sets it to true after binding it to splatUnit
 	static void SetFrameUniforms(Shader& shader, Camera& camera, LightSource& light, const TerrainRenderSettings& settings,
 		const glm::mat4& model, int heightUnit, glm::vec2 flatMin, glm::vec2 flatMax);
 
@@ -110,6 +118,7 @@ private:
 	std::unique_ptr<VertexBuffer> vertexBuffer;
 	std::unique_ptr<Shader> shader;
 	std::unique_ptr<TextureClass> textures[3];
+	std::unique_ptr<TextureClass> splat;
 
 	GpuSurfacePass surfacePass;
 	//Surface maps of TERRAIN and OVERLAY (GL_RGBA32F), indexed like the layers

@@ -64,6 +64,7 @@ add_executable(ProceduralTerrainGenerator
 	${PTG_SRC}/opengl/NoisePreview.cpp
 	${PTG_SRC}/opengl/Renderer.cpp
 	${PTG_SRC}/opengl/Shader.cpp
+	${PTG_SRC}/opengl/TerrainMaterials.cpp
 	${PTG_SRC}/opengl/TerrainView.cpp
 	${PTG_SRC}/opengl/TextureClass.cpp
 	${PTG_SRC}/opengl/VertexArray.cpp
@@ -95,6 +96,7 @@ target_link_libraries(ProceduralTerrainGenerator PRIVATE
 	glfw
 	imgui::imgui
 	implot::implot
+	nlohmann_json::nlohmann_json
 	comdlg32
 )
 # Fallback working directory with res/, used when the exe is started from elsewhere (build dir, IDE)
