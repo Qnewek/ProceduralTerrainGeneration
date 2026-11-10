@@ -310,7 +310,7 @@ Biomy (Faza 3, pkt 3–4) opierają się na wysokości i znaczeniu szumów C/M/W
 Cel: realistyczne, płynne przejścia i biomy wpływające na kształt terenu.
 
 **Kolejność ustalona z właścicielem 2026-11-08:** pkt 1 + 2 (zrobione) → pkt 6 edytor biomów (zrobione 2026-11-09) → pkt 4 klimat zależny od wysokości (zrobione 2026-11-09) →
-pkt 3 biomy modyfikują teren (zrobione 2026-11-09) → **pkt 5 teksturowanie (następny)** (na koniec, najwięcej pracy z assetami). Po każdym kroku nowe przypadki w `--gpu-check`.
+pkt 3 biomy modyfikują teren (zrobione 2026-11-09) → pkt 5 teksturowanie (zrobione 2026-11-10; strojenie wartości domyślnych na bieżąco). Po każdym kroku nowe przypadki w `--gpu-check`.
 Pkt 6 w szczegółach: lista biomów (dodaj/usuń, nazwa, kolor, 5 zakresów suwakami), diagram Whittakera (temperatura × wilgotność, prostokąty biomów w ImPlot),
 podgląd mapy biomów 2D; tabela nie może być pusta (ostatniego biomu nie da się usunąć); id = indeks, więc usunięcie przesuwa id kolejnych biomów.
 Pkt 4 wymaga, żeby shader biomów liczył też wysokość terenu (splajny w buforze jak w `height_compute.shader`).
@@ -341,8 +341,17 @@ Pkt 4 wymaga, żeby shader biomów liczył też wysokość terenu (splajny w buf
    Wilgotność przy wybrzeżu liczona z wysokości nad wodą, nie z continentalness (w LAYERED podstawa terenu = splajn C, więc wychodzi na to samo).
    Nowy domyślny biom „Snowy peaks” (C ≥ 0,3, M ≥ 0,05, T ≤ -0,5) przed „Mountain” (teraz T ≥ -0,5). UI: sekcja „Climate” w ustawieniach biomów.
    `--gpu-check`: sekcja `climate:` (skrajny lapse rate → nad wodą tylko biomy z T = -1, skrajna wilgotność → przy brzegu tylko biomy z H = 1, klimat zmienia biomy).
-5. **Teksturowanie:** splat mapping (texture arrays: trawa, skała, piasek, śnieg, ziemia), reguły per biom +
-   slope/height (skała na stromych zboczach), triplanar mapping dla klifów, detail normal maps, mieszanie height-based.
+5. ✅ 2026-11-10 **Teksturowanie:** tryb wyświetlania TEXTURED.
+   - Assety: 11 materiałów CC0 (Poly Haven, ambientCG, 2K) poza gitem; lista w `res/textures/terrain_materials.json`, pobiera je `tools/fetch_textures.py`.
+     `opengl/TerrainMaterials.*` pakuje je do dwóch `GL_TEXTURE_2D_ARRAY` (albedo + wysokość, normal XY + roughness + AO; mipmapy, anizotropia) i UBO (binding 0,
+     `common/materials.glsl`). Brak tekstur = warstwa w kolorze zastępczym, aplikacja działa dalej.
+   - Splat: każdy biom ma do 4 materiałów z wagami (`Biome::materials`, presety). `biome_compute.shader` pisze mapę udziałów 16 materiałów (RGBA8, 4 warstwy) obok mapy biomów,
+     także per chunk (bit w bit z pełną mapą, `--gpu-check`). Mieszanka = biomy ważone `BlendWeight` (`materialBlendWidth`), potem plamy: softmax c·(log w + k·szum)
+     (`materialPatchiness`, `materialPatchContrast`, `materialPatchSize`), więc materiał prowadzi na mniej więcej swoim udziale powierzchni. `biome::MixMaterials` = `mixMaterials` w GLSL.
+   - FS: klify z nachylenia (każdy materiał oddaje wagę swojemu `cliffMaterial`), 4 najsilniejsze materiały mieszane height-based, triplanar powyżej progu nachylenia
+     (whiteout normal blend, `textureGrad`), AO w ambient, specular Blinn-Phong z roughness, anti-tiling (druga skala UV z odległością, kolor średni z ostatniego mipa daleko,
+     makrowariacja jasności/odcienia). Parametry FS to ustawienia wyświetlania („Terrain materials”), nie świata — nie trafiają do presetów.
+   - Do zrobienia później: oświetlenie liniowe (sRGB), detail normal maps z bliska, pomiar kosztu FS przy przelocie.
 6. ✅ 2026-11-09 **Edytor biomów w UI:** `utility/BiomeEditor.*`, sekcja „Biome table” w „Biome generation settings” (szumy T/H w zwijanej sekcji obok).
    Lista biomów (kolor + nazwa), „Add copy” (kopia pod zaznaczonym — nic nie zmienia, bo oryginał wygrywa remisy), „Remove” (ostatniego nie da się usunąć),
    strzałki kolejności (remis → wyższy na liście), nazwa, kolor i 5 zakresów (`DragFloatRange2`, [-1, 1], min ≤ max). Diagram Whittakera (ImPlot, T × H):
