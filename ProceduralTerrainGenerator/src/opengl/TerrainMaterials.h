@@ -60,6 +60,8 @@ private:
 		float cliffSlopeStart, cliffSlopeEnd;	//radians
 		float heightInfluence;
 		float blendDepth;					//0 = plain crossfade instead of height-based blending
+		float triplanarStart, triplanarEnd;	//radians
+		float specularStrength;
 	};
 
 	void UploadBlock();
@@ -79,5 +81,8 @@ private:
 	bool heightBlending = true;
 	float heightInfluence = 0.5f;
 	float blendDepth = 0.15f;
+	//Slopes (degrees) over which the side projections fade in (triplanar); below the start only the projection from above
+	float triplanarStart = 20.0f, triplanarEnd = 40.0f;
+	float specularStrength = 0.5f;	//0 = no sun highlights
 	bool blockOutdated = true;
 };
