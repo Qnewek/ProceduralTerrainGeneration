@@ -82,6 +82,11 @@ bool TerrainGenApp::Initialize()
 	ImGui_ImplOpenGL3_Init("#version 450");
 
     metrics = std::make_unique<FrameMetrics>();
+    //Without the list the TEXTURED mode has nothing to show, but the rest of the app works
+    materials = std::make_unique<TerrainMaterials>();
+    if (!materials->Initialize("res/textures/terrain_materials.json", "res/textures/terrain")) {
+        std::cout << "[ERROR] Terrain materials not loaded" << std::endl;
+    }
 
     //Logic initialization
 	renderer.SetPatches(4);
@@ -94,6 +99,11 @@ bool TerrainGenApp::Initialize()
 		std::cout << "[ERROR] Failed to initialize TerrainGenerationSys" << std::endl;
 		return false;
 	}
+	std::vector<std::string> materialNames;
+	for (const TerrainMaterial& m : materials->GetMaterials()) {
+		materialNames.push_back(m.name);
+	}
+	terrainGenSys.SetMaterialNames(std::move(materialNames));
 	if (!mapImportSys.Initialize(width, height, heightScale)) {
 		std::cout << "[ERROR] Failed to initialize MapImportSys" << std::endl;
 		return false;
@@ -154,6 +164,7 @@ void TerrainGenApp::Start()
     }
 
     metrics.reset();
+    materials.reset();
     ImGui_ImplOpenGL3_Shutdown();
     ImGui_ImplGlfw_Shutdown();
 	ImPlot::DestroyContext();
@@ -182,6 +193,7 @@ void TerrainGenApp::Draw()
     renderer.Clear(glm::vec3(0.0f, 0.0f, 0.0f));
 
     metrics->BeginScene();
+    materials->Bind();
     if (!FlatView()) {
         sky.Draw(camera, light);
     }
@@ -240,6 +252,7 @@ void TerrainGenApp::ImGuiRender()
     }
     camera.ImGuiDraw();
     light.ImGuiDraw();
+    materials->ImGuiDraw();
     if (currentMode == mode::NOISE_HEIGHTMAP) {
         noiseGenSys.ImGuiLeftPanel();
     }

@@ -7,6 +7,8 @@ out float Height;
 out vec3 FragPos;
 out vec3 aColor;
 out vec3 aNormal;
+out vec3 TerrainPos;    //world position before modelScale, for textures that stay on the terrain
+out vec2 MapCoord;      //texture coordinate of the maps, for the splat map sampled per pixel
 
 uniform sampler2D heightMap;
 uniform sampler2D biomeMap;
@@ -36,6 +38,7 @@ void main()
     vec2 t0 = (t01 - t00) * u + t00;
     vec2 t1 = (t11 - t10) * u + t10;
     vec2 texCoord = (t1 - t0) * v + t0;
+    MapCoord = texCoord;
 
     Height =  texture(heightMap, texCoord).r * heightScale;
 
@@ -99,5 +102,7 @@ void main()
     //Lighting is done in world space; the 2D map mode only swaps view/projection for a top-down orthographic camera
     vec4 worldPos = model * p;
     FragPos = worldPos.xyz;
+    //model = scale(modelScale) * translate, with a uniform scale, so model[0][0] = modelScale
+    TerrainPos = worldPos.xyz / model[0][0];
     gl_Position = projection * view * worldPos;
 }

@@ -99,13 +99,19 @@ static WorldConfig DistinctWorld()
 	c.biomes.modifyTerrain = false;
 	c.biomes.terrainBlendWidth = 0.27f;
 	c.biomes.detailSeed = 4321;
-	//Unlike the default table: other count, names, colors, every range and every terrain modifier
+	c.biomes.materialBlendWidth = 0.19f;
+	c.biomes.materialPatchiness = 0.37f;
+	c.biomes.materialPatchContrast = 2.75f;
+	c.biomes.materialPatchSize = 13.5f;
+	//Unlike the default table: other count, names, colors, every range, every terrain modifier and material layer
 	biome::Biome alpha{ "Alpha", glm::vec3(0.31f, 0.32f, 0.33f),
 		{ biome::Range{ -0.41f, 0.42f }, biome::Range{ -0.43f, 0.44f }, biome::Range{ -0.45f, 0.46f }, biome::Range{ -0.47f, 0.48f }, biome::Range{ -0.49f, 0.51f } },
-		biome::TerrainModifier{ 0.71f, 0.072f, 0.073f, 7.4f, true } };
+		biome::TerrainModifier{ 0.71f, 0.072f, 0.073f, 7.4f, true },
+		{ { { 3, 0.25f }, { 7, 0.5f }, { 15, 0.125f } } } };
 	biome::Biome beta{ "Beta", glm::vec3(0.61f, 0.62f, 0.63f),
 		{ biome::Range{ 0.52f, 0.53f }, biome::Range{ 0.54f, 0.55f }, biome::Range{ 0.56f, 0.57f }, biome::Range{ 0.58f, 0.59f }, biome::Range{ 0.64f, 0.65f } },
-		biome::TerrainModifier{ 1.31f, -0.032f, 0.033f, 33.0f, false } };
+		biome::TerrainModifier{ 1.31f, -0.032f, 0.033f, 33.0f, false },
+		{ { { 1, 2.5f } } } };
 	c.biomes.table = { alpha, beta };
 	return c;
 }
@@ -126,6 +132,14 @@ static void CheckSameBiomes(const std::vector<biome::Biome>& a, const std::vecto
 		CHECK(a[i].terrain.detailAmplitude == b[i].terrain.detailAmplitude);
 		CHECK(a[i].terrain.detailSize == b[i].terrain.detailSize);
 		CHECK(a[i].terrain.detailRidge == b[i].terrain.detailRidge);
+		//Unused layers (weight 0) are not saved, so only the used ones have to match
+		for (int l = 0; l < biome::materialLayers; l++) {
+			CAPTURE(l);
+			CHECK(a[i].materials[l].weight == b[i].materials[l].weight);
+			if (a[i].materials[l].weight > 0.0f) {
+				CHECK(a[i].materials[l].material == b[i].materials[l].material);
+			}
+		}
 	}
 }
 
@@ -166,6 +180,10 @@ TEST_CASE("A world preset keeps every field")
 	CHECK(loaded.biomes.modifyTerrain == original.biomes.modifyTerrain);
 	CHECK(loaded.biomes.terrainBlendWidth == original.biomes.terrainBlendWidth);
 	CHECK(loaded.biomes.detailSeed == original.biomes.detailSeed);
+	CHECK(loaded.biomes.materialBlendWidth == original.biomes.materialBlendWidth);
+	CHECK(loaded.biomes.materialPatchiness == original.biomes.materialPatchiness);
+	CHECK(loaded.biomes.materialPatchContrast == original.biomes.materialPatchContrast);
+	CHECK(loaded.biomes.materialPatchSize == original.biomes.materialPatchSize);
 	CheckSameBiomes(loaded.biomes.table, original.biomes.table);
 }
 
@@ -279,6 +297,9 @@ TEST_CASE("A biome missing fields in a preset keeps the values of a new biome")
 	CHECK(b.ranges[biome::HUMIDITY].max == 0.2f);
 	CHECK(b.ranges[biome::TEMPERATURE].min == -1.0f);
 	CHECK(b.ranges[biome::TEMPERATURE].max == 1.0f);
+	CHECK(b.materials[0].material == 0);
+	CHECK(b.materials[0].weight == 1.0f);
+	CHECK(loaded.biomes.materialPatchSize == BiomeConfig().materialPatchSize);
 }
 
 TEST_CASE("Unknown fields are ignored")
@@ -339,6 +360,15 @@ TEST_CASE("Invalid presets are rejected and the config stays unchanged")
 		{ "biome range of one number", Replaced(valid, "-0.41,", "") },
 		{ "biome color out of range", Replaced(valid, "0.31", "1.31") },
 		{ "biome name not a string", Replaced(valid, "\"Alpha\"", "7") },
+		{ "zero material blend width", Replaced(valid, "\"materialBlendWidth\": 0.19", "\"materialBlendWidth\": 0") },
+		{ "patchiness above 1", Replaced(valid, "\"materialPatchiness\": 0.37", "\"materialPatchiness\": 1.5") },
+		{ "patch contrast below 1", Replaced(valid, "\"materialPatchContrast\": 2.75", "\"materialPatchContrast\": 0.5") },
+		{ "zero patch size",Replaced(valid, "\"materialPatchSize\": 13.5", "\"materialPatchSize\": 0") },
+		{ "material out of range", Replaced(valid, "\"material\": 15", "\"material\": 16") },
+		{ "negative material weight", Replaced(valid, "\"weight\": 0.5", "\"weight\": -0.5") },
+		{ "no material weight", Replaced(valid, "\"weight\": 2.5", "\"weight\": 0") },
+		{ "materials not an array", Replaced(valid, "\"materials\": [", "\"materials\": 1, \"unused\": [") },
+		{ "too many materials", Replaced(valid, "\"materials\": [", "\"materials\": [{}, {}, {}, {}, {},") },
 	};
 
 	for (const Case& c : cases) {

@@ -74,10 +74,10 @@ void TerrainGenerationSys::UpdateChunks(const Camera& camera)
 		return;
 	}
 	gpu.BeginMeasure();
-	chunks.GenerateNext([&](const MapArea& area, TextureClass& height, TextureClass* colors, TextureClass* ids) {
+	chunks.GenerateNext([&](const MapArea& area, TextureClass& height, TextureClass* colors, TextureClass* ids, TextureClass* splat) {
 		gpu.GenerateTerrain(world.terrain, area, height, biomesGeneration ? &world.biomes : nullptr);
 		if (colors && ids) {
-			gpu.GenerateBiomes(world.biomes, world.terrain, area, *colors, *ids);
+			gpu.GenerateBiomes(world.biomes, world.terrain, area, *colors, *ids, splat);
 		}
 	});
 	gpu.EndMeasure();
@@ -106,7 +106,8 @@ void TerrainGenerationSys::GenerateFinite()
 		if (!biomeIds || biomeIds->GetWidth() != width || biomeIds->GetHeight() != height) {
 			biomeIds = std::make_unique<TextureClass>(width, height, GL_R32I);
 		}
-		gpu.GenerateBiomes(world.biomes, world.terrain, MapArea{}, view.LayerTexture(TerrainView::Layer::BIOMES, width, height), *biomeIds);
+		gpu.GenerateBiomes(world.biomes, world.terrain, MapArea{}, view.LayerTexture(TerrainView::Layer::BIOMES, width, height), *biomeIds,
+			&view.SplatTexture(width, height));
 	}
 	gpu.EndMeasure();
 
@@ -392,12 +393,19 @@ void TerrainGenerationSys::BiomesEditor()
 {
 	ImGui::Separator();
 	if (ImGui::Checkbox("Biomes generation", &biomesGeneration)) {
+		//The textured view stays: with biomes it shows their materials, without them the material chosen in "Terrain materials"
+		const bool textured = renderSettings.displayMode == utilities::heightMapMode::TEXTURED;
 		if (biomesGeneration) {
 			RequestBiomes();
-			renderSettings.displayMode = utilities::heightMapMode::BIOMES;
+			if (!textured) {
+				renderSettings.displayMode = utilities::heightMapMode::BIOMES;
+			}
 		}
 		else {
-			renderSettings.displayMode = utilities::heightMapMode::TOPOGRAPHICAL;
+			view.ReleaseSplat();
+			if (!textured) {
+				renderSettings.displayMode = utilities::heightMapMode::TOPOGRAPHICAL;
+			}
 			//Without biomes the terrain loses their modifiers
 			if (world.biomes.modifyTerrain) {
 				RequestTerrain();
@@ -442,6 +450,24 @@ void TerrainGenerationSys::BiomesEditor()
 				modifiersChanged |= ImGui::InputInt("Detail seed", &b.detailSeed);
 				ImGui::EndDisabled();
 				if (modifiersChanged) {
+					RequestBiomes();
+				}
+				ImGui::TreePop();
+			}
+			if (ImGui::TreeNodeEx("Surface materials", ImGuiTreeNodeFlags_DefaultOpen)) {
+				BiomeConfig& b = world.biomes;
+				ImGui::TextDisabled("Seen in the TEXTURED display mode; each biome's mix is in the biome table");
+				//Both divide in the shader, so they stay above 0
+				bool materialsChanged = ImGui::SliderFloat("Material blend width", &b.materialBlendWidth, 0.01f, 0.5f, "%.3f", ImGuiSliderFlags_AlwaysClamp);
+				ImGui::SetItemTooltip("How far (in noise values) the materials of neighbouring biomes mix");
+				materialsChanged |= ImGui::SliderFloat("Patchiness", &b.materialPatchiness, 0.0f, 1.0f, "%.2f", ImGuiSliderFlags_AlwaysClamp);
+				ImGui::SetItemTooltip("How strongly noise breaks a biome's mix into patches of its materials; 0 = an even mix.\n"
+					"At 1 each material covers about its share of the biome's area");
+				materialsChanged |= ImGui::SliderFloat("Patch contrast", &b.materialPatchContrast, 1.0f, 16.0f, "%.1f", ImGuiSliderFlags_AlwaysClamp | ImGuiSliderFlags_Logarithmic);
+				ImGui::SetItemTooltip("How sharp the edges of the patches are; 1 = soft gradients. Takes full effect at patchiness 1");
+				materialsChanged |= ImGui::SliderFloat("Patch size", &b.materialPatchSize, 2.0f, 256.0f, "%.0f texels", ImGuiSliderFlags_AlwaysClamp | ImGuiSliderFlags_Logarithmic);
+				ImGui::SetItemTooltip("Wavelength of the patch noise in map texels; the detail seed above chooses its pattern");
+				if (materialsChanged) {
 					RequestBiomes();
 				}
 				ImGui::TreePop();
