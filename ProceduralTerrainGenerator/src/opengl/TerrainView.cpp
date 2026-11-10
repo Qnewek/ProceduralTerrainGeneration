@@ -6,6 +6,9 @@
 
 #include "glm/gtc/matrix_transform.hpp"
 
+#include "GpuHeightGenerator.h"
+#include "TerrainMaterials.h"
+
 TerrainView::TerrainView()
 {
 }
@@ -144,6 +147,19 @@ void TerrainView::SetFrameUniforms(Shader& shader, Camera& camera, LightSource& 
 	shader.SetUniform1i("heightMap", heightUnit);
 	shader.SetUniform1i("biomeMap", static_cast<int>(Layer::BIOMES));
 	shader.SetUniform1i("surfaceMap", surfaceUnit);
+	//The material arrays are bound once per frame by TerrainMaterials::Bind
+	shader.SetUniform1i("materialAlbedo", TerrainMaterials::albedoUnit);
+	shader.SetUniform1i("materialDetail", TerrainMaterials::detailUnit);
+	shader.SetUniform1i("splatMap", splatUnit);
+	shader.SetUniform1i("useSplat", 0);
+}
+
+TextureClass& TerrainView::SplatTexture(int _width, int _height)
+{
+	if (!splat || splat->GetWidth() != _width || splat->GetHeight() != _height) {
+		splat = std::make_unique<TextureClass>(_width, _height, GL_RGBA8, GpuHeightGenerator::splatLayers);
+	}
+	return *splat;
 }
 
 void TerrainView::SetLayer(Layer layer, const HeightField& map)
@@ -207,6 +223,11 @@ void TerrainView::Draw(Renderer& renderer, Camera& camera, LightSource& light, c
 		}
 	}
 	surfaces[static_cast<int>(heightLayer)]->Bind(surfaceUnit);
+	//The splat map belongs to the terrain, not to a noise preview drawn from OVERLAY
+	if (splat && heightLayer == Layer::TERRAIN) {
+		splat->Bind(splatUnit);
+		shader->SetUniform1i("useSplat", 1);
+	}
 
 	if (settings.wireFrame) {
 		glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);

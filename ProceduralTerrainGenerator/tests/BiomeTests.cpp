@@ -172,6 +172,142 @@ TEST_CASE("Blend weight falls smoothly from 1 at the nearest biome to 0 at the b
 	CHECK(biome::BlendWeight(0.31f, 0.3f, 0.0f) == 0.0f);
 }
 
+namespace {
+	float Sum(const biome::MaterialWeights& weights)
+	{
+		float sum = 0.0f;
+		for (float w : weights) {
+			sum += w;
+		}
+		return sum;
+	}
+
+	//Two biomes split by temperature at 0: cold = material 2, warm = 70% material 5 + 30% material 9 (weights given unnormalized)
+	std::vector<biome::Biome> TwoMaterialBiomes()
+	{
+		biome::Biome cold, warm;
+		cold.ranges[biome::TEMPERATURE] = { -1.0f, 0.0f };
+		cold.materials = { { { 2, 3.0f } } };
+		warm.ranges[biome::TEMPERATURE] = { 0.0f, 1.0f };
+		warm.materials = { { { 5, 7.0f }, { 9, 3.0f } } };
+		return { cold, warm };
+	}
+}
+
+TEST_CASE("Materials: a biome alone gives its normalized mix")
+{
+	const std::vector<biome::Biome> table = TwoMaterialBiomes();
+	const biome::MaterialWeights noPatches{};
+
+	const biome::MaterialWeights warm = biome::MixMaterials(table, Values(0.0f, 0.0f, 0.0f, 0.8f, 0.0f), 0.1f, 0.0f, 4.0f, noPatches);
+	CHECK(warm[5] == doctest::Approx(0.7f));
+	CHECK(warm[9] == doctest::Approx(0.3f));
+	CHECK(warm[2] == 0.0f);
+	CHECK(Sum(warm) == doctest::Approx(1.0f));
+
+	const biome::MaterialWeights cold = biome::MixMaterials(table, Values(0.0f, 0.0f, 0.0f, -0.8f, 0.0f), 0.1f, 0.0f, 4.0f, noPatches);
+	CHECK(cold[2] == doctest::Approx(1.0f));
+	CHECK(Sum(cold) == doctest::Approx(1.0f));
+}
+
+TEST_CASE("Materials: biomes at a border mix and the mix changes continuously")
+{
+	const std::vector<biome::Biome> table = TwoMaterialBiomes();
+	const biome::MaterialWeights noPatches{};
+
+	//On the border both biomes are at distance 0: half of each
+	const biome::MaterialWeights border = biome::MixMaterials(table, Values(0.0f, 0.0f, 0.0f, 0.0f, 0.0f), 0.1f, 0.0f, 4.0f, noPatches);
+	CHECK(border[2] == doctest::Approx(0.5f));
+	CHECK(border[5] == doctest::Approx(0.35f));
+	CHECK(border[9] == doctest::Approx(0.15f));
+
+	//Small steps in temperature make small steps in the weights
+	biome::MaterialWeights previous = biome::MixMaterials(table, Values(0.0f, 0.0f, 0.0f, -0.2f, 0.0f), 0.1f, 0.0f, 4.0f, noPatches);
+	float largestStep = 0.0f;
+	for (int i = 1; i <= 400; i++) {
+		const float t = -0.2f + 0.001f * i;
+		const biome::MaterialWeights w = biome::MixMaterials(table, Values(0.0f, 0.0f, 0.0f, t, 0.0f), 0.1f, 0.0f, 4.0f, noPatches);
+		CHECK(Sum(w) == doctest::Approx(1.0f));
+		for (int m = 0; m < biome::maxMaterials; m++) {
+			largestStep = std::max(largestStep, std::abs(w[m] - previous[m]));
+		}
+		previous = w;
+	}
+	CHECK(largestStep < 0.05f);
+}
+
+TEST_CASE("Materials: patches are a softmax of log weight plus scaled noise")
+{
+	const std::vector<biome::Biome> table = TwoMaterialBiomes();
+	const biome::ParameterValues warm = Values(0.0f, 0.0f, 0.0f, 0.8f, 0.0f);
+	biome::MaterialWeights patch{};
+	patch[5] = -0.2f;
+	patch[9] = 0.3f;
+
+	//Contrast 1: weights proportional to w * exp(k * patch), k = patchNoiseScale * patchiness
+	const float k = biome::patchNoiseScale * 0.5f;
+	const float e5 = 0.7f * std::exp(k * -0.2f), e9 = 0.3f * std::exp(k * 0.3f);
+	const biome::MaterialWeights w = biome::MixMaterials(table, warm, 0.1f, 0.5f, 1.0f, patch);
+	CHECK(w[5] == doctest::Approx(e5 / (e5 + e9)));
+	CHECK(w[9] == doctest::Approx(e9 / (e5 + e9)));
+	CHECK(w[2] == 0.0f);
+	CHECK(Sum(w) == doctest::Approx(1.0f));
+
+	//The minor material leads where its noise is high enough; contrast keeps the leader and sharpens the edge
+	const biome::MaterialWeights soft = biome::MixMaterials(table, warm, 0.1f, 1.0f, 1.0f, patch);
+	const biome::MaterialWeights sharp = biome::MixMaterials(table, warm, 0.1f, 1.0f, 8.0f, patch);
+	CHECK(soft[9] > soft[5]);
+	CHECK(sharp[9] > soft[9]);
+	CHECK(sharp[9] > 0.99f);
+	CHECK(Sum(sharp) == doctest::Approx(1.0f));
+
+	//Even extreme scores stay finite (computed in the log space)
+	biome::MaterialWeights extreme{};
+	extreme[5] = 1.0f;
+	extreme[9] = -1.0f;
+	const biome::MaterialWeights e = biome::MixMaterials(table, warm, 0.1f, 1.0f, 100.0f, extreme);
+	CHECK(e[5] == doctest::Approx(1.0f));
+	CHECK(std::isfinite(e[9]));
+}
+
+TEST_CASE("Materials: with patches a material covers about its share of the area")
+{
+	//Patch values spread like the shader noise (about 1 / patchNoiseScale * 1.28 standard deviation is assumed there);
+	//here a uniform spread in [-0.5, 0.5] per material, sampled on a grid, checks the order of magnitude
+	const std::vector<biome::Biome> table = TwoMaterialBiomes();
+	const biome::ParameterValues warm = Values(0.0f, 0.0f, 0.0f, 0.8f, 0.0f);
+	int minorLeads = 0, samples = 0;
+	for (int a = 0; a < 100; a++) {
+		for (int b = 0; b < 100; b++) {
+			biome::MaterialWeights patch{};
+			patch[5] = -0.5f + (a + 0.5f) / 100.0f;
+			patch[9] = -0.5f + (b + 0.5f) / 100.0f;
+			const biome::MaterialWeights w = biome::MixMaterials(table, warm, 0.1f, 1.0f, 4.0f, patch);
+			minorLeads += w[9] > w[5] ? 1 : 0;
+			samples++;
+		}
+	}
+	//Material 9 has 30% of the mix: it must lead on a clear part of the area, but less than the major one
+	const float share = static_cast<float>(minorLeads) / samples;
+	CHECK(share > 0.15f);
+	CHECK(share < 0.5f);
+}
+
+TEST_CASE("Default biomes have valid materials")
+{
+	for (const biome::Biome& b : biome::DefaultBiomes()) {
+		CAPTURE(b.name);
+		float sum = 0.0f;
+		for (const biome::MaterialLayer& layer : b.materials) {
+			CHECK(layer.material >= 0);
+			CHECK(layer.material < biome::maxMaterials);
+			CHECK(layer.weight >= 0.0f);
+			sum += layer.weight;
+		}
+		CHECK(sum > 0.0f);
+	}
+}
+
 //Overlapping biomes would share an area; there the first one of the table always wins and the other only blends in
 TEST_CASE("Default biomes do not overlap")
 {

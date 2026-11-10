@@ -47,6 +47,8 @@ out/
 # Presets and height maps saved from the app
 ProceduralTerrainGenerator/presets/
 ProceduralTerrainGenerator/exports/
+# Terrain textures, downloaded by tools/fetch_textures.py
+ProceduralTerrainGenerator/res/textures/terrain/
 # Uncomment if you have tasks that create the project's static files in wwwroot
 #wwwroot/
 

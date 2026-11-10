@@ -147,6 +147,17 @@ namespace preset {
 			terrain["detailSize"] = ReadableFloat(b.terrain.detailSize);
 			terrain["detailRidge"] = b.terrain.detailRidge;
 			j["terrain"] = std::move(terrain);
+			//Only the used layers
+			json materials = json::array();
+			for (const biome::MaterialLayer& layer : b.materials) {
+				if (layer.weight > 0.0f) {
+					json m;
+					m["material"] = layer.material;
+					m["weight"] = ReadableFloat(layer.weight);
+					materials.push_back(std::move(m));
+				}
+			}
+			j["materials"] = std::move(materials);
 			return j;
 		}
 
@@ -423,6 +434,11 @@ namespace preset {
 			r.Read("modifyTerrain", b.modifyTerrain);
 			r.Read("terrainBlendWidth", b.terrainBlendWidth);
 			r.Read("detailSeed", b.detailSeed);
+			//Missing in presets saved before the materials existed (2026-11-10); the defaults are kept
+			r.Read("materialBlendWidth", b.materialBlendWidth);
+			r.Read("materialPatchiness", b.materialPatchiness);
+			r.Read("materialPatchContrast", b.materialPatchContrast);
+			r.Read("materialPatchSize", b.materialPatchSize);
 
 			//A table in the file replaces the default one; fields missing in an entry keep the values of a new Biome
 			const json* table = r.Find("table");
@@ -453,6 +469,19 @@ namespace preset {
 					t.Read("detailAmplitude", biome.terrain.detailAmplitude);
 					t.Read("detailSize", biome.terrain.detailSize);
 					t.Read("detailRidge", biome.terrain.detailRidge);
+				}
+				//Missing in presets saved before the materials existed: the biome keeps the default (material 0)
+				if (const json* materials = entry.Find("materials")) {
+					const std::string path = entry.PathOf("materials");
+					if (!materials->is_array() || materials->size() > biome::materialLayers) {
+						throw std::runtime_error(path + " must be an array of at most " + std::to_string(biome::materialLayers) + " materials");
+					}
+					biome.materials = {};
+					for (size_t l = 0; l < materials->size(); l++) {
+						const Reader m((*materials)[l], path + "[" + std::to_string(l) + "]");
+						m.Read("material", biome.materials[l].material);
+						m.Read("weight", biome.materials[l].weight);
+					}
 				}
 			}
 		}
@@ -514,6 +543,20 @@ namespace preset {
 			if (!std::isfinite(b.terrainBlendWidth) || b.terrainBlendWidth <= 0.0f) {
 				throw std::runtime_error("Biomes: terrainBlendWidth must be greater than 0");
 			}
+			//Material blending and the patch noise divide by them
+			if (!std::isfinite(b.materialBlendWidth) || b.materialBlendWidth <= 0.0f) {
+				throw std::runtime_error("Biomes: materialBlendWidth must be greater than 0");
+			}
+			if (!std::isfinite(b.materialPatchSize) || b.materialPatchSize <= 0.0f) {
+				throw std::runtime_error("Biomes: materialPatchSize must be greater than 0");
+			}
+			if (!(b.materialPatchiness >= 0.0f && b.materialPatchiness <= 1.0f)) {
+				throw std::runtime_error("Biomes: materialPatchiness must be between 0 and 1");
+			}
+			//Below 1 the patches would blur into each other instead of sharpening; huge values overflow nothing (log space) but are useless
+			if (!(b.materialPatchContrast >= 1.0f && b.materialPatchContrast <= 100.0f)) {
+				throw std::runtime_error("Biomes: materialPatchContrast must be between 1 and 100");
+			}
 			if (b.table.empty() || b.table.size() > maxBiomes) {
 				throw std::runtime_error("Biomes: the table must have between 1 and " + std::to_string(maxBiomes) + " biomes");
 			}
@@ -537,6 +580,20 @@ namespace preset {
 				//The detail noise divides the position by it
 				if (!std::isfinite(t.detailSize) || t.detailSize <= 0.0f) {
 					throw std::runtime_error(name + ": terrain detailSize must be greater than 0");
+				}
+				float materialSum = 0.0f;
+				for (const biome::MaterialLayer& layer : biome.materials) {
+					if (layer.material < 0 || layer.material >= biome::maxMaterials) {
+						throw std::runtime_error(name + ": material must be between 0 and " + std::to_string(biome::maxMaterials - 1));
+					}
+					if (!(layer.weight >= 0.0f && std::isfinite(layer.weight))) {
+						throw std::runtime_error(name + ": material weights must not be negative");
+					}
+					materialSum += layer.weight;
+				}
+				//The layers are normalized by their sum
+				if (materialSum <= 0.0f) {
+					throw std::runtime_error(name + ": at least one material needs a weight greater than 0");
 				}
 			}
 		}
@@ -682,6 +739,10 @@ namespace preset {
 		biomes["modifyTerrain"] = c.biomes.modifyTerrain;
 		biomes["terrainBlendWidth"] = ReadableFloat(c.biomes.terrainBlendWidth);
 		biomes["detailSeed"] = c.biomes.detailSeed;
+		biomes["materialBlendWidth"] = ReadableFloat(c.biomes.materialBlendWidth);
+		biomes["materialPatchiness"] = ReadableFloat(c.biomes.materialPatchiness);
+		biomes["materialPatchContrast"] = ReadableFloat(c.biomes.materialPatchContrast);
+		biomes["materialPatchSize"] = ReadableFloat(c.biomes.materialPatchSize);
 		json table = json::array();
 		for (const biome::Biome& b : c.biomes.table) {
 			table.push_back(BiomeToJson(b));

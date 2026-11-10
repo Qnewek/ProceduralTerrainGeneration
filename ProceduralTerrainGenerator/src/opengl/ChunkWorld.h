@@ -39,8 +39,8 @@ public:
 	//Fills the maps of one chunk, textureSize x textureSize texels
 	//@param area - map positions of the texels and the island size, for GpuHeightGenerator
 	//@param height - GL_R32F
-	//@param colors, ids - GL_RGBA32F and GL_R32I, nullptr while biomes are off
-	using GenerateFn = std::function<void(const MapArea& area, TextureClass& height, TextureClass* colors, TextureClass* ids)>;
+	//@param colors, ids, splat - GL_RGBA32F, GL_R32I and the splat map (GpuHeightGenerator::GenerateBiomes), nullptr while biomes are off
+	using GenerateFn = std::function<void(const MapArea& area, TextureClass& height, TextureClass* colors, TextureClass* ids, TextureClass* splat)>;
 
 	bool Initialize();
 	//Rebuilds the shaders from their source files and regenerates the chunks
@@ -97,7 +97,7 @@ private:
 	struct Chunk {
 		int level = 0;
 		glm::ivec2 coord = glm::ivec2(0);	//in chunks of its level
-		std::unique_ptr<TextureClass> height, surface, colors, ids;
+		std::unique_ptr<TextureClass> height, surface, colors, ids, splat;
 		uint64_t version = 0;		//worldVersion it was generated for; 0 = never generated
 		uint64_t generation = 0;	//unique number of its last generation
 		uint64_t lastSeen = 0;		//frame of the last Plan that visited it
