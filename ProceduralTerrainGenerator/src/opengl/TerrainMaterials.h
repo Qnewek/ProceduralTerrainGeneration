@@ -62,6 +62,9 @@ private:
 		float blendDepth;					//0 = plain crossfade instead of height-based blending
 		float triplanarStart, triplanarEnd;	//radians
 		float specularStrength;
+		float farUvScale, farUvMix, farUvStart, farUvEnd;
+		float averageStart, averageEnd;
+		float macroStrength, macroSize;
 	};
 
 	void UploadBlock();
@@ -84,5 +87,14 @@ private:
 	//Slopes (degrees) over which the side projections fade in (triplanar); below the start only the projection from above
 	float triplanarStart = 20.0f, triplanarEnd = 40.0f;
 	float specularStrength = 0.5f;	//0 = no sun highlights
+	//Anti-tiling (distances in world units before modelScale): a second texture scale mixed in with distance,
+	//average colors far away, low-frequency brightness/hue variation
+	bool antiTiling = true;
+	float farUvScale = 0.27f;		//not a simple fraction, so the repeats of both scales do not line up
+	float farUvMix = 0.5f;
+	float farUvStart = 30.0f, farUvEnd = 150.0f;
+	float averageStart = 800.0f, averageEnd = 2000.0f;
+	float macroStrength = 0.15f;
+	float macroSize = 150.0f;
 	bool blockOutdated = true;
 };

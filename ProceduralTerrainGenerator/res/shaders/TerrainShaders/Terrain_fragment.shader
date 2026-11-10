@@ -26,6 +26,7 @@ uniform bool fogOn;
 uniform float fogStart;
 uniform float fogDistance;
 uniform vec3 viewPos;
+uniform mat4 model;         //model[0][0] = modelScale (as in the TES)
 uniform int displayMode;    //values of utilities::heightMapMode; the colors of the other modes come from the TES
 //Share of every material (GpuHeightGenerator::GenerateBiomes): material m in layer m / 4, channel m % 4.
 //Without it (no biomes) the TEXTURED mode draws previewMaterial
@@ -138,7 +139,7 @@ void texturedSurface(SurfaceSampling p, out vec3 albedo, out vec3 normal, out fl
         sum += b;
     }
     //sum > 0: the best material has b = blendDepth (or its weight)
-    albedo /= sum;
+    albedo = clamp(albedo / sum * macroVariation(p.position), 0.0, 1.0);
     normal = normalize(normal);
     occlusion /= sum;
     roughness /= sum;
@@ -163,7 +164,8 @@ void main()
     bool textured = displayMode == MODE_TEXTURED;
     if (textured) {
         //displayMode is uniform, so the derivatives inside surfaceSampling are taken in uniform control flow
-        texturedSurface(surfaceSampling(TerrainPos, norm), baseColor, norm, occlusion, roughness);
+        float viewDistance = length(viewPos - FragPos) / model[0][0];
+        texturedSurface(surfaceSampling(TerrainPos, norm, viewDistance), baseColor, norm, occlusion, roughness);
     }
     else {
         float modHeight = mod(Height, step);
