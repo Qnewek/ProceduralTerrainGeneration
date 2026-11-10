@@ -362,10 +362,12 @@ void ChunkWorld::AllocateTextures(Chunk& chunk)
 	if (biomes && !chunk.colors) {
 		chunk.colors = std::make_unique<TextureClass>(textureSize, textureSize, GL_RGBA32F);
 		chunk.ids = std::make_unique<TextureClass>(textureSize, textureSize, GL_R32I);
+		chunk.splat = std::make_unique<TextureClass>(textureSize, textureSize, GL_RGBA8, GpuHeightGenerator::splatLayers);
 	}
 	else if (!biomes) {
 		chunk.colors.reset();
 		chunk.ids.reset();
+		chunk.splat.reset();
 	}
 }
 
@@ -381,7 +383,7 @@ void ChunkWorld::GenerateNext(const GenerateFn& generate)
 		area.origin = glm::vec2(chunk.coord * chunkSize * step - step);
 		area.step = static_cast<float>(step);
 		area.islandSize = alignedSize;
-		generate(area, *chunk.height, chunk.colors.get(), chunk.ids.get());
+		generate(area, *chunk.height, chunk.colors.get(), chunk.ids.get(), chunk.splat.get());
 		surfacePass.Run(*chunk.height, TerrainView::worldUnitsPerTexel * step, *chunk.surface);
 		chunk.version = worldVersion;
 		chunk.generation = ++generationCounter;
@@ -411,6 +413,10 @@ void ChunkWorld::Draw(Renderer& renderer, Camera& camera, LightSource& light, co
 		chunk->height->Bind(0);
 		(chunk->colors ? *chunk->colors : *noBiomes).Bind(static_cast<unsigned int>(TerrainView::Layer::BIOMES));
 		chunk->surface->Bind(TerrainView::surfaceUnit);
+		if (chunk->splat) {
+			chunk->splat->Bind(TerrainView::splatUnit);
+		}
+		shader->SetUniform1i("useSplat", chunk->splat ? 1 : 0);
 		renderer.DrawPatches(*vao, *shader, patchCount, 4);
 	}
 	if (settings.wireFrame) {

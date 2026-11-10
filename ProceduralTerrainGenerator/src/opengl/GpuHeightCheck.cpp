@@ -1,6 +1,7 @@
 #include "GpuHeightCheck.h"
 
 #include <algorithm>
+#include <array>
 #include <chrono>
 #include <cmath>
 #include <cstring>
@@ -447,6 +448,129 @@ namespace {
 		return ok && blendOk && defaultOk;
 	}
 
+	//Splat map of the default terrain: weights (0-255) of every material, texel after texel
+	std::vector<std::array<int, biome::maxMaterials>> GenerateSplat(GpuHeightGenerator& gpu, const BiomeConfig& biomes, const MapArea& area,
+		int width, int height)
+	{
+		TextureClass colors(width, height, GL_RGBA32F), ids(width, height, GL_R32I);
+		TextureClass splat(width, height, GL_RGBA8, GpuHeightGenerator::splatLayers);
+		gpu.GenerateBiomes(biomes, TerrainConfig::Default(), area, colors, ids, &splat);
+		const size_t texels = static_cast<size_t>(width) * height;
+		std::vector<unsigned char> data(texels * 4 * GpuHeightGenerator::splatLayers);
+		splat.Read(GL_RGBA, GL_UNSIGNED_BYTE, static_cast<int>(data.size()), data.data());
+		std::vector<std::array<int, biome::maxMaterials>> weights(texels);
+		for (int layer = 0; layer < GpuHeightGenerator::splatLayers; layer++) {
+			for (size_t i = 0; i < texels; i++) {
+				for (int c = 0; c < 4; c++) {
+					weights[i][layer * 4 + c] = data[(layer * texels + i) * 4 + c];
+				}
+			}
+		}
+		return weights;
+	}
+
+	//Largest change of a material weight (0-255) between neighbouring texels
+	int LargestWeightStep(const std::vector<std::array<int, biome::maxMaterials>>& weights)
+	{
+		int largest = 0;
+		for (int y = 0; y < mapHeight; y++) {
+			for (int x = 0; x < mapWidth; x++) {
+				const auto& w = weights[static_cast<size_t>(y) * mapWidth + x];
+				for (int m = 0; m < biome::maxMaterials; m++) {
+					if (x + 1 < mapWidth) {
+						largest = std::max(largest, std::abs(weights[static_cast<size_t>(y) * mapWidth + x + 1][m] - w[m]));
+					}
+					if (y + 1 < mapHeight) {
+						largest = std::max(largest, std::abs(weights[static_cast<size_t>(y + 1) * mapWidth + x][m] - w[m]));
+					}
+				}
+			}
+		}
+		return largest;
+	}
+
+	//Splat map (biome::MixMaterials): weights sum to 1 (up to 8-bit rounding), only materials of the table appear,
+	//a single material covers everything, patches change the mix, and blending makes the steps between texels smaller
+	bool CheckMaterials(GpuHeightGenerator& gpu)
+	{
+		std::cout << "\nmaterials: splat map from the biomes\n";
+		const BiomeConfig config = BiomeConfig::Default();
+		const auto weights = GenerateSplat(gpu, config, MapArea{}, mapWidth, mapHeight);
+		std::array<bool, biome::maxMaterials> used{};
+		for (const biome::Biome& b : config.table) {
+			for (const biome::MaterialLayer& layer : b.materials) {
+				used[layer.material] = used[layer.material] || layer.weight > 0.0f;
+			}
+		}
+		//Each of the 16 weights rounds by at most half a step
+		size_t badSum = 0, unused = 0;
+		std::array<size_t, biome::maxMaterials> present{};
+		for (const auto& w : weights) {
+			int sum = 0;
+			for (int m = 0; m < biome::maxMaterials; m++) {
+				sum += w[m];
+				unused += !used[m] && w[m] > 0 ? 1 : 0;
+				present[m] += w[m] > 0 ? 1 : 0;
+			}
+			badSum += std::abs(sum - 255) > 8 ? 1 : 0;
+		}
+		//For tuning: on how many texels each material has the largest share, and its mean share
+		std::array<size_t, biome::maxMaterials> dominant{};
+		std::array<double, biome::maxMaterials> shareSum{};
+		for (const auto& w : weights) {
+			dominant[std::max_element(w.begin(), w.end()) - w.begin()]++;
+			for (int m = 0; m < biome::maxMaterials; m++) {
+				shareSum[m] += w[m] / 255.0;
+			}
+		}
+		//Transitions: texels where no material has 90% of the mix, for several patch contrasts
+		std::cout << "  texels in a transition (no material >= 90%):";
+		for (float contrast : { 1.0f, 1.5f, 2.0f, 3.0f, 4.0f }) {
+			BiomeConfig c = config;
+			c.materialPatchContrast = contrast;
+			const auto w = GenerateSplat(gpu, c, MapArea{}, mapWidth, mapHeight);
+			const size_t transition = static_cast<size_t>(std::count_if(w.begin(), w.end(), [](const auto& t) { return *std::max_element(t.begin(), t.end()) < 230; }));
+			std::cout << "  contrast " << contrast << ": " << std::fixed << std::setprecision(1) << 100.0 * transition / w.size() << "%";
+		}
+		std::cout << "\n  material: dominant on % of texels, mean share %\n";
+		for (int m = 0; m < biome::maxMaterials; m++) {
+			if (present[m] > 0) {
+				std::cout << "  " << std::setw(2) << m << ": " << std::fixed << std::setprecision(1) << std::setw(5) << 100.0 * dominant[m] / weights.size()
+					<< "  " << std::setw(5) << 100.0 * shareSum[m] / weights.size() << "\n";
+			}
+		}
+		const size_t materialsPresent = static_cast<size_t>(std::count_if(present.begin(), present.end(), [](size_t c) { return c > 0; }));
+		const bool sumOk = badSum == 0 && unused == 0 && materialsPresent > 1;
+		Report("materials: default table", std::to_string(materialsPresent) + " materials, " + std::to_string(badSum) + " bad sums, "
+			+ std::to_string(unused) + " unused materials", sumOk);
+
+		BiomeConfig single = config;
+		for (biome::Biome& b : single.table) {
+			b.materials = { { { 3, 2.0f } } };
+		}
+		const auto singleWeights = GenerateSplat(gpu, single, MapArea{}, mapWidth, mapHeight);
+		const size_t notFull = static_cast<size_t>(std::count_if(singleWeights.begin(), singleWeights.end(), [](const auto& w) { return w[3] != 255; }));
+		const bool singleOk = notFull == 0;
+		Report("materials: one material everywhere", std::to_string(notFull) + " texels not fully material 3", singleOk);
+
+		BiomeConfig even = config;
+		even.materialPatchiness = 0.0f;
+		const auto evenWeights = GenerateSplat(gpu, even, MapArea{}, mapWidth, mapHeight);
+		size_t patched = 0;
+		for (size_t i = 0; i < weights.size(); i++) {
+			patched += weights[i] != evenWeights[i] ? 1 : 0;
+		}
+		const bool patchOk = patched > weights.size() / 10;
+		Report("materials: patches change the mix", std::to_string(patched) + " of " + std::to_string(weights.size()) + " texels", patchOk);
+
+		BiomeConfig sharp = even;
+		sharp.materialBlendWidth = 0.001f;
+		const int sharpStep = LargestWeightStep(GenerateSplat(gpu, sharp, MapArea{}, mapWidth, mapHeight)), evenStep = LargestWeightStep(evenWeights);
+		const bool blendOk = evenStep < sharpStep;
+		Report("materials: blending", "largest step " + std::to_string(sharpStep) + " -> " + std::to_string(evenStep), blendOk);
+		return sumOk && singleOk && patchOk && blendOk;
+	}
+
 	//A chunk is a part of the map generated on its own, with an origin and the island size of the whole map; a coarser
 	//level of detail also takes every step-th sample. It has to equal the same samples of the whole map exactly,
 	//or chunk borders would show seams and levels would not meet
@@ -506,6 +630,22 @@ namespace {
 			TextureClass ids(colors.GetWidth(), colors.GetHeight(), GL_R32I);
 			gpu.GenerateBiomes(biomes, terrain, area, colors, ids);
 		});
+
+		//The splat map has several layers, so it is compared here rather than through check
+		const auto whole = GenerateSplat(gpu, biomes, MapArea{}, mapWidth, mapHeight);
+		for (int step : { 1, 2, 4 }) {
+			const auto part = GenerateSplat(gpu, biomes, MapArea{ glm::vec2(corner), static_cast<float>(step), glm::ivec2(mapWidth, mapHeight) },
+				partWidth, partHeight);
+			int different = 0;
+			for (int y = 0; y < partHeight; y++) {
+				for (int x = 0; x < partWidth; x++) {
+					different += whole[static_cast<size_t>(corner.y + y * step) * mapWidth + corner.x + x * step] != part[static_cast<size_t>(y) * partWidth + x] ? 1 : 0;
+				}
+			}
+			const bool ok = different == 0;
+			allOk = allOk && ok;
+			Report("chunk: material splat, step " + std::to_string(step), std::to_string(different) + " of " + std::to_string(partWidth * partHeight) + " texels differ", ok);
+		}
 		return allOk;
 	}
 
@@ -652,6 +792,7 @@ int RunGpuHeightCheck()
 			ok = CheckBiomes(gpu) && ok;
 			ok = CheckClimate(gpu) && ok;
 			ok = CheckModifiers(gpu) && ok;
+			ok = CheckMaterials(gpu) && ok;
 			ok = CheckChunks(gpu) && ok;
 			ok = CheckSurface(surfacePass) && ok;
 			RunTimings(gpu, surfacePass);

@@ -42,8 +42,10 @@ namespace {
 		float r, g, b;
 		float amplitude, offset, detailAmplitude, detailSize;
 		int32_t detailRidge;
+		int32_t materials[biome::materialLayers];
+		float materialWeights[biome::materialLayers];
 	};
-	static_assert(sizeof(GpuBiomeEntry) == 72);
+	static_assert(sizeof(GpuBiomeEntry) == 104);
 
 	void SetPermutation(uint32_t* permutations, int index, int seed)
 	{
@@ -151,6 +153,15 @@ void GpuHeightGenerator::UploadBiomeTable(const BiomeConfig& biomes)
 		e.detailAmplitude = b.terrain.detailAmplitude;
 		e.detailSize = b.terrain.detailSize;
 		e.detailRidge = b.terrain.detailRidge ? 1 : 0;
+		//Layers normalized here, so the shader adds them as they are (biome::MixMaterials normalizes them the same way)
+		float layerSum = 0.0f;
+		for (const biome::MaterialLayer& layer : b.materials) {
+			layerSum += layer.weight;
+		}
+		for (int l = 0; l < biome::materialLayers; l++) {
+			e.materials[l] = std::clamp(b.materials[l].material, 0, biome::maxMaterials - 1);
+			e.materialWeights[l] = layerSum > 0.0f ? b.materials[l].weight / layerSum : 0.0f;
+		}
 	}
 	//The number of biomes can change, so the buffer gets new storage on every use
 	glNamedBufferData(biomeTable, entries.size() * sizeof(GpuBiomeEntry), entries.data(), GL_DYNAMIC_DRAW);
@@ -233,7 +244,8 @@ void GpuHeightGenerator::GenerateTerrain(const TerrainConfig& config, const MapA
 	RunHeightShader(mode, modify, area, target);
 }
 
-void GpuHeightGenerator::GenerateBiomes(const BiomeConfig& biomes, const TerrainConfig& terrain, const MapArea& area, TextureClass& colors, TextureClass& ids)
+void GpuHeightGenerator::GenerateBiomes(const BiomeConfig& biomes, const TerrainConfig& terrain, const MapArea& area, TextureClass& colors, TextureClass& ids,
+	TextureClass* splat)
 {
 	auto input = std::make_unique_for_overwrite<GpuWorldInput>();
 	const int mode = FillWorldInput(*input, terrain, &biomes);
@@ -248,5 +260,13 @@ void GpuHeightGenerator::GenerateBiomes(const BiomeConfig& biomes, const Terrain
 	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, biomeTable);
 	colors.BindImage(0, GL_WRITE_ONLY);
 	ids.BindImage(1, GL_WRITE_ONLY);
+	biomeShader->SetUniform1i("writeSplat", splat ? 1 : 0);
+	if (splat) {
+		biomeShader->SetUniform1f("materialBlendWidth", biomes.materialBlendWidth);
+		biomeShader->SetUniform1f("materialPatchiness", biomes.materialPatchiness);
+		biomeShader->SetUniform1f("materialPatchContrast", biomes.materialPatchContrast);
+		biomeShader->SetUniform1f("materialPatchSize", biomes.materialPatchSize);
+		splat->BindImage(2, GL_WRITE_ONLY);
+	}
 	DispatchTiles(*biomeShader, colors.GetWidth(), colors.GetHeight());
 }

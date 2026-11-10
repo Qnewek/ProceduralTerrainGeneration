@@ -138,6 +138,65 @@ bool BiomeEditor::ImGuiDraw(std::vector<biome::Biome>& table)
 		changed = true;
 	}
 	ImGui::SetItemTooltip("The biome keeps the terrain as it is");
+
+	changed |= MaterialLayers(b);
+	return changed;
+}
+
+void BiomeEditor::SetMaterialNames(std::vector<std::string> names)
+{
+	materialNames = std::move(names);
+}
+
+bool BiomeEditor::MaterialLayers(biome::Biome& b)
+{
+	ImGui::SeparatorText("Surface materials");
+	ImGui::TextDisabled("Mix of up to %d materials, seen in the TEXTURED display mode", biome::materialLayers);
+	auto nameOf = [&](int material) {
+		return material < static_cast<int>(materialNames.size()) ? materialNames[material] : "Material " + std::to_string(material);
+	};
+	float sum = 0.0f;
+	for (const biome::MaterialLayer& layer : b.materials) {
+		sum += layer.weight;
+	}
+
+	bool changed = false;
+	//Without the material list (it could not be read) any index can still be chosen
+	const int choices = materialNames.empty() ? biome::maxMaterials : std::min(static_cast<int>(materialNames.size()), biome::maxMaterials);
+	for (int l = 0; l < biome::materialLayers; l++) {
+		biome::MaterialLayer& layer = b.materials[l];
+		ImGui::PushID(l);
+		ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x * 0.45f);
+		if (ImGui::BeginCombo("##material", nameOf(layer.material).c_str())) {
+			for (int m = 0; m < choices; m++) {
+				if (ImGui::Selectable(nameOf(m).c_str(), m == layer.material)) {
+					layer.material = m;
+					changed = true;
+				}
+			}
+			ImGui::EndCombo();
+		}
+		ImGui::SameLine();
+		ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x * 0.6f);
+		changed |= ImGui::SliderFloat("##weight", &layer.weight, 0.0f, 1.0f, "%.2f", ImGuiSliderFlags_AlwaysClamp);
+		ImGui::SameLine();
+		//Share after normalization, as the shader uses it
+		if (layer.weight > 0.0f && sum > 0.0f) {
+			ImGui::Text("%3.0f%%", 100.0f * layer.weight / sum);
+		}
+		else {
+			ImGui::TextDisabled("unused");
+		}
+		ImGui::PopID();
+	}
+	//A biome needs at least one material
+	float newSum = 0.0f;
+	for (const biome::MaterialLayer& layer : b.materials) {
+		newSum += layer.weight;
+	}
+	if (newSum <= 0.0f) {
+		b.materials[0].weight = 1.0f;
+	}
 	return changed;
 }
 

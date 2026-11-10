@@ -162,8 +162,15 @@ struct BiomeConfig {
 	bool modifyTerrain = true;
 	//Distance in the parameter space over which the modifiers of biomes mix; must be > 0, or the terrain would jump at borders
 	float terrainBlendWidth = 0.15f;
-	//Seed of the detail noise of the modifiers (one permutation table for all biomes)
+	//Seed of the detail noise of the modifiers (one permutation table for all biomes); the material patches use it too
 	int detailSeed = 1234;
+	//Surface materials (see biome::MixMaterials): distance in the parameter space over which the materials of biomes mix, must be > 0;
+	//how strongly the patch noise breaks a mix into patches, in [0, 1]; how sharp the edges of the patches are, >= 1;
+	//wavelength of the patch noise in map texels, must be > 0
+	float materialBlendWidth = 0.1f;
+	float materialPatchiness = 1.0f;
+	float materialPatchContrast = 4.0f;
+	float materialPatchSize = 24.0f;
 
 	//Noise of a biome-only parameter (TEMPERATURE or HUMIDITY; anything else returns temperature)
 	noise::NoiseConfigParameters& Noise(BiomeParameter p) { return p == BiomeParameter::HUMIDITY ? humidity : temperature; }

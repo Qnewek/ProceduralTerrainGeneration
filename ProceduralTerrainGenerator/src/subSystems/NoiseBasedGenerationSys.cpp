@@ -129,7 +129,7 @@ void NoiseBasedGenerationSys::UpdateChunks(const Camera& camera)
 		return;
 	}
 	gpu.BeginMeasure();
-	chunks.GenerateNext([&](const MapArea& area, TextureClass& height, TextureClass*, TextureClass*) {
+	chunks.GenerateNext([&](const MapArea& area, TextureClass& height, TextureClass*, TextureClass*, TextureClass*) {
 		gpu.GenerateNoise(config.noise, area, height);
 	});
 	gpu.EndMeasure();

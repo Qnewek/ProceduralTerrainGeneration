@@ -34,11 +34,26 @@ namespace biome {
 		bool detailRidge = false;		//sharp crests (1 - 2|n|) instead of the plain noise, e.g. dunes
 	};
 
+	//Most surface materials (layers of res/textures/terrain_materials.json; TerrainMaterials::maxMaterials)
+	constexpr int maxMaterials = 16;
+	//Most materials one biome mixes
+	constexpr int materialLayers = 4;
+
+	//Share of a surface material in a biome; a layer with weight 0 is unused
+	struct MaterialLayer {
+		int material = 0;		//index in the material list, 0 to maxMaterials - 1
+		float weight = 0.0f;	//>= 0; the layers of a biome are normalized to sum 1
+	};
+
+	using MaterialWeights = std::array<float, maxMaterials>;
+
 	struct Biome {
 		std::string name;
 		glm::vec3 color = glm::vec3(0.0f);
 		std::array<Range, PARAMETER_COUNT> ranges;
 		TerrainModifier terrain;
+		//Surface materials of the biome; at least one layer has weight > 0
+		std::array<MaterialLayer, materialLayers> materials = { MaterialLayer{ 0, 1.0f } };
 
 		//Distance in the parameter space from the ranges of the biome: 0 inside all of them, otherwise
 		//the Euclidean length of how far each value lies outside its range
@@ -72,6 +87,22 @@ namespace biome {
 	float ModifyHeight(const std::vector<Biome>& table, const ParameterValues& values, float height, float waterHeight, float blendWidth,
 		const std::vector<float>& detail);
 
-	//Biomes used by default
+	//Multiplies the patch noise at patchiness 1. The noise (2 octaves of simplex) has a spread of about 1 / 4 of this, so
+	//log(w) + noise behaves like the Gumbel trick: a material wins on about its share w of the area, in compact patches
+	constexpr float patchNoiseScale = 5.0f;
+
+	//Share of every surface material at a point (the splat map, biome_compute.shader does the same).
+	//1. mix w: the material layers of every biome, each biome with BlendWeight(distance, nearest, blendWidth)
+	//2. patches: score = c * (log w + k * patch), k = patchNoiseScale * patchiness, c = 1 + (contrast - 1) * patchiness;
+	//	result = exp(score) normalized to sum 1 (softmax). A material leads where its score is the highest, on about its share
+	//	of the area; c only sharpens the edges of the patches. Patchiness 0 gives the plain mix w.
+	//blendWidth must be > 0, contrast >= 1
+	//@param values - after ApplyClimate
+	//@param patch - value of the patch noise of every material at this point, in [-1, 1] (the shader evaluates it)
+	//@param patchiness - in [0, 1]; 0 = no patches
+	MaterialWeights MixMaterials(const std::vector<Biome>& table, const ParameterValues& values, float blendWidth, float patchiness,
+		float contrast, const MaterialWeights& patch);
+
+	//Biomes used by default; materials refer to the default material list (res/textures/terrain_materials.json)
 	std::vector<Biome> DefaultBiomes();
 }

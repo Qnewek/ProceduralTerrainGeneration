@@ -48,7 +48,13 @@ public:
 	//and colors of all biomes mixed with biome::BlendWeight. Depends on the whole terrain config, so a terrain change needs new biomes
 	//@param colors - GL_RGBA32F, blended color of every texel
 	//@param ids - GL_R32I of the same size, id (index in the table) of the nearest biome of every texel
-	void GenerateBiomes(const BiomeConfig& biomes, const TerrainConfig& terrain, const MapArea& area, TextureClass& colors, TextureClass& ids);
+	//@param splat - if given, GL_RGBA8 array of splatLayers layers of the same size: share of every surface material (biome::MixMaterials),
+	//	material m in layer m / 4, channel m % 4
+	void GenerateBiomes(const BiomeConfig& biomes, const TerrainConfig& terrain, const MapArea& area, TextureClass& colors, TextureClass& ids,
+		TextureClass* splat = nullptr);
+
+	//Layers of a splat map: 4 materials per RGBA layer
+	static constexpr int splatLayers = biome::maxMaterials / 4;
 
 	//Measure the GPU time of the Generate calls between them; cannot overlap another GL_TIME_ELAPSED query
 	void BeginMeasure() { timer->Begin(); }
