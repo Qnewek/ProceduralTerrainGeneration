@@ -58,7 +58,7 @@ ProceduralTerrainGenerator/
     terrainGeneration/
       WorldConfig.h              same dane: WorldConfig (TerrainConfig + BiomeConfig), NoiseMapConfig, ErosionConfig
       Noise.h                    noise::NoiseConfigParameters (fBm, ridge, island, redistribution); sam szum jest tylko w GLSL
-      Biome.*                    biom = zakresy wartości 5 szumów + kolor; najbliższy biom (Nearest) i wagi przejść (BlendWeight) — opis reguł, które liczy biome_compute.shader
+      Biome.*                    biom = zakresy 6 parametrów (5 szumów + elewacja) + kolor; najbliższy biom (Nearest) i wagi przejść (BlendWeight) — opis reguł, które liczy biome_compute.shader
       Erosion.*                  erozja kroplowa (CPU, lista jednokierunkowa kropel)
       Grid.h                     mapy Grid<T>
       SplineSampling.*           próbkowanie splajnu do tablicy (dla GPU i wykresu w edytorze)
@@ -176,11 +176,15 @@ Wartości szumów są w [-1, 1]. Konwencja indeksowania: `map[y * width + x]`.
   (np. `%TEMP%\ptg_cc`), nie w scratchpadzie.
 - Pomiary GPU: `GL_TIME_ELAPSED` nie może się zagnieżdżać, więc scena i UI mają osobne, kolejne zapytania — nie otwieraj
   kolejnego w ich trakcie. Liczba trójkątów obejmuje też trójkąt nieba i podgląd erozji, i jest liczona przed przycinaniem.
-- Biomy (Faza 3): tabela w `BiomeConfig::table` (w presetach), id biomu = indeks w tabeli. Każdy texel dostaje najbliższy biom w przestrzeni (C, M, W, T, H),
+- Biomy (Faza 3): tabela w `BiomeConfig::table` (w presetach), id biomu = indeks w tabeli. Każdy texel dostaje najbliższy biom w przestrzeni (C, M, W, T, H, E),
   odległość = długość wektora wyjścia poza zakresy; kolor miesza wszystkie biomy wagą `BlendWeight` (`blendWidth`), więc mapa id ma ostre granice, a kolory płynne.
   Reguły są dwa razy: `Biome.cpp` (testy) i `common/biomes.glsl` — zmiana w jednym wymaga zmiany w drugim. Tabela nie może być pusta (sprawdza `Check`).
-  Ocean i plażę wybiera sam zakres kontynentalności, nie wysokość nad wodą: progi C w `DefaultBiomes` (`coast`, `inland`, `highland`) odpowiadają punktom
-  domyślnego `continentalnessSpline` (wybrzeże = gdzie podstawa osiąga `seaLevel`). Zmiana splajnu lub `seaLevel` wymaga przesunięcia tych progów.
+  Parametrów biomu jest 6: pięć szumów i `ELEVATION` = wysokość względem lustra wody w [-1, 1] (`biome::Elevation`, ustawiana w `ApplyClimate`; 0 = lustro,
+  -1 = dno na wysokości 0, 1 = wysokość 1). W shaderach pętla po szumach idzie do `NOISE_COUNT`, a `PARAMETER_COUNT` obejmuje elewację; nowy parametr
+  = `biome::Parameter` + `parameterNames` + `biomeParameterNames` (`Preset.cpp`) + stałe w `biomes.glsl` + rozmiar `GpuBiomeEntry`. Brakujący zakres w presecie = [-1, 1].
+  Domyślna tabela (18 biomów, `DefaultBiomes`) dzieli całą przestrzeń parametrów bez dziur i nakładania (testy „cover the whole parameter space” / „do not overlap”);
+  woda, wybrzeże, pagórki i góry są wybierane elewacją, więc tabela nie zależy od splajnu C ani `seaLevel` (C nieużywane). Progi skalibrowane na domyślnym świecie
+  (udziały w ROADMAP, sekcja „Nowa tabela biomów”) — po zmianie domyślnego terenu lub klimatu warto je zmierzyć ponownie.
   Przed wyborem biomu T i H zmienia klimat (`biome::ApplyClimate`: lapse rate i wilgotność przy brzegu, od wysokości nad `TerrainConfig::WaterHeight()`);
   shader biomów liczy wysokość sam (`common/terrain.glsl`), więc biomy zależą od całego `TerrainConfig` — `RequestTerrain` przy włączonych biomach przelicza też biomy.
   Modyfikatory terenu (`biome::TerrainModifier`, `ModifyHeight`): przy włączonych biomach i `modifyTerrain` teren zależy od `BiomeConfig` (`GenerateTerrain(..., &biomes)`),
