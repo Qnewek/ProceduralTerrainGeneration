@@ -1,8 +1,8 @@
 # Procedural Terrain Generator — analiza i plan rozwoju
 
-Diagnoza na 2026-10-27 (branch `lodChunked` = `master`, commit `fbd32ab`); postęp odhaczany na bieżąco, ostatnia aktualizacja 2026-11-12
+Diagnoza na 2026-10-27 (branch `lodChunked` = `master`, commit `fbd32ab`); postęp odhaczany na bieżąco, ostatnia aktualizacja 2026-11-13
 (Fazy 0–3 i Teren 2.0 zamknięte: fundament i porządki, generacja wyłącznie na GPU, chunki z LOD, biomy ciągłe z edytorem, klimatem, modyfikatorami terenu
-i teksturowaniem; następna Faza 4 — roślinność).
+i teksturowaniem, kontynenty, tabela 18 biomów i rzeźba terenu; następna Faza 4 — roślinność).
 Cel projektu: **generowanie terenu z edycją parametrów w czasie rzeczywistym, maksymalna wydajność,
 biomy, roślinność i kolejne feature'y.**
 
@@ -50,7 +50,7 @@ biomy, roślinność i kolejne feature'y.**
 | A7 | Brak serializacji (presety, konfiguracje biomów, eksport) — „Saving” to placeholder | Nie da się zapisać efektu pracy ani porównać ustawień — ✅ presety JSON i eksport heightmapy (2026-11-03), tabela biomów z materiałami w presetach (Faza 3) |
 | A8 | Brak testów, CI, profilera; brak menedżera zależności (binarki w repo) | Regresje niewykrywalne; aktualizacje bibliotek ręczne — **Częściowo:** CMake + vcpkg, CI z kontrolą checksum (2026-10-30), testy jednostkowe (2026-11-02), panel pomiarów (2026-11-03); Tracy odłożony (Faza 1 pkt 8) |
 | ~~A9~~ ✅ | Martwy kod: `VegetationGenerator` (pusty), CPU-mesh w `utilities.cpp` (`MapToVertices`, `PerformErosion`, `PaintVerticesByHeight`, `MeshIndicesStrips`, `CalculateHeightMapNormals`), `TINYOBJLOADER_IMPLEMENTATION` bez użycia, `DrawTriangleStrips`, gałęzie git bez scalenia | Szum poznawczy — **Zrobione 2026-10-30:** usunięte `VegetationGenerator`, CPU-mesh z `utilities` (zostały `GenerateVerticesForResolution`, `GetBiomeColorMap` i helpery ImGui), `DrawTriangleStrips`, nieużywane vendor `ObjLoader` (tiny_obj_loader) i `PoissonSampling` — wrócą w nowej postaci w Fazie 4. `res/textures/` zostaje (assety pod Fazę 3) |
-| ~~A10~~ ✅ | Higiena repo: śledzony `imgui.ini`, commity „sda/asd/x”, 17 zdalnych branchy, README z pustymi sekcjami | Trudno wrócić do projektu po przerwie (jak teraz) — **Zrobione 2026-10-30:** `imgui.ini` nieśledzony (od B13), scalone branche usunięte lokalnie i z GitHuba (zostaje `master`), jedyny nie scalony commit (`infiniteTerrain`, klasa `Chunk`) zachowany jako tag `archive/infinite-terrain-chunks`; README przepisany (funkcje, build, sterowanie, benchmark) — brakuje screenshotów |
+| ~~A10~~ ✅ | Higiena repo: śledzony `imgui.ini`, commity „sda/asd/x”, 17 zdalnych branchy, README z pustymi sekcjami | Trudno wrócić do projektu po przerwie (jak teraz) — **Zrobione 2026-10-30:** `imgui.ini` nieśledzony (od B13), scalone branche usunięte lokalnie i z GitHuba (zostaje `master`), jedyny nie scalony commit (`infiniteTerrain`, klasa `Chunk`) zachowany jako tag `archive/infinite-terrain-chunks` (tag usunięty 2026-11-12 na prośbę właściciela, chunki zrobione od nowa w Fazie 2); README przepisany (funkcje, build, sterowanie, benchmark) — brakuje screenshotów |
 
 ---
 
@@ -392,6 +392,11 @@ Pkt 4 wymaga, żeby shader biomów liczył też wysokość terenu (splajny w buf
 Zostają jako możliwe usprawnienia: koszt szumu plam materiałów (pkt 3, po połączeniu przebiegów 2026-11-12), oświetlenie sRGB, detail normal maps i pomiar kosztu FS (pkt 5), wybór osi / przekrój diagramu i ostrzeżenia
 o nakładaniu się biomów (pkt 6), tarasowanie per biom.
 
+✅ **Domknięcie Fazy 3 2026-11-13** — po zamknięciu kryterium dopracowane wartości domyślne świata i układ UI (sekcje niżej, PR #41–#44): zakładki w panelach,
+kontynenty z ~60% wody, tabela 18 biomów z parametrem ELEVATION i umiarkowanym klimatem, rzeźba terenu (`heightScale` 1024, wysokie góry, rzeźba per biom).
+Przeniesione do kolejnych faz: bagna (priorytet biomu w regułach) i własne materiały Jungle/Taiga — Faza 4; łagodniejsze pagórki i większy domyślny render distance
+wobec gór ~900 jednostek — do decyzji przy przelotach w Fazie 4.
+
 ### Układ UI — przed Fazą 4 (decyzja właściciela 2026-11-12)
 ✅ 2026-11-12 (branch `feat/vertical-tabs`) Zamiast jednej długiej listy zwijanych sekcji w każdym panelu: zakładki (`utility/PanelTabs.*`) w rzędach na górze panelu,
 zawijane do kolejnego rzędu, gdy się nie mieszczą (pierwsza próba, pionowa kolumna z boku, zastąpiona na prośbę właściciela), treść zakładki pod nimi,
@@ -489,7 +494,7 @@ Rozwinięcie trybu „Imported map”, który dziś tylko pokazuje mapę z pliku
 | P0 | Faza 0 (B13, B3, B2, B1, B11) | Bez tego każda dalsza praca jest na niepewnym gruncie |
 | P1 | Faza 1: ~~B8 (szum)~~ ✅, ~~A2/B5 (RAII + width/height)~~ ✅, ~~A3/A4 (rozdzielenie warstw)~~ ✅, ~~B6 (shadery)~~ ✅, ~~B15 (tekstury)~~ ✅, ~~wielowątkowość (7a)~~ ✅, ~~generacja asynchroniczna (7b)~~ ✅, ~~pomiary~~ ✅ | Fundament — bez rozdzielenia warstw nie da się przenieść generacji na GPU |
 | P1 | Faza 2.1–2.3 (compute height + chunki) | Największy zysk dla „real-time” |
-| P2 | Faza 2.4–2.7, Faza 3 | Jakość i skalowanie |
+| P2 | ~~Faza 2.4–2.7~~ ✅ (2.6, 2.7 niepotrzebne), ~~Faza 3~~ ✅ | Jakość i skalowanie |
 | P3 | Faza 4, Faza 5, Faza 6 | Feature'y budowane na stabilnym fundamencie |
 
 Sugerowany pierwszy krok po Fazie 0: **zmierzyć** (Tracy) czas `TerrainGenerator::GenerateTerrain` dla 512²,
