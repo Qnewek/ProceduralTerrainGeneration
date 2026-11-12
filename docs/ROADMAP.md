@@ -464,6 +464,34 @@ przeniesienia wprost, ale reguły rozmieszczenia i UI są dobrym punktem wyjści
 
 **Kryterium:** 100k+ instancji drzew i 1M+ źdźbeł trawy przy 60 FPS; roślinność zgodna z biomami i spójna między chunkami.
 
+**Decyzje właściciela 2026-11-13:** modele CC0 glTF z Poly Haven pobierane skryptem (jak tekstury); najpierw drzewa, krzewy i kamienie, trawa osobno później;
+roślinność tylko w świecie nieskończonym (TerrainGen infinite). Poly Haven ma wyłącznie fotoskany — drzewa 150 tys. – 17 mln trójkątów, kamienie 6–28 tys. —
+więc uproszczenie siatek i impostory są konieczne od początku. Lekkie modele low-poly (Kenney, Quaternius) odrzucone: tylko ręczne pobieranie i styl niepasujący do fototekstur.
+Skala: 1 m = 4 jednostki świata (1 teksel = 1 m), modele glTF są w metrach.
+
+Kroki:
+1. **Assety i LOD** (branch `feat/vegetation-assets`): lista modeli `res/vegetation/vegetation_models.json`, `tools/fetch_models.py` (glTF 1k + mapy alpha liści),
+   wczytywanie glTF (cgltf), LOD-y przy wczytaniu (meshoptimizer dla pni i skał; liście/igły jako karty — usuwanie części kart i powiększanie pozostałych),
+   cache uproszczonych siatek na dysku, tekstury w tablicach (albedo + alpha, normal + roughness + AO), wczytywanie w tle. Podgląd modelu w panelu (FBO, wybór LOD, liczba trójkątów).
+   ✅ 2026-11-13 (do oceny właściciela): `terrainGeneration/VegetationMesh.*` (ptg_core, testy `VegetationMeshTests.cpp`), `opengl/VegetationModels.*`,
+   `res/shaders/VegetationShaders/`, zakładka „Vegetation” w lewym panelu, `--vegetation-preview [folder]` (PNG z LOD-ami każdego wariantu + tabela). Nowe zależności vcpkg: cgltf, meshoptimizer.
+   - 14 modeli (ok. 730 MB pobrania): jodła (`fir_tree_01`, 3 warianty), sadzonki jodły i sosny, drzewo liściaste, island tree, searsia, quiver tree, martwy pień,
+     2 krzewy, paproć, 3 kamienie. Pełnej sosny (`pine_tree_01`, 905 MB) nie ma.
+   - Warianty: Poly Haven trzyma kilka wariantów w jednym pliku obok siebie. Wariant = węzły stojące na ziemi o nakładających się podstawach; węzły wiszące (korona, liście) dołączają do pnia pod sobą.
+   - Liście to karty z alfą, ale bardzo gęste (drzewo liściaste 1,9 mln, jodła 6,7 mln trójkątów igieł), więc 16 tys. na LOD0 dawało łyse drzewa.
+     Budżety: drzewa 150 000 / 30 000 / 6 000, krzewy i kamienie 4 000 / 1 000 / 250; liście dostają co najmniej 60% poziomu.
+     Gałęzie: najpierw odpadają najmniejsze kawałki, potem zwijanie krawędzi (meshoptimizer); vertex clustering tylko dla brył (kamień, pień) — wcześniej robił z gałęzi odłamki.
+     Karty liści: zostaje równomiernie rozłożona część kawałków, powiększona (≤ 4×) do podobnej powierzchni.
+   - Pierwsze wczytanie (budowa LOD-ów) ok. 6–7 s w tle, najdłużej jodła; potem z cache ok. 0,1–0,2 s na model. Cache: `res/vegetation/cache/*.mesh` (klucz: rozmiar i data plików + budżety).
+   - Shader: alpha test z podbiciem alfy na dalszych mipach, oba boki liści z przeświecaniem, normal mapy z ramki z pochodnych (bez tangentów), oświetlenie i mgła jak terenu.
+   - Znane: trzecia jodła ma czarny pień (materiał `trunk_c`, do sprawdzenia mapowanie UV); LOD2 drzew jest rzadki — zastąpią go impostory (krok 4).
+2. **Rozmieszczenie i rendering:** compute per kafel świata (jittered grid, seed z kafla — deterministyczne i bez szwów), wysokość i biom liczone tą samą funkcją co teren,
+   reguły na sztywno (gęstość z biomu, maska nachylenia i wody), instancing z wyborem LOD po odległości.
+3. **Reguły per biom:** tabela roślinności w `BiomeConfig` (model, gęstość, zakres nachylenia/wysokości, skala, klastrowanie), edytor, presety.
+4. **Impostory i culling na GPU:** impostory pieczone przy wczytaniu (octahedral), frustum/distance culling w compute, `glMultiDrawElementsIndirect`; pomiar 100k instancji.
+5. **Trawa:** osobny system blisko kamery (compute + wiatr w VS).
+6. **Wspólny UBO kamery i światła** (pkt 6 wyżej) — przy kroku 2, gdy dojdą shadery roślinności.
+
 ### Faza 5 — realizm i narzędzia (otwarte)
 - **Erozja na GPU:** hydrauliczna (pipe model / virtual pipes lub kroplowa w compute z atomics) + termiczna;
   tryb „bake” dla obszaru (erozja jest nielokalna — dla chunków: erozja na większym regionie z marginesem i zszywanie).
