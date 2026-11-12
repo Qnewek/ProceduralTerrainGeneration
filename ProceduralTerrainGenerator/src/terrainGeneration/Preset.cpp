@@ -32,7 +32,8 @@ namespace preset {
 		using biome::maxBiomes;
 
 		//Keys of the biome ranges, in the order of biome::Parameter
-		constexpr const char* biomeParameterNames[biome::PARAMETER_COUNT] = { "continentalness", "mountainousness", "weirdness", "temperature", "humidity" };
+		constexpr const char* biomeParameterNames[biome::PARAMETER_COUNT] = { "continentalness", "mountainousness", "weirdness", "temperature", "humidity",
+		"elevation" };	//elevation added 2026-11-13 without a new version: older presets read it as the full range, so their biomes stay the same
 
 		template<typename E>
 		struct EnumName {

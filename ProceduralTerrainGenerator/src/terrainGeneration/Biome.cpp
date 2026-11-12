@@ -46,7 +46,15 @@ namespace biome {
 		const float coast = 1.0f - t * t * (3.0f - 2.0f * t);
 		values[TEMPERATURE] = std::clamp(values[TEMPERATURE] - climate.lapseRate * above, -1.0f, 1.0f);
 		values[HUMIDITY] = std::clamp(values[HUMIDITY] + climate.coastHumidity * coast, -1.0f, 1.0f);
+		values[ELEVATION] = Elevation(height, waterHeight);
 		return values;
+	}
+
+	float Elevation(float height, float waterHeight)
+	{
+		const float relative = height - waterHeight;
+		const float side = relative >= 0.0f ? 1.0f - waterHeight : waterHeight;
+		return std::clamp(relative / std::max(side, 1e-6f), -1.0f, 1.0f);
 	}
 
 	float ModifyHeight(const std::vector<Biome>& table, const ParameterValues& values, float height, float waterHeight, float blendWidth,
@@ -113,39 +121,71 @@ namespace biome {
 
 	std::vector<Biome> DefaultBiomes()
 	{
-		//Order of ranges: continentalness, mountainousness, weirdness, temperature, humidity.
-		//Converted from the discrete levels used before 2026-11-08; Snowy peaks added with the climate (2026-11-09):
-		//mountains cold enough after the lapse rate
+		//Table of 2026-11-13: the ranges split the whole parameter space (no point lies outside every biome, no two biomes overlap),
+		//thresholds calibrated on the default world (shares of the land in docs/ROADMAP.md). Water, shore, hills and mountains are
+		//chosen by the elevation, so the table does not depend on the continentalness spline or the sea level; continentalness is unused
 		const Range all{ -1.0f, 1.0f };
-		//Continentalness borders, following TerrainConfig::continentalnessSpline (continents, 2026-11-12): the coast where the base
-		//reaches seaLevel, a narrow beach (about 8% of the land), mountains on about 45% of the land as before the calibration
-		const float coast = 0.15f, inland = 0.2f, highland = 0.5f;
-		//Terrain modifiers (2026-11-09): flatter plains and snowfields, dunes in the desert, sharper and rougher mountains;
-		//both mountain biomes alike, so the snow line does not change the shape
-		const TerrainModifier plains{ 0.8f, 0.0f, 0.0f, 16.0f, false };
-		const TerrainModifier snowfield{ 0.9f, 0.0f, 0.0f, 16.0f, false };
-		const TerrainModifier dunes{ 1.0f, 0.0f, 0.012f, 10.0f, true };
-		const TerrainModifier rock{ 1.15f, 0.0f, 0.015f, 20.0f, true };
+		//Elevation: deep sea below seaFloor, shore up to shoreTop, mountains from highland (on rough terrain)
+		const float seaFloor = -0.4f, shoreTop = 0.045f, highland = 0.32f;
+		//Temperature (after the lapse rate) and humidity bands; hot lands have their own humidity borders
+		const float frozen = -0.78f, cold = -0.42f, hot = 0.25f;
+		const float dry = -0.45f, wet = 0.2f, hotDry = -0.3f, hotWet = 0.3f;
+		//Mountainousness: rough terrain (hills, mountains) and a rocky shore; weirdness: jagged peaks
+		const float rough = 0.05f, rockyShore = 0.3f, jagged = 0.6f;
+		//Ranges with continentalness unused: mountainousness, weirdness, temperature, humidity, elevation
+		const auto ranges = [&](Range m, Range w, Range t, Range h, Range e) { return std::array<Range, PARAMETER_COUNT>{ all, m, w, t, h, e }; };
+		const Range shore{ 0.0f, shoreTop }, inland{ shoreTop, 1.0f }, smooth{ -1.0f, rough }, hilly{ rough, 1.0f };
+		//Terrain modifiers: flat plains and shores, rolling forests, dunes, hills, rough rock. The three mountain biomes share
+		//one modifier, so the snow line and the jagged peaks do not change the shape
 		const TerrainModifier none;
-		//Materials (2026-11-10), indices of the default material list. With the patches a weight is about the share of the area;
-		//the sea floor is dark while there is no water surface, so the sea does not look like a beach
+		const TerrainModifier flat{ 0.8f, 0.0f, 0.0f, 16.0f, false };
+		const TerrainModifier gentle{ 0.9f, 0.0f, 0.0f, 16.0f, false };
+		const TerrainModifier rolling{ 1.0f, 0.0f, 0.005f, 32.0f, false };
+		const TerrainModifier hills{ 1.05f, 0.0f, 0.008f, 40.0f, false };
+		const TerrainModifier dunes{ 1.0f, 0.0f, 0.012f, 10.0f, true };
+		const TerrainModifier stony{ 1.1f, 0.0f, 0.01f, 12.0f, true };
+		const TerrainModifier rock{ 1.15f, 0.0f, 0.015f, 20.0f, true };
+		//Materials, indices of the default material list. With the patches a weight is about the share of the area;
+		//the deep sea floor is dark while there is no water surface, so the sea does not look like a beach
 		enum { GRASS, DRY_GRASS, FOREST_FLOOR, DIRT, SAND, BEACH, CLIFF_ROCK, SANDSTONE, SCREE, SNOW, TUNDRA };
 		using Layers = std::array<MaterialLayer, materialLayers>;
-		const Layers meadow{ { { GRASS, 0.6f }, { DRY_GRASS, 0.2f }, { FOREST_FLOOR, 0.12f }, { DIRT, 0.08f } } };
-		const Layers desert{ { { SAND, 0.75f }, { SANDSTONE, 0.25f } } };
-		const Layers snowfields{ { { SNOW, 0.6f }, { TUNDRA, 0.4f } } };
-		const Layers beach{ { { BEACH, 0.7f }, { SAND, 0.3f } } };
-		const Layers peaks{ { { SNOW, 0.6f }, { CLIFF_ROCK, 0.3f }, { SCREE, 0.1f } } };
-		const Layers mountain{ { { CLIFF_ROCK, 0.5f }, { SCREE, 0.3f }, { DRY_GRASS, 0.2f } } };
-		const Layers seabed{ { { SCREE, 0.5f }, { DIRT, 0.5f } } };
 		return {
-			{ "Grassplains", glm::vec3(0.2f, 0.8f, 0.2f),	{ Range{ inland, 1.0f }, Range{ -1.0f, -0.2f }, all, Range{ -0.5f, 0.0f }, Range{ -0.5f, 1.0f } }, plains, meadow },
-			{ "Desert", glm::vec3(0.95f, 0.1f, 0.1f),		{ Range{ inland, 1.0f }, Range{ -1.0f, 0.05f }, all, Range{ 0.0f, 1.0f }, Range{ -1.0f, -0.5f } }, dunes, desert },
-			{ "Snow", glm::vec3(0.95f, 0.95f, 0.95f),		{ Range{ inland, 1.0f }, Range{ -1.0f, 0.05f }, all, Range{ -1.0f, -0.5f }, all }, snowfield, snowfields },
-			{ "Sand", glm::vec3(0.93f, 0.82f, 0.55f),		{ Range{ coast, inland }, all, all, all, all }, none, beach },
-			{ "Snowy peaks", glm::vec3(0.85f, 0.9f, 1.0f),	{ Range{ highland, 1.0f }, Range{ 0.05f, 1.0f }, all, Range{ -1.0f, -0.5f }, all }, rock, peaks },
-			{ "Mountain", glm::vec3(0.5f, 0.5f, 0.5f),		{ Range{ highland, 1.0f }, Range{ 0.05f, 1.0f }, all, Range{ -0.5f, 1.0f }, all }, rock, mountain },
-			{ "Ocean", glm::vec3(0.2f, 0.4f, 0.85f),		{ Range{ -1.0f, coast }, all, all, all, all }, none, seabed },
+			{ "Deep ocean", glm::vec3(0.1f, 0.2f, 0.55f), ranges(all, all, all, all, { -1.0f, seaFloor }), none,
+				Layers{ { { DIRT, 0.6f }, { SCREE, 0.4f } } } },
+			{ "Ocean", glm::vec3(0.2f, 0.4f, 0.85f), ranges(all, all, all, all, { seaFloor, 0.0f }), none,
+				Layers{ { { SAND, 0.5f }, { BEACH, 0.3f }, { DIRT, 0.2f } } } },
+			{ "Beach", glm::vec3(0.93f, 0.82f, 0.55f), ranges({ -1.0f, rockyShore }, all, { frozen, 1.0f }, all, shore), flat,
+				Layers{ { { BEACH, 0.7f }, { SAND, 0.3f } } } },
+			{ "Stony shore", glm::vec3(0.55f, 0.55f, 0.5f), ranges({ rockyShore, 1.0f }, all, { frozen, 1.0f }, all, shore), stony,
+				Layers{ { { SCREE, 0.5f }, { CLIFF_ROCK, 0.3f }, { BEACH, 0.2f } } } },
+			{ "Snowy shore", glm::vec3(0.8f, 0.85f, 0.9f), ranges(all, all, { -1.0f, frozen }, all, shore), flat,
+				Layers{ { { SNOW, 0.5f }, { SCREE, 0.3f }, { BEACH, 0.2f } } } },
+			{ "Tundra", glm::vec3(0.55f, 0.6f, 0.45f), ranges(smooth, all, { -1.0f, frozen }, { -1.0f, wet }, inland), gentle,
+				Layers{ { { TUNDRA, 0.6f }, { DRY_GRASS, 0.2f }, { SCREE, 0.2f } } } },
+			{ "Snowfields", glm::vec3(0.95f, 0.95f, 0.95f), ranges(smooth, all, { -1.0f, frozen }, { wet, 1.0f }, inland), gentle,
+				Layers{ { { SNOW, 0.6f }, { TUNDRA, 0.4f } } } },
+			{ "Taiga", glm::vec3(0.15f, 0.4f, 0.3f), ranges(smooth, all, { frozen, cold }, { dry, 1.0f }, inland), rolling,
+				Layers{ { { FOREST_FLOOR, 0.55f }, { GRASS, 0.25f }, { TUNDRA, 0.2f } } } },
+			{ "Steppe", glm::vec3(0.75f, 0.7f, 0.4f), ranges(smooth, all, { frozen, hot }, { -1.0f, dry }, inland), flat,
+				Layers{ { { DRY_GRASS, 0.6f }, { DIRT, 0.25f }, { GRASS, 0.15f } } } },
+			{ "Plains", glm::vec3(0.2f, 0.8f, 0.2f), ranges(smooth, all, { cold, hot }, { dry, wet }, inland), flat,
+				Layers{ { { GRASS, 0.6f }, { DRY_GRASS, 0.2f }, { FOREST_FLOOR, 0.12f }, { DIRT, 0.08f } } } },
+			{ "Forest", glm::vec3(0.1f, 0.55f, 0.15f), ranges(smooth, all, { cold, hot }, { wet, 1.0f }, inland), rolling,
+				Layers{ { { FOREST_FLOOR, 0.6f }, { GRASS, 0.3f }, { DIRT, 0.1f } } } },
+			{ "Desert", glm::vec3(0.95f, 0.1f, 0.1f), ranges(smooth, all, { hot, 1.0f }, { -1.0f, hotDry }, inland), dunes,
+				Layers{ { { SAND, 0.75f }, { SANDSTONE, 0.25f } } } },
+			{ "Savanna", glm::vec3(0.8f, 0.6f, 0.2f), ranges(smooth, all, { hot, 1.0f }, { hotDry, hotWet }, inland), flat,
+				Layers{ { { DRY_GRASS, 0.6f }, { DIRT, 0.2f }, { SAND, 0.1f }, { GRASS, 0.1f } } } },
+			{ "Jungle", glm::vec3(0.0f, 0.35f, 0.1f), ranges(smooth, all, { hot, 1.0f }, { hotWet, 1.0f }, inland), rolling,
+				Layers{ { { GRASS, 0.5f }, { FOREST_FLOOR, 0.5f } } } },
+			{ "Hills", glm::vec3(0.45f, 0.65f, 0.3f), ranges(hilly, all, { frozen, 1.0f }, all, { shoreTop, highland }), hills,
+				Layers{ { { GRASS, 0.45f }, { DRY_GRASS, 0.2f }, { SCREE, 0.2f }, { DIRT, 0.15f } } } },
+			{ "Mountain", glm::vec3(0.5f, 0.5f, 0.5f), ranges(hilly, { -1.0f, jagged }, { frozen, 1.0f }, all, { highland, 1.0f }), rock,
+				Layers{ { { CLIFF_ROCK, 0.5f }, { SCREE, 0.3f }, { DRY_GRASS, 0.2f } } } },
+			{ "Rocky peaks", glm::vec3(0.35f, 0.33f, 0.32f), ranges(hilly, { jagged, 1.0f }, { frozen, 1.0f }, all, { highland, 1.0f }), rock,
+				Layers{ { { CLIFF_ROCK, 0.7f }, { SCREE, 0.3f } } } },
+			{ "Snowy peaks", glm::vec3(0.85f, 0.9f, 1.0f), ranges(hilly, all, { -1.0f, frozen }, all, inland), rock,
+				Layers{ { { SNOW, 0.6f }, { CLIFF_ROCK, 0.3f }, { SCREE, 0.1f } } } },
 		};
 	}
 }

@@ -2,17 +2,21 @@
 
 #include <algorithm>
 #include <cmath>
+#include <functional>
 
 #include "Biome.h"
 
 //Ids (indices) of the default biomes from biome::DefaultBiomes
-constexpr int GRASSPLAINS = 0, DESERT = 1, SNOW = 2, SAND = 3, SNOWY_PEAKS = 4, MOUNTAIN = 5, OCEAN = 6;
+enum DefaultBiome {
+	DEEP_OCEAN, OCEAN, BEACH, STONY_SHORE, SNOWY_SHORE, TUNDRA, SNOWFIELDS, TAIGA, STEPPE, PLAINS, FOREST, DESERT, SAVANNA, JUNGLE,
+	HILLS, MOUNTAIN, ROCKY_PEAKS, SNOWY_PEAKS, DEFAULT_BIOME_COUNT
+};
 
 namespace {
-	//Values in the order of biome::Parameter
-	biome::ParameterValues Values(float c, float m, float w, float t, float h)
+	//Values in the order of biome::Parameter; the elevation last, 0 (the water surface) unless given
+	biome::ParameterValues Values(float c, float m, float w, float t, float h, float e = 0.0f)
 	{
-		return { c, m, w, t, h };
+		return { c, m, w, t, h, e };
 	}
 }
 
@@ -35,15 +39,67 @@ TEST_CASE("Distance is 0 inside the ranges and grows with how far a value lies o
 TEST_CASE("Default biomes are chosen by their parameters")
 {
 	const std::vector<biome::Biome> table = biome::DefaultBiomes();
+	REQUIRE(table.size() == DEFAULT_BIOME_COUNT);
 
-	//Arguments: continentalness, mountainousness, weirdness, temperature, humidity
-	CHECK(biome::Nearest(table, Values(0.5f, -0.5f, 0.0f, -0.25f, 0.0f)) == GRASSPLAINS);
-	CHECK(biome::Nearest(table, Values(0.5f, -0.5f, 0.0f, 0.5f, -0.8f)) == DESERT);
-	CHECK(biome::Nearest(table, Values(0.5f, -0.5f, 0.0f, -0.8f, 0.5f)) == SNOW);
-	CHECK(biome::Nearest(table, Values(0.17f, 0.8f, 0.0f, 0.5f, 0.5f)) == SAND);
-	CHECK(biome::Nearest(table, Values(0.6f, 0.6f, 0.0f, 0.0f, 0.0f)) == MOUNTAIN);
-	CHECK(biome::Nearest(table, Values(0.6f, 0.6f, 0.0f, -0.7f, 0.0f)) == SNOWY_PEAKS);
-	CHECK(biome::Nearest(table, Values(-0.9f, 0.0f, 0.0f, 0.0f, 0.0f)) == OCEAN);
+	//Arguments: continentalness, mountainousness, weirdness, temperature, humidity, elevation
+	CHECK(biome::Nearest(table, Values(0.0f, 0.0f, 0.0f, 0.0f, 0.0f, -0.8f)) == DEEP_OCEAN);
+	CHECK(biome::Nearest(table, Values(0.0f, 0.0f, 0.0f, 0.0f, 0.0f, -0.1f)) == OCEAN);
+	//Shores just above the water: sandy, rocky where the terrain is rough, snowy where it is frozen
+	CHECK(biome::Nearest(table, Values(0.0f, -0.5f, 0.0f, 0.0f, 0.0f, 0.02f)) == BEACH);
+	CHECK(biome::Nearest(table, Values(0.0f, 0.6f, 0.0f, 0.0f, 0.0f, 0.02f)) == STONY_SHORE);
+	CHECK(biome::Nearest(table, Values(0.0f, -0.5f, 0.0f, -0.9f, 0.0f, 0.02f)) == SNOWY_SHORE);
+	//Flat land by temperature and humidity
+	CHECK(biome::Nearest(table, Values(0.0f, -0.5f, 0.0f, -0.9f, -0.5f, 0.1f)) == TUNDRA);
+	CHECK(biome::Nearest(table, Values(0.0f, -0.5f, 0.0f, -0.9f, 0.5f, 0.1f)) == SNOWFIELDS);
+	CHECK(biome::Nearest(table, Values(0.0f, -0.5f, 0.0f, -0.6f, 0.0f, 0.1f)) == TAIGA);
+	CHECK(biome::Nearest(table, Values(0.0f, -0.5f, 0.0f, 0.0f, -0.7f, 0.1f)) == STEPPE);
+	CHECK(biome::Nearest(table, Values(0.0f, -0.5f, 0.0f, 0.0f, 0.0f, 0.1f)) == PLAINS);
+	CHECK(biome::Nearest(table, Values(0.0f, -0.5f, 0.0f, 0.0f, 0.5f, 0.1f)) == FOREST);
+	CHECK(biome::Nearest(table, Values(0.0f, -0.5f, 0.0f, 0.6f, -0.7f, 0.1f)) == DESERT);
+	CHECK(biome::Nearest(table, Values(0.0f, -0.5f, 0.0f, 0.6f, 0.0f, 0.1f)) == SAVANNA);
+	CHECK(biome::Nearest(table, Values(0.0f, -0.5f, 0.0f, 0.6f, 0.6f, 0.1f)) == JUNGLE);
+	//Rough land by elevation, weirdness and temperature
+	CHECK(biome::Nearest(table, Values(0.0f, 0.5f, 0.0f, 0.0f, 0.0f, 0.2f)) == HILLS);
+	CHECK(biome::Nearest(table, Values(0.0f, 0.5f, 0.0f, 0.0f, 0.0f, 0.5f)) == MOUNTAIN);
+	CHECK(biome::Nearest(table, Values(0.0f, 0.5f, 0.8f, 0.0f, 0.0f, 0.5f)) == ROCKY_PEAKS);
+	CHECK(biome::Nearest(table, Values(0.0f, 0.5f, 0.0f, -0.9f, 0.0f, 0.5f)) == SNOWY_PEAKS);
+}
+
+TEST_CASE("Elevation: 0 at the water surface, -1 at the deepest floor, 1 at the top, linear on each side")
+{
+	CHECK(biome::Elevation(0.2f, 0.2f) == 0.0f);
+	CHECK(biome::Elevation(0.0f, 0.2f) == doctest::Approx(-1.0f));
+	CHECK(biome::Elevation(0.1f, 0.2f) == doctest::Approx(-0.5f));
+	CHECK(biome::Elevation(1.0f, 0.2f) == doctest::Approx(1.0f));
+	CHECK(biome::Elevation(0.6f, 0.2f) == doctest::Approx(0.5f));
+	//Without a water surface (methods other than LAYERED) the height itself; out of range clamped
+	CHECK(biome::Elevation(0.3f, 0.0f) == doctest::Approx(0.3f));
+	CHECK(biome::Elevation(1.5f, 0.2f) == 1.0f);
+	//ApplyClimate fills it in
+	const biome::ParameterValues v = biome::ApplyClimate(Values(0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.7f), 0.6f, 0.2f, biome::Climate{});
+	CHECK(v[biome::ELEVATION] == doctest::Approx(0.5f));
+}
+
+//With no gaps no point falls to an arbitrary nearest biome; with no overlaps (test below) no two biomes share a point
+TEST_CASE("Default biomes cover the whole parameter space")
+{
+	const std::vector<biome::Biome> table = biome::DefaultBiomes();
+	//A grid over all six parameters, off the borders of the ranges
+	const float steps[] = { -0.97f, -0.71f, -0.43f, -0.13f, 0.01f, 0.04f, 0.17f, 0.29f, 0.51f, 0.73f, 0.97f };
+	int outside = 0;
+	biome::ParameterValues v{};
+	const std::function<void(int)> walk = [&](int p) {
+		if (p == biome::PARAMETER_COUNT) {
+			outside += table[biome::Nearest(table, v)].Distance(v) > 0.0f ? 1 : 0;
+			return;
+		}
+		for (float s : steps) {
+			v[p] = s;
+			walk(p + 1);
+		}
+	};
+	walk(0);
+	CHECK(outside == 0);
 }
 
 TEST_CASE("Climate: temperature falls with height above the water, humidity rises at the coast")
@@ -66,7 +122,8 @@ TEST_CASE("Climate: temperature falls with height above the water, humidity rise
 	v = biome::ApplyClimate(values, water + 0.5f, water, climate);
 	CHECK(v[biome::TEMPERATURE] == doctest::Approx(-0.1f));
 	CHECK(v[biome::HUMIDITY] == doctest::Approx(-0.2f));
-	//The terrain noises are kept
+	//The terrain noises are kept, the elevation set
+	CHECK(v[biome::ELEVATION] == doctest::Approx(0.5f / 0.8f));
 	CHECK(v[biome::CONTINENTALNESS] == 0.1f);
 	CHECK(v[biome::MOUNTAINOUSNESS] == 0.2f);
 	CHECK(v[biome::WEIRDNESS] == 0.3f);
@@ -127,21 +184,24 @@ TEST_CASE("Climate: high mountains of the default table get snow")
 {
 	const std::vector<biome::Biome> table = biome::DefaultBiomes();
 	const biome::Climate climate;
-	//A mountain in a mild climate: grey low down, snowy high up
-	const biome::ParameterValues mountain = Values(0.6f, 0.6f, 0.0f, 0.0f, 0.0f);
-	CHECK(biome::Nearest(table, biome::ApplyClimate(mountain, 0.3f, 0.1f, climate)) == MOUNTAIN);
-	CHECK(biome::Nearest(table, biome::ApplyClimate(mountain, 0.9f, 0.1f, climate)) == SNOWY_PEAKS);
+	//Rough terrain in a cool climate, with the elevation and temperature from the height: hills low down, then a grey mountain, snowy at the top
+	const biome::ParameterValues rough = Values(0.0f, 0.6f, 0.0f, -0.4f, 0.0f);
+	CHECK(biome::Nearest(table, biome::ApplyClimate(rough, 0.3f, 0.1f, climate)) == HILLS);
+	CHECK(biome::Nearest(table, biome::ApplyClimate(rough, 0.5f, 0.1f, climate)) == MOUNTAIN);
+	CHECK(biome::Nearest(table, biome::ApplyClimate(rough, 0.9f, 0.1f, climate)) == SNOWY_PEAKS);
 }
 
 TEST_CASE("Every point gets the nearest biome, also where no biome contains it")
 {
-	const std::vector<biome::Biome> table = biome::DefaultBiomes();
-	//Hot and humid flat land lies in no default biome; grassplains are nearest (temperature 0.3 above its range)
-	const biome::ParameterValues values = Values(0.5f, -0.5f, 0.0f, 0.3f, 0.2f);
-	for (const biome::Biome& b : table) {
-		CHECK(b.Distance(values) > 0.0f);
-	}
-	CHECK(biome::Nearest(table, values) == GRASSPLAINS);
+	biome::Biome cold, warm;
+	cold.ranges[biome::TEMPERATURE] = { -1.0f, -0.5f };
+	warm.ranges[biome::TEMPERATURE] = { 0.0f, 1.0f };
+	warm.ranges[biome::HUMIDITY] = { 0.5f, 1.0f };
+	//T = -0.3 lies in neither: cold is 0.2 away, warm 0.3 (temperature) and 0.5 (humidity)
+	const biome::ParameterValues values = Values(0.0f, 0.0f, 0.0f, -0.3f, 0.0f);
+	CHECK(cold.Distance(values) == doctest::Approx(0.2f));
+	CHECK(warm.Distance(values) > 0.2f);
+	CHECK(biome::Nearest({ warm, cold }, values) == 1);
 }
 
 TEST_CASE("On equal distances the first biome of the table wins")
