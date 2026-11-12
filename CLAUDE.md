@@ -67,7 +67,7 @@ ProceduralTerrainGenerator/
       GenerationJob.h            jedno zadanie generacji w tle (std::async + TryTake)
     opengl/                      cienkie wrappery: Shader, VertexArray/Buffer, IndexBuffer, TextureClass, Renderer, GpuQuery
       TerrainView.*              siatka + shader + tekstury (TERRAIN/OVERLAY/BIOMES), wspólny dla obu trybów
-      GpuHeightGenerator.*       jedyna generacja: szum, teren i biomy w compute shaderach; GpuHeightCheck.* = testy generacji (--gpu-check)
+      GpuHeightGenerator.*       jedyna generacja: szum, teren i biomy w compute shaderach (GenerateWorld = teren + biomy w jednym przebiegu); GpuHeightCheck.* = testy generacji (--gpu-check)
       NoisePreview.*             podgląd edytowanego szumu jako mapa 2D w panelu ImGui (≤ 512 tekseli na dłuższym boku, preview_compute.shader = skala szarości)
       GpuSurfacePass.*           mapa pochodnych (gradient + laplasjan) z mapy wysokości; uruchamia ją TerrainView i ChunkWorld
       ChunkWorld.*               „Infinite generation”: quadtree chunków 128² z LOD wokół kamery, kolejka wg odległości, cache, skirts, rysowanie shaderem terenu
@@ -179,11 +179,15 @@ Wartości szumów są w [-1, 1]. Konwencja indeksowania: `map[y * width + x]`.
   shader biomów liczy wysokość sam (`common/terrain.glsl`), więc biomy zależą od całego `TerrainConfig` — `RequestTerrain` przy włączonych biomach przelicza też biomy.
   Modyfikatory terenu (`biome::TerrainModifier`, `ModifyHeight`): przy włączonych biomach i `modifyTerrain` teren zależy od `BiomeConfig` (`GenerateTerrain(..., &biomes)`),
   więc `RequestBiomes` przelicza też teren. Biomy wybiera wysokość przed modyfikatorami (bez pętli). Teren po modyfikatorach jest w [0, 1].
+  Teren + biomy razem = `GpuHeightGenerator::GenerateWorld`: jeden przebieg `biome_compute.shader` (`writeHeight`) pisze wysokość, kolory, id i splat, szumy i odległości
+  do biomów liczone raz (jedna pętla po biomach dla koloru, modyfikatorów i materiałów). Używają go chunki z biomami i mapa skończona, gdy trzeba obu.
+  Ścieżka modyfikatorów w `height_compute.shader` (`modifyHeight`) zostaje jako wzorzec: `--gpu-check` (sekcja `world:`) wymaga, żeby jeden przebieg był bit w bit
+  równy dwóm osobnym — sumy w pętli `biome_compute.shader` muszą iść w tej samej kolejności co w `modifyHeight`.
 - Teksturowanie (tryb TEXTURED): tekstury materiałów nie są w gicie — `python tools/fetch_textures.py` pobiera je do `res/textures/terrain/` (lista i id = kolejność
   w `res/textures/terrain_materials.json`). Limit 16 = `TerrainMaterials::maxMaterials` = `biome::maxMaterials` = `MAX_MATERIALS` w GLSL — zmiana wymaga wszystkich trzech.
   Brak tekstur nie jest błędem: warstwa tablicy dostaje `fallbackColor`. Biomy i presety zapisują id materiałów, nie nazwy, więc zmiana kolejności w JSON zmienia materiały biomów.
   Każdy biom ma do 4 warstw `biome::MaterialLayer`. Mapę udziałów materiałów (splat, RGBA8 × 4 warstwy) pisze `biome_compute.shader` razem z biomami; mieszanka i plamy to
-  `biome::MixMaterials` (CPU, testy) = `mixMaterials` w `common/biomes.glsl` — jak reguły biomów, zmiana w obu. Bez biomów splat mapy nie ma (`useSplat = false`)
+  `biome::MixMaterials` (CPU, testy) = sumy w pętli `biome_compute.shader` + `finishMaterials` w `common/biomes.glsl` — jak reguły biomów, zmiana w obu. Bez biomów splat mapy nie ma (`useSplat = false`)
   i cały teren ma materiał wybrany w „Terrain materials”.
   Klify, height blending, triplanar, specular i anti-tiling są w FS (`Terrain_fragment.shader`, `common/materials.glsl`), parametry w UBO `TerrainMaterials::Block`,
   który musi odpowiadać `TerrainMaterialBlock` (std140) pole w pole. Odczyty materiałów w FS przez `textureGrad` (pochodne z `surfaceSampling`, liczone w jednolitym

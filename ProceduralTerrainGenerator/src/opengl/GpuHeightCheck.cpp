@@ -571,6 +571,71 @@ namespace {
 		return sumOk && singleOk && patchOk && blendOk;
 	}
 
+	//All texels of a texture as bytes (every layer of an array)
+	std::vector<unsigned char> ReadBytes(const TextureClass& texture, GLenum format, GLenum type, int bytesPerTexel)
+	{
+		std::vector<unsigned char> data(static_cast<size_t>(texture.GetWidth()) * texture.GetHeight() * texture.GetLayers() * bytesPerTexel);
+		texture.Read(format, type, static_cast<int>(data.size()), data.data());
+		return data;
+	}
+
+	//GenerateWorld (one pass) gives the same height, colors, ids and splat map as GenerateTerrain with the biome modifiers
+	//followed by GenerateBiomes, bit for bit, also for a chunk with a coarser step
+	bool CheckWorld(GpuHeightGenerator& gpu)
+	{
+		std::cout << "\nworld: terrain and biomes in one pass equal the two passes bit for bit\n";
+		struct WorldCase {
+			std::string name;
+			TerrainConfig terrain;
+			BiomeConfig biomes;
+			MapArea area;
+		};
+		std::vector<WorldCase> cases;
+		cases.push_back({ "world: default", TerrainConfig::Default(), BiomeConfig::Default(), MapArea{} });
+		BiomeConfig unmodified = BiomeConfig::Default();
+		unmodified.modifyTerrain = false;
+		cases.push_back({ "world: without modifiers", TerrainConfig::Default(), unmodified, MapArea{} });
+		TerrainConfig spline = TerrainConfig::Default();
+		spline.method = EvaluationMethod::SPLINE_COMBINE;
+		BiomeConfig sharp = BiomeConfig::Default();
+		sharp.blendWidth = 0.0f;
+		cases.push_back({ "world: spline method, sharp colors", spline, sharp, MapArea{} });
+		cases.push_back({ "world: chunk, step 2", TerrainConfig::Default(), BiomeConfig::Default(),
+			MapArea{ glm::vec2(300.0f, 30.0f), 2.0f, glm::ivec2(mapWidth, mapHeight) } });
+
+		bool allOk = true;
+		for (const WorldCase& c : cases) {
+			TextureClass height(mapWidth, mapHeight, GL_R32F), colors(mapWidth, mapHeight, GL_RGBA32F), ids(mapWidth, mapHeight, GL_R32I);
+			TextureClass splat(mapWidth, mapHeight, GL_RGBA8, GpuHeightGenerator::splatLayers);
+			gpu.GenerateTerrain(c.terrain, c.area, height, &c.biomes);
+			gpu.GenerateBiomes(c.biomes, c.terrain, c.area, colors, ids, &splat);
+			const auto separate = std::array{ ReadBytes(height, GL_RED, GL_FLOAT, 4), ReadBytes(colors, GL_RGBA, GL_FLOAT, 16),
+				ReadBytes(ids, GL_RED_INTEGER, GL_INT, 4), ReadBytes(splat, GL_RGBA, GL_UNSIGNED_BYTE, 4) };
+
+			TextureClass height1(mapWidth, mapHeight, GL_R32F), colors1(mapWidth, mapHeight, GL_RGBA32F), ids1(mapWidth, mapHeight, GL_R32I);
+			TextureClass splat1(mapWidth, mapHeight, GL_RGBA8, GpuHeightGenerator::splatLayers);
+			gpu.GenerateWorld(c.terrain, c.biomes, c.area, height1, colors1, ids1, &splat1);
+			const auto single = std::array{ ReadBytes(height1, GL_RED, GL_FLOAT, 4), ReadBytes(colors1, GL_RGBA, GL_FLOAT, 16),
+				ReadBytes(ids1, GL_RED_INTEGER, GL_INT, 4), ReadBytes(splat1, GL_RGBA, GL_UNSIGNED_BYTE, 4) };
+
+			const char* names[] = { "height", "colors", "ids", "splat" };
+			const int bytes[] = { 4, 16, 4, 4 };
+			std::string details;
+			bool ok = true;
+			for (int m = 0; m < 4; m++) {
+				size_t different = 0;
+				for (size_t i = 0; i < separate[m].size(); i += bytes[m]) {
+					different += std::memcmp(&separate[m][i], &single[m][i], bytes[m]) != 0 ? 1 : 0;
+				}
+				ok = ok && different == 0;
+				details += (m > 0 ? ", " : "") + std::string(names[m]) + " " + std::to_string(different);
+			}
+			allOk = allOk && ok;
+			Report(c.name, details + " differ", ok);
+		}
+		return allOk;
+	}
+
 	//A chunk is a part of the map generated on its own, with an origin and the island size of the whole map; a coarser
 	//level of detail also takes every step-th sample. It has to equal the same samples of the whole map exactly,
 	//or chunk borders would show seams and levels would not meet
@@ -731,9 +796,11 @@ namespace {
 	{
 		const TerrainConfig config = TerrainConfig::Default();
 		const BiomeConfig biomes = BiomeConfig::Default();
-		std::cout << "\nGPU time [ms]   terrain   modified   biomes   surface map\n";
+		//two passes = modified + biomes with the splat map, the way the maps with biomes were generated before GenerateWorld
+		std::cout << "\nGPU time [ms]   terrain   modified   biomes   +splat   two passes   one pass   surface map\n";
 		for (int size : { 512, 1024, 2048, 4096 }) {
 			TextureClass height(size, size, GL_R32F), colors(size, size, GL_RGBA32F), ids(size, size, GL_R32I), surface(size, size, GL_RGBA32F);
+			TextureClass splat(size, size, GL_RGBA8, GpuHeightGenerator::splatLayers);
 			const double terrainMs = MedianMs([&] {
 				gpu.GenerateTerrain(config, MapArea{}, height);
 				glFinish();
@@ -747,12 +814,26 @@ namespace {
 				gpu.GenerateBiomes(biomes, config, MapArea{}, colors, ids);
 				glFinish();
 			}, 9);
+			const double splatMs = MedianMs([&] {
+				gpu.GenerateBiomes(biomes, config, MapArea{}, colors, ids, &splat);
+				glFinish();
+			}, 9);
+			const double twoPassMs = MedianMs([&] {
+				gpu.GenerateTerrain(config, MapArea{}, height, &biomes);
+				gpu.GenerateBiomes(biomes, config, MapArea{}, colors, ids, &splat);
+				glFinish();
+			}, 9);
+			const double onePassMs = MedianMs([&] {
+				gpu.GenerateWorld(config, biomes, MapArea{}, height, colors, ids, &splat);
+				glFinish();
+			}, 9);
 			const double surfaceMs = MedianMs([&] {
 				surfacePass.Run(height, surfaceTexelSize, surface);
 				glFinish();
 			}, 9);
 			std::cout << std::left << std::setw(14) << (std::to_string(size) + "x" + std::to_string(size)) << std::right << std::fixed << std::setprecision(2)
-				<< std::setw(10) << terrainMs << std::setw(11) << modifiedMs << std::setw(9) << biomesMs << std::setw(14) << surfaceMs << std::defaultfloat << "\n" << std::left;
+				<< std::setw(10) << terrainMs << std::setw(11) << modifiedMs << std::setw(9) << biomesMs << std::setw(9) << splatMs
+				<< std::setw(13) << twoPassMs << std::setw(11) << onePassMs << std::setw(14) << surfaceMs << std::defaultfloat << "\n" << std::left;
 		}
 	}
 }
@@ -793,6 +874,7 @@ int RunGpuHeightCheck()
 			ok = CheckClimate(gpu) && ok;
 			ok = CheckModifiers(gpu) && ok;
 			ok = CheckMaterials(gpu) && ok;
+			ok = CheckWorld(gpu) && ok;
 			ok = CheckChunks(gpu) && ok;
 			ok = CheckSurface(surfacePass) && ok;
 			RunTimings(gpu, surfacePass);
