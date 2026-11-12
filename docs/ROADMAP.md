@@ -1,7 +1,8 @@
 # Procedural Terrain Generator — analiza i plan rozwoju
 
-Diagnoza na 2026-10-27 (branch `lodChunked` = `master`, commit `fbd32ab`); postęp odhaczany na bieżąco, ostatnia aktualizacja 2026-11-04
-(Fazy 0 i 1 zamknięte: A2/B5/B9, B8, A3, A4, B6 + shadery, B15, 7a/7b — generacja równoległa i asynchroniczna, A9/A10, A8 — CMake + vcpkg + CI, testy jednostkowe, panel pomiarów, presety JSON, eksport heightmapy; w toku Faza 2: generacja w aplikacji wyłącznie na GPU, dalej normalne i chunki).
+Diagnoza na 2026-10-27 (branch `lodChunked` = `master`, commit `fbd32ab`); postęp odhaczany na bieżąco, ostatnia aktualizacja 2026-11-12
+(Fazy 0–3 i Teren 2.0 zamknięte: fundament i porządki, generacja wyłącznie na GPU, chunki z LOD, biomy ciągłe z edytorem, klimatem, modyfikatorami terenu
+i teksturowaniem; następna Faza 4 — roślinność).
 Cel projektu: **generowanie terenu z edycją parametrów w czasie rzeczywistym, maksymalna wydajność,
 biomy, roślinność i kolejne feature'y.**
 
@@ -45,8 +46,8 @@ biomy, roślinność i kolejne feature'y.**
 | ~~A3~~ ✅ | Logika generacji, stan UI i rendering wymieszane w subsystemach (`TerrainGenerationSys` = 420 linii UI+GL+logika) | Nie da się przenieść generacji na wątek/GPU ani testować bez okna — **Zrobione 2026-10-29:** config w `WorldConfig.h`, generatory bezstanowe względem configu, GL w `TerrainView` |
 | ~~A4~~ ✅ | Duplikacja: dwa subsystemy z identycznym `Initialize/Draw/Resize`, dwa zestawy shaderów różniące się kilkoma liniami | Każdą poprawkę (np. B6) trzeba robić 2× — **Zrobione 2026-10-29:** wspólny `TerrainView`, jeden zestaw shaderów |
 | A5 | Brak modelu „świata”: mapa = jeden prostokąt `width×height` przypięty do kamery; brak chunków, LOD, cache | Infinite terrain i duże światy są niewykonalne wydajnie — ✅ chunki z cache i LOD (quadtree), 2026-11-08 |
-| A6 | Biomy oparte o dyskretne poziomy `int` i pierwszy pasujący biom z `unordered_map` (kolejność nieokreślona!) | Ostre granice, niedeterministyczny wybór przy nakładaniu się zakresów, brak blendingu, trudne do konfiguracji |
-| A7 | Brak serializacji (presety, konfiguracje biomów, eksport) — „Saving” to placeholder | Nie da się zapisać efektu pracy ani porównać ustawień — **Częściowo:** presety JSON i eksport heightmapy (2026-11-03); brak konfiguracji biomów z pliku (Faza 3) |
+| A6 | Biomy oparte o dyskretne poziomy `int` i pierwszy pasujący biom z `unordered_map` (kolejność nieokreślona!) | Ostre granice, niedeterministyczny wybór przy nakładaniu się zakresów, brak blendingu, trudne do konfiguracji — ✅ ciągła przestrzeń parametrów, najbliższy biom (remis → pierwszy w tabeli) i blending, 2026-11-08 (Faza 3) |
+| A7 | Brak serializacji (presety, konfiguracje biomów, eksport) — „Saving” to placeholder | Nie da się zapisać efektu pracy ani porównać ustawień — ✅ presety JSON i eksport heightmapy (2026-11-03), tabela biomów z materiałami w presetach (Faza 3) |
 | A8 | Brak testów, CI, profilera; brak menedżera zależności (binarki w repo) | Regresje niewykrywalne; aktualizacje bibliotek ręczne — **Częściowo:** CMake + vcpkg, CI z kontrolą checksum (2026-10-30), testy jednostkowe (2026-11-02), panel pomiarów (2026-11-03); Tracy odłożony (Faza 1 pkt 8) |
 | ~~A9~~ ✅ | Martwy kod: `VegetationGenerator` (pusty), CPU-mesh w `utilities.cpp` (`MapToVertices`, `PerformErosion`, `PaintVerticesByHeight`, `MeshIndicesStrips`, `CalculateHeightMapNormals`), `TINYOBJLOADER_IMPLEMENTATION` bez użycia, `DrawTriangleStrips`, gałęzie git bez scalenia | Szum poznawczy — **Zrobione 2026-10-30:** usunięte `VegetationGenerator`, CPU-mesh z `utilities` (zostały `GenerateVerticesForResolution`, `GetBiomeColorMap` i helpery ImGui), `DrawTriangleStrips`, nieużywane vendor `ObjLoader` (tiny_obj_loader) i `PoissonSampling` — wrócą w nowej postaci w Fazie 4. `res/textures/` zostaje (assety pod Fazę 3) |
 | ~~A10~~ ✅ | Higiena repo: śledzony `imgui.ini`, commity „sda/asd/x”, 17 zdalnych branchy, README z pustymi sekcjami | Trudno wrócić do projektu po przerwie (jak teraz) — **Zrobione 2026-10-30:** `imgui.ini` nieśledzony (od B13), scalone branche usunięte lokalnie i z GitHuba (zostaje `master`), jedyny nie scalony commit (`infiniteTerrain`, klasa `Chunk`) zachowany jako tag `archive/infinite-terrain-chunks`; README przepisany (funkcje, build, sterowanie, benchmark) — brakuje screenshotów |
@@ -310,7 +311,7 @@ Biomy (Faza 3, pkt 3–4) opierają się na wysokości i znaczeniu szumów C/M/W
 Cel: realistyczne, płynne przejścia i biomy wpływające na kształt terenu.
 
 **Kolejność ustalona z właścicielem 2026-11-08:** pkt 1 + 2 (zrobione) → pkt 6 edytor biomów (zrobione 2026-11-09) → pkt 4 klimat zależny od wysokości (zrobione 2026-11-09) →
-pkt 3 biomy modyfikują teren (zrobione 2026-11-09) → **pkt 5 teksturowanie (następny)** (na koniec, najwięcej pracy z assetami). Po każdym kroku nowe przypadki w `--gpu-check`.
+pkt 3 biomy modyfikują teren (zrobione 2026-11-09) → pkt 5 teksturowanie (zrobione 2026-11-10). Po każdym kroku nowe przypadki w `--gpu-check`.
 Pkt 6 w szczegółach: lista biomów (dodaj/usuń, nazwa, kolor, 5 zakresów suwakami), diagram Whittakera (temperatura × wilgotność, prostokąty biomów w ImPlot),
 podgląd mapy biomów 2D; tabela nie może być pusta (ostatniego biomu nie da się usunąć); id = indeks, więc usunięcie przesuwa id kolejnych biomów.
 Pkt 4 wymaga, żeby shader biomów liczył też wysokość terenu (splajny w buforze jak w `height_compute.shader`).
@@ -341,8 +342,30 @@ Pkt 4 wymaga, żeby shader biomów liczył też wysokość terenu (splajny w buf
    Wilgotność przy wybrzeżu liczona z wysokości nad wodą, nie z continentalness (w LAYERED podstawa terenu = splajn C, więc wychodzi na to samo).
    Nowy domyślny biom „Snowy peaks” (C ≥ 0,3, M ≥ 0,05, T ≤ -0,5) przed „Mountain” (teraz T ≥ -0,5). UI: sekcja „Climate” w ustawieniach biomów.
    `--gpu-check`: sekcja `climate:` (skrajny lapse rate → nad wodą tylko biomy z T = -1, skrajna wilgotność → przy brzegu tylko biomy z H = 1, klimat zmienia biomy).
-5. **Teksturowanie:** splat mapping (texture arrays: trawa, skała, piasek, śnieg, ziemia), reguły per biom +
-   slope/height (skała na stromych zboczach), triplanar mapping dla klifów, detail normal maps, mieszanie height-based.
+5. ✅ 2026-11-10 **Teksturowanie** (PR #38): nowy tryb wyświetlania `TEXTURED` (6, `MODE_TEXTURED` w `Terrain_fragment.shader`).
+   - **Materiały:** lista w `res/textures/terrain_materials.json` (kolejność = id materiału w shaderach, limit 16): nazwa, asset, `tileSize` (jednostki świata
+     na powtórzenie), `fallbackColor`, `cliffMaterial` (materiał na stromych zboczach). Domyślnie 11: trawa, sucha trawa, ściółka, ziemia, piasek, plaża,
+     skała, piaskowiec, piarg, śnieg, tundra. Tekstury (CC0, Poly Haven / ambientCG) nie są w gicie: pobiera je `tools/fetch_textures.py [--resolution 1k|2k|4k]`
+     do `res/textures/terrain/<asset>/`. Materiał bez tekstur rysuje się kolorem `fallbackColor`, więc aplikacja działa i bez nich.
+   - **`TerrainMaterials`** (`opengl/`): wczytuje listę i tekstury (dekodowanie równoległe), pakuje je do dwóch `GL_TEXTURE_2D_ARRAY` (jednostka 4: albedo + wysokość,
+     5: normalna XY + roughness + AO) i parametrów w bloku `std140` (binding 0, `common/materials.glsl`). `Bind` raz na klatkę w `TerrainGenApp::Draw`.
+     Sekcja UI „Terrain materials”: materiał bez biomów, skala tekstur, siła normal map, progi klifów i triplanaru, height blending, specular, anti-tiling.
+     `TextureClass` obsługuje teraz tablice (`_layers`).
+   - **Reguły per biom:** każdy biom ma do 4 warstw materiałów (`biome::MaterialLayer`: materiał + waga, normalizowane). `biome::MixMaterials` (CPU, testy) =
+     `mixMaterials` w `common/biomes.glsl`: materiały biomów mieszane wagą `BlendWeight` z `BiomeConfig::materialBlendWidth`, potem szum plam
+     (score = c·(log w + k·patch), softmax; przy `materialPatchiness` = 1 materiał zajmuje ok. swój udział powierzchni, `materialPatchContrast` wyostrza brzegi,
+     `materialPatchSize` = długość fali w tekselach, seed = `detailSeed`). Wynik to splat map (`GL_RGBA8`, tablica 4 warstw po 4 materiały), którą liczy
+     `biome_compute.shader` przy `GenerateBiomes(..., splat)`; mapa skończona trzyma ją w `TerrainView::SplatTexture` (jednostka 6), chunki w `Chunk::splat`.
+     UI: sekcja „Surface materials” w ustawieniach biomów i warstwy materiałów zaznaczonego biomu w edytorze. Presety: pola `material*` w `biomes`
+     i `materials` w każdym biomie (bez podbicia wersji: starsze pliki dostają wartości domyślne).
+   - **Shader fragmentów:** wagi ze splat mapy (bez biomów: jeden materiał), na zboczach między `cliffSlopeStart` a `cliffSlopeEnd` waga przechodzi na `cliffMaterial`,
+     najsilniejsze materiały mieszane height-based (score = waga + `heightInfluence` · wysokość tekstury, widoczne te w `blendDepth` od najlepszego).
+     Triplanar między `triplanarStart` a `triplanarEnd`, poniżej tylko rzut z góry. Normal mapy, AO, roughness + specular słońca.
+     Anti-tiling: druga skala UV mieszana z odległością, średni kolor materiału w dali, wahania jasności/odcienia szumem o niskiej częstotliwości.
+     Tekstury przyklejone do terenu przez `TerrainPos` (pozycja przed `modelScale`, z TES).
+   - `--gpu-check`: sekcja `materials:` (wagi sumują się do 1, tylko materiały z tabeli, jeden materiał wszędzie, plamy zmieniają mieszankę, blending zmniejsza skoki)
+     i `chunk: material splat` (chunk = fragment pełnej mapy bit w bit).
+   - **Nie zrobione z planu:** osobne detail normal maps (na bliską odległość) i reguły materiałów zależne od wysokości (wysokość działa pośrednio, przez klimat i biomy).
 6. ✅ 2026-11-09 **Edytor biomów w UI:** `utility/BiomeEditor.*`, sekcja „Biome table” w „Biome generation settings” (szumy T/H w zwijanej sekcji obok).
    Lista biomów (kolor + nazwa), „Add copy” (kopia pod zaznaczonym — nic nie zmienia, bo oryginał wygrywa remisy), „Remove” (ostatniego nie da się usunąć),
    strzałki kolejności (remis → wyższy na liście), nazwa, kolor i 5 zakresów (`DragFloatRange2`, [-1, 1], min ≤ max). Diagram Whittakera (ImPlot, T × H):
@@ -356,6 +379,11 @@ Pkt 4 wymaga, żeby shader biomów liczył też wysokość terenu (splajny w buf
      zacinałoby się na niewidocznej osi, nakładanie bywa celowe). Pomysł: „Overlaps with: …” przy zaznaczonym, ⚠ na liście, opcjonalnie „Resolve” (przycięcie).
 
 **Kryterium:** brak ostrych granic biomów; zmiana definicji biomu widoczna natychmiast; konfiguracja biomów ładowana z pliku.
+
+✅ **Faza 3 zamknięta 2026-11-12** — kryterium spełnione: kolory, teren i materiały przechodzą płynnie (`blendWidth`, `terrainBlendWidth`, `materialBlendWidth`;
+`--gpu-check` sprawdza, że blending zmniejsza skoki), każda zmiana w edytorze od razu przelicza biomy, a cała `BiomeConfig` z tabelą jest w presetach JSON.
+Zostają jako możliwe usprawnienia: teren i biomy w jednym przebiegu compute (pkt 3), detail normal maps (pkt 5), wybór osi / przekrój diagramu i ostrzeżenia
+o nakładaniu się biomów (pkt 6), tarasowanie per biom.
 
 ### Faza 4 — roślinność i obiekty (2–4 tygodnie)
 Poprzednia implementacja (usunięta w A9, do wglądu w historii gita: `fb8b840` — ostatnia działająca wersja,
