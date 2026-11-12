@@ -333,7 +333,12 @@ Pkt 4 wymaga, żeby shader biomów liczył też wysokość terenu (splajny w buf
    zmiana biomu przelicza wtedy też teren. Domyślne: równiny 0,8, śnieg 0,9, wydmy na pustyni (0,012 / 10 tekseli, ridged), góry 1,15 + skała (0,015 / 20, ridged).
    UI: sekcja „Terrain modifiers” (włącznik, blend width, seed) i „Terrain modifier” zaznaczonego biomu w edytorze. Tarasowanie per biom odłożone.
    `--gpu-check`: sekcja `biome modifiers:` (neutralne, amplitude 0, offset, wyłączone, blending zmniejsza skoki, domyślna tabela) + chunk z modyfikatorami bit w bit.
-   **Do zrobienia później:** teren i biomy w jednym przebiegu (oba liczą to samo), wtedy łączny koszt jak dziś same biomy.
+   ✅ 2026-11-12 **Teren i biomy w jednym przebiegu** (branch `perf/single-pass-generation`): `GpuHeightGenerator::GenerateWorld` = `biome_compute.shader`
+   z `writeHeight`, szumy raz i jedna pętla po biomach (każda odległość liczona raz zamiast ~6 razy: nearest, kolor, modyfikatory, materiały). Wyniki bit w bit
+   jak dwa przebiegi (`--gpu-check`, sekcja `world:`). Czas na RTX 2060 (teren z modyfikatorami + biomy ze splatem → jeden przebieg): 512² 1,77 → 1,35 ms,
+   1024² 6,25 → 4,47, 2048² 18,19 → 11,84, 4096² 73,3 → 51,4 ms (−30%). Jeden przebieg kosztuje tyle co same biomy ze splatem.
+   Z pomiaru: szum plam materiałów (2 oktawy simplex na każdy obecny materiał) to ok. 40% przebiegu (4096²: 51,4 → 31,6 ms bez niego) — kandydat na następny krok,
+   ale tańszy szum zmienia wygląd plam (decyzja właściciela).
 4. ✅ 2026-11-09 **Wpływ wysokości na klimat:** `biome::Climate` w `BiomeConfig::climate` (presety: `biomes.climate`), `biome::ApplyClimate` (CPU, testy) =
    `applyClimate` w `biome_compute.shader`. above = max(h − `TerrainConfig::WaterHeight()`, 0) (LAYERED: seaLevel · (1 − mountainShare), inne metody: 0);
    T −= lapseRate · above, H += coastHumidity · (1 − smoothstep(0, coastRange, above)), oba przycięte do [-1, 1]. Domyślnie 1,0 / 0,3 / 0,05.
@@ -353,7 +358,7 @@ Pkt 4 wymaga, żeby shader biomów liczył też wysokość terenu (splajny w buf
      To ustawienia wyświetlania, nie świata — nie trafiają do presetów.
      `TextureClass` obsługuje teraz tablice (`_layers`).
    - **Reguły per biom:** każdy biom ma do 4 warstw materiałów (`biome::MaterialLayer`: materiał + waga, normalizowane). `biome::MixMaterials` (CPU, testy) =
-     `mixMaterials` w `common/biomes.glsl`: materiały biomów mieszane wagą `BlendWeight` z `BiomeConfig::materialBlendWidth`, potem szum plam
+     sumy w `biome_compute.shader` + `finishMaterials` w `common/biomes.glsl`: materiały biomów mieszane wagą `BlendWeight` z `BiomeConfig::materialBlendWidth`, potem szum plam
      (score = c·(log w + k·patch), softmax; przy `materialPatchiness` = 1 materiał zajmuje ok. swój udział powierzchni, `materialPatchContrast` wyostrza brzegi,
      `materialPatchSize` = długość fali w tekselach, seed = `detailSeed`). Wynik to splat map (`GL_RGBA8`, tablica 4 warstw po 4 materiały), którą liczy
      `biome_compute.shader` przy `GenerateBiomes(..., splat)`; mapa skończona trzyma ją w `TerrainView::SplatTexture` (jednostka 6), chunki w `Chunk::splat`.
@@ -384,7 +389,7 @@ Pkt 4 wymaga, żeby shader biomów liczył też wysokość terenu (splajny w buf
 
 ✅ **Faza 3 zamknięta 2026-11-12** — kryterium spełnione: kolory, teren i materiały przechodzą płynnie (`blendWidth`, `terrainBlendWidth`, `materialBlendWidth`;
 `--gpu-check` sprawdza, że blending zmniejsza skoki), każda zmiana w edytorze od razu przelicza biomy, a cała `BiomeConfig` z tabelą jest w presetach JSON.
-Zostają jako możliwe usprawnienia: teren i biomy w jednym przebiegu compute (pkt 3), oświetlenie sRGB, detail normal maps i pomiar kosztu FS (pkt 5), wybór osi / przekrój diagramu i ostrzeżenia
+Zostają jako możliwe usprawnienia: koszt szumu plam materiałów (pkt 3, po połączeniu przebiegów 2026-11-12), oświetlenie sRGB, detail normal maps i pomiar kosztu FS (pkt 5), wybór osi / przekrój diagramu i ostrzeżenia
 o nakładaniu się biomów (pkt 6), tarasowanie per biom.
 
 ### Faza 4 — roślinność i obiekty (2–4 tygodnie)

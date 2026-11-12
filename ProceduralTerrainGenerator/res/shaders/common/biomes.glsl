@@ -1,6 +1,8 @@
 // Biome rules shared by biome_compute.shader and height_compute.shader (terrain modifiers); the same as Biome.cpp:
 // biomeDistance = biome::Biome::Distance, applyClimate = biome::ApplyClimate, blendWeight = biome::BlendWeight,
-// modifyHeight = biome::ModifyHeight, mixMaterials = biome::MixMaterials. A change here needs the same change there (and the other way round).
+// modifyHeight = biome::ModifyHeight, the material sums in biome_compute.shader + finishMaterials = biome::MixMaterials
+// (biome_compute.shader also repeats the sums of modifyHeight in its single loop over the biomes).
+// A change here needs the same change there (and the other way round).
 // Needs noise.glsl included first (simplex2, permutation table 5 = detail noise, also used by the material patches).
 
 const int PARAMETER_COUNT = 5;
@@ -95,23 +97,10 @@ float patchNoise(int material, vec2 position)
 	return (simplex2(DETAIL_TABLE, p.x, p.y) + 0.5 * simplex2(DETAIL_TABLE, p.x * 2.0, p.y * 2.0)) / 1.5;
 }
 
-// Share of every material at a point, summing to 1 (biome::MixMaterials); values after applyClimate, position = map position
-void mixMaterials(float values[PARAMETER_COUNT], vec2 position, out float weights[MAX_MATERIALS])
+// Second step of biome::MixMaterials: patches on the mix of the biomes (weights = sums of the material layers weighted by
+// blendWeight with materialBlendWidth); the result sums to 1
+void finishMaterials(inout float weights[MAX_MATERIALS], vec2 position)
 {
-	for (int m = 0; m < MAX_MATERIALS; m++) {
-		weights[m] = 0.0;
-	}
-	float nearest;
-	nearestBiome(values, nearest);
-	for (int b = 0; b < biomeCount; b++) {
-		float weight = blendWeight(biomeDistance(b, values), nearest, materialBlendWidth);
-		if (weight <= 0.0) {
-			continue;
-		}
-		for (int l = 0; l < MATERIAL_LAYERS; l++) {
-			weights[biomes[b].materials[l]] += weight * biomes[b].materialWeights[l];
-		}
-	}
 	// Softmax of c * (log w + k * patch) in the log space: the largest score is subtracted, so exp cannot overflow
 	float k = PATCH_NOISE_SCALE * materialPatchiness;
 	float c = 1.0 + (materialPatchContrast - 1.0) * materialPatchiness;
@@ -135,6 +124,13 @@ void mixMaterials(float values[PARAMETER_COUNT], vec2 position, out float weight
 	}
 }
 
+// Last step of modifyHeight from the sums over the biomes, each term weighted by blendWeight with terrainBlendWidth;
+// total >= 1, because the nearest biome has weight 1
+float finishModifiedHeight(float height, float total, float amplitude, float offset, float details)
+{
+	return clamp(waterHeight + (height - waterHeight) * amplitude / total + (offset + details) / total, 0.0, 1.0);
+}
+
 // Height changed by the modifiers of the biomes chosen from values (after applyClimate); position = map position
 float modifyHeight(float values[PARAMETER_COUNT], float height, vec2 position)
 {
@@ -154,6 +150,5 @@ float modifyHeight(float values[PARAMETER_COUNT], float height, vec2 position)
 			details += weight * biomes[b].detailAmplitude * detailNoise(b, position);
 		}
 	}
-	// total >= 1: the nearest biome has weight 1
-	return clamp(waterHeight + (height - waterHeight) * amplitude / total + (offset + details) / total, 0.0, 1.0);
+	return finishModifiedHeight(height, total, amplitude, offset, details);
 }
