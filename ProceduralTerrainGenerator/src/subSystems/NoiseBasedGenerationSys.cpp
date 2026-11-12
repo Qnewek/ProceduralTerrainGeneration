@@ -177,7 +177,7 @@ void NoiseBasedGenerationSys::RequestErosion()
 	pending.erode = true;
 }
 
-void NoiseBasedGenerationSys::PresetsImGui()
+void NoiseBasedGenerationSys::ImGuiPresets()
 {
 	std::string error;
 	switch (presets.ImGuiDraw()) {
@@ -236,27 +236,53 @@ void NoiseBasedGenerationSys::Draw(Renderer& renderer, Camera& camera, LightSour
 
 void NoiseBasedGenerationSys::ImGuiRightPanel()
 {
+	const PanelTabs::Tab tabs[] = {
+		{ "Noise", [this] { NoiseTabImGui(); } },
+		{ "Erosion", [this] { ErosionImGui(); } },
+	};
+	generationTabs.Draw("generation", tabs);
+}
+
+void NoiseBasedGenerationSys::NoiseTabImGui()
+{
 	if(utilities::MapSizeImGui(config.width, config.height)) {
 		RequestNoise();
 	}
 
-	bool regen = utilities::NoiseImGui(config.noise);
+	ImGui::SeparatorText("Noise");
 	ImGui::Checkbox("Instant Update", &instantUpdate);
 	if (!instantUpdate) {
+		ImGui::SameLine();
 		if (ImGui::Button("Generate new noise")) {
 			RequestNoise();
 		}
 	}
-	else if(regen){
+	const bool regen = utilities::NoiseImGui(config.noise);
+	if (instantUpdate && regen) {
 		RequestNoise();
 	}
+}
+
+void NoiseBasedGenerationSys::ImGuiDisplay()
+{
+	TerrainRenderSettings& s = renderSettings;
+	if (utilities::DisplayModeImGui(s.modelScale, s.topoStep, s.topoBandWidth, s.heightScale, s.displayMode, s.wireFrame, s.map2d, &infiniteGeneration)) {
+		if(s.displayMode == utilities::heightMapMode::BIOMES) {
+			s.displayMode = utilities::heightMapMode::GREYSCALE;
+		}
+	}
 	if (infiniteGeneration) {
-		ImGui::TextDisabled("Erosion and saving work on the finite map (Partial generation)");
-		PresetsImGui();
+		ImGui::SeparatorText("Infinite generation");
+		chunks.ImGuiDraw();
+	}
+}
+
+void NoiseBasedGenerationSys::ImGuiSaving()
+{
+	if (infiniteGeneration) {
+		ImGui::TextWrapped("Saving works on the finite map: switch to Partial generation in the Display tab.");
 		return;
 	}
-	ErosionImGui();
-	PresetsImGui();
 	//The base map, plus the eroded one in its own file when it is shown
 	std::vector<ExportPanel::Target> exportTargets = { { view.GetMapWidth(), view.GetMapHeight(), "", [this] { return view.ReadLayer(TerrainView::Layer::TERRAIN); } } };
 	if (erosionDraw) {
@@ -266,48 +292,36 @@ void NoiseBasedGenerationSys::ImGuiRightPanel()
 	exporter.ImGuiDraw(exportTargets, heightmap::noiseRange);
 }
 
-void NoiseBasedGenerationSys::ImGuiLeftPanel()
-{
-	TerrainRenderSettings& s = renderSettings;
-	if (utilities::DisplayModeImGui(s.modelScale, s.topoStep, s.topoBandWidth, s.heightScale, s.displayMode, s.wireFrame, s.map2d, &infiniteGeneration)) {
-		if(s.displayMode == utilities::heightMapMode::BIOMES) {
-			s.displayMode = utilities::heightMapMode::GREYSCALE;
-		}
-	}
-	if (infiniteGeneration) {
-		chunks.ImGuiDraw();
-	}
-}
-
 void NoiseBasedGenerationSys::ErosionImGui()
 {
-	//Erosion settings
-	if (ImGui::CollapsingHeader("Erosion Settings")) {
-		erosion::ErosionConfig& e = config.erosion;
-		ImGui::InputInt("Droplet count", &e.dropletCount);
-		ImGui::InputInt("Droplet lifetime", &e.dropletLifetime);
-		ImGui::InputFloat("Inertia", &e.inertia);
-		ImGui::InputFloat("Droplet init capacity", &e.initialCapacity, 0.01f, 1.0f);
-		ImGui::InputFloat("Droplet init velocity", &e.initialVelocity, 0.0f, 1.0f);
-		ImGui::InputFloat("Droplet init water", &e.initialWater, 0.0f, 1.0f);
-		ImGui::InputFloat("Erosion rate", &e.erosionRate, 0.0f, 1.0f);
-		ImGui::InputFloat("Deposition rate", &e.depositionRate, 0.0f, 1.0f);
-		ImGui::InputFloat("Evaporation rate", &e.evaporationRate, 0.0f, 1.0f);
-		ImGui::InputFloat("Gravity", &e.gravity, 0.0f, 10.0f);
-		ImGui::InputFloat("Min slope", &e.minSlope, 0.0f, 1.0f);
-		ImGui::InputInt("Erosion radius", &e.erosionRadius);
-		ImGui::InputFloat("Blur", &e.blur, 0.0f, 1.0f);
+	if (infiniteGeneration) {
+		ImGui::TextWrapped("Erosion works on the finite map: switch to Partial generation in the Display tab.");
+		return;
+	}
+	erosion::ErosionConfig& e = config.erosion;
+	ImGui::InputInt("Droplet count", &e.dropletCount);
+	ImGui::InputInt("Droplet lifetime", &e.dropletLifetime);
+	ImGui::InputFloat("Inertia", &e.inertia);
+	ImGui::InputFloat("Droplet init capacity", &e.initialCapacity, 0.01f, 1.0f);
+	ImGui::InputFloat("Droplet init velocity", &e.initialVelocity, 0.0f, 1.0f);
+	ImGui::InputFloat("Droplet init water", &e.initialWater, 0.0f, 1.0f);
+	ImGui::InputFloat("Erosion rate", &e.erosionRate, 0.0f, 1.0f);
+	ImGui::InputFloat("Deposition rate", &e.depositionRate, 0.0f, 1.0f);
+	ImGui::InputFloat("Evaporation rate", &e.evaporationRate, 0.0f, 1.0f);
+	ImGui::InputFloat("Gravity", &e.gravity, 0.0f, 10.0f);
+	ImGui::InputFloat("Min slope", &e.minSlope, 0.0f, 1.0f);
+	ImGui::InputInt("Erosion radius", &e.erosionRadius);
+	ImGui::InputFloat("Blur", &e.blur, 0.0f, 1.0f);
 
-		if (ImGui::Button("Erode map")) {
-			RequestErosion();
-		}
-		ImGui::SameLine();
-		if (ImGui::Button("Reset")) {
-			//Drops a not yet started erosion too, so the reset is not followed by an erosion of the old request
-			pending.erode = false;
-			pending.resetErosion = true;
-			erosionDraw = false;
-		}
+	if (ImGui::Button("Erode map")) {
+		RequestErosion();
+	}
+	ImGui::SameLine();
+	if (ImGui::Button("Reset")) {
+		//Drops a not yet started erosion too, so the reset is not followed by an erosion of the old request
+		pending.erode = false;
+		pending.resetErosion = true;
+		erosionDraw = false;
 	}
 }
 

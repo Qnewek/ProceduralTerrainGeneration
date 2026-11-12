@@ -11,22 +11,20 @@ glm::vec3 LightSource::GetDirection() const
 }
 
 void LightSource::ImGuiDraw() {
-	if (ImGui::CollapsingHeader("Sun and sky")) {
-		ImGui::SliderFloat("Sun azimuth", &azimuth, 0.0f, 360.0f, "%.0f deg");
-		//Past 90 degrees the sun goes over the zenith and down on the opposite side, like during a day
-		ImGui::SliderFloat("Sun elevation", &elevation, 0.0f, 180.0f, "%.0f deg");
-		//Both are tinted by the sun height in the shader (sky.glsl)
-		ImGui::ColorEdit3("Ambient", &ambient.x);
-		ImGui::ColorEdit3("Sunlight", &diffuse.x);
-		ImGui::Checkbox("Lighting", &lightOn);
-		ImGui::SameLine();
-		ImGui::Checkbox("Fog", &fog);
-		if (fog) {
-			//Stored as a share, shown in percent of the camera render distance
-			float percent = fogStart * 100.0f;
-			if (ImGui::SliderFloat("Fog start", &percent, 0.0f, 99.0f, "%.0f%% of render distance")) {
-				fogStart = percent / 100.0f;
-			}
+	ImGui::SliderFloat("Sun azimuth", &azimuth, 0.0f, 360.0f, "%.0f deg");
+	//Past 90 degrees the sun goes over the zenith and down on the opposite side, like during a day
+	ImGui::SliderFloat("Sun elevation", &elevation, 0.0f, 180.0f, "%.0f deg");
+	//Both are tinted by the sun height in the shader (sky.glsl)
+	ImGui::ColorEdit3("Ambient", &ambient.x);
+	ImGui::ColorEdit3("Sunlight", &diffuse.x);
+	ImGui::Checkbox("Lighting", &lightOn);
+	ImGui::SameLine();
+	ImGui::Checkbox("Fog", &fog);
+	if (fog) {
+		//Stored as a share, shown in percent of the camera render distance
+		float percent = fogStart * 100.0f;
+		if (ImGui::SliderFloat("Fog start", &percent, 0.0f, 99.0f, "%.0f%% of render distance")) {
+			fogStart = percent / 100.0f;
 		}
 	}
 }

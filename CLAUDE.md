@@ -49,7 +49,8 @@ ProceduralTerrainGenerator/
   src/
     Application.cpp              main(): new TerrainGenApp → Initialize → Start
     subSystems/
-      TerrainGenApp.*            okno GLFW, pętla główna, layout 4 paneli ImGui, przełączanie trybów
+      TerrainGenApp.*            okno GLFW, pętla główna, layout 4 paneli ImGui, przełączanie trybów; lewy panel = zakładki widoku
+                                 (Display, Camera, Sun & sky, Materials, Presets, Saving, About), prawy = zakładki generacji subsystemu trybu
       NoiseBasedGenerationSys.*  tryb "Noise heightmap": jeden szum + erozja (podgląd obok)
       TerrainGenerationSys.*     tryb "TerrainGen": 3 szumy + splajny + biomy, edytory ImPlot
       MapImportSys.*             tryb "Imported map": podgląd mapy wysokości z pliku, wczytywanej w tle
@@ -82,6 +83,7 @@ ProceduralTerrainGenerator/
       PresetPanel.*              sekcja „Presets” w ImGui (lista plików, nazwa); zapis i odczyt wykonuje subsystem
       ExportPanel.*              sekcja „Saving” w ImGui; subsystem podaje mapy do zapisu i ich zakres wartości
       BiomeEditor.*              edytor tabeli biomów (lista, zakresy, diagram Whittakera T × H); edytuje tabelę w miejscu, subsystem przelicza biomy
+      PanelTabs.*                zakładki panelu: rzędy przycisków na górze (zawijane, gdy się nie mieszczą) + przewijana treść pod nimi; wybór trzymany po nazwie
       FileDialog.*               systemowe okno wyboru pliku (tylko Windows, comdlg32); przy porcie na Linuksa do zastąpienia
       utilities.*                helpery ImGui (NoiseImGui, DisplayModeImGui...), siatka patchy, kolory biomów
     vendor/                      SimplexNoise (z niego tylko makePermutation: tablice permutacji dla GPU), stb_image
@@ -128,7 +130,7 @@ Wartości szumów są w [-1, 1]. Konwencja indeksowania: `map[y * width + x]`.
   Do OpenGL przez `.Data()`. OpenGL obiekty w `std::unique_ptr`.
 - Warstwy (A3): parametry świata to same dane w `WorldConfig.h`, trzymane przez subsystem (`world` / `config`).
   Generatory (`GpuHeightGenerator`, `Erosion`) **nie trzymają configu** — dostają `const XxxConfig&` w każdym wywołaniu.
-  UI (immediate-mode w subsystemach: `ImGuiLeftPanel/RightPanel/Output`) edytuje config i zgłasza żądanie (`Request*`),
+  UI (immediate-mode w subsystemach: `ImGuiDisplay/Presets/Saving`, `ImGuiRightPanel`, `ImGuiOutput`) edytuje config i zgłasza żądanie (`Request*`),
   subsystem generuje w tle i przekazuje wynik do `TerrainView`. Stan edytorów (wybrany szum, wciśnięte przyciski) to nie config.
 - Includy własne po nazwie pliku (`#include "Noise.h"` — katalogi `src/*` są w include path targetów).
   Zależności z vcpkg bez podkatalogu (`"imgui.h"`, `"implot.h"`, `"stb_image.h"`, `<GL/glew.h>`, `"glm/glm.hpp"`),
