@@ -409,7 +409,21 @@ największy ≈ 19% lądu. Zmiany domyślnych: szum C `scale` 0,5 → 0,1, `pers
 (wybrzeże przy C = 0,15); progi C biomów: Ocean < 0,15, Sand 0,15–0,2 (wąska plaża, ~8% lądu — samo przesunięcie dałoby 34%), ląd ≥ 0,2, góry ≥ 0,5 (~45% lądu jak wcześniej).
 Warp i mniej oktaw sprawdzone: warp rozbija ląd na drobne masy, liczba oktaw prawie bez wpływu. Stare presety zachowują swoje wartości.
 Mapa skończona (250²) to teraz wycinek jednego wybrzeża — kontynenty widać w trybie nieskończonym.
-Do decyzji: biomy wody i plaży zależne od wysokości nad lustrem wody zamiast progów C (wtedy kalibracja splajnu nie wymaga zmiany tabeli biomów).
+Biomy wody i plaży zależne od wysokości nad lustrem wody: zrobione w „Nowa tabela biomów” niżej.
+
+### Nowa tabela biomów (decyzja właściciela 2026-11-13)
+✅ 2026-11-13 (branch `feat/biome-table`) Pomiar starej tabeli (7 biomów) na domyślnym świecie: 42% lądu poza wszystkimi zakresami (biom „najbliższy”) —
+brak biomu dla ciepłego i wilgotnego klimatu, dla średniej rzeźby i dla pagórków; 68% „Sand” leżało w głębi lądu; świat zimny (lapse rate 1,0: mediana T na lądzie −0,26,
+Snow + Snowy peaks = 31% lądu); weirdness nieużywane.
+- Nowy, szósty parametr biomu `ELEVATION` (wysokość względem lustra wody, [-1, 1]); presety bez zmiany wersji (brak zakresu = cały przedział).
+- Klimat umiarkowany: `lapseRate` 1,0 → 0,5 (mediana T na lądzie −0,13).
+- 18 biomów dzielących całą przestrzeń parametrów (0% lądu poza biomami): Deep ocean (E < −0,4), Ocean; wybrzeże E 0–0,045: Beach, Stony shore (M ≥ 0,3), Snowy shore;
+  niziny (M < 0,05) wg T × H: Tundra, Snowfields, Taiga, Steppe, Plains, Forest, Desert, Savanna, Jungle; rzeźba (M ≥ 0,05): Hills (E < 0,32), Mountain,
+  Rocky peaks (W ≥ 0,6), Snowy peaks (T < −0,78). Progi T: −0,78 / −0,42 / 0,25; H: −0,45 / 0,2 (ciepłe: −0,3 / 0,3).
+- Udział w lądzie domyślnego świata: wybrzeże 5,5%, mroźne ~10%, umiarkowane niziny 33% (Plains 9,8, Forest 8,7, Taiga 7,4, Steppe 6,9), ciepłe 13%
+  (Savanna 5,3, Jungle 4,2, Desert 3,4), Hills 17,7%, Mountain 14,0%, Rocky peaks 6,9%, Snowy peaks 5,1%. `GenerateWorld` 2048²: 17,8 → ~18–19 ms.
+- Bez bagien: wymagałyby nakładania zakresów (dwa biomy o wadze 1 mieszają kolory pół na pół) — potrzebny priorytet biomu w regułach.
+- Jungle i Taiga używają istniejących tekstur (grass, forest floor, tundra); własne materiały razem z Fazą 4.
 
 ### Faza 4 — roślinność i obiekty (2–4 tygodnie)
 Poprzednia implementacja (usunięta w A9, do wglądu w historii gita: `fb8b840` — ostatnia działająca wersja,

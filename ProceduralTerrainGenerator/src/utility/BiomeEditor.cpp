@@ -104,11 +104,14 @@ bool BiomeEditor::ImGuiDraw(std::vector<biome::Biome>& table)
 	//The name does not change the map
 	InputString("Name", b.name);
 	changed |= ImGui::ColorEdit3("Color", glm::value_ptr(b.color), ImGuiColorEditFlags_Float);
-	ImGui::TextDisabled("Value ranges (min, max) of the noises the biome covers");
+	ImGui::TextDisabled("Value ranges (min, max) of the parameters the biome covers");
 	for (int i = 0; i < biome::PARAMETER_COUNT; i++) {
 		biome::Range& r = b.ranges[i];
-		//Clamped to the noise range, min <= max kept by the widget
+		//Clamped to the parameter range, min <= max kept by the widget
 		changed |= ImGui::DragFloatRange2(biome::parameterNames[i], &r.min, &r.max, 0.005f, -1.0f, 1.0f, "%.3f", nullptr, ImGuiSliderFlags_AlwaysClamp);
+		if (i == biome::ELEVATION) {
+			ImGui::SetItemTooltip("Height relative to the water surface: 0 = the water surface, -1 = the deepest sea floor, 1 = the highest peak");
+		}
 	}
 	if (ImGui::Button("Full range")) {
 		for (biome::Range& r : b.ranges) {
@@ -116,7 +119,7 @@ bool BiomeEditor::ImGuiDraw(std::vector<biome::Biome>& table)
 		}
 		changed = true;
 	}
-	ImGui::SetItemTooltip("Set all five ranges to [-1, 1]");
+	ImGui::SetItemTooltip("Set all ranges to [-1, 1]");
 
 	ImGui::SeparatorText("Terrain modifier");
 	biome::TerrainModifier& t = b.terrain;

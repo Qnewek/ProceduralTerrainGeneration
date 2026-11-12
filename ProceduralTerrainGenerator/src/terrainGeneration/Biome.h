@@ -6,19 +6,21 @@
 
 #include "glm/glm.hpp"
 
-//Biomes as regions in the space of the five parameter noises, as the multi-noise biomes of Minecraft 1.18:
-//every point belongs to the nearest biome, and biomes closer than the blend width to the nearest one mix with it.
+//Biomes as regions in the space of six parameters, as the multi-noise biomes of Minecraft 1.18: five noises and the elevation.
+//Every point belongs to the nearest biome, and biomes closer than the blend width to the nearest one mix with it.
 //biome_compute.shader does the same on the GPU; the functions here describe it and are used by tests.
 namespace biome {
-	//Parameters a biome is described by, in the order of noises and ranges in biome_compute.shader
-	enum Parameter { CONTINENTALNESS, MOUNTAINOUSNESS, WEIRDNESS, TEMPERATURE, HUMIDITY, PARAMETER_COUNT };
+	//Parameters a biome is described by, in the order of ranges in biome_compute.shader. The first NOISE_COUNT are noises
+	//(in the order of the noises of the shaders); ELEVATION is the terrain height relative to the water surface (see ApplyClimate)
+	enum Parameter { CONTINENTALNESS, MOUNTAINOUSNESS, WEIRDNESS, TEMPERATURE, HUMIDITY, ELEVATION, PARAMETER_COUNT };
+	constexpr int NOISE_COUNT = ELEVATION;
 	//Names of the parameters for the UI, in the order of Parameter
-	constexpr const char* parameterNames[PARAMETER_COUNT] = { "Continentalness", "Mountainousness", "Weirdness", "Temperature", "Humidity" };
+	constexpr const char* parameterNames[PARAMETER_COUNT] = { "Continentalness", "Mountainousness", "Weirdness", "Temperature", "Humidity", "Elevation" };
 
 	//Most biomes a table can hold (presets and the editor keep to it)
 	constexpr size_t maxBiomes = 64;
 
-	//Range of a noise value (noises are in [-1, 1]); min <= max
+	//Range of a parameter value (all are in [-1, 1]); min <= max
 	struct Range {
 		float min = -1.0f, max = 1.0f;
 	};
@@ -69,15 +71,21 @@ namespace biome {
 
 	//How the terrain changes the climate the biomes are chosen by. Heights are terrain heights in [0, 1] (before heightScale)
 	struct Climate {
-		float lapseRate = 1.0f;			//temperature drop per unit of height above the water surface
+		//Temperature drop per unit of height above the water surface. 0.5 (2026-11-13, was 1.0): a temperate world with snow
+		//on the high mountains, not a cold one
+		float lapseRate = 0.5f;
 		float coastHumidity = 0.3f;		//humidity added at the water surface, fading out with height
 		float coastRange = 0.05f;		//height above the water surface where the added humidity reaches 0; must be > 0
 	};
 
 	//Temperature and humidity after the climate: T - lapseRate * above, H + coastHumidity * (1 - smoothstep(0, coastRange, above)),
 	//where above = max(height - waterHeight, 0); both clamped to [-1, 1], so biomes with ranges at -1 or 1 still contain them.
-	//The other values are kept. biome_compute.shader does the same
+	//Also sets ELEVATION = Elevation(height, waterHeight). The other values are kept. biome_compute.shader does the same
 	ParameterValues ApplyClimate(ParameterValues values, float height, float waterHeight, const Climate& climate);
+
+	//Height relative to the water surface in [-1, 1]: 0 at the water surface, -1 at height 0 (the deepest sea floor), 1 at height 1;
+	//linear in between on each side, so a biome range does not depend on where the water surface is
+	float Elevation(float height, float waterHeight);
 
 	//Terrain height changed by the biomes: their modifiers mixed with BlendWeight(distance, nearest, blendWidth) normalized to sum 1,
 	//h = water + (height - water) * amplitude + offset + sum of weight * detailAmplitude * detail, clamped to [0, 1].

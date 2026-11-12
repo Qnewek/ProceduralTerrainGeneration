@@ -5,7 +5,9 @@
 // A change here needs the same change there (and the other way round).
 // Needs noise.glsl included first (simplex2, permutation table 5 = detail noise, also used by the material patches).
 
-const int PARAMETER_COUNT = 5;
+const int PARAMETER_COUNT = 6;		// biome::PARAMETER_COUNT: the noises, then the elevation (set by applyClimate)
+const int NOISE_COUNT = 5;			// biome::NOISE_COUNT
+const int ELEVATION = 5;
 const int DETAIL_TABLE = 5;
 const int MATERIAL_LAYERS = 4;		// biome::materialLayers
 const int MAX_MATERIALS = 16;		// biome::maxMaterials
@@ -45,6 +47,10 @@ void applyClimate(inout float values[PARAMETER_COUNT], float height)
 	float coast = 1.0 - smoothstep(0.0, climate.z, above);
 	values[3] = clamp(values[3] - climate.x * above, -1.0, 1.0);
 	values[4] = clamp(values[4] + climate.y * coast, -1.0, 1.0);
+	// biome::Elevation
+	float relative = height - waterHeight;
+	float side = relative >= 0.0 ? 1.0 - waterHeight : waterHeight;
+	values[ELEVATION] = clamp(relative / max(side, 1e-6), -1.0, 1.0);
 }
 
 // Id of the nearest biome, the first one on ties
