@@ -52,6 +52,11 @@ public:
 	//	material m in layer m / 4, channel m % 4
 	void GenerateBiomes(const BiomeConfig& biomes, const TerrainConfig& terrain, const MapArea& area, TextureClass& colors, TextureClass& ids,
 		TextureClass* splat = nullptr);
+	//Terrain and biomes in one pass (biome_compute.shader): the same maps as GenerateTerrain(terrain, area, height, &biomes) followed by
+	//GenerateBiomes, bit for bit, but the noises and the biome table are evaluated once. Use it whenever both are needed
+	//@param height - GL_R32F of the size of colors; changed by the biome modifiers if biomes.modifyTerrain
+	void GenerateWorld(const TerrainConfig& terrain, const BiomeConfig& biomes, const MapArea& area, TextureClass& height,
+		TextureClass& colors, TextureClass& ids, TextureClass* splat = nullptr);
 
 	//Layers of a splat map: 4 materials per RGBA layer
 	static constexpr int splatLayers = biome::maxMaterials / 4;
@@ -66,6 +71,9 @@ private:
 	void UploadBiomeTable(const BiomeConfig& biomes);
 	//Runs height_compute.shader with the world input bound (and the biome table if modify)
 	void RunHeightShader(int mode, bool modify, const MapArea& area, TextureClass& target);
+	//Runs biome_compute.shader; splat and height are written only if given
+	void RunBiomeShader(const BiomeConfig& biomes, const TerrainConfig& terrain, const MapArea& area, TextureClass& colors, TextureClass& ids,
+		TextureClass* splat, TextureClass* height);
 
 	std::unique_ptr<Shader> heightShader, biomeShader;
 	unsigned int worldInput = 0, biomeTable = 0;

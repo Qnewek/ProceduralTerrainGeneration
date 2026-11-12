@@ -75,9 +75,12 @@ void TerrainGenerationSys::UpdateChunks(const Camera& camera)
 	}
 	gpu.BeginMeasure();
 	chunks.GenerateNext([&](const MapArea& area, TextureClass& height, TextureClass* colors, TextureClass* ids, TextureClass* splat) {
-		gpu.GenerateTerrain(world.terrain, area, height, biomesGeneration ? &world.biomes : nullptr);
+		//The maps of a chunk are generated together, so with biomes one pass gives all of them
 		if (colors && ids) {
-			gpu.GenerateBiomes(world.biomes, world.terrain, area, *colors, *ids, splat);
+			gpu.GenerateWorld(world.terrain, world.biomes, area, height, *colors, *ids, splat);
+		}
+		else {
+			gpu.GenerateTerrain(world.terrain, area, height, biomesGeneration ? &world.biomes : nullptr);
 		}
 	});
 	gpu.EndMeasure();
@@ -98,16 +101,23 @@ void TerrainGenerationSys::GenerateFinite()
 	}
 	view.Resize(width, height);
 
-	gpu.BeginMeasure();
-	if (request.terrain) {
-		gpu.GenerateTerrain(world.terrain, MapArea{}, view.LayerTexture(TerrainView::Layer::TERRAIN, width, height), biomesGeneration ? &world.biomes : nullptr);
+	if (request.biomes && (!biomeIds || biomeIds->GetWidth() != width || biomeIds->GetHeight() != height)) {
+		biomeIds = std::make_unique<TextureClass>(width, height, GL_R32I);
 	}
-	if (request.biomes) {
-		if (!biomeIds || biomeIds->GetWidth() != width || biomeIds->GetHeight() != height) {
-			biomeIds = std::make_unique<TextureClass>(width, height, GL_R32I);
+	gpu.BeginMeasure();
+	if (request.terrain && request.biomes && biomesGeneration) {
+		//Both in one pass: the noises and the biome table are evaluated once
+		gpu.GenerateWorld(world.terrain, world.biomes, MapArea{}, view.LayerTexture(TerrainView::Layer::TERRAIN, width, height),
+			view.LayerTexture(TerrainView::Layer::BIOMES, width, height), *biomeIds, &view.SplatTexture(width, height));
+	}
+	else {
+		if (request.terrain) {
+			gpu.GenerateTerrain(world.terrain, MapArea{}, view.LayerTexture(TerrainView::Layer::TERRAIN, width, height), biomesGeneration ? &world.biomes : nullptr);
 		}
-		gpu.GenerateBiomes(world.biomes, world.terrain, MapArea{}, view.LayerTexture(TerrainView::Layer::BIOMES, width, height), *biomeIds,
-			&view.SplatTexture(width, height));
+		if (request.biomes) {
+			gpu.GenerateBiomes(world.biomes, world.terrain, MapArea{}, view.LayerTexture(TerrainView::Layer::BIOMES, width, height), *biomeIds,
+				&view.SplatTexture(width, height));
+		}
 	}
 	gpu.EndMeasure();
 

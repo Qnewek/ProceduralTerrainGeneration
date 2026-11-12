@@ -247,26 +247,45 @@ void GpuHeightGenerator::GenerateTerrain(const TerrainConfig& config, const MapA
 void GpuHeightGenerator::GenerateBiomes(const BiomeConfig& biomes, const TerrainConfig& terrain, const MapArea& area, TextureClass& colors, TextureClass& ids,
 	TextureClass* splat)
 {
+	RunBiomeShader(biomes, terrain, area, colors, ids, splat, nullptr);
+}
+
+void GpuHeightGenerator::GenerateWorld(const TerrainConfig& terrain, const BiomeConfig& biomes, const MapArea& area, TextureClass& height,
+	TextureClass& colors, TextureClass& ids, TextureClass* splat)
+{
+	RunBiomeShader(biomes, terrain, area, colors, ids, splat, &height);
+}
+
+void GpuHeightGenerator::RunBiomeShader(const BiomeConfig& biomes, const TerrainConfig& terrain, const MapArea& area, TextureClass& colors, TextureClass& ids,
+	TextureClass* splat, TextureClass* height)
+{
 	auto input = std::make_unique_for_overwrite<GpuWorldInput>();
 	const int mode = FillWorldInput(*input, terrain, &biomes);
 	glNamedBufferSubData(worldInput, 0, sizeof(GpuWorldInput), input.get());
 	UploadBiomeTable(biomes);
 
-	biomeShader->Bind();
-	SetWorldUniforms(*biomeShader, mode, terrain, biomes);
-	biomeShader->SetUniform1f("blendWidth", biomes.blendWidth);
-	SetMapUniforms(*biomeShader, area, colors);
+	Shader& shader = *biomeShader;
+	shader.Bind();
+	SetWorldUniforms(shader, mode, terrain, biomes);
+	shader.SetUniform1f("blendWidth", biomes.blendWidth);
+	SetMapUniforms(shader, area, colors);
 	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, worldInput);
 	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, biomeTable);
 	colors.BindImage(0, GL_WRITE_ONLY);
 	ids.BindImage(1, GL_WRITE_ONLY);
-	biomeShader->SetUniform1i("writeSplat", splat ? 1 : 0);
+	shader.SetUniform1i("writeSplat", splat ? 1 : 0);
 	if (splat) {
-		biomeShader->SetUniform1f("materialBlendWidth", biomes.materialBlendWidth);
-		biomeShader->SetUniform1f("materialPatchiness", biomes.materialPatchiness);
-		biomeShader->SetUniform1f("materialPatchContrast", biomes.materialPatchContrast);
-		biomeShader->SetUniform1f("materialPatchSize", biomes.materialPatchSize);
+		shader.SetUniform1f("materialBlendWidth", biomes.materialBlendWidth);
+		shader.SetUniform1f("materialPatchiness", biomes.materialPatchiness);
+		shader.SetUniform1f("materialPatchContrast", biomes.materialPatchContrast);
+		shader.SetUniform1f("materialPatchSize", biomes.materialPatchSize);
 		splat->BindImage(2, GL_WRITE_ONLY);
 	}
-	DispatchTiles(*biomeShader, colors.GetWidth(), colors.GetHeight());
+	shader.SetUniform1i("writeHeight", height ? 1 : 0);
+	if (height) {
+		shader.SetUniform1i("modifyTerrain", biomes.modifyTerrain ? 1 : 0);
+		shader.SetUniform1f("terrainBlendWidth", biomes.terrainBlendWidth);
+		height->BindImage(3, GL_WRITE_ONLY);
+	}
+	DispatchTiles(shader, colors.GetWidth(), colors.GetHeight());
 }
