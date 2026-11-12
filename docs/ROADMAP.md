@@ -392,6 +392,15 @@ Pkt 4 wymaga, żeby shader biomów liczył też wysokość terenu (splajny w buf
 Zostają jako możliwe usprawnienia: koszt szumu plam materiałów (pkt 3, po połączeniu przebiegów 2026-11-12), oświetlenie sRGB, detail normal maps i pomiar kosztu FS (pkt 5), wybór osi / przekrój diagramu i ostrzeżenia
 o nakładaniu się biomów (pkt 6), tarasowanie per biom.
 
+### Układ UI — przed Fazą 4 (decyzja właściciela 2026-11-12)
+✅ 2026-11-12 (branch `feat/vertical-tabs`) Zamiast jednej długiej listy zwijanych sekcji w każdym panelu: zakładki (`utility/PanelTabs.*`) w rzędach na górze panelu,
+zawijane do kolejnego rzędu, gdy się nie mieszczą (pierwsza próba, pionowa kolumna z boku, zastąpiona na prośbę właściciela), treść zakładki pod nimi,
+przewijana osobno (stały pasek, więc podgląd szumu nie migocze). Lewy panel = widok: Display (tryb, isolinie,
+generacja skończona/nieskończona + chunki), Camera, Sun & sky, Materials, Presets, Saving (Presets/Saving tylko w trybach z nimi), About. Prawy = generacja trybu:
+TerrainGen — Terrain (rozmiar, metoda, sampling), Noises (C/M/W + podgląd), Splines, Biomes (włącznik, blend, klimat, modyfikatory, materiały), Biome table,
+Biome noises (T/H); Noise heightmap — Noise, Erosion; Imported map — Load. Checkboxy „Edit component noise” / „Edit spline” i przyciski „Done” usunięte:
+otwarta zakładka = edytowany element, jej szum dostaje podgląd 2D; zawsze jest wybrany składnik (domyślnie C i T). Nagłówki zwijane usunięte z sekcji, które są całymi zakładkami.
+
 ### Faza 4 — roślinność i obiekty (2–4 tygodnie)
 Poprzednia implementacja (usunięta w A9, do wglądu w historii gita: `fb8b840` — ostatnia działająca wersja,
 `b7f7720` „Fixed trees”): Poisson-disk per chunk (vendor `PoissonGenerator.h`) z gęstością z biomu

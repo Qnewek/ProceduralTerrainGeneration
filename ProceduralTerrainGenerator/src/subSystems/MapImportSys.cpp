@@ -113,67 +113,73 @@ void MapImportSys::BrowseForFile()
 
 void MapImportSys::ImGuiRightPanel()
 {
+	const PanelTabs::Tab tabs[] = {
+		{ "Load", [this] { LoadImGui(); } },
+	};
+	importTabs.Draw("import", tabs);
+}
+
+void MapImportSys::LoadImGui()
+{
 	if (!listed) {
 		RefreshFiles();
 	}
 	const bool loading = job.IsRunning();
 
-	if (ImGui::CollapsingHeader("Load height map", ImGuiTreeNodeFlags_DefaultOpen)) {
-		ImGui::BeginDisabled(loading);
-		if (ImGui::Button("Browse...")) {
-			BrowseForFile();
-		}
-		ImGui::EndDisabled();
+	ImGui::BeginDisabled(loading);
+	if (ImGui::Button("Browse...")) {
+		BrowseForFile();
+	}
+	ImGui::EndDisabled();
 
-		if (ImGui::InputText("Folder", folder, sizeof(folder))) {
-			RefreshFiles();
-		}
-		if (ImGui::Button("Refresh list")) {
-			RefreshFiles();
-		}
-		if (files.empty()) {
-			ImGui::TextWrapped("No PNG, R16 or RAW files in this folder.");
-		}
+	if (ImGui::InputText("Folder", folder, sizeof(folder))) {
+		RefreshFiles();
+	}
+	if (ImGui::Button("Refresh list")) {
+		RefreshFiles();
+	}
+	if (files.empty()) {
+		ImGui::TextWrapped("No PNG, R16 or RAW files in this folder.");
+	}
 
-		if (ImGui::BeginCombo("File", selected.empty() ? "[none]" : FileNameOf(selected).c_str())) {
-			for (const std::filesystem::path& file : files) {
-				bool isSelected = file == selected;
-				if (ImGui::Selectable(FileNameOf(file).c_str(), isSelected)) {
-					selected = file;
-				}
-				if (isSelected) {
-					ImGui::SetItemDefaultFocus();
-				}
+	if (ImGui::BeginCombo("File", selected.empty() ? "[none]" : FileNameOf(selected).c_str())) {
+		for (const std::filesystem::path& file : files) {
+			bool isSelected = file == selected;
+			if (ImGui::Selectable(FileNameOf(file).c_str(), isSelected)) {
+				selected = file;
 			}
-			ImGui::EndCombo();
+			if (isSelected) {
+				ImGui::SetItemDefaultFocus();
+			}
 		}
+		ImGui::EndCombo();
+	}
 
-		ImGui::BeginDisabled(loading);
-		//Changing the range of a loaded map reads its file again; the new range applies to it right away
-		if (ImGui::Combo("Value range", &selectedRange, valueRangeNames) && !mapPath.empty()) {
-			StartLoading(mapPath);
-		}
-		ImGui::EndDisabled();
+	ImGui::BeginDisabled(loading);
+	//Changing the range of a loaded map reads its file again; the new range applies to it right away
+	if (ImGui::Combo("Value range", &selectedRange, valueRangeNames) && !mapPath.empty()) {
+		StartLoading(mapPath);
+	}
+	ImGui::EndDisabled();
 
-		ImGui::BeginDisabled(loading || selected.empty());
-		if (ImGui::Button("Load")) {
-			StartLoading(selected);
-		}
-		ImGui::EndDisabled();
-		if (loading) {
-			ImGui::SameLine();
-			ImGui::Text("Loading...");
-		}
+	ImGui::BeginDisabled(loading || selected.empty());
+	if (ImGui::Button("Load")) {
+		StartLoading(selected);
+	}
+	ImGui::EndDisabled();
+	if (loading) {
+		ImGui::SameLine();
+		ImGui::Text("Loading...");
+	}
 
-		if (!error.empty()) {
-			ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.3f, 0.3f, 1.0f));
-			ImGui::TextWrapped("Error: %s", error.c_str());
-			ImGui::PopStyleColor();
-		}
+	if (!error.empty()) {
+		ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.3f, 0.3f, 1.0f));
+		ImGui::TextWrapped("Error: %s", error.c_str());
+		ImGui::PopStyleColor();
 	}
 }
 
-void MapImportSys::ImGuiLeftPanel()
+void MapImportSys::ImGuiDisplay()
 {
 	TerrainRenderSettings& s = renderSettings;
 	//No biomes to show and a file has no infinite generation

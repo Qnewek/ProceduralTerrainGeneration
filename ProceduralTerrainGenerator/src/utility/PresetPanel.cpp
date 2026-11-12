@@ -54,9 +54,6 @@ void PresetPanel::ReportError(const std::string& message)
 
 PresetPanel::Action PresetPanel::ImGuiDraw()
 {
-	if (!ImGui::CollapsingHeader("Presets")) {
-		return Action::NONE;
-	}
 	if (!listed) {
 		Refresh();
 	}

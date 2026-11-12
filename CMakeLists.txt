@@ -82,6 +82,7 @@ add_executable(ProceduralTerrainGenerator
 	${PTG_SRC}/utility/PresetPanel.cpp
 	${PTG_SRC}/utility/Sky.cpp
 	${PTG_SRC}/utility/utilities.cpp
+	${PTG_SRC}/utility/PanelTabs.cpp
 )
 target_include_directories(ProceduralTerrainGenerator PRIVATE
 	${PTG_SRC}
