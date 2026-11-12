@@ -71,6 +71,7 @@ ProceduralTerrainGenerator/
       NoisePreview.*             podgląd edytowanego szumu jako mapa 2D w panelu ImGui (≤ 512 tekseli na dłuższym boku, preview_compute.shader = skala szarości)
       GpuSurfacePass.*           mapa pochodnych (gradient + laplasjan) z mapy wysokości; uruchamia ją TerrainView i ChunkWorld
       ChunkWorld.*               „Infinite generation”: quadtree chunków 128² z LOD wokół kamery, kolejka wg odległości, cache, skirts, rysowanie shaderem terenu
+      TerrainMaterials.*         materiały powierzchni (tryb TEXTURED): lista z terrain_materials.json, tekstury w 2 tablicach (jednostki 4, 5), parametry w UBO (binding 0), sekcja „Terrain materials”
     utility/
       Camera.*                   kamera FPS (WASD, Space/Ctrl, M = mysz, Esc = zwolnij mysz)
       LightSource.*              słońce: światło kierunkowe (azymut, wysokość), ambient, przełącznik mgły
@@ -87,8 +88,11 @@ ProceduralTerrainGenerator/
   res/shaders/
     TerrainShaders/              VS → TCS → TES → FS, jedyny zestaw dla terenu (oba tryby)
     ComputeShaders/              height_compute.shader (szum, teren), biome_compute.shader, surface_compute.shader; wspólne: common/noise.glsl, noise_params.glsl, simplex.glsl, surface.glsl,
-                                 terrain.glsl (wysokość terenu z C/M/W), world_input.glsl (wspólny bufor wejściowy), biomes.glsl (reguły biomów, klimat, modyfikatory terenu)
+                                 terrain.glsl (wysokość terenu z C/M/W), world_input.glsl (wspólny bufor wejściowy), biomes.glsl (reguły biomów, klimat, modyfikatory terenu, mieszanie materiałów)
+    common/materials.glsl        próbkowanie materiałów w trybie TEXTURED (triplanar, anti-tiling), blok TerrainMaterialBlock = TerrainMaterials::Block
     sky_vertex/fragment.shader   niebo; kolory nieba w common/sky.glsl, z których korzysta też mgła terenu
+  res/textures/terrain_materials.json   lista materiałów (kolejność = id); same tekstury w res/textures/terrain/ (poza gitem)
+tools/fetch_textures.py          pobiera tekstury materiałów (CC0, Poly Haven / ambientCG), tylko biblioteka standardowa Pythona
 CMakeLists.txt, CMakePresets.json, vcpkg.json   build; GLFW, GLEW, glm, ImGui, ImPlot, stb z vcpkg
 .github/workflows/build.yml      CI (Windows x64 Debug/Release, build + testy jednostkowe)
 ```
@@ -105,7 +109,7 @@ CMakeLists.txt, CMakePresets.json, vcpkg.json   build; GLFW, GLEW, glm, ImGui, I
    `width * worldUnitsPerTexel` (= 4, `GetWorldWidth()`), rysowana `GL_PATCHES` (4 wierzchołki).
 4. TCS: poziom teselacji 4–64 zależnie od odległości w przestrzeni oka. TES: próbkuje `heightMap`,
    przesuwa wierzchołek o `height * heightScale`, bierze normalną z `surfaceMap`, koloruje wg `displayMode`
-   (0 grey, 1 topo, 2 mono, 3 biomy z `biomeMap`, 4 nachylenie, 5 krzywizna). `surfaceMap` (gradient + laplasjan surowej wysokości, `RGBA32F`)
+   (0 grey, 1 topo, 2 mono, 3 biomy z `biomeMap`, 4 nachylenie, 5 krzywizna; 6 TEXTURED liczy fragment shader z materiałów i `splatMap`). `surfaceMap` (gradient + laplasjan surowej wysokości, `RGBA32F`)
    liczy `TerrainView::Draw` przez `GpuSurfacePass`, tylko gdy warstwa wysokości zmieniła się od ostatniego razu (`LayerTexture` oznacza ją jako nieaktualną).
 5. Tryb „infinite” (TerrainGen i Noise heightmap) to `ChunkWorld`: w `Update(camera)` subsystem woła `Plan` (chunki w zasięgu „Render distance”)
    i `GenerateNext` z własną funkcją generującą (`GpuHeightGenerator` z originem chunka i `islandSize` = rozmiar mapy), a `Draw` rysuje chunki zamiast `TerrainView`.
@@ -174,6 +178,11 @@ Wartości szumów są w [-1, 1]. Konwencja indeksowania: `map[y * width + x]`.
   shader biomów liczy wysokość sam (`common/terrain.glsl`), więc biomy zależą od całego `TerrainConfig` — `RequestTerrain` przy włączonych biomach przelicza też biomy.
   Modyfikatory terenu (`biome::TerrainModifier`, `ModifyHeight`): przy włączonych biomach i `modifyTerrain` teren zależy od `BiomeConfig` (`GenerateTerrain(..., &biomes)`),
   więc `RequestBiomes` przelicza też teren. Biomy wybiera wysokość przed modyfikatorami (bez pętli). Teren po modyfikatorach jest w [0, 1].
+- Materiały (tryb TEXTURED): każdy biom ma do 4 warstw `biome::MaterialLayer` (id materiału = indeks w `terrain_materials.json`, limit 16 = `biome::maxMaterials`
+  = `TerrainMaterials::maxMaterials` = `MAX_MATERIALS` w GLSL — zmiana wymaga wszystkich trzech). Udziały liczy `biome::MixMaterials` = `mixMaterials` w `biomes.glsl`
+  (znów dwie kopie reguł) do splat mapy (`GL_RGBA8`, 4 warstwy × 4 materiały) w `GenerateBiomes`; bez biomów splat mapy nie ma (`useSplat = false`)
+  i cały teren ma materiał wybrany w „Terrain materials”. Zmiana kolejności materiałów w JSON zmienia materiały w biomach i presetach (zapisane są id, nie nazwy).
+  Brak tekstur nie jest błędem: warstwa tablicy dostaje `fallbackColor`. Jednostki tekstur terenu: 0–1 wysokość, 2 biomy, 3 `surfaceMap`, 4–5 materiały, 6 splat.
 - Presety (`Preset.cpp`): nowe pole w `WorldConfig.h` trzeba dopisać do zapisu i odczytu oraz do `tests/PresetTests.cpp` (funkcje `Distinct*` / `CheckSame*`).
   Wersja 2 (2026-11-08, tabela biomów zamiast poziomów); wersja 1 nie jest już czytana (`minVersion`).
   Nowe wymaganie generacji wobec wartości configu = nowy warunek w `Check*`, bo plik można edytować ręcznie. Nie zmieniaj nazw pól
@@ -195,5 +204,5 @@ Wartości szumów są w [-1, 1]. Konwencja indeksowania: `map[y * width + x]`.
 
 Cel: edycja parametrów w czasie rzeczywistym + maksymalna wydajność + biomy i roślinność.
 Kolejność: naprawy krytyczne (Faza 0) → porządki/architektura (Faza 1) → generacja na GPU (compute shaders)
-i system chunków z LOD (Faza 2) → biomy ciągłe z blendingiem i teksturowaniem (Faza 3) →
-roślinność instancjonowana (Faza 4) → erozja GPU, woda, eksport (Faza 5).
+i system chunków z LOD (Faza 2) → biomy ciągłe z blendingiem i teksturowaniem (Faza 3) — wszystko to zamknięte (2026-11-12) →
+roślinność instancjonowana (Faza 4, następna) → erozja GPU, woda, eksport (Faza 5).
