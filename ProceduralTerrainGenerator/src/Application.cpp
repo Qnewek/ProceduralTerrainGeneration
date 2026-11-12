@@ -1,5 +1,6 @@
 #include "TerrainGenApp.h"
 #include "GpuHeightCheck.h"
+#include "VegetationCheck.h"
 
 #include <cstring>
 #include <filesystem>
@@ -20,6 +21,10 @@ int main(int argc, char* argv[])
 	//Checks of the GPU generation and its timings, without the application window
 	if (argc > 1 && std::strcmp(argv[1], "--gpu-check") == 0) {
 		return RunGpuHeightCheck();
+	}
+	//Levels of detail of the vegetation models as pictures, for checking how the simplification looks
+	if (argc > 1 && std::strcmp(argv[1], "--vegetation-preview") == 0) {
+		return RunVegetationPreview(argc > 2 ? argv[2] : "vegetation_preview");
 	}
 
 	TerrainGenApp* app = new TerrainGenApp();

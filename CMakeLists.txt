@@ -17,6 +17,9 @@ find_package(nlohmann_json CONFIG REQUIRED)
 find_package(lodepng CONFIG REQUIRED)
 find_package(Stb REQUIRED)
 find_package(doctest CONFIG REQUIRED)
+find_package(meshoptimizer CONFIG REQUIRED)
+# cgltf is a single header (the implementation is compiled in VegetationMesh.cpp)
+find_path(CGLTF_INCLUDE_DIRS "cgltf.h" REQUIRED)
 
 set(PTG_DIR ${CMAKE_CURRENT_SOURCE_DIR}/ProceduralTerrainGenerator)
 set(PTG_SRC ${PTG_DIR}/src)
@@ -48,10 +51,12 @@ add_library(ptg_core STATIC
 	${PTG_SRC}/terrainGeneration/LandStats.cpp
 	${PTG_SRC}/terrainGeneration/Preset.cpp
 	${PTG_SRC}/terrainGeneration/SplineSampling.cpp
+	${PTG_SRC}/terrainGeneration/VegetationMesh.cpp
 )
 target_include_directories(ptg_core PUBLIC ${PTG_SRC}/terrainGeneration)
+target_include_directories(ptg_core SYSTEM PRIVATE ${CGLTF_INCLUDE_DIRS})
 target_link_libraries(ptg_core PUBLIC ptg_vendor glm::glm)
-target_link_libraries(ptg_core PRIVATE nlohmann_json::nlohmann_json lodepng)
+target_link_libraries(ptg_core PRIVATE nlohmann_json::nlohmann_json lodepng meshoptimizer::meshoptimizer)
 ptg_set_warnings(ptg_core)
 
 add_executable(ProceduralTerrainGenerator
@@ -68,6 +73,8 @@ add_executable(ProceduralTerrainGenerator
 	${PTG_SRC}/opengl/TerrainMaterials.cpp
 	${PTG_SRC}/opengl/TerrainView.cpp
 	${PTG_SRC}/opengl/TextureClass.cpp
+	${PTG_SRC}/opengl/VegetationCheck.cpp
+	${PTG_SRC}/opengl/VegetationModels.cpp
 	${PTG_SRC}/opengl/VertexArray.cpp
 	${PTG_SRC}/opengl/VertexBuffer.cpp
 	${PTG_SRC}/subSystems/MapImportSys.cpp
@@ -99,6 +106,7 @@ target_link_libraries(ProceduralTerrainGenerator PRIVATE
 	imgui::imgui
 	implot::implot
 	nlohmann_json::nlohmann_json
+	lodepng
 	comdlg32
 )
 # Fallback working directory with res/, used when the exe is started from elsewhere (build dir, IDE)
@@ -120,6 +128,7 @@ add_executable(ptg_tests
 	${PTG_DIR}/tests/PresetTests.cpp
 	${PTG_DIR}/tests/SplineTests.cpp
 	${PTG_DIR}/tests/RollingStatsTests.cpp
+	${PTG_DIR}/tests/VegetationMeshTests.cpp
 	${PTG_DIR}/tests/TestMain.cpp
 )
 target_include_directories(ptg_tests PRIVATE ${PTG_SRC}/utility)
