@@ -46,6 +46,7 @@ void TerrainGenerationSys::Update(Camera& camera)
 		}
 	}
 	GeneratePreview();
+	MeasureLand();
 	if (infiniteGeneration) {
 		UpdateChunks(camera);
 	}
@@ -56,6 +57,23 @@ void TerrainGenerationSys::Update(Camera& camera)
 	if (leftInfinite) {
 		view.BringCameraToMap(camera, renderSettings);
 	}
+}
+
+void TerrainGenerationSys::MeasureLand()
+{
+	//Any terrain change makes the shown statistics old (checked before the generation clears the request)
+	if (pending.terrain && landStats) {
+		landStatsOld = true;
+	}
+	if (!measureLand) {
+		return;
+	}
+	measureLand = false;
+	//Around the middle of the finite map, with the island and biome modifiers as the terrain shown
+	const HeightField sample = gpu.SampleTerrain(world.terrain, glm::vec2(world.width, world.height) * 0.5f, land::sampleSize, land::sampleStep,
+		glm::ivec2(world.width, world.height), biomesGeneration ? &world.biomes : nullptr);
+	landStats = land::Measure(sample, world.terrain.WaterHeight());
+	landStatsOld = false;
 }
 
 void TerrainGenerationSys::UpdateChunks(const Camera& camera)
@@ -295,6 +313,33 @@ void TerrainGenerationSys::TerrainImGui()
 			RequestBiomes();
 		}
 	}
+	LandStatsImGui();
+}
+
+void TerrainGenerationSys::LandStatsImGui()
+{
+	ImGui::SeparatorText("Land statistics");
+	if (ImGui::Button("Measure")) {
+		measureLand = true;
+	}
+	const int side = static_cast<int>(static_cast<float>(land::sampleSize) * land::sampleStep);
+	ImGui::SetItemTooltip("Samples %dx%d texels around the map (every %.0f texels): far more than the finite map, so the whole world counts",
+		side, side, land::sampleStep);
+	if (!landStats) {
+		ImGui::SameLine();
+		ImGui::TextDisabled("not measured yet");
+		return;
+	}
+	if (landStatsOld) {
+		ImGui::SameLine();
+		ImGui::TextColored(ImVec4(1.0f, 0.75f, 0.3f, 1.0f), "terrain changed since");
+	}
+	const LandStats& s = *landStats;
+	ImGui::Text("Water: %.1f%%   Land: %.1f%%", 100.0f * s.waterShare, 100.0f * (1.0f - s.waterShare));
+	ImGui::Text("Landmasses: %d", s.landmasses);
+	ImGui::Text("Largest landmass: %.1f%% of the land", 100.0f * s.largestShare);
+	ImGui::Text("In continents: %.1f%% of the land", 100.0f * s.continentalShare);
+	ImGui::SetItemTooltip("Land in landmasses of at least %.0f%% of the sampled area; the rest are islands", 100.0f * land::continentMinShare);
 }
 
 void TerrainGenerationSys::ImGuiDisplay()

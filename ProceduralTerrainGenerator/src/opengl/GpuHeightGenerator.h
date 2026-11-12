@@ -4,6 +4,7 @@
 #include <vector>
 
 #include "Biome.h"
+#include "Grid.h"
 #include "GpuQuery.h"
 #include "Shader.h"
 #include "TextureClass.h"
@@ -57,6 +58,14 @@ public:
 	//@param height - GL_R32F of the size of colors; changed by the biome modifiers if biomes.modifyTerrain
 	void GenerateWorld(const TerrainConfig& terrain, const BiomeConfig& biomes, const MapArea& area, TextureClass& height,
 		TextureClass& colors, TextureClass& ids, TextureClass* splat = nullptr);
+
+	//Coarse sample of the terrain over a large area, read back to the CPU (waits for the GPU), for statistics of the world
+	//@param center - map position in the middle of the sampled area
+	//@param size - samples along each side
+	//@param step - map texels between samples
+	//@param islandSize - as in MapArea; the size of the finite map
+	//@param biomes - as in GenerateTerrain
+	HeightField SampleTerrain(const TerrainConfig& config, glm::vec2 center, int size, float step, glm::ivec2 islandSize, const BiomeConfig* biomes);
 
 	//Layers of a splat map: 4 materials per RGBA layer
 	static constexpr int splatLayers = biome::maxMaterials / 4;

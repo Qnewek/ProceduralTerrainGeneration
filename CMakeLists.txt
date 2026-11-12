@@ -45,6 +45,7 @@ add_library(ptg_core STATIC
 	${PTG_SRC}/terrainGeneration/FileIO.cpp
 	${PTG_SRC}/terrainGeneration/HeightmapExport.cpp
 	${PTG_SRC}/terrainGeneration/HeightmapImport.cpp
+	${PTG_SRC}/terrainGeneration/LandStats.cpp
 	${PTG_SRC}/terrainGeneration/Preset.cpp
 	${PTG_SRC}/terrainGeneration/SplineSampling.cpp
 )
@@ -114,6 +115,7 @@ add_executable(ptg_tests
 	${PTG_DIR}/tests/GridTests.cpp
 	${PTG_DIR}/tests/HeightmapExportTests.cpp
 	${PTG_DIR}/tests/HeightmapImportTests.cpp
+	${PTG_DIR}/tests/LandStatsTests.cpp
 	${PTG_DIR}/tests/PermutationTests.cpp
 	${PTG_DIR}/tests/PresetTests.cpp
 	${PTG_DIR}/tests/SplineTests.cpp

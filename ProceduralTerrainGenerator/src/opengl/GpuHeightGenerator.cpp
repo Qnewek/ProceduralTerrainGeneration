@@ -244,6 +244,17 @@ void GpuHeightGenerator::GenerateTerrain(const TerrainConfig& config, const MapA
 	RunHeightShader(mode, modify, area, target);
 }
 
+HeightField GpuHeightGenerator::SampleTerrain(const TerrainConfig& config, glm::vec2 center, int size, float step, glm::ivec2 islandSize,
+	const BiomeConfig* biomes)
+{
+	TextureClass target(size, size, GL_R32F);
+	const MapArea area{ center - glm::vec2(static_cast<float>(size) * step * 0.5f), step, islandSize };
+	GenerateTerrain(config, area, target, biomes);
+	HeightField map(size, size);
+	target.Read(GL_RED, GL_FLOAT, static_cast<int>(map.Size() * sizeof(float)), map.Data());
+	return map;
+}
+
 void GpuHeightGenerator::GenerateBiomes(const BiomeConfig& biomes, const TerrainConfig& terrain, const MapArea& area, TextureClass& colors, TextureClass& ids,
 	TextureClass* splat)
 {
