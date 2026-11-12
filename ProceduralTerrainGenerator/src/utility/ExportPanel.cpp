@@ -48,10 +48,6 @@ void ExportPanel::ExportAll(const std::vector<Target>& targets, heightmap::Value
 
 void ExportPanel::ImGuiDraw(const std::vector<Target>& targets, heightmap::ValueRange range)
 {
-	if (!ImGui::CollapsingHeader("Saving")) {
-		return;
-	}
-
 	int selectedFormat = static_cast<int>(format);
 	if (ImGui::Combo("Format", &selectedFormat, "PNG 16-bit\0RAW 16-bit (R16)\0")) {
 		format = static_cast<heightmap::Format>(selectedFormat);

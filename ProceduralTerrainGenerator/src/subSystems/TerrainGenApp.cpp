@@ -239,36 +239,48 @@ void TerrainGenApp::ImGuiRender()
     //Left panel
     ImGui::SetNextWindowPos(ImVec2(0, 0), ImGuiCond_Always);
     ImGui::SetNextWindowSize(ImVec2(leftPanelWidth, static_cast<float>(windowHeight)), ImGuiCond_Always);
-    //Side panels always show the scrollbar: one that comes and goes changes the width, and content sized to the width
-    //(e.g. the noise preview) then changes the height and toggles the scrollbar back - flickering every frame
-    ImGui::Begin("Main tools", nullptr, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_AlwaysVerticalScrollbar);
+    //Side panels hold tabs; the content of a tab scrolls on its own, so the panel itself does not
+    ImGui::Begin("View", nullptr, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
     leftPanelWidth = ImGui::GetWindowWidth() <= windowWidth / 2 ? ImGui::GetWindowWidth() : windowWidth / 2;
-    if (ImGui::CollapsingHeader("A few words...", ImGuiTreeNodeFlags_DefaultOpen)) {
+    //Shared tabs first, so they keep their place when the mode changes
+    std::vector<PanelTabs::Tab> viewTabs = {
+        { "Display", [this] {
+            if (currentMode == mode::NOISE_HEIGHTMAP) {
+                noiseGenSys.ImGuiDisplay();
+            }
+            else if (currentMode == mode::TERRAIN_GEN) {
+                terrainGenSys.ImGuiDisplay();
+            }
+            else {
+                mapImportSys.ImGuiDisplay();
+            }
+        } },
+        { "Camera", [this] { camera.ImGuiDraw(); } },
+        { "Sun & sky", [this] { light.ImGuiDraw(); } },
+        { "Materials", [this] { materials->ImGuiDraw(); } },
+    };
+    if (currentMode == mode::NOISE_HEIGHTMAP) {
+        viewTabs.push_back({ "Presets", [this] { noiseGenSys.ImGuiPresets(); } });
+        viewTabs.push_back({ "Saving", [this] { noiseGenSys.ImGuiSaving(); } });
+    }
+    else if (currentMode == mode::TERRAIN_GEN) {
+        viewTabs.push_back({ "Presets", [this] { terrainGenSys.ImGuiPresets(); } });
+        viewTabs.push_back({ "Saving", [this] { terrainGenSys.ImGuiSaving(); } });
+    }
+    viewTabs.push_back({ "About", [] {
         ImGui::TextWrapped("Hi Dear User!\n"
             "I am more than happy to be able to introduce my Procedural Generation App to you.\n"
             "It a project ive been working on for some time now because the field it covers extremely interests me and it was the topic of my thesis.\n"
             "I hope you will find it a bit interesting and fun to play with "
             "and feel free to contact me if you have any questions or suggestions.\n");
-    }
-    camera.ImGuiDraw();
-    light.ImGuiDraw();
-    materials->ImGuiDraw();
-    if (currentMode == mode::NOISE_HEIGHTMAP) {
-        noiseGenSys.ImGuiLeftPanel();
-    }
-    else if (currentMode == mode::TERRAIN_GEN) {
-        terrainGenSys.ImGuiLeftPanel();
-    }
-    else if (currentMode == mode::MAP_IMPORT) {
-        mapImportSys.ImGuiLeftPanel();
-    }
-
+    } });
+    viewPanelTabs.Draw("view", viewTabs);
     ImGui::End();
 
 	//Right panel
     ImGui::SetNextWindowPos(ImVec2(windowWidth - rightPanelWidth, 0), ImGuiCond_Always);
     ImGui::SetNextWindowSize(ImVec2(rightPanelWidth, static_cast<float>(windowHeight)), ImGuiCond_Always);
-    ImGui::Begin("Tools", nullptr, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_AlwaysVerticalScrollbar);
+    ImGui::Begin("Generation", nullptr, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
     rightPanelWidth = ImGui::GetWindowWidth() <= windowWidth/2 ? ImGui::GetWindowWidth() : windowWidth/2;
 
     if (currentMode == mode::NOISE_HEIGHTMAP) {

@@ -308,9 +308,6 @@ void TerrainMaterials::Bind()
 
 void TerrainMaterials::ImGuiDraw()
 {
-	if (!ImGui::CollapsingHeader("Terrain materials")) {
-		return;
-	}
 	if (materials.empty()) {
 		ImGui::TextWrapped("The material list (res/textures/terrain_materials.json) could not be read.");
 		return;

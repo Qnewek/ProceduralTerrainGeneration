@@ -14,6 +14,7 @@
 #include "LightSource.h"
 #include "Sky.h"
 #include "TerrainMaterials.h"
+#include "PanelTabs.h"
 
 #include "NoiseBasedGenerationSys.h"
 #include "TerrainGenerationSys.h"
@@ -51,6 +52,8 @@ private:
 	bool vsync = true;
 	//Textures of the terrain materials, shared by all modes; released before the context like metrics
 	std::unique_ptr<TerrainMaterials> materials;
+	//Tabs of the left panel (view, camera, sun, files); the right panel's tabs belong to the mode's subsystem
+	PanelTabs viewPanelTabs;
 
 	//F5 state in the previous frame, so a held key reloads shaders once
 	bool reloadKeyWasDown = false;

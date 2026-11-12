@@ -18,6 +18,7 @@
 #include "PresetPanel.h"
 #include "ExportPanel.h"
 #include "BiomeEditor.h"
+#include "PanelTabs.h"
 
 //What has to be regenerated at the next Update; with infinite generation a terrain or biome request regenerates the chunks
 struct WorldRequest {
@@ -33,7 +34,7 @@ class TerrainGenerationSys
 private:
 	bool changeTerrain = false;
 	bool biomesGeneration = false;
-	bool editNoise = false, editSpline = false, infiniteGeneration = true;
+	bool infiniteGeneration = true;
 	//The edited noise is shown as a 2D picture in the panel; the view always shows the resulting terrain
 	bool showNoisePreview = true;
 	NoisePreview noisePreview;
@@ -69,24 +70,40 @@ private:
 	void RequestTerrain();
 	void RequestBiomes();
 
-	void PresetsImGui();
 	//Replaces the world parameters, resets editors holding copies of them and regenerates everything shown
 	void ApplyWorld(const WorldConfig& loaded);
 	PresetPanel presets{ "presets/world" };
 	ExportPanel exporter{ "exports" };
 	BiomeEditor biomeEditor;
 
-	//Editor UI state; the noise and spline editors are open together, so each has its own component
+	//Tabs of the right panel (generation); the open tab is the edited part, e.g. its noise gets the 2D picture
+	static constexpr const char* tabTerrain = "Terrain";
+	static constexpr const char* tabNoises = "Noises";
+	static constexpr const char* tabSplines = "Splines";
+	static constexpr const char* tabBiomes = "Biomes";
+	static constexpr const char* tabBiomeTable = "Biome table";
+	static constexpr const char* tabBiomeNoises = "Biome noises";
+	PanelTabs generationTabs;
+
+	//Editor UI state: the component each editor shows
 	WorldGenParameter editedComponent = WorldGenParameter::CONTINENTALNESS;
 	WorldGenParameter editedSplineComponent = WorldGenParameter::CONTINENTALNESS;
 	BiomeParameter editedBiomeComponent = BiomeParameter::TEMPERATURE;
 	int samplingResolution = 500;
-
-	//Pressed editor buttons (0 = nothing selected)
-	int noisePressedButton = 0;
-	int biomeNoisePressedButton = 0;
-	int splinePressedButton = 0;
 	int splineDraggedPoint = -1;
+
+	//Content of the generation tabs
+	void TerrainImGui();
+	void NoiseEditor();
+	void SplineEditor();
+	void BiomesEditor();
+	void BiomeTableEditor();
+	void BiomeNoisesEditor();
+	//Checkbox and 2D picture of the edited noise, shown only in the editor of that noise
+	void NoisePreviewImGui(const noise::NoiseConfigParameters& noise);
+	//Shows a note instead of a biome tab while biomes are off
+	//@return true if biomes are off
+	bool BiomesOffNotice();
 
 public:
 	TerrainGenerationSys();
@@ -105,14 +122,12 @@ public:
 	void ReloadShaders() { view.ReloadShader(); chunks.ReloadShader(); gpu.ReloadShaders(); noisePreview.ReloadShader(); }
 	//Names of the surface materials for the biome editor, in the order of their ids
 	void SetMaterialNames(std::vector<std::string> names) { biomeEditor.SetMaterialNames(std::move(names)); }
+	//Right panel: the generation tabs
 	void ImGuiRightPanel();
-	void ImGuiLeftPanel();
+	//Content of the Display, Presets and Saving tabs of the left panel
+	void ImGuiDisplay();
+	void ImGuiPresets();
+	void ImGuiSaving();
 	void ImGuiOutput(glm::vec3 pos);
-	void NoiseEditor();
-	//Checkbox and 2D picture of the edited noise, shown only in the editor of that noise
-	void NoisePreviewImGui(const noise::NoiseConfigParameters& noise);
-	void BiomesEditor();
-	void BiomeNoisesEditor();
-	void SplineEditor();
 };
 

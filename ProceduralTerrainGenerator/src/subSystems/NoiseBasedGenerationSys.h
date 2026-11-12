@@ -11,6 +11,7 @@
 #include "TerrainView.h"
 #include "PresetPanel.h"
 #include "ExportPanel.h"
+#include "PanelTabs.h"
 
 //What has to be done. The noise map is generated on the GPU at the next Update (with infinite generation: the chunks);
 //erosion runs on the CPU in a job, and requests made while it runs are done together afterwards
@@ -68,11 +69,15 @@ class NoiseBasedGenerationSys
 		void UpdateChunks(const Camera& camera);
 		void RequestErosion();
 
-		void PresetsImGui();
 		//Replaces the parameters and regenerates the map; an erosion waiting to start is dropped
 		void ApplyConfig(const NoiseMapConfig& loaded);
 		PresetPanel presets{ "presets/noise" };
 		ExportPanel exporter{ "exports" };
+
+		//Tabs of the right panel and their content
+		PanelTabs generationTabs;
+		void NoiseTabImGui();
+		void ErosionImGui();
 	public:
 		NoiseBasedGenerationSys();
 		~NoiseBasedGenerationSys();
@@ -88,9 +93,12 @@ class NoiseBasedGenerationSys
 		//Infinite generation shows chunks with part of the view not generated yet
 		bool HoleInView() const { return chunksShown && chunks.HasHoleInView(); }
 		void ReloadShaders() { view.ReloadShader(); chunks.ReloadShader(); gpu.ReloadShaders(); }
+		//Right panel: the generation tabs (noise, erosion)
 		void ImGuiRightPanel();
-		void ImGuiLeftPanel();
-		void ErosionImGui();
+		//Content of the Display, Presets and Saving tabs of the left panel
+		void ImGuiDisplay();
+		void ImGuiPresets();
+		void ImGuiSaving();
 		void ImGuiOutput();
 };
 

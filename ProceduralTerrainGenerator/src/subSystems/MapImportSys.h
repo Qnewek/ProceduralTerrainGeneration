@@ -10,6 +10,7 @@
 #include "LightSource.h"
 #include "TerrainView.h"
 #include "utilities.h"
+#include "PanelTabs.h"
 
 //"Imported map" mode: shows a height map read from a file. The map is owned here and read on a background thread,
 //so operations modifying it can be added as further steps next to loading.
@@ -24,8 +25,10 @@ public:
 	//true while the 2D map is shown instead of the 3D view
 	bool FlatView() const { return renderSettings.map2d; }
 	void ReloadShaders() { view.ReloadShader(); }
+	//Right panel: the Load tab
 	void ImGuiRightPanel();
-	void ImGuiLeftPanel();
+	//Content of the Display tab of the left panel
+	void ImGuiDisplay();
 	void ImGuiOutput();
 
 private:
@@ -44,6 +47,9 @@ private:
 	void StartLoading(const std::filesystem::path& path);
 	void InstallResult(LoadResult& result);
 	std::filesystem::path Folder() const;
+	//Content of the Load tab: file choice, value range, loading
+	void LoadImGui();
+	PanelTabs importTabs;
 
 	TerrainView view;
 	TerrainRenderSettings renderSettings;
