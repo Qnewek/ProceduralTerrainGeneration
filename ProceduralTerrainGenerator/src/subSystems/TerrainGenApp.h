@@ -14,6 +14,7 @@
 #include "LightSource.h"
 #include "Sky.h"
 #include "TerrainMaterials.h"
+#include "VegetationModels.h"
 #include "PanelTabs.h"
 
 #include "NoiseBasedGenerationSys.h"
@@ -52,6 +53,8 @@ private:
 	bool vsync = true;
 	//Textures of the terrain materials, shared by all modes; released before the context like metrics
 	std::unique_ptr<TerrainMaterials> materials;
+	//Vegetation and rock models, loaded in the background; released before the context like metrics
+	std::unique_ptr<VegetationModels> vegetation;
 	//Tabs of the left panel (view, camera, sun, files); the right panel's tabs belong to the mode's subsystem
 	PanelTabs viewPanelTabs;
 
