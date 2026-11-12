@@ -60,7 +60,9 @@ private:
 
 	//Map Size variables
 	int width, height;
+	//World units of height 1: heightScale for one map (Noise heightmap, Imported map), worldHeightScale for TerrainGen
 	float heightScale;
+	static constexpr float worldHeightScale = 1024.0f;
 	
 	//Window Layout variables
 	int windowWidth, windowHeight;

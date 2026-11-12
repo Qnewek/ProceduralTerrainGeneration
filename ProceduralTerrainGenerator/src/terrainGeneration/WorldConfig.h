@@ -42,8 +42,10 @@ struct TerrainConfig {
 	//Weirdness with Ridge (gain 3, offset 1) is the fold 1 - |3|W| - 2| = peaks and valleys of Minecraft 1.18.
 	float seaLevel = 0.3f;
 	float coastWidth = 0.15f;
-	float mountainShare = 0.6f;
-	SplinePoints peaksSpline{ {-1.0, -0.5, 0.0, 0.5, 1.0}, {0.0, 0.05, 0.25, 0.7, 1.0} };
+	//Relief (2026-11-13, was 0.6 and peaks from 0): most of the height range for the mountains, and weirdness shapes peaks and
+	//valleys without flattening the ranges (a valley keeps 15% of the mountain height)
+	float mountainShare = 0.8f;
+	SplinePoints peaksSpline{ {-1.0, -0.5, 0.0, 0.5, 1.0}, {0.15, 0.3, 0.5, 0.8, 1.0} };
 
 	//Height of the water surface the climate of biomes is measured from: seaLevel * (1 - mountainShare) for LAYERED;
 	//the other methods have no sea, so heights are measured from 0
@@ -80,7 +82,8 @@ struct TerrainConfig {
 		TerrainConfig c;
 		c.continentalness.seed = 623;
 		c.continentalness.constrast = 1.5f;
-		c.continentalness.octaves = 7;
+		//5 octaves (2026-11-13, was 7): the finest ones only roughened the lowlands at heightScale 1024; the shape of continents keeps
+		c.continentalness.octaves = 5;
 		//Continents (2026-11-12): a low scale gives landmasses thousands of texels across, a low persistence fewer small islands,
 		//and the coast at C = 0.15 in continentalnessSpline about 60% water (measured by the Land statistics of the Terrain tab).
 		//The biome ranges of continentalness in biome::DefaultBiomes follow this spline
@@ -101,7 +104,8 @@ struct TerrainConfig {
 		c.weirdness.Ridge = true;
 
 		c.continentalnessSpline = { {-1.0, -0.35, 0.15, 0.38, 0.65, 1.0}, {0.0, 0.1, 0.3, 0.70, 0.95, 1.0} };
-		c.mountainousnessSpline = { {-1.0, -0.78, -0.37, -0.2, 0.05, 0.45, 0.55, 1.0}, {0.0, 0.1, 0.2, 0.3, 0.3, 0.6, 0.6, 1.0} };
+		//Relief (2026-11-13): almost none at low mountainousness, rising steeply to full height in the mountain ranges
+		c.mountainousnessSpline = { {-1.0, -0.4, 0.0, 0.25, 0.5, 0.8, 1.0}, {0.0, 0.0, 0.02, 0.22, 0.6, 0.88, 1.0} };
 		c.weirdnessSpline = { {-1.0, -0.85, -0.6, 0.2, 0.7, 1.0}, {1.0, 0.7, 0.4, 0.2, 0.05, 0} };
 		return c;
 	}
