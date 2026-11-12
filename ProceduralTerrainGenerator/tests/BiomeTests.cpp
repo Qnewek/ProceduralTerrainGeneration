@@ -40,7 +40,7 @@ TEST_CASE("Default biomes are chosen by their parameters")
 	CHECK(biome::Nearest(table, Values(0.5f, -0.5f, 0.0f, -0.25f, 0.0f)) == GRASSPLAINS);
 	CHECK(biome::Nearest(table, Values(0.5f, -0.5f, 0.0f, 0.5f, -0.8f)) == DESERT);
 	CHECK(biome::Nearest(table, Values(0.5f, -0.5f, 0.0f, -0.8f, 0.5f)) == SNOW);
-	CHECK(biome::Nearest(table, Values(-0.1f, 0.8f, 0.0f, 0.5f, 0.5f)) == SAND);
+	CHECK(biome::Nearest(table, Values(0.17f, 0.8f, 0.0f, 0.5f, 0.5f)) == SAND);
 	CHECK(biome::Nearest(table, Values(0.6f, 0.6f, 0.0f, 0.0f, 0.0f)) == MOUNTAIN);
 	CHECK(biome::Nearest(table, Values(0.6f, 0.6f, 0.0f, -0.7f, 0.0f)) == SNOWY_PEAKS);
 	CHECK(biome::Nearest(table, Values(-0.9f, 0.0f, 0.0f, 0.0f, 0.0f)) == OCEAN);

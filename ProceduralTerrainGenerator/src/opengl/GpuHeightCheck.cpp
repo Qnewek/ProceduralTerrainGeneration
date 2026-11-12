@@ -19,6 +19,7 @@
 #include "Grid.h"
 #include "GpuHeightGenerator.h"
 #include "GpuSurfacePass.h"
+#include "LandStats.h"
 
 namespace {
 	//Not square, so swapped axes are detected; larger than one part of a dispatch along X
@@ -571,6 +572,28 @@ namespace {
 		return sumOk && singleOk && patchOk && blendOk;
 	}
 
+	//Water and landmasses of the default world, sampled as the Terrain tab does; the defaults are calibrated to about 60% water
+	//in a few large landmasses, so a change of the default terrain that breaks it shows here
+	bool CheckLand(GpuHeightGenerator& gpu)
+	{
+		std::cout << "\nland: water and landmasses of the default world (" << land::sampleSize << "^2 samples, every " << land::sampleStep << " texels)\n";
+		const TerrainConfig terrain = TerrainConfig::Default();
+		const BiomeConfig biomes = BiomeConfig::Default();
+		bool allOk = true;
+		for (const auto& [name, withBiomes] : { std::pair{ "land: default world", false }, { "land: default world, biome modifiers", true } }) {
+			const HeightField map = gpu.SampleTerrain(terrain, glm::vec2(0.0f), land::sampleSize, land::sampleStep, glm::ivec2(mapWidth, mapHeight),
+				withBiomes ? &biomes : nullptr);
+			const LandStats s = land::Measure(map, terrain.WaterHeight());
+			std::ostringstream details;
+			details << std::fixed << std::setprecision(1) << 100.0f * s.waterShare << "% water, " << s.landmasses << " masses, "
+				<< 100.0f * s.continentalShare << "% continental ";
+			const bool ok = s.waterShare >= 0.55f && s.waterShare <= 0.65f && s.continentalShare >= 0.8f;
+			allOk = allOk && ok;
+			Report(name, details.str(), ok);
+		}
+		return allOk;
+	}
+
 	//All texels of a texture as bytes (every layer of an array)
 	std::vector<unsigned char> ReadBytes(const TextureClass& texture, GLenum format, GLenum type, int bytesPerTexel)
 	{
@@ -875,6 +898,7 @@ int RunGpuHeightCheck()
 			ok = CheckModifiers(gpu) && ok;
 			ok = CheckMaterials(gpu) && ok;
 			ok = CheckWorld(gpu) && ok;
+			ok = CheckLand(gpu) && ok;
 			ok = CheckChunks(gpu) && ok;
 			ok = CheckSurface(surfacePass) && ok;
 			RunTimings(gpu, surfacePass);
