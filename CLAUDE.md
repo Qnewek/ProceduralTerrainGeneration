@@ -219,12 +219,11 @@ Wartości szumów są w [-1, 1]. Konwencja indeksowania: `map[y * width + x]`.
 - LOD chunków: poziom L bierze co 2^L-tą próbkę (`MapArea::step`, potęga dwójki, więc próbki poziomów się pokrywają). Siatka chunka jest jedna, skalowana w XZ uniformem
   `meshScale` (VS), a skirty (wierzchołki z `aPos.y = -1`) TES opuszcza o `skirtDepth`; `SetFrameUniforms` ustawia oba na neutralne (1 i 0) dla `TerrainView`.
   Culling (chunki na CPU w `ChunkWorld`, patche w TCS) zakłada |wysokość| ≤ 1,5 (`heightBound` w `ChunkWorld.cpp` = `HEIGHT_BOUND` w TCS); mapa o większych
-  wartościach wymaga zmiany obu, inaczej teren przy krawędzi ekranu zniknie. Nie skaluj `model` niejednorodnie — `normalMatrix` i mapa pochodnych (liczona z krokiem `worldUnitsPerTexel · 2^L`) zakładają jednostki świata. Wcześniejsza próba chunków (klasa `Chunk`, nigdy nie scalona) jest pod tagiem
-  `archive/infinite-terrain-chunks`; stara roślinność — w historii (`fb8b840`), opis w ROADMAP, Faza 4.
+  wartościach wymaga zmiany obu, inaczej teren przy krawędzi ekranu zniknie. Nie skaluj `model` niejednorodnie — `normalMatrix` i mapa pochodnych (liczona z krokiem `worldUnitsPerTexel · 2^L`) zakładają jednostki świata. Stara roślinność — w historii (`fb8b840`), opis w ROADMAP, Faza 4.
 
 ## Kierunek rozwoju (skrót z ROADMAP)
 
 Cel: edycja parametrów w czasie rzeczywistym + maksymalna wydajność + biomy i roślinność.
 Kolejność: naprawy krytyczne (Faza 0) → porządki/architektura (Faza 1) → generacja na GPU (compute shaders)
-i system chunków z LOD (Faza 2) → biomy ciągłe z blendingiem i teksturowaniem (Faza 3) — wszystko to zamknięte (2026-11-12) →
+i system chunków z LOD (Faza 2) → biomy ciągłe z blendingiem i teksturowaniem (Faza 3, domknięta 2026-11-13 kontynentami, tabelą 18 biomów i rzeźbą terenu) — wszystko to zamknięte →
 roślinność instancjonowana (Faza 4, następna) → erozja GPU, woda, eksport (Faza 5).
