@@ -401,6 +401,16 @@ TerrainGen — Terrain (rozmiar, metoda, sampling), Noises (C/M/W + podgląd), S
 Biome noises (T/H); Noise heightmap — Noise, Erosion; Imported map — Load. Checkboxy „Edit component noise” / „Edit spline” i przyciski „Done” usunięte:
 otwarta zakładka = edytowany element, jej szum dostaje podgląd 2D; zawsze jest wybrany składnik (domyślnie C i T). Nagłówki zwijane usunięte z sekcji, które są całymi zakładkami.
 
+### Kontynenty — więcej oceanu (decyzja właściciela 2026-11-12)
+✅ 2026-11-12 (branch `feat/continents`) Cel: ~60% wody i ląd w formie kontynentów, bez nowego mechanizmu generacji — samą kalibracją.
+Pomiar: `LandStats` (udział wody, masy lądu, część lądu w masach ≥ 1% próbki) na próbce 512² co 64 teksele; „Land statistics” w zakładce Terrain i sekcja `land:` w `--gpu-check`.
+Przed: 35,6% wody, jedna masa lądu z jeziorami (98% lądu razem; podstawowa fala C ≈ 1000 tekseli). Po: 60,8% wody, 59 mas, 82% lądu w kontynentach,
+największy ≈ 19% lądu. Zmiany domyślnych: szum C `scale` 0,5 → 0,1, `persistance` 0,5 → 0,4, punkty `continentalnessSpline` przesunięte o +0,35
+(wybrzeże przy C = 0,15); progi C biomów: Ocean < 0,15, Sand 0,15–0,2 (wąska plaża, ~8% lądu — samo przesunięcie dałoby 34%), ląd ≥ 0,2, góry ≥ 0,5 (~45% lądu jak wcześniej).
+Warp i mniej oktaw sprawdzone: warp rozbija ląd na drobne masy, liczba oktaw prawie bez wpływu. Stare presety zachowują swoje wartości.
+Mapa skończona (250²) to teraz wycinek jednego wybrzeża — kontynenty widać w trybie nieskończonym.
+Do decyzji: biomy wody i plaży zależne od wysokości nad lustrem wody zamiast progów C (wtedy kalibracja splajnu nie wymaga zmiany tabeli biomów).
+
 ### Faza 4 — roślinność i obiekty (2–4 tygodnie)
 Poprzednia implementacja (usunięta w A9, do wglądu w historii gita: `fb8b840` — ostatnia działająca wersja,
 `b7f7720` „Fixed trees”): Poisson-disk per chunk (vendor `PoissonGenerator.h`) z gęstością z biomu
