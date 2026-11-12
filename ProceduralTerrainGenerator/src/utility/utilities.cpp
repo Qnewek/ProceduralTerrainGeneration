@@ -185,6 +185,9 @@ namespace utilities
 		ImGui::SameLine();
 		ImGui::Checkbox("2D map", &map2d);
 		ImGui::SliderFloat("Model scale", &modelScale, 0.1f, 5.0f);
+		//Only the view: the maps stay in [0, 1], so nothing has to be generated again
+		ImGui::SliderFloat("Height scale", &heightScale, 16.0f, 4096.0f, "%.0f", ImGuiSliderFlags_Logarithmic);
+		ImGui::SetItemTooltip("World units of height 1 (a texel is 4 units wide)");
 
 		ImGui::SeparatorText("Isopleth");
 		ImGui::SliderFloat("Step", &topoStep, 1.0f, heightScale);

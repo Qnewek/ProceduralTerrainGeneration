@@ -425,6 +425,19 @@ Snow + Snowy peaks = 31% lądu); weirdness nieużywane.
 - Bez bagien: wymagałyby nakładania zakresów (dwa biomy o wadze 1 mieszają kolory pół na pół) — potrzebny priorytet biomu w regułach.
 - Jungle i Taiga używają istniejących tekstur (grass, forest floor, tundra); własne materiały razem z Fazą 4.
 
+### Rzeźba terenu (decyzja właściciela 2026-11-13)
+✅ 2026-11-13 (branch `feat/terrain-relief`) Pomiar (próbki co 4 teksele, nachylenie w stopniach przy skali wyświetlania): przy `heightScale` 256 Mountain średnio
+108 jednostek nad wodą (nachylenie 9°), wszystkie niziny 55–70 jednostek i 3–4°, pagórki niżej niż równiny — kontynent ~20 000 jednostek szeroki, szczyt maks. 256.
+- `heightScale` TerrainGen 256 → 1024 (`TerrainGenApp::worldHeightScale`; Noise heightmap i Imported map zostają przy 256), suwak „Height scale” w Display (tylko widok).
+- LAYERED: `mountainShare` 0,6 → 0,8; `mountainousnessSpline` prawie zero rzeźby przy niskim M, stromo do pełnej wysokości w pasmach; `peaksSpline` od 0,15 (dolina zachowuje
+  część wysokości pasma); szum C 7 → 5 oktaw (drobne oktawy tylko szorstkowały niziny).
+- Modyfikatory: sąsiednie biomy lądowe mają podobną amplitudę (0,85–1) — różnica amplitud robiła rampy na granicach (pierwsza próba z równinami 0,45 dawała nizinom 7–9°);
+  charakter daje szum szczegółu (nachylenie rośnie z `detailAmplitude / detailSize`). Góry z amplitudą 1, więc szczyty nie są ścinane na wysokości 1.
+- Progi elewacji przeliczone (rozkład E się zmienił): wybrzeże do 0,022, góry od 0,22 — udziały biomów jak w poprzedniej tabeli (wybrzeże 6%, Hills 16%, góry 28%).
+- Wynik (średnio nad wodą / nachylenie): Plains 93 / 4,6°, Steppe 99 / 4,4°, Snowfields 83 / 5,0°, Savanna 100 / 5,8°, Tundra 105 / 6,4°, Taiga 98 / 6,7°, Forest 93 / 6,9°,
+  Desert 92 / 10° (wydmy), Jungle 99 / 11°, Hills 148 / 25°, Mountain 366 / 37° (p95 627), Snowy peaks 369 / 39° (p95 745), Rocky peaks 518 / 47° (p95 862); ścięte szczyty 0,2%.
+- Do rozważenia: pagórki (25°) są dość strome — ich rzeźba to głównie splajn M w zakresie 0,05–0,25; render distance (5000) jest mały wobec gór ~900 jednostek.
+
 ### Faza 4 — roślinność i obiekty (2–4 tygodnie)
 Poprzednia implementacja (usunięta w A9, do wglądu w historii gita: `fb8b840` — ostatnia działająca wersja,
 `b7f7720` „Fixed trees”): Poisson-disk per chunk (vendor `PoissonGenerator.h`) z gęstością z biomu
