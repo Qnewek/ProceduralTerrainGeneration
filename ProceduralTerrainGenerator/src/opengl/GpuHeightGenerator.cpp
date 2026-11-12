@@ -45,7 +45,7 @@ namespace {
 		int32_t materials[biome::materialLayers];
 		float materialWeights[biome::materialLayers];
 	};
-	static_assert(sizeof(GpuBiomeEntry) == 104);
+	static_assert(sizeof(GpuBiomeEntry) == 112);
 
 	void SetPermutation(uint32_t* permutations, int index, int seed)
 	{

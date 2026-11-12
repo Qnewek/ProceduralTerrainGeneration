@@ -33,7 +33,7 @@ float evaluateHeight(vec2 position)
 	}
 	// As in biome_compute.shader: biomes chosen from the height before the modifiers
 	float values[PARAMETER_COUNT];
-	for (int i = 0; i < PARAMETER_COUNT; i++) {
+	for (int i = 0; i < NOISE_COUNT; i++) {
 		values[i] = evaluateNoise(i, position.x, position.y);
 	}
 	float height = terrainHeight(values[0], values[1], values[2]);
