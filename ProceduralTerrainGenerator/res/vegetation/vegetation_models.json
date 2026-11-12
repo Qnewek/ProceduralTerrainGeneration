@@ -1,0 +1,24 @@
+{
+	"comment": "Vegetation and rock models (CC0, Poly Haven), downloaded by tools/fetch_models.py into res/vegetation/models/<asset>/. kind = tree | shrub | rock sets the default triangle counts of the levels of detail (lods, nearest first); foliage = materials simplified by dropping cards instead of collapsing edges (by default: alpha-tested materials and names with leaf, leaves, twig, needle).",
+	"lodTriangles": {
+		"tree": [ 150000, 30000, 6000 ],
+		"shrub": [ 4000, 1000, 250 ],
+		"rock": [ 4000, 1000, 250 ]
+	},
+	"models": [
+		{ "name": "Fir", "asset": "fir_tree_01", "kind": "tree" },
+		{ "name": "Fir sapling", "asset": "fir_sapling", "kind": "shrub" },
+		{ "name": "Pine sapling", "asset": "pine_sapling_small", "kind": "shrub" },
+		{ "name": "Deciduous tree", "asset": "tree_small_02", "kind": "tree" },
+		{ "name": "Island tree", "asset": "island_tree_02", "kind": "tree" },
+		{ "name": "Searsia", "asset": "searsia_lucida", "kind": "tree" },
+		{ "name": "Quiver tree", "asset": "quiver_tree_02", "kind": "tree" },
+		{ "name": "Dead trunk", "asset": "dead_tree_trunk", "kind": "shrub" },
+		{ "name": "Shrub", "asset": "shrub_02", "kind": "shrub" },
+		{ "name": "Shrub 2", "asset": "shrub_04", "kind": "shrub" },
+		{ "name": "Fern", "asset": "fern_02", "kind": "shrub" },
+		{ "name": "Rock", "asset": "rock_07", "kind": "rock" },
+		{ "name": "Stone", "asset": "moon_rock_02", "kind": "rock" },
+		{ "name": "Boulder", "asset": "namaqualand_boulder_05", "kind": "rock" }
+	]
+}

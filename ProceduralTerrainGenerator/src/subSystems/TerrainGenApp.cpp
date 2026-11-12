@@ -87,6 +87,11 @@ bool TerrainGenApp::Initialize()
     if (!materials->Initialize("res/textures/terrain_materials.json", "res/textures/terrain")) {
         std::cout << "[ERROR] Terrain materials not loaded" << std::endl;
     }
+    //Optional as well: without it there is no vegetation
+    vegetation = std::make_unique<VegetationModels>();
+    if (!vegetation->Initialize("res/vegetation")) {
+        std::cout << "[ERROR] Vegetation models not loaded" << std::endl;
+    }
 
     //Logic initialization
 	renderer.SetPatches(4);
@@ -135,6 +140,7 @@ void TerrainGenApp::Start()
             ReloadShaders();
         }
         reloadKeyWasDown = reloadKeyDown;
+        vegetation->Update();
 
         //Install finished background generation and start the pending one (only for the active mode)
         if (currentMode == mode::NOISE_HEIGHTMAP) {
@@ -166,6 +172,7 @@ void TerrainGenApp::Start()
 
     metrics.reset();
     materials.reset();
+    vegetation.reset();
     ImGui_ImplOpenGL3_Shutdown();
     ImGui_ImplGlfw_Shutdown();
 	ImPlot::DestroyContext();
@@ -219,6 +226,7 @@ void TerrainGenApp::ReloadShaders()
     terrainGenSys.ReloadShaders();
     mapImportSys.ReloadShaders();
     sky.ReloadShader();
+    vegetation->ReloadShader();
 }
 
 bool TerrainGenApp::FlatView() const
@@ -259,6 +267,7 @@ void TerrainGenApp::ImGuiRender()
         { "Camera", [this] { camera.ImGuiDraw(); } },
         { "Sun & sky", [this] { light.ImGuiDraw(); } },
         { "Materials", [this] { materials->ImGuiDraw(); } },
+        { "Vegetation", [this] { vegetation->ImGuiDraw(light); } },
     };
     if (currentMode == mode::NOISE_HEIGHTMAP) {
         viewTabs.push_back({ "Presets", [this] { noiseGenSys.ImGuiPresets(); } });

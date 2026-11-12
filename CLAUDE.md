@@ -98,6 +98,7 @@ ProceduralTerrainGenerator/
     sky_vertex/fragment.shader   niebo; kolory nieba w common/sky.glsl, z których korzysta też mgła terenu
   res/textures/terrain_materials.json   lista materiałów (kolejność = id); same tekstury w res/textures/terrain/ (poza gitem)
 tools/fetch_textures.py          pobiera tekstury materiałów (CC0, Poly Haven / ambientCG), tylko biblioteka standardowa Pythona
+tools/fetch_models.py            pobiera modele roślinności i kamieni (CC0 glTF, Poly Haven) z mapami alpha liści
 CMakeLists.txt, CMakePresets.json, vcpkg.json   build; GLFW, GLEW, glm, ImGui, ImPlot, stb z vcpkg
 .github/workflows/build.yml      CI (Windows x64 Debug/Release, build + testy jednostkowe)
 ```
@@ -201,6 +202,10 @@ Wartości szumów są w [-1, 1]. Konwencja indeksowania: `map[y * width + x]`.
   Każdy biom ma do 4 warstw `biome::MaterialLayer`. Mapę udziałów materiałów (splat, RGBA8 × 4 warstwy) pisze `biome_compute.shader` razem z biomami; mieszanka i plamy to
   `biome::MixMaterials` (CPU, testy) = sumy w pętli `biome_compute.shader` + `finishMaterials` w `common/biomes.glsl` — jak reguły biomów, zmiana w obu. Bez biomów splat mapy nie ma (`useSplat = false`)
   i cały teren ma materiał wybrany w „Terrain materials”.
+- Roślinność (Faza 4): modele glTF z Poly Haven nie są w gicie — `python tools/fetch_models.py` pobiera je do `res/vegetation/models/` (lista w `res/vegetation/vegetation_models.json`).
+  `VegetationModels` wczytuje je w tle (wątki, bez GL) i instaluje w `Update` na wątku GL; LOD-y budowane przy pierwszym wczytaniu (`vegetation::BuildLods`) i trzymane
+  w `res/vegetation/cache/` — zmiana algorytmu LOD-ów lub formatu wymaga podbicia `cacheVersion` w `VegetationMesh.cpp`, inaczej zostaną stare. Modele są w metrach
+  (1 m = 4 jednostki świata), podstawa w początku układu; jeden plik = kilka wariantów. Jakość LOD-ów sprawdza `--vegetation-preview [folder]` (PNG).
   Klify, height blending, triplanar, specular i anti-tiling są w FS (`Terrain_fragment.shader`, `common/materials.glsl`), parametry w UBO `TerrainMaterials::Block`,
   który musi odpowiadać `TerrainMaterialBlock` (std140) pole w pole. Odczyty materiałów w FS przez `textureGrad` (pochodne z `surfaceSampling`, liczone w jednolitym
   przepływie sterowania). W FS uniform izolinii nazywa się `step` i zasłania wbudowane `step()` — nie używaj go w tym shaderze.
