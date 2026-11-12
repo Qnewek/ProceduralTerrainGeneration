@@ -53,30 +53,64 @@ namespace utilities
 	//@return - boolean value indicating if the noise parameters were modified
 	bool NoiseImGui(noise::NoiseConfigParameters& noiseConfig)
 	{
-		if (ImGui::CollapsingHeader("Noise Settings", ImGuiTreeNodeFlags_DefaultOpen)) {
-			bool regenerate = false;
-			regenerate |= ImGui::InputInt("Seed", &noiseConfig.seed);
-			regenerate |= ImGui::SliderInt("Octaves", &noiseConfig.octaves, 1, 8);
-			regenerate |= ImGui::SliderFloat("Offset x", &noiseConfig.xoffset, 0.0f, 5.0f);
-			regenerate |= ImGui::SliderFloat("Offset y", &noiseConfig.yoffset, 0.0f, 5.0f);
-			regenerate |= ImGui::SliderInt("Resolution", &noiseConfig.resolution, 100, 1000);
-			regenerate |= ImGui::SliderFloat("Scale", &noiseConfig.scale, 0.01f, 3.0f);
-			regenerate |= ImGui::SliderFloat("Constrast", &noiseConfig.constrast, 0.1f, 2.0f);
-			regenerate |= ImGui::SliderFloat("Redistribution", &noiseConfig.redistribution, 0.1f, 10.0f);
-			regenerate |= ImGui::SliderFloat("Lacunarity", &noiseConfig.lacunarity, 0.1f, 10.0f);
-			regenerate |= ImGui::SliderFloat("Persistance", &noiseConfig.persistance, 0.1f, 1.0f);
+		bool regenerate = false;
+		regenerate |= ImGui::InputInt("Seed", &noiseConfig.seed);
+		regenerate |= ImGui::SliderInt("Octaves", &noiseConfig.octaves, 1, 8);
+		regenerate |= ImGui::SliderFloat("Offset x", &noiseConfig.xoffset, 0.0f, 5.0f);
+		regenerate |= ImGui::SliderFloat("Offset y", &noiseConfig.yoffset, 0.0f, 5.0f);
+		regenerate |= ImGui::SliderInt("Resolution", &noiseConfig.resolution, 100, 1000);
+		regenerate |= ImGui::SliderFloat("Scale", &noiseConfig.scale, 0.01f, 3.0f);
+		regenerate |= ImGui::SliderFloat("Constrast", &noiseConfig.constrast, 0.1f, 2.0f);
+		regenerate |= ImGui::SliderFloat("Redistribution", &noiseConfig.redistribution, 0.1f, 10.0f);
+		regenerate |= ImGui::SliderFloat("Lacunarity", &noiseConfig.lacunarity, 0.1f, 10.0f);
+		regenerate |= ImGui::SliderFloat("Persistance", &noiseConfig.persistance, 0.1f, 1.0f);
 
-			static const char* options[] = { "REFIT_ALL", "FLATTEN_NEGATIVES", "REVERT_NEGATIVES", "NOTHING" };
-			int current_option = static_cast<int>(noiseConfig.option);
+		static const char* options[] = { "REFIT_ALL", "FLATTEN_NEGATIVES", "REVERT_NEGATIVES", "NOTHING" };
+		int current_option = static_cast<int>(noiseConfig.option);
 
-			if (ImGui::BeginCombo("Negatives: ", options[current_option]))
+		if (ImGui::BeginCombo("Negatives: ", options[current_option]))
+		{
+			for (int n = 0; n < IM_ARRAYSIZE(options); n++)
 			{
-				for (int n = 0; n < IM_ARRAYSIZE(options); n++)
+				bool is_selected = (current_option == n);
+				if (ImGui::Selectable(options[n], is_selected)) {
+					current_option = n;
+					noiseConfig.option = static_cast<noise::Options>(n);
+					regenerate = true;
+				}
+				if (is_selected)
+					ImGui::SetItemDefaultFocus();
+			}
+			ImGui::EndCombo();
+		}
+		if (noiseConfig.option == noise::Options::REVERT_NEGATIVES)
+			regenerate |= ImGui::SliderFloat("Revert Gain", &noiseConfig.revertGain, 0.1f, 1.0f);
+
+		// Ridged noise settings
+		regenerate |= ImGui::Checkbox("Ridge", &noiseConfig.Ridge);
+		if (noiseConfig.Ridge)
+		{
+			regenerate |= ImGui::SliderFloat("Ridge Gain", &noiseConfig.RidgeGain, 0.1f, 10.0f);
+			regenerate |= ImGui::SliderFloat("Ridge Offset", &noiseConfig.RidgeOffset, 0.1f, 10.0f);
+		}
+
+		// Island settings
+		regenerate |= ImGui::Checkbox("Island", &noiseConfig.island);
+		if (noiseConfig.island)
+		{
+			static const char* islandTypes[] = { "CONE", "DIAGONAL", "EUKLIDEAN_SQUARED",
+												 "SQUARE_BUMP","HYPERBOLOID", "SQUIRCLE",
+												 "TRIG" };
+			int current_island = static_cast<int>(noiseConfig.islandType);
+
+			if (ImGui::BeginCombo("Island type: ", islandTypes[current_island]))
+			{
+				for (int n = 0; n < IM_ARRAYSIZE(islandTypes); n++)
 				{
-					bool is_selected = (current_option == n);
-					if (ImGui::Selectable(options[n], is_selected)) {
-						current_option = n;
-						noiseConfig.option = static_cast<noise::Options>(n);
+					bool is_selected = (current_island == n);
+					if (ImGui::Selectable(islandTypes[n], is_selected)) {
+						current_island = n;
+						noiseConfig.islandType = static_cast<noise::IslandType>(n);
 						regenerate = true;
 					}
 					if (is_selected)
@@ -84,123 +118,78 @@ namespace utilities
 				}
 				ImGui::EndCombo();
 			}
-			if (noiseConfig.option == noise::Options::REVERT_NEGATIVES)
-				regenerate |= ImGui::SliderFloat("Revert Gain", &noiseConfig.revertGain, 0.1f, 1.0f);
-
-			// Ridged noise settings
-			regenerate |= ImGui::Checkbox("Ridge", &noiseConfig.Ridge);
-			if (noiseConfig.Ridge)
-			{
-				regenerate |= ImGui::SliderFloat("Ridge Gain", &noiseConfig.RidgeGain, 0.1f, 10.0f);
-				regenerate |= ImGui::SliderFloat("Ridge Offset", &noiseConfig.RidgeOffset, 0.1f, 10.0f);
-			}
-
-			// Island settings
-			regenerate |= ImGui::Checkbox("Island", &noiseConfig.island);
-			if (noiseConfig.island)
-			{
-				static const char* islandTypes[] = { "CONE", "DIAGONAL", "EUKLIDEAN_SQUARED",
-													 "SQUARE_BUMP","HYPERBOLOID", "SQUIRCLE",
-													 "TRIG" };
-				int current_island = static_cast<int>(noiseConfig.islandType);
-
-				if (ImGui::BeginCombo("Island type: ", islandTypes[current_island]))
-				{
-					for (int n = 0; n < IM_ARRAYSIZE(islandTypes); n++)
-					{
-						bool is_selected = (current_island == n);
-						if (ImGui::Selectable(islandTypes[n], is_selected)) {
-							current_island = n;
-							noiseConfig.islandType = static_cast<noise::IslandType>(n);
-							regenerate = true;
-						}
-						if (is_selected)
-							ImGui::SetItemDefaultFocus();
-					}
-					ImGui::EndCombo();
-				}
-				regenerate |= ImGui::SliderFloat("Mix Power", &noiseConfig.mixPower, 0.0f, 1.0f);
-			}
-
-			// Shape operations; 0 turns each of them off
-			ImGui::SeparatorText("Shape");
-			regenerate |= ImGui::SliderFloat("Warp strength", &noiseConfig.warpStrength, 0.0f, 2.0f);
-			ImGui::SetItemTooltip("Domain warping: moves the noise by a second noise, which bends coastlines and mountain ranges.\n"
-				"1 = by about one feature of the noise. Has no effect on symmetrical noise");
-			if (noiseConfig.warpStrength != 0.0f) {
-				regenerate |= ImGui::SliderFloat("Warp scale", &noiseConfig.warpScale, 0.1f, 4.0f);
-				ImGui::SetItemTooltip("Frequency of the moving noise relative to this one; higher = finer swirls");
-			}
-			regenerate |= ImGui::SliderFloat("Slope erosion", &noiseConfig.slopeErosion, 0.0f, 2.0f);
-			ImGui::SetItemTooltip("Weakens fine octaves on steep slopes: smooth flanks, details in valleys and on ridges, like eroded terrain");
-			regenerate |= ImGui::SliderInt("Terrace steps", &noiseConfig.terraceSteps, 0, 32);
-			ImGui::SetItemTooltip("Splits the height into flat ledges, this many per unit of height; 0 = off");
-			if (noiseConfig.terraceSteps > 0) {
-				regenerate |= ImGui::SliderFloat("Terrace sharpness", &noiseConfig.terraceSharpness, 0.0f, 1.0f);
-				ImGui::SetItemTooltip("0 = gentle steps, 1 = flat ledges with steep risers");
-			}
-			return regenerate;
+			regenerate |= ImGui::SliderFloat("Mix Power", &noiseConfig.mixPower, 0.0f, 1.0f);
 		}
-		return false;
+
+		// Shape operations; 0 turns each of them off
+		ImGui::SeparatorText("Shape");
+		regenerate |= ImGui::SliderFloat("Warp strength", &noiseConfig.warpStrength, 0.0f, 2.0f);
+		ImGui::SetItemTooltip("Domain warping: moves the noise by a second noise, which bends coastlines and mountain ranges.\n"
+			"1 = by about one feature of the noise. Has no effect on symmetrical noise");
+		if (noiseConfig.warpStrength != 0.0f) {
+			regenerate |= ImGui::SliderFloat("Warp scale", &noiseConfig.warpScale, 0.1f, 4.0f);
+			ImGui::SetItemTooltip("Frequency of the moving noise relative to this one; higher = finer swirls");
+		}
+		regenerate |= ImGui::SliderFloat("Slope erosion", &noiseConfig.slopeErosion, 0.0f, 2.0f);
+		ImGui::SetItemTooltip("Weakens fine octaves on steep slopes: smooth flanks, details in valleys and on ridges, like eroded terrain");
+		regenerate |= ImGui::SliderInt("Terrace steps", &noiseConfig.terraceSteps, 0, 32);
+		ImGui::SetItemTooltip("Splits the height into flat ledges, this many per unit of height; 0 = off");
+		if (noiseConfig.terraceSteps > 0) {
+			regenerate |= ImGui::SliderFloat("Terrace sharpness", &noiseConfig.terraceSharpness, 0.0f, 1.0f);
+			ImGui::SetItemTooltip("0 = gentle steps, 1 = flat ledges with steep risers");
+		}
+		return regenerate;
 	}
 	//ImGui interface for modifying map size
 	//@param width - width of the noise map in chunks
 	//@param height - height of the noise map in chunks
 	bool MapSizeImGui(int& width, int& height)
 	{
-		if (ImGui::CollapsingHeader("Size settings", ImGuiTreeNodeFlags_DefaultOpen)) {
-			ImGui::Text("Resize map");
-			ImGui::InputInt("Width", &width);
-			ImGui::InputInt("Height", &height);
-			if (ImGui::Button("Resize")) {
-				return true;
-			}
-		}
-		return false;
+		ImGui::SeparatorText("Map size");
+		ImGui::InputInt("Width", &width);
+		ImGui::InputInt("Height", &height);
+		return ImGui::Button("Resize");
 	}
 	bool DisplayModeImGui(float& modelScale, float& topoStep, float& topoBandWidth, float& heightScale, heightMapMode& m, bool& wireFrame, bool& map2d, bool* infGen)
 	{
-		if (ImGui::CollapsingHeader("Display settings:", ImGuiTreeNodeFlags_DefaultOpen)) {
-			ImGui::Text("Model scale:");
-			ImGui::SliderFloat("Model scale", &modelScale, 0.1f, 5.0f);
-			ImGui::Text("Isopleth:");
-			ImGui::SliderFloat("Step", &topoStep, 1.0f, heightScale);
-			ImGui::SliderFloat("Band width", &topoBandWidth, 0.1f, 1.0f);
-
-			static const char* displayOptions[] = { "GREYSCALE", "TOPOGRAPHICAL", "MONOCOLOR", "BIOMES", "SLOPE", "CURVATURE", "TEXTURED" };
-			int currentDisplayOption = static_cast<int>(m);
-			bool change = false;
-
-			if (ImGui::BeginCombo("Mode", displayOptions[currentDisplayOption]))
-			{
-				for (int n = 0; n < IM_ARRAYSIZE(displayOptions); n++)
-				{
-					bool is_selected = (currentDisplayOption == n);
-					if (ImGui::Selectable(displayOptions[n], is_selected)) {
-						currentDisplayOption = n;
-						m = static_cast<utilities::heightMapMode>(n);
-						change = true;
-					}
-					if (is_selected)
-						ImGui::SetItemDefaultFocus();
-				}
-				ImGui::EndCombo();
+		if (infGen) {
+			if (ImGuiButtonWrapper("Partial generation", !*infGen)) {
+				*infGen = !*infGen;
 			}
-			ImGui::Checkbox("WireFrame", &wireFrame);
-
-			ImGui::Checkbox("2D map", &map2d);
-			if (infGen) {
-				if (ImGuiButtonWrapper("Partial generation", !*infGen)) {
-					*infGen = !*infGen;
-				}
-				ImGui::SameLine();
-				if (ImGuiButtonWrapper("Infinite generation", *infGen)) {
-					*infGen = !*infGen;
-				}
+			ImGui::SameLine();
+			if (ImGuiButtonWrapper("Infinite generation", *infGen)) {
+				*infGen = !*infGen;
 			}
-			return change;
 		}
-		return false;
+
+		static const char* displayOptions[] = { "GREYSCALE", "TOPOGRAPHICAL", "MONOCOLOR", "BIOMES", "SLOPE", "CURVATURE", "TEXTURED" };
+		int currentDisplayOption = static_cast<int>(m);
+		bool change = false;
+
+		if (ImGui::BeginCombo("Mode", displayOptions[currentDisplayOption]))
+		{
+			for (int n = 0; n < IM_ARRAYSIZE(displayOptions); n++)
+			{
+				bool is_selected = (currentDisplayOption == n);
+				if (ImGui::Selectable(displayOptions[n], is_selected)) {
+					currentDisplayOption = n;
+					m = static_cast<utilities::heightMapMode>(n);
+					change = true;
+				}
+				if (is_selected)
+					ImGui::SetItemDefaultFocus();
+			}
+			ImGui::EndCombo();
+		}
+		ImGui::Checkbox("WireFrame", &wireFrame);
+		ImGui::SameLine();
+		ImGui::Checkbox("2D map", &map2d);
+		ImGui::SliderFloat("Model scale", &modelScale, 0.1f, 5.0f);
+
+		ImGui::SeparatorText("Isopleth");
+		ImGui::SliderFloat("Step", &topoStep, 1.0f, heightScale);
+		ImGui::SliderFloat("Band width", &topoBandWidth, 0.1f, 1.0f);
+		return change;
 	}
 	bool ImGuiButtonWrapper(const char* label, bool disabled)
 	{
