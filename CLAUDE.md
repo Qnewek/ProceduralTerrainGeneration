@@ -185,6 +185,8 @@ Wartości szumów są w [-1, 1]. Konwencja indeksowania: `map[y * width + x]`.
   Domyślna tabela (18 biomów, `DefaultBiomes`) dzieli całą przestrzeń parametrów bez dziur i nakładania (testy „cover the whole parameter space” / „do not overlap”);
   woda, wybrzeże, pagórki i góry są wybierane elewacją, więc tabela nie zależy od splajnu C ani `seaLevel` (C nieużywane). Progi skalibrowane na domyślnym świecie
   (udziały w ROADMAP, sekcja „Nowa tabela biomów”) — po zmianie domyślnego terenu lub klimatu warto je zmierzyć ponownie.
+  Modyfikatory terenu: sąsiednie biomy lądowe mają podobną amplitudę (0,85–1), bo różnica amplitud robi rampę na granicy biomów; charakter rzeźby daje szum szczegółu
+  (nachylenie ~ `detailAmplitude * heightScale / (4 * detailSize)`). TerrainGen wyświetla wysokość 1 jako 1024 jednostki (`worldHeightScale`), pozostałe tryby 256.
   Przed wyborem biomu T i H zmienia klimat (`biome::ApplyClimate`: lapse rate i wilgotność przy brzegu, od wysokości nad `TerrainConfig::WaterHeight()`);
   shader biomów liczy wysokość sam (`common/terrain.glsl`), więc biomy zależą od całego `TerrainConfig` — `RequestTerrain` przy włączonych biomach przelicza też biomy.
   Modyfikatory terenu (`biome::TerrainModifier`, `ModifyHeight`): przy włączonych biomach i `modifyTerrain` teren zależy od `BiomeConfig` (`GenerateTerrain(..., &biomes)`),

@@ -95,7 +95,8 @@ bool TerrainGenApp::Initialize()
         std::cout << "[ERROR] Failed to initialize NoiseBasedGenerationSys" << std::endl;
         return false;
     }
-	if (!terrainGenSys.Initialize(width, height, heightScale)) {
+	//TerrainGen builds continents thousands of texels wide, so its mountains need a larger scale than one small map
+	if (!terrainGenSys.Initialize(width, height, worldHeightScale)) {
 		std::cout << "[ERROR] Failed to initialize TerrainGenerationSys" << std::endl;
 		return false;
 	}

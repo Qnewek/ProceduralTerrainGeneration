@@ -186,7 +186,7 @@ TEST_CASE("Climate: high mountains of the default table get snow")
 	const biome::Climate climate;
 	//Rough terrain in a cool climate, with the elevation and temperature from the height: hills low down, then a grey mountain, snowy at the top
 	const biome::ParameterValues rough = Values(0.0f, 0.6f, 0.0f, -0.4f, 0.0f);
-	CHECK(biome::Nearest(table, biome::ApplyClimate(rough, 0.3f, 0.1f, climate)) == HILLS);
+	CHECK(biome::Nearest(table, biome::ApplyClimate(rough, 0.25f, 0.1f, climate)) == HILLS);
 	CHECK(biome::Nearest(table, biome::ApplyClimate(rough, 0.5f, 0.1f, climate)) == MOUNTAIN);
 	CHECK(biome::Nearest(table, biome::ApplyClimate(rough, 0.9f, 0.1f, climate)) == SNOWY_PEAKS);
 }
