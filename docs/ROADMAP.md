@@ -311,7 +311,7 @@ Biomy (Faza 3, pkt 3–4) opierają się na wysokości i znaczeniu szumów C/M/W
 Cel: realistyczne, płynne przejścia i biomy wpływające na kształt terenu.
 
 **Kolejność ustalona z właścicielem 2026-11-08:** pkt 1 + 2 (zrobione) → pkt 6 edytor biomów (zrobione 2026-11-09) → pkt 4 klimat zależny od wysokości (zrobione 2026-11-09) →
-pkt 3 biomy modyfikują teren (zrobione 2026-11-09) → pkt 5 teksturowanie (zrobione 2026-11-10). Po każdym kroku nowe przypadki w `--gpu-check`.
+pkt 3 biomy modyfikują teren (zrobione 2026-11-09) → pkt 5 teksturowanie (zrobione 2026-11-10; strojenie wartości domyślnych na bieżąco). Po każdym kroku nowe przypadki w `--gpu-check`.
 Pkt 6 w szczegółach: lista biomów (dodaj/usuń, nazwa, kolor, 5 zakresów suwakami), diagram Whittakera (temperatura × wilgotność, prostokąty biomów w ImPlot),
 podgląd mapy biomów 2D; tabela nie może być pusta (ostatniego biomu nie da się usunąć); id = indeks, więc usunięcie przesuwa id kolejnych biomów.
 Pkt 4 wymaga, żeby shader biomów liczył też wysokość terenu (splajny w buforze jak w `height_compute.shader`).
@@ -348,8 +348,9 @@ Pkt 4 wymaga, żeby shader biomów liczył też wysokość terenu (splajny w buf
      skała, piaskowiec, piarg, śnieg, tundra. Tekstury (CC0, Poly Haven / ambientCG) nie są w gicie: pobiera je `tools/fetch_textures.py [--resolution 1k|2k|4k]`
      do `res/textures/terrain/<asset>/`. Materiał bez tekstur rysuje się kolorem `fallbackColor`, więc aplikacja działa i bez nich.
    - **`TerrainMaterials`** (`opengl/`): wczytuje listę i tekstury (dekodowanie równoległe), pakuje je do dwóch `GL_TEXTURE_2D_ARRAY` (jednostka 4: albedo + wysokość,
-     5: normalna XY + roughness + AO) i parametrów w bloku `std140` (binding 0, `common/materials.glsl`). `Bind` raz na klatkę w `TerrainGenApp::Draw`.
+     5: normalna XY + roughness + AO; mipmapy, anizotropia) i parametrów w bloku `std140` (binding 0, `common/materials.glsl`). `Bind` raz na klatkę w `TerrainGenApp::Draw`.
      Sekcja UI „Terrain materials”: materiał bez biomów, skala tekstur, siła normal map, progi klifów i triplanaru, height blending, specular, anti-tiling.
+     To ustawienia wyświetlania, nie świata — nie trafiają do presetów.
      `TextureClass` obsługuje teraz tablice (`_layers`).
    - **Reguły per biom:** każdy biom ma do 4 warstw materiałów (`biome::MaterialLayer`: materiał + waga, normalizowane). `biome::MixMaterials` (CPU, testy) =
      `mixMaterials` w `common/biomes.glsl`: materiały biomów mieszane wagą `BlendWeight` z `BiomeConfig::materialBlendWidth`, potem szum plam
@@ -359,13 +360,14 @@ Pkt 4 wymaga, żeby shader biomów liczył też wysokość terenu (splajny w buf
      UI: sekcja „Surface materials” w ustawieniach biomów i warstwy materiałów zaznaczonego biomu w edytorze. Presety: pola `material*` w `biomes`
      i `materials` w każdym biomie (bez podbicia wersji: starsze pliki dostają wartości domyślne).
    - **Shader fragmentów:** wagi ze splat mapy (bez biomów: jeden materiał), na zboczach między `cliffSlopeStart` a `cliffSlopeEnd` waga przechodzi na `cliffMaterial`,
-     najsilniejsze materiały mieszane height-based (score = waga + `heightInfluence` · wysokość tekstury, widoczne te w `blendDepth` od najlepszego).
-     Triplanar między `triplanarStart` a `triplanarEnd`, poniżej tylko rzut z góry. Normal mapy, AO, roughness + specular słońca.
-     Anti-tiling: druga skala UV mieszana z odległością, średni kolor materiału w dali, wahania jasności/odcienia szumem o niskiej częstotliwości.
+     4 najsilniejsze materiały mieszane height-based (score = waga + `heightInfluence` · wysokość tekstury, widoczne te w `blendDepth` od najlepszego).
+     Triplanar między `triplanarStart` a `triplanarEnd` (whiteout normal blend, `textureGrad`), poniżej tylko rzut z góry. AO w ambient, specular Blinn-Phong z roughness.
+     Anti-tiling: druga skala UV mieszana z odległością, kolor średni z ostatniego mipa w dali, wahania jasności/odcienia szumem o niskiej częstotliwości.
      Tekstury przyklejone do terenu przez `TerrainPos` (pozycja przed `modelScale`, z TES).
    - `--gpu-check`: sekcja `materials:` (wagi sumują się do 1, tylko materiały z tabeli, jeden materiał wszędzie, plamy zmieniają mieszankę, blending zmniejsza skoki)
      i `chunk: material splat` (chunk = fragment pełnej mapy bit w bit).
-   - **Nie zrobione z planu:** osobne detail normal maps (na bliską odległość) i reguły materiałów zależne od wysokości (wysokość działa pośrednio, przez klimat i biomy).
+   - **Do zrobienia później:** oświetlenie liniowe (sRGB), detail normal maps z bliska, pomiar kosztu FS przy przelocie. Reguły materiałów zależne od wysokości
+     nie są osobne — wysokość działa pośrednio, przez klimat i biomy.
 6. ✅ 2026-11-09 **Edytor biomów w UI:** `utility/BiomeEditor.*`, sekcja „Biome table” w „Biome generation settings” (szumy T/H w zwijanej sekcji obok).
    Lista biomów (kolor + nazwa), „Add copy” (kopia pod zaznaczonym — nic nie zmienia, bo oryginał wygrywa remisy), „Remove” (ostatniego nie da się usunąć),
    strzałki kolejności (remis → wyższy na liście), nazwa, kolor i 5 zakresów (`DragFloatRange2`, [-1, 1], min ≤ max). Diagram Whittakera (ImPlot, T × H):
@@ -382,7 +384,7 @@ Pkt 4 wymaga, żeby shader biomów liczył też wysokość terenu (splajny w buf
 
 ✅ **Faza 3 zamknięta 2026-11-12** — kryterium spełnione: kolory, teren i materiały przechodzą płynnie (`blendWidth`, `terrainBlendWidth`, `materialBlendWidth`;
 `--gpu-check` sprawdza, że blending zmniejsza skoki), każda zmiana w edytorze od razu przelicza biomy, a cała `BiomeConfig` z tabelą jest w presetach JSON.
-Zostają jako możliwe usprawnienia: teren i biomy w jednym przebiegu compute (pkt 3), detail normal maps (pkt 5), wybór osi / przekrój diagramu i ostrzeżenia
+Zostają jako możliwe usprawnienia: teren i biomy w jednym przebiegu compute (pkt 3), oświetlenie sRGB, detail normal maps i pomiar kosztu FS (pkt 5), wybór osi / przekrój diagramu i ostrzeżenia
 o nakładaniu się biomów (pkt 6), tarasowanie per biom.
 
 ### Faza 4 — roślinność i obiekty (2–4 tygodnie)
