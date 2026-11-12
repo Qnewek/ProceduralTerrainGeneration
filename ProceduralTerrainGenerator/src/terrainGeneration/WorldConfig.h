@@ -81,7 +81,11 @@ struct TerrainConfig {
 		c.continentalness.seed = 623;
 		c.continentalness.constrast = 1.5f;
 		c.continentalness.octaves = 7;
-		c.continentalness.scale = 0.5f;
+		//Continents (2026-11-12): a low scale gives landmasses thousands of texels across, a low persistence fewer small islands,
+		//and the coast at C = 0.15 in continentalnessSpline about 60% water (measured by the Land statistics of the Terrain tab).
+		//The biome ranges of continentalness in biome::DefaultBiomes follow this spline
+		c.continentalness.scale = 0.1f;
+		c.continentalness.persistance = 0.4f;
 		c.continentalness.option = noise::Options::NOTHING;
 
 		c.mountainousness.seed = 262;
@@ -96,7 +100,7 @@ struct TerrainConfig {
 		c.weirdness.option = noise::Options::NOTHING;
 		c.weirdness.Ridge = true;
 
-		c.continentalnessSpline = { {-1.0, -0.7, -0.2, 0.03, 0.3, 1.0}, {0.0, 0.1, 0.3, 0.70, 0.95, 1.0} };
+		c.continentalnessSpline = { {-1.0, -0.35, 0.15, 0.38, 0.65, 1.0}, {0.0, 0.1, 0.3, 0.70, 0.95, 1.0} };
 		c.mountainousnessSpline = { {-1.0, -0.78, -0.37, -0.2, 0.05, 0.45, 0.55, 1.0}, {0.0, 0.1, 0.2, 0.3, 0.3, 0.6, 0.6, 1.0} };
 		c.weirdnessSpline = { {-1.0, -0.85, -0.6, 0.2, 0.7, 1.0}, {1.0, 0.7, 0.4, 0.2, 0.05, 0} };
 		return c;

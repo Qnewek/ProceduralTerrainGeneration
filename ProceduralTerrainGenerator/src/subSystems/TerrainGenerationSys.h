@@ -1,6 +1,7 @@
 #pragma once
 
 #include <memory>
+#include <optional>
 #include <vector>
 
 #include "glm/glm.hpp"
@@ -11,6 +12,7 @@
 #include "NoisePreview.h"
 #include "Grid.h"
 #include "GpuHeightGenerator.h"
+#include "LandStats.h"
 #include "WorldConfig.h"
 #include "Camera.h"
 #include "LightSource.h"
@@ -57,6 +59,10 @@ private:
 	//Copy of biomeIds on the CPU, for the name of the biome under the camera
 	BiomeMap biomeMap;
 
+	//Land statistics of the Terrain tab: measured on request in Update (reads the GPU back)
+	std::optional<LandStats> landStats;
+	bool measureLand = false, landStatsOld = false;
+
 	//Currently edited noise (terrain or biome component), nullptr if none
 	const noise::NoiseConfigParameters* EditedNoise() const;
 	//Generates the 2D picture of the edited noise if it was requested
@@ -65,6 +71,7 @@ private:
 	void UpdateChunks(const Camera& camera);
 	//Finite map: generates what was requested
 	void GenerateFinite();
+	void MeasureLand();
 
 	void RequestPreview();
 	void RequestTerrain();
@@ -94,6 +101,7 @@ private:
 
 	//Content of the generation tabs
 	void TerrainImGui();
+	void LandStatsImGui();
 	void NoiseEditor();
 	void SplineEditor();
 	void BiomesEditor();

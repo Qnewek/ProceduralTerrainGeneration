@@ -31,7 +31,8 @@ Plan napraw i rozwoju: `docs/ROADMAP.md` (ID zadań `B*`, `A*`, `F*` są tam zde
   i ID z ROADMAP; po naprawie błędu test zacznie zgłaszać niepowodzenie, wtedy usuń oznaczenie.
 - **Test generacji: `out\build\x64-release\ProceduralTerrainGenerator.exe --gpu-check`** (ukryte okno, potrzebny GPU z OpenGL 4.5; uruchamiaj po każdej
   zmianie shaderów generacji). Sprawdza: wartości skończone i w zakresie opcji (każda opcja, ridge, wyspy, metody terenu), determinizm i wpływ seeda,
-  zgodność id i kolorów biomów, chunki i poziomy LOD bit w bit z pełną mapą, mapę pochodnych na mapach o znanych pochodnych; potem czasy GPU.
+  zgodność id i kolorów biomów, chunki i poziomy LOD bit w bit z pełną mapą, mapę pochodnych na mapach o znanych pochodnych, udział wody domyślnego świata
+  (55–65%, ≥ 80% lądu w kontynentach); potem czasy GPU.
   Nowa opcja generacji = nowy przypadek w `CheckRanges` (`GpuHeightCheck.cpp`).
 - **Wielkość liter ścieżek = dokładnie taka jak w gicie** (`git ls-files`): `src/opengl`, `src/subSystems`,
   `src/terrainGeneration`, `src/utility`, `src/vendor`, `res/shaders`, `res/textures`.
@@ -66,6 +67,7 @@ ProceduralTerrainGenerator/
       HeightmapExport.*          zapis mapy jako PNG 16-bit lub RAW R16; FileIO.* = zapis przez plik tymczasowy
       HeightmapImport.*          odczyt mapy z PNG lub R16/RAW; format po rozszerzeniu, nowy = czytnik i rozszerzenie w tym pliku
       GenerationJob.h            jedno zadanie generacji w tle (std::async + TryTake)
+      LandStats.*                udział wody i masy lądu (flood fill) z rzadkiej próbki świata (GpuHeightGenerator::SampleTerrain); „Land statistics” w zakładce Terrain i sekcja land: w --gpu-check
     opengl/                      cienkie wrappery: Shader, VertexArray/Buffer, IndexBuffer, TextureClass, Renderer, GpuQuery
       TerrainView.*              siatka + shader + tekstury (TERRAIN/OVERLAY/BIOMES), wspólny dla obu trybów
       GpuHeightGenerator.*       jedyna generacja: szum, teren i biomy w compute shaderach (GenerateWorld = teren + biomy w jednym przebiegu); GpuHeightCheck.* = testy generacji (--gpu-check)
@@ -177,6 +179,8 @@ Wartości szumów są w [-1, 1]. Konwencja indeksowania: `map[y * width + x]`.
 - Biomy (Faza 3): tabela w `BiomeConfig::table` (w presetach), id biomu = indeks w tabeli. Każdy texel dostaje najbliższy biom w przestrzeni (C, M, W, T, H),
   odległość = długość wektora wyjścia poza zakresy; kolor miesza wszystkie biomy wagą `BlendWeight` (`blendWidth`), więc mapa id ma ostre granice, a kolory płynne.
   Reguły są dwa razy: `Biome.cpp` (testy) i `common/biomes.glsl` — zmiana w jednym wymaga zmiany w drugim. Tabela nie może być pusta (sprawdza `Check`).
+  Ocean i plażę wybiera sam zakres kontynentalności, nie wysokość nad wodą: progi C w `DefaultBiomes` (`coast`, `inland`, `highland`) odpowiadają punktom
+  domyślnego `continentalnessSpline` (wybrzeże = gdzie podstawa osiąga `seaLevel`). Zmiana splajnu lub `seaLevel` wymaga przesunięcia tych progów.
   Przed wyborem biomu T i H zmienia klimat (`biome::ApplyClimate`: lapse rate i wilgotność przy brzegu, od wysokości nad `TerrainConfig::WaterHeight()`);
   shader biomów liczy wysokość sam (`common/terrain.glsl`), więc biomy zależą od całego `TerrainConfig` — `RequestTerrain` przy włączonych biomach przelicza też biomy.
   Modyfikatory terenu (`biome::TerrainModifier`, `ModifyHeight`): przy włączonych biomach i `modifyTerrain` teren zależy od `BiomeConfig` (`GenerateTerrain(..., &biomes)`),

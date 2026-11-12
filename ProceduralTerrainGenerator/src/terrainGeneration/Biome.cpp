@@ -117,6 +117,9 @@ namespace biome {
 		//Converted from the discrete levels used before 2026-11-08; Snowy peaks added with the climate (2026-11-09):
 		//mountains cold enough after the lapse rate
 		const Range all{ -1.0f, 1.0f };
+		//Continentalness borders, following TerrainConfig::continentalnessSpline (continents, 2026-11-12): the coast where the base
+		//reaches seaLevel, a narrow beach (about 8% of the land), mountains on about 45% of the land as before the calibration
+		const float coast = 0.15f, inland = 0.2f, highland = 0.5f;
 		//Terrain modifiers (2026-11-09): flatter plains and snowfields, dunes in the desert, sharper and rougher mountains;
 		//both mountain biomes alike, so the snow line does not change the shape
 		const TerrainModifier plains{ 0.8f, 0.0f, 0.0f, 16.0f, false };
@@ -136,13 +139,13 @@ namespace biome {
 		const Layers mountain{ { { CLIFF_ROCK, 0.5f }, { SCREE, 0.3f }, { DRY_GRASS, 0.2f } } };
 		const Layers seabed{ { { SCREE, 0.5f }, { DIRT, 0.5f } } };
 		return {
-			{ "Grassplains", glm::vec3(0.2f, 0.8f, 0.2f),	{ Range{ 0.03f, 1.0f }, Range{ -1.0f, -0.2f }, all, Range{ -0.5f, 0.0f }, Range{ -0.5f, 1.0f } }, plains, meadow },
-			{ "Desert", glm::vec3(0.95f, 0.1f, 0.1f),		{ Range{ 0.03f, 1.0f }, Range{ -1.0f, 0.05f }, all, Range{ 0.0f, 1.0f }, Range{ -1.0f, -0.5f } }, dunes, desert },
-			{ "Snow", glm::vec3(0.95f, 0.95f, 0.95f),		{ Range{ 0.03f, 1.0f }, Range{ -1.0f, 0.05f }, all, Range{ -1.0f, -0.5f }, all }, snowfield, snowfields },
-			{ "Sand", glm::vec3(0.93f, 0.82f, 0.55f),		{ Range{ -0.2f, 0.03f }, all, all, all, all }, none, beach },
-			{ "Snowy peaks", glm::vec3(0.85f, 0.9f, 1.0f),	{ Range{ 0.3f, 1.0f }, Range{ 0.05f, 1.0f }, all, Range{ -1.0f, -0.5f }, all }, rock, peaks },
-			{ "Mountain", glm::vec3(0.5f, 0.5f, 0.5f),		{ Range{ 0.3f, 1.0f }, Range{ 0.05f, 1.0f }, all, Range{ -0.5f, 1.0f }, all }, rock, mountain },
-			{ "Ocean", glm::vec3(0.2f, 0.4f, 0.85f),		{ Range{ -1.0f, -0.2f }, all, all, all, all }, none, seabed },
+			{ "Grassplains", glm::vec3(0.2f, 0.8f, 0.2f),	{ Range{ inland, 1.0f }, Range{ -1.0f, -0.2f }, all, Range{ -0.5f, 0.0f }, Range{ -0.5f, 1.0f } }, plains, meadow },
+			{ "Desert", glm::vec3(0.95f, 0.1f, 0.1f),		{ Range{ inland, 1.0f }, Range{ -1.0f, 0.05f }, all, Range{ 0.0f, 1.0f }, Range{ -1.0f, -0.5f } }, dunes, desert },
+			{ "Snow", glm::vec3(0.95f, 0.95f, 0.95f),		{ Range{ inland, 1.0f }, Range{ -1.0f, 0.05f }, all, Range{ -1.0f, -0.5f }, all }, snowfield, snowfields },
+			{ "Sand", glm::vec3(0.93f, 0.82f, 0.55f),		{ Range{ coast, inland }, all, all, all, all }, none, beach },
+			{ "Snowy peaks", glm::vec3(0.85f, 0.9f, 1.0f),	{ Range{ highland, 1.0f }, Range{ 0.05f, 1.0f }, all, Range{ -1.0f, -0.5f }, all }, rock, peaks },
+			{ "Mountain", glm::vec3(0.5f, 0.5f, 0.5f),		{ Range{ highland, 1.0f }, Range{ 0.05f, 1.0f }, all, Range{ -0.5f, 1.0f }, all }, rock, mountain },
+			{ "Ocean", glm::vec3(0.2f, 0.4f, 0.85f),		{ Range{ -1.0f, coast }, all, all, all, all }, none, seabed },
 		};
 	}
 }
