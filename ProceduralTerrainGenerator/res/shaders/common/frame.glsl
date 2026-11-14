@@ -28,4 +28,11 @@ layout(std140, binding = 1) uniform FrameBlock {
     float shadowStrength;
     //Pass into a depth map (shadows): fragment shaders only test alpha and return
     bool depthPass;
+    //Haze (common/fog.glsl): extinction per world unit at y = 0, falling by e every 1 / hazeFalloff world units up; 0 = none
+    float hazeDensity;
+    float hazeFalloff;
+    //Clouds (common/clouds.glsl): x = base, y = top (metres, top <= base = no clouds), z = coverage 0..1, w = strength of their shadows
+    vec4 cloudLayer;
+    //xy = wind offset of the clouds (metres), z = world units per metre, w = density
+    vec4 cloudWind;
 };

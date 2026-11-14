@@ -127,6 +127,8 @@ FrameUniforms::Block TerrainView::FrameBlock(Camera& camera, const LightSource& 
 	//The fog needs the perspective camera, so the 2D map has none; it ends where the far plane cuts the terrain off
 	if (settings.map2d) {
 		block.fogOn = 0;
+		//Cloud shadows would only blot the map
+		block.cloudLayer.w = 0.0f;
 		SetFlatCamera(block, settings, flatMin, flatMax);
 	}
 	else if (settings.shadows) {

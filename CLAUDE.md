@@ -73,14 +73,15 @@ ProceduralTerrainGenerator/
       GpuHeightGenerator.*       jedyna generacja: szum, teren i biomy w compute shaderach (GenerateWorld = teren + biomy w jednym przebiegu); GpuHeightCheck.* = testy generacji (--gpu-check)
       NoisePreview.*             podgląd edytowanego szumu jako mapa 2D w panelu ImGui (≤ 512 tekseli na dłuższym boku, preview_compute.shader = skala szarości)
       GpuSurfacePass.*           mapa pochodnych (gradient + laplasjan) z mapy wysokości; uruchamia ją TerrainView i ChunkWorld
+      Clouds.*                   chmury wolumetryczne: szumy 3D + mapa pogody (raz), ray march w compute w połowie rozdzielczości, składane przez niebo / po scenie
       ShadowMap.*                cienie słońca: cascaded shadow maps (teren + roślinność), dane kaskad w FrameBlock; WaterSurface.* = woda
       ChunkWorld.*               „Infinite generation”: quadtree chunków 128² z LOD wokół kamery, kolejka wg odległości, cache, skirts, rysowanie shaderem terenu
       TerrainMaterials.*         materiały terenu (tryb TEXTURED): lista z terrain_materials.json, texture arrays (albedo+wysokość, normal+roughness+AO; jednostki 4, 5)
                                  + UBO parametrów FS (binding 0), sekcja „Terrain materials”
     utility/
       Camera.*                   kamera FPS (WASD, Space/Ctrl, M = mysz, Esc = zwolnij mysz)
-      LightSource.*              słońce: światło kierunkowe (azymut, wysokość), ambient, przełącznik mgły
-      Sky.*                      tło widoku 3D: proceduralne niebo zależne od wysokości słońca + tarcza słońca (fullscreen triangle)
+      LightSource.*              słońce: światło kierunkowe (azymut, pora dnia = wysokość, cykl dnia), ambient, mgła (zamglenie wysokościowe + zanikanie na granicy)
+      Sky.*                      atmosfera: LUT transmitancji i widoku nieba (rozpraszanie Rayleigh/Mie/ozon, compute, co klatkę) + tło 3D (niebo, tarcza słońca, gwiazdy)
       FrameMetrics.*             pomiary w panelu Output (czas klatki/CPU/GPU, trójkąty); RollingStats.h = średnia i maks. z ostatnich próbek;
                                  FlightRecord.h = „Record flight” (prędkość, klatki > 20 ms, klatki z dziurą), pomiar kryterium Fazy 2
       PresetPanel.*              sekcja „Presets” w ImGui (lista plików, nazwa); zapis i odczyt wykonuje subsystem
@@ -96,7 +97,8 @@ ProceduralTerrainGenerator/
     ComputeShaders/              height_compute.shader (szum, teren), biome_compute.shader, surface_compute.shader; wspólne: common/noise.glsl, noise_params.glsl, simplex.glsl, surface.glsl,
                                  terrain.glsl (wysokość terenu z C/M/W), world_input.glsl (wspólny bufor wejściowy), biomes.glsl (reguły biomów, klimat, modyfikatory terenu, mieszanie materiałów)
     common/materials.glsl        próbkowanie materiałów w trybie TEXTURED (triplanar, anti-tiling), blok TerrainMaterialBlock = TerrainMaterials::Block
-    sky_vertex/fragment.shader   niebo; kolory nieba w common/sky.glsl, z których korzysta też mgła terenu
+    sky_vertex/fragment.shader   niebo; kolory nieba i światła w common/sky.glsl (z LUT), mgła w common/fog.glsl; model atmosfery common/atmosphere_model.glsl, LUT-y w AtmosphereShaders/;
+                                 chmury: CloudShaders/ + common/clouds.glsl (gęstość, mapa pogody, cień chmur w sunShadow)
   res/textures/terrain_materials.json   lista materiałów (kolejność = id); same tekstury w res/textures/terrain/ (poza gitem)
 tools/fetch_textures.py          pobiera tekstury materiałów (CC0, Poly Haven / ambientCG), tylko biblioteka standardowa Pythona
 tools/fetch_models.py            pobiera modele roślinności i kamieni (CC0 glTF, Poly Haven) z mapami alpha liści
@@ -160,8 +162,21 @@ Wartości szumów są w [-1, 1]. Konwencja indeksowania: `map[y * width + x]`.
   TerrainGen zawsze pokazuje teren wynikowy; edytowany szum składowy widać tylko w `NoisePreview` w panelu, a zmiany jego parametrów od razu regenerują teren (i biomy, jeśli są włączone).
 - Oświetlenie w world space: `FragPos = model * p`, normalna z gradientu `surfaceMap` (krok `worldUnitsPerTexel`)
   przez `normalMatrix`. Zmieniając skalę siatki, zmień `worldUnitsPerTexel`, nie shader. Światło to słońce (kierunek `light.direction`), więc nie zależy od położenia.
-  Mgła: teren przechodzi w kolor nieba (`fogColor` z `sky.glsl`) od „Fog start” (część „Render distance”) do całego zasięgu; w widoku 2D mgły i nieba nie ma.
-  Kolory ambient i słońca z UI są w shaderze mnożone przez `ambientTint` / `sunlightTint` (`sky.glsl`), zależne od wysokości słońca.
+  Atmosfera (`Sky`): `Sky::Update` (co klatkę, przed rysowaniem, też w 2D) liczy w compute LUT widoku nieba (192×108 + wiersz kolorów światła: transmitancja do słońca
+  = `sunlightTint`, oświetlenie całym niebem = `ambientTint`, unormowane do słońca na 45° stałą `AMBIENT_REFERENCE`) i trzyma go na jednostce 14 (`Sky::skyViewUnit`,
+  `layout(binding = 14)` w `sky.glsl`) — nie używaj jej do niczego innego. Każde narzędzie z własnym oknem rysujące oświetlone shadery musi mieć `Sky` i wołać `Update`
+  (bez LUT światło jest czarne). LUT jest liniowy, `skyToDisplay` = 1 − exp(−L · `SKY_EXPOSURE`), bez gammy (reszta oświetlenia też jej nie ma). Noc: `NIGHT_SKY`, `NIGHT_AMBIENT`, gwiazdy.
+  Mgła (`applyFog` w `common/fog.glsl`, wszystkie shadery sceny): zamglenie o gęstości malejącej wykładniczo z wysokością (`FrameBlock::hazeDensity/hazeFalloff`, z „Haze visibility/height”,
+  całka analityczna wzdłuż promienia) w kolor nieba przy horyzoncie (`fogColor`), potem zanikanie w niebo od „Fog start” do „Render distance”; w widoku 2D mgły i nieba nie ma.
+  Kolory ambient i słońca z UI są w shaderze mnożone przez `ambientTint` / `sunlightTint` (`sky.glsl`).
+  Chmury (`Clouds`, ustawienia w `LightSource`, sekcja „Clouds” w Sun & sky; w `FrameBlock` jako `cloudLayer` / `cloudWind`): warstwa między „Cloud base” a base + thickness (metry),
+  gęstość = mapa pogody 512² (kafel 24 km, przesuwana wiatrem) × szum kształtu 128³ (Perlin-Worley) erodowany szumem detalu 32³ — wszystko w `cloud_noise_compute.shader`,
+  liczone raz. Ray march (`cloud_compute.shader`) w połowie rozdzielczości viewportu, światło: krótki marsz ku słońcu + faza dwupłatowa + niebo; daleko zanikają w niebo.
+  Wynik (rgb = światło, a = transmitancja): `RenderSky` przed niebem, które składa chmury na sobie — teren rysowany później je zasłania, co jest poprawne, dopóki kamera
+  jest pod podstawą chmur (dlatego podstawa ≥ 400 m > najwyższy teren); kamera na wysokości chmur lub wyżej → `DrawOver` po scenie (kopia głębi, promień kończy się na scenie,
+  blend `GL_ONE, GL_SRC_ALPHA`). Mapa pogody stale na jednostce 16 (`Clouds::weatherUnit`, `layout(binding = 16)` w `clouds.glsl`): `sunShadow` = cień kaskad × `cloudShadow`
+  (pokrycie tam, gdzie promień ku słońcu przecina środek warstwy), więc cienie chmur padają na wszystko; w 2D wyłączone. Woda odbija niebo z chmurami z kopii sceny,
+  gdy kierunek odbicia jest na ekranie. Koszt ok. 1 ms (1080p, pokrycie 0,45). Benchmark ma linię „clouds GPU” (tylko `RenderSky`).
 - Po wyłączeniu „Infinite generation” subsystem woła `TerrainView::BringCameraToMap` (kamera przenoszona tylko, gdy nie jest nad mapą), dlatego `Update` dostaje `Camera&`.
 - Chunki: tekstura ma margines 1 teksela (`textureSize = chunkSize + 3`, origin = `coord * chunkSize - 1`), a sąsiednie chunki dzielą teksele krawędzi.
   Brak szwów wymaga, żeby generacja była funkcją samej pozycji mapy: `float(texel) + origin` musi być dokładne (liczby całkowite), a nic nie może zależeć od
