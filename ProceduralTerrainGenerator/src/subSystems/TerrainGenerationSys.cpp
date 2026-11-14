@@ -49,6 +49,16 @@ void TerrainGenerationSys::Update(Camera& camera)
 	MeasureLand();
 	if (infiniteGeneration) {
 		UpdateChunks(camera);
+		VegetationLayer::World vegetationWorld;
+		if (biomesGeneration) {
+			for (const biome::Biome& b : world.biomes.table) {
+				vegetationWorld.biomeNames.push_back(b.name);
+			}
+		}
+		vegetationWorld.waterHeight = world.terrain.WaterHeight();
+		vegetationWorld.heightScale = renderSettings.heightScale;
+		vegetationWorld.seed = static_cast<uint32_t>(world.biomes.detailSeed);
+		vegetationLayer.Update(chunks, vegetationModels, vegetationWorld);
 	}
 	else {
 		GenerateFinite();
@@ -240,6 +250,7 @@ void TerrainGenerationSys::ApplyWorld(const WorldConfig& loaded)
 void TerrainGenerationSys::Draw(Renderer& renderer, Camera& camera, LightSource& light) {
 	if (chunksShown) {
 		chunks.Draw(renderer, camera, light, renderSettings);
+		vegetationLayer.Draw(camera, light, renderSettings, vegetationModels);
 		return;
 	}
 	view.Draw(renderer, camera, light, renderSettings, TerrainView::Layer::TERRAIN);

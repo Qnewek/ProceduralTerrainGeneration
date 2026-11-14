@@ -206,6 +206,9 @@ Wartości szumów są w [-1, 1]. Konwencja indeksowania: `map[y * width + x]`.
   `VegetationModels` wczytuje je w tle (wątki, bez GL) i instaluje w `Update` na wątku GL; LOD-y budowane przy pierwszym wczytaniu (`vegetation::BuildLods`) i trzymane
   w `res/vegetation/cache/` — zmiana algorytmu LOD-ów lub formatu wymaga podbicia `cacheVersion` w `VegetationMesh.cpp`, inaczej zostaną stare. Modele są w metrach
   (1 m = 4 jednostki świata), podstawa w początku układu; jeden plik = kilka wariantów. Jakość LOD-ów sprawdza `--vegetation-preview [folder]` (PNG).
+  Rozmieszczenie (`VegetationPlacement.*`, CPU, testy): siatka komórek z jitterem na warstwę (drzewa/krzewy/skały), komórki w całości w jednym chunku, wszystko
+  z hasha pozycji komórki → deterministyczne i bez szwów. Gatunki per biom wg nazwy biomu (`DefaultRules`). `VegetationLayer` (w `TerrainGenerationSys`) czyta mapy
+  chunków poziomu 0 z GPU (`ChunkWorld::FineChunks`, ≤ 4 chunki na klatkę) i rysuje instancje (SSBO, grupy model/wariant/LOD wg odległości). Bez biomów roślinności nie ma.
   Klify, height blending, triplanar, specular i anti-tiling są w FS (`Terrain_fragment.shader`, `common/materials.glsl`), parametry w UBO `TerrainMaterials::Block`,
   który musi odpowiadać `TerrainMaterialBlock` (std140) pole w pole. Odczyty materiałów w FS przez `textureGrad` (pochodne z `surfaceSampling`, liczone w jednolitym
   przepływie sterowania). W FS uniform izolinii nazywa się `step` i zasłania wbudowane `step()` — nie używaj go w tym shaderze.

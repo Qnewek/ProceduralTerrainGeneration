@@ -21,6 +21,7 @@
 #include "ExportPanel.h"
 #include "BiomeEditor.h"
 #include "PanelTabs.h"
+#include "VegetationLayer.h"
 
 //What has to be regenerated at the next Update; with infinite generation a terrain or biome request regenerates the chunks
 struct WorldRequest {
@@ -45,6 +46,9 @@ private:
 	//Rendering; the finite map lives in the layers of the view, the infinite world in chunks
 	TerrainView view;
 	ChunkWorld chunks;
+	//Vegetation on the chunks; the models belong to the application
+	VegetationLayer vegetationLayer;
+	VegetationModels* vegetationModels = nullptr;
 	TerrainRenderSettings renderSettings;
 	//infiniteGeneration as of the last Update
 	bool chunksShown = false;
@@ -130,6 +134,10 @@ public:
 	void ReloadShaders() { view.ReloadShader(); chunks.ReloadShader(); gpu.ReloadShaders(); noisePreview.ReloadShader(); }
 	//Names of the surface materials for the biome editor, in the order of their ids
 	void SetMaterialNames(std::vector<std::string> names) { biomeEditor.SetMaterialNames(std::move(names)); }
+	//Models drawn on the infinite world; nullptr (before the models are destroyed) = no vegetation
+	void SetVegetationModels(VegetationModels* models) { vegetationModels = models; }
+	//Placement settings and statistics, in the Vegetation tab
+	void ImGuiVegetation() { vegetationLayer.ImGuiDraw(); }
 	//Right panel: the generation tabs
 	void ImGuiRightPanel();
 	//Content of the Display, Presets and Saving tabs of the left panel

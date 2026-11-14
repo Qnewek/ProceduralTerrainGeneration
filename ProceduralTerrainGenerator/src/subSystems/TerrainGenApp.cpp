@@ -110,6 +110,7 @@ bool TerrainGenApp::Initialize()
 		materialNames.push_back(m.name);
 	}
 	terrainGenSys.SetMaterialNames(std::move(materialNames));
+	terrainGenSys.SetVegetationModels(vegetation.get());
 	if (!mapImportSys.Initialize(width, height, heightScale)) {
 		std::cout << "[ERROR] Failed to initialize MapImportSys" << std::endl;
 		return false;
@@ -172,6 +173,7 @@ void TerrainGenApp::Start()
 
     metrics.reset();
     materials.reset();
+    terrainGenSys.SetVegetationModels(nullptr);
     vegetation.reset();
     ImGui_ImplOpenGL3_Shutdown();
     ImGui_ImplGlfw_Shutdown();
@@ -267,7 +269,14 @@ void TerrainGenApp::ImGuiRender()
         { "Camera", [this] { camera.ImGuiDraw(); } },
         { "Sun & sky", [this] { light.ImGuiDraw(); } },
         { "Materials", [this] { materials->ImGuiDraw(); } },
-        { "Vegetation", [this] { vegetation->ImGuiDraw(light); } },
+        { "Vegetation", [this] {
+            if (currentMode == mode::TERRAIN_GEN) {
+                ImGui::SeparatorText("Placement");
+                terrainGenSys.ImGuiVegetation();
+                ImGui::SeparatorText("Models");
+            }
+            vegetation->ImGuiDraw(light);
+        } },
     };
     if (currentMode == mode::NOISE_HEIGHTMAP) {
         viewTabs.push_back({ "Presets", [this] { noiseGenSys.ImGuiPresets(); } });

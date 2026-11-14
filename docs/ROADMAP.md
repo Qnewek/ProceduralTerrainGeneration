@@ -487,6 +487,10 @@ Kroki:
    - Znane: trzecia jodła ma czarny pień (materiał `trunk_c`, do sprawdzenia mapowanie UV); LOD2 drzew jest rzadki — zastąpią go impostory (krok 4).
 2. **Rozmieszczenie i rendering:** compute per kafel świata (jittered grid, seed z kafla — deterministyczne i bez szwów), wysokość i biom liczone tą samą funkcją co teren,
    reguły na sztywno (gęstość z biomu, maska nachylenia i wody), instancing z wyborem LOD po odległości.
+   - Wynik (2026-11-12, w toku): zamiast compute rozmieszczenie na CPU z map chunków poziomu 0 czytanych z GPU (≤ 4 chunki na klatkę) — te same mapy co teren,
+     więc wysokość i biom zgadzają się co do teksela; prostsze do testów. Siatka z jitterem 8 m (drzewa, skały) i 4 m (krzewy), szum klastrujący lasy i polany,
+     gatunki po nazwie biomu (`vegetation::DefaultRules`). Rysowanie: instancje w zasięgu i we frustum, posortowane w grupy model/wariant/LOD, jeden SSBO na klatkę.
+     Przeniesienie do compute — w kroku 4 razem z cullingiem na GPU, jeśli odczyt map okaże się za wolny.
 3. **Reguły per biom:** tabela roślinności w `BiomeConfig` (model, gęstość, zakres nachylenia/wysokości, skala, klastrowanie), edytor, presety.
 4. **Impostory i culling na GPU:** impostory pieczone przy wczytaniu (octahedral), frustum/distance culling w compute, `glMultiDrawElementsIndirect`; pomiar 100k instancji.
 5. **Trawa:** osobny system blisko kamery (compute + wiatr w VS).
