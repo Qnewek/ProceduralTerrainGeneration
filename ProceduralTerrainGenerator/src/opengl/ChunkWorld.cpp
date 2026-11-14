@@ -424,6 +424,25 @@ void ChunkWorld::Draw(Renderer& renderer, Camera& camera, LightSource& light, co
 	}
 }
 
+std::vector<ChunkWorld::FineChunk> ChunkWorld::FineChunks(float maxDistance) const
+{
+	std::vector<FineChunk> result;
+	const glm::vec2 local = lastCenter - mapOrigin;
+	const float size = NodeSize(0);
+	for (const auto& [key, chunk] : chunks) {
+		if (chunk.level != 0 || chunk.version == 0) {
+			continue;
+		}
+		const float distance = DistanceToSquare(local, glm::vec2(chunk.coord) * size, size);
+		if (distance > maxDistance) {
+			continue;
+		}
+		result.push_back({ key, chunk.coord, chunk.generation, chunk.height.get(), chunk.surface.get(), chunk.ids.get(), distance });
+	}
+	std::sort(result.begin(), result.end(), [](const FineChunk& a, const FineChunk& b) { return a.distance < b.distance; });
+	return result;
+}
+
 int ChunkWorld::BiomeAt(glm::vec2 position)
 {
 	if (!biomes) {
