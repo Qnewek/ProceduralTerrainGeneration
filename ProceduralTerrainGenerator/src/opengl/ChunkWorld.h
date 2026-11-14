@@ -80,6 +80,21 @@ public:
 	//Reads the finest chunk there, which is the one under the camera; copies its ids from the GPU when it changes
 	int BiomeAt(glm::vec2 position);
 
+	//A generated chunk of level 0 (full detail) with its maps
+	struct FineChunk {
+		uint64_t key = 0;
+		glm::ivec2 coord = glm::ivec2(0);		//in chunks; its first map texel is coord * chunkSize
+		uint64_t generation = 0;				//changes whenever the chunk is generated again
+		const TextureClass* height = nullptr;
+		const TextureClass* surface = nullptr;
+		const TextureClass* ids = nullptr;		//nullptr while biomes are off
+		float distance = 0.0f;					//from the camera of the last Plan, XZ in world units
+	};
+	//Generated chunks of level 0 within maxDistance of the camera of the last Plan, nearest first; drawn or not
+	std::vector<FineChunk> FineChunks(float maxDistance) const;
+	//World XZ (before modelScale) of map texel (0, 0)
+	glm::vec2 GetMapOrigin() const { return mapOrigin; }
+
 	//Chunks drawn: in range and in the frustum
 	int GetVisibleCount() const { return static_cast<int>(visible.size()); }
 	//Chunks that would be drawn without the frustum test

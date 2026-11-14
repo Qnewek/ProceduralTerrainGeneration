@@ -52,6 +52,7 @@ add_library(ptg_core STATIC
 	${PTG_SRC}/terrainGeneration/Preset.cpp
 	${PTG_SRC}/terrainGeneration/SplineSampling.cpp
 	${PTG_SRC}/terrainGeneration/VegetationMesh.cpp
+	${PTG_SRC}/terrainGeneration/VegetationPlacement.cpp
 )
 target_include_directories(ptg_core PUBLIC ${PTG_SRC}/terrainGeneration)
 target_include_directories(ptg_core SYSTEM PRIVATE ${CGLTF_INCLUDE_DIRS})
@@ -75,6 +76,7 @@ add_executable(ProceduralTerrainGenerator
 	${PTG_SRC}/opengl/TextureClass.cpp
 	${PTG_SRC}/opengl/VegetationCheck.cpp
 	${PTG_SRC}/opengl/VegetationModels.cpp
+	${PTG_SRC}/opengl/VegetationLayer.cpp
 	${PTG_SRC}/opengl/VertexArray.cpp
 	${PTG_SRC}/opengl/VertexBuffer.cpp
 	${PTG_SRC}/subSystems/MapImportSys.cpp
@@ -129,6 +131,7 @@ add_executable(ptg_tests
 	${PTG_DIR}/tests/SplineTests.cpp
 	${PTG_DIR}/tests/RollingStatsTests.cpp
 	${PTG_DIR}/tests/VegetationMeshTests.cpp
+	${PTG_DIR}/tests/VegetationPlacementTests.cpp
 	${PTG_DIR}/tests/TestMain.cpp
 )
 target_include_directories(ptg_tests PRIVATE ${PTG_SRC}/utility)

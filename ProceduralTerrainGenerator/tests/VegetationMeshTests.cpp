@@ -181,6 +181,40 @@ TEST_CASE("SimplifySurface thins out many small pieces, largest first kept")
 	CHECK(largeKept);
 }
 
+TEST_CASE("SimplifySurface keeps a surface cut into strips by UV seams whole")
+{
+	//A standing grid whose rows are separate strips sharing positions but not vertices (UV seams), like a trunk:
+	//it is one piece, so its bottom stays
+	const int n = 64;
+	const SourcePart grid = Grid(n);
+	SourcePart part;
+	for (int z = 0; z < n; z++) {
+		const uint32_t first = static_cast<uint32_t>(part.vertices.size());
+		for (int row = z; row <= z + 1; row++) {
+			for (int x = 0; x <= n; x++) {
+				Vertex v = grid.vertices[static_cast<size_t>(row * (n + 1) + x)];
+				v.position = glm::vec3(v.position.x, v.position.z * 10.0f, v.position.y);
+				part.vertices.push_back(v);
+			}
+		}
+		for (int x = 0; x < n; x++) {
+			const uint32_t a = first + static_cast<uint32_t>(x), b = a + 1, c = a + static_cast<uint32_t>(n + 1), d = c + 1;
+			part.indices.insert(part.indices.end(), { a, c, b, b, c, d });
+		}
+	}
+	std::vector<Vertex> vertices;
+	std::vector<uint32_t> indices;
+	SimplifySurface(part, 200, vertices, indices);
+	REQUIRE_FALSE(indices.empty());
+	float lowest = INFINITY, highest = -INFINITY;
+	for (const uint32_t index : indices) {
+		lowest = std::min(lowest, vertices[index].position.y);
+		highest = std::max(highest, vertices[index].position.y);
+	}
+	CHECK(lowest == doctest::Approx(0.0f).epsilon(0.01));
+	CHECK(highest == doctest::Approx(10.0f).epsilon(0.01));
+}
+
 TEST_CASE("BuildLods: fewer triangles per level, foliage share, ranges inside the arrays, cache round trip")
 {
 	std::vector<Material> materials{ Material{ "trunk" }, Material{ "leaves" } };

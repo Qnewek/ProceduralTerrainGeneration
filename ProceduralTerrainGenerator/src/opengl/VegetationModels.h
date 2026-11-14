@@ -60,10 +60,14 @@ public:
 	const std::vector<Model>& GetModels() const { return models; }
 	int LoadingCount() const;
 
-	//Binds the shader and sets the per-frame uniforms; the instances must be bound to SSBO binding 1
+	//Binds the shader and sets the per-frame uniforms; the instances must be bound to SSBO binding instanceBinding
 	//@param model - modelScale of the view
-	void BeginDraw(const glm::mat4& view, const glm::mat4& projection, const glm::vec3& viewPos, const glm::mat4& model,
+	//@param heightScale - world units of height 1 (the y of the instances is a height of the map)
+	void BeginDraw(const glm::mat4& view, const glm::mat4& projection, const glm::vec3& viewPos, const glm::mat4& model, float heightScale,
 		const LightSource& light, bool fogOn, float fogStart, float fogDistance);
+	//Binding of the instance buffer (Instances in vegetation_vertex.shader): two vec4 per instance,
+	//(x, height, z, world units per metre) and (yaw, 0, 0, 0)
+	static constexpr unsigned int instanceBinding = 1;
 	//Draws instances [firstInstance, firstInstance + instanceCount) of a level of detail of a variant of a ready model
 	void Draw(int model, int variant, int lod, int firstInstance, int instanceCount);
 
