@@ -222,12 +222,16 @@ Wartości szumów są w [-1, 1]. Konwencja indeksowania: `map[y * width + x]`.
   Bez biomów roślinności nie ma.
   Kolejność rysowania (`TerrainGenerationSys::Draw`): roślinność, trawa, teren — teren za drzewami odpada na teście głębi przed shaderem materiałów;
   chunki terenu rysowane od najbliższego (sort w `ChunkWorld::Plan`). W stałej kolejności patrzenie w stronę −X/−Z podwajało koszt trybu TEXTURED.
-  Woda (`WaterSurface`, w `TerrainGenerationSys`, sekcja „Water” w Display): po terenie, quad na poziomie `TerrainConfig::WaterHeight() * heightScale` na każdym
-  chunku gruntu, blending premultiplied, bez zapisu głębi. Głębokość = poziom wody − mapa wysokości chunka (kolor, przezroczystość, piana przy brzegu); odbicie
-  nieba z `skyColor` (`sky.glsl`) + refleks słońca, Fresnel; fale = normalne z kilku sinusów wygaszanych przez `fwidth`. Tylko tryb infinite; w 2D widziana z góry (`flatView`, kamera z `TerrainView::FrameBlock`), nigdy całkiem przezroczysta.
+  Woda (`WaterSurface`, w `TerrainGenerationSys`, sekcja „Water” w Display): rysowana **na końcu**, quad na poziomie `TerrainConfig::WaterHeight() * heightScale`
+  na każdym chunku gruntu (`Draw`) albo jeden na skończonej mapie (`DrawMap`, tekstura z `TerrainView::GetLayerTexture`), bez zapisu głębi, nieprzezroczysta.
+  Przed nią `CopyScene` kopiuje kolor i głębię viewportu (`glCopyTextureSubImage2D`, jednostki 12–13): dno = kopia przesunięta falami (refrakcja), osłabiana wodą
+  wzdłuż promienia widzenia (grubość z kopii głębi); odbicie = SSR po kopii głębi dla **gładkiej** tafli (fale tylko przesuwają odczyt — promień na każdą falę
+  migał między brzegiem a niebem), z grubością trafienia `SSR_THICKNESS`; poza ekranem, ku kamerze i bez trafienia niebo z `skyColor` + refleks słońca, Fresnel.
+  Głębokość pionowa z mapy wysokości (kolor toni, piana). W 2D widziana z góry (`flatView`, kamera z `TerrainView::FrameBlock`), bez SSR, nigdy całkiem przezroczysta.
+  Koszt ok. 0,5 ms (wybrzeże w kadrze, 1080p).
   Cienie słońca (`ShadowMap`, w `TerrainGenerationSys`, sekcja „Shadows” w Display): cascaded shadow maps, do 4 kaskad w tablicy głębokości (`GL_DEPTH_COMPONENT32F`,
   porównanie sprzętowe), zasięg „Shadow distance”. Kaskada = ortho ze słońca wokół sfery swojego wycinka frustum, środek przyciągany do tekseli (bez migotania),
-  zakres głębokości wydłużony ku słońcu o najwyższy teren + `GL_DEPTH_CLAMP`. `ShadowMap::Render` idzie w `Draw` **przed** roślinnością: na kaskadę teren
+  zakres głębokości wydłużony ku słońcu o najwyższy teren + `GL_DEPTH_CLAMP`; na czas przebiegu wyłączony `GL_SCISSOR_TEST` (prostokąt viewportu z `TerrainGenApp` zostawiał resztę mapy niewyczyszczoną = cień na pół ekranu). `ShadowMap::Render` idzie w `Draw` **przed** roślinnością: na kaskadę teren
   (`ChunkWorld::DrawShadow`: wszystkie liście quadtree w frustum słońca, nie tylko widoczne; teselacja 4× rzadsza) i rośliny (`VegetationLayer::CullShadows` +
   `DrawShadow`: przycinanie per kaskada w te same bufory co kamera, krótsze LOD-y `shadowDetail`, krzewy i skały do `shadowSmallRange`; impostory obrócone do słońca).
   Dane kaskad idą przez `FrameBlock` (`shadowMatrices`, `shadowSplits`, `shadowTexels`, `shadowCascades` = 0 → brak cieni), a tekstura na jednostce 15

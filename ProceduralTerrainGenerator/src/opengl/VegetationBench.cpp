@@ -264,13 +264,13 @@ namespace {
 		glEnable(GL_DEPTH_TEST);
 		glViewport(0, 0, screenWidth, screenHeight);
 		renderer.SetPatches(4);
-		Timer terrainTimer, vegetationTimer, grassTimer, shadowTimer;
+		Timer terrainTimer, vegetationTimer, grassTimer, shadowTimer, waterTimer;
 		ShadowMap shadows;
 		//Measured twice on the same placement: trees far away as LOD 2 meshes, then as impostors
 		struct Phase {
 			const char* name;
 			bool impostors;
-			Stats terrainGpu, grassGpu, vegetationGpu, shadowGpu, vegetationCpu, updateCpu;
+			Stats terrainGpu, grassGpu, vegetationGpu, shadowGpu, waterGpu, vegetationCpu, updateCpu;
 			int blades = 0;
 			int drawn = 0, perLod[4] = {};
 			uint64_t triangles = 0;
@@ -323,8 +323,10 @@ namespace {
 			terrainTimer.Begin();
 			chunks.Draw(renderer, camera, light, settings);
 			terrainTimer.End();
+			waterTimer.Begin();
 			water.Draw(chunks, camera, light, settings, world.terrain.WaterHeight() * heightScale);
-			const double terrainMs = terrainTimer.Ms(), grassMs = grassTimer.Ms(), vegetationMs = vegetationTimer.Ms(), shadowMs = shadowTimer.Ms();
+			waterTimer.End();
+			const double terrainMs = terrainTimer.Ms(), grassMs = grassTimer.Ms(), vegetationMs = vegetationTimer.Ms(), shadowMs = shadowTimer.Ms(), waterMs = waterTimer.Ms();
 			if (lastFrame && target) {
 				const std::string file = screenshot + "_" + p.name + ".png";
 				if (!SaveScreenshot(file)) {
@@ -337,6 +339,7 @@ namespace {
 				p.terrainGpu.Add(terrainMs);
 				p.grassGpu.Add(grassMs);
 				p.shadowGpu.Add(shadowMs);
+				p.waterGpu.Add(waterMs);
 				p.vegetationGpu.Add(vegetationMs);
 				p.vegetationCpu.Add(drawMs);
 				p.updateCpu.Add(updateMs);
@@ -380,6 +383,7 @@ namespace {
 			std::printf("%-28s %8.2f %8.2f\n", "terrain GPU", p.terrainGpu.Mean(), p.terrainGpu.max);
 			std::printf("%-28s %8.2f %8.2f   (%d blades)\n", "grass GPU", p.grassGpu.Mean(), p.grassGpu.max, p.blades);
 			std::printf("%-28s %8.2f %8.2f\n", "shadows GPU", p.shadowGpu.Mean(), p.shadowGpu.max);
+			std::printf("%-28s %8.2f %8.2f\n", "water GPU", p.waterGpu.Mean(), p.waterGpu.max);
 			std::printf("%-28s %8.2f %8.2f\n", "vegetation GPU", p.vegetationGpu.Mean(), p.vegetationGpu.max);
 			std::printf("%-28s %8.2f %8.2f\n", "vegetation draw CPU", p.vegetationCpu.Mean(), p.vegetationCpu.max);
 			std::printf("%-28s %8.2f %8.2f\n", "update CPU (chunks, place)", p.updateCpu.Mean(), p.updateCpu.max);

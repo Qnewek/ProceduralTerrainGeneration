@@ -270,11 +270,15 @@ void TerrainGenerationSys::Draw(Renderer& renderer, Camera& camera, LightSource&
 			grass.Draw(chunks, camera, light, renderSettings, *terrainMaterials);
 		}
 		chunks.Draw(renderer, camera, light, renderSettings);
-		//Blended over the terrain, so after it
+		//Last: it reads a copy of everything drawn before
 		water.Draw(chunks, camera, light, renderSettings, world.terrain.WaterHeight() * renderSettings.heightScale);
 		return;
 	}
 	view.Draw(renderer, camera, light, renderSettings, TerrainView::Layer::TERRAIN);
+	if (const TextureClass* height = view.GetLayerTexture(TerrainView::Layer::TERRAIN)) {
+		water.DrawMap(*height, glm::vec2(view.GetWorldWidth(), view.GetWorldHeight()), camera, light, renderSettings,
+			world.terrain.WaterHeight() * renderSettings.heightScale, view.GetFlatViewMin(), view.GetFlatViewMax());
+	}
 }
 void TerrainGenerationSys::ImGuiRightPanel()
 {
