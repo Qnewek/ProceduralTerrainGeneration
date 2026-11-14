@@ -7,6 +7,8 @@ struct Light {
     vec3 diffuse;
 };
 
+const int MAX_SHADOW_CASCADES = 4;  //FrameUniforms::maxShadowCascades
+
 layout(std140, binding = 1) uniform FrameBlock {
     mat4 view;
     mat4 projection;
@@ -18,4 +20,12 @@ layout(std140, binding = 1) uniform FrameBlock {
     bool fogOn;
     float fogStart;
     float fogDistance;
+    //Sun shadows (common/shadow.glsl): world space -> shadow map [0, 1]^3 per cascade
+    mat4 shadowMatrices[MAX_SHADOW_CASCADES];
+    vec4 shadowSplits;      //far end of every cascade, as depth along the camera view
+    vec4 shadowTexels;      //world size of a shadow map texel of every cascade
+    int shadowCascades;     //0 = no shadows
+    float shadowStrength;
+    //Pass into a depth map (shadows): fragment shaders only test alpha and return
+    bool depthPass;
 };

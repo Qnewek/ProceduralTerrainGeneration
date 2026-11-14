@@ -15,5 +15,6 @@ int RunVegetationPreview(const std::string& folder);
 //@param eyeMetres - height of the camera above the ground
 //@param screenshot - the last measured frame of each measurement goes to <screenshot>_meshes.png and <screenshot>_impostors.png; empty or - = none
 //@param viewMetres - render distance and range of trees; 0 = the application's render distance and default range
+//@param sunElevation - degrees above the horizon (LightSource::SetElevation); 0 = the default sun
 //@return 0 if it ran
-int RunVegetationBench(float density, float eyeMetres, const std::string& screenshot, float viewMetres);
+int RunVegetationBench(float density, float eyeMetres, const std::string& screenshot, float viewMetres, float sunElevation);

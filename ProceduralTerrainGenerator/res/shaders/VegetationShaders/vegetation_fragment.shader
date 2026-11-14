@@ -22,6 +22,7 @@ uniform float specularStrength;
 uniform bool bake;
 
 #include "../common/sky.glsl"
+#include "../common/shadow.glsl"
 
 //Alpha of distant mip levels is averaged down, so thin leaves would vanish; raising it with the mip level keeps their coverage
 const float ALPHA_MIP_BOOST = 0.25;
@@ -46,6 +47,13 @@ mat3 cotangentFrame(vec3 n, vec3 p, vec2 uv)
 void main()
 {
     vec4 albedo = texture(albedoMap, UV);
+    //Shadow map: only the alpha test counts (no detail map, no tangent frame)
+    if (depthPass) {
+        if (alphaTest && albedo.a * (1.0 + max(textureQueryLod(albedoMap, UV).x, 0.0) * ALPHA_MIP_BOOST) < 0.5) {
+            discard;
+        }
+        return;
+    }
     vec4 detail = texture(detailMap, UV);
     //Derivatives before any discard
     vec3 n = normalize(Normal);
@@ -80,7 +88,7 @@ void main()
             diff += max(-facing, 0.0) * TRANSLUCENCY;
         }
         vec3 ambient = light.ambient * ambientTint(light.direction);
-        vec3 sunlight = light.diffuse * sunlightTint(light.direction);
+        vec3 sunlight = light.diffuse * sunlightTint(light.direction) * sunShadow(FragPos, n, 0);
         result = (ambient * occlusion + sunlight * diff) * albedo.rgb;
         if (facing > 0.0) {
             float smoothness = 1.0 - roughness;
