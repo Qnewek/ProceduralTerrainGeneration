@@ -271,6 +271,7 @@ void NoiseBasedGenerationSys::ImGuiDisplay()
 			s.displayMode = utilities::heightMapMode::GREYSCALE;
 		}
 	}
+	utilities::TerrainDetailImGui(s.tessPixels);
 	if (infiniteGeneration) {
 		ImGui::SeparatorText("Infinite generation");
 		chunks.ImGuiDraw();

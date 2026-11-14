@@ -130,6 +130,7 @@ add_executable(ptg_tests
 	${PTG_DIR}/tests/LandStatsTests.cpp
 	${PTG_DIR}/tests/PermutationTests.cpp
 	${PTG_DIR}/tests/PresetTests.cpp
+	${PTG_DIR}/tests/RangeAllocatorTests.cpp
 	${PTG_DIR}/tests/SplineTests.cpp
 	${PTG_DIR}/tests/RollingStatsTests.cpp
 	${PTG_DIR}/tests/VegetationMeshTests.cpp

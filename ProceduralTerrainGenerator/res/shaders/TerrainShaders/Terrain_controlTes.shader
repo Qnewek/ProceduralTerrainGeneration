@@ -8,6 +8,12 @@ out vec2 TextureCoord[];
 
 uniform float heightScale;
 uniform float skirtDepth;
+uniform sampler2D heightMap;
+//3D view: tessellation from the size of an edge on screen, tessPixels pixels per triangle edge (viewportHeight = height of the view in pixels).
+//The 2D map keeps the tessellation by distance
+uniform bool screenSpaceTess;
+uniform float tessPixels;
+uniform float viewportHeight;
 
 //Largest absolute height of a map (noises are in [-1, 1]) with a margin; heightBound in ChunkWorld.cpp
 const float HEIGHT_BOUND = 1.5;
@@ -38,6 +44,22 @@ bool outsideFrustum()
     return false;
 }
 
+//Corner i of the patch on the surface, in world space (skirt corners are taken at the surface, so a skirt edge matches its surface edge)
+vec3 surfaceCorner(int i)
+{
+    vec4 p = gl_in[i].gl_Position;
+    return (model * vec4(p.x, texture(heightMap, TexCoord[i]).r * heightScale, p.z, 1.0)).xyz;
+}
+
+//Tessellation level of the edge between corners a and b: its length on screen, measured as the diameter of a sphere at its middle
+//(independent of the direction of the edge, so neighbouring patches agree on shared edges), divided by tessPixels
+float screenLevel(vec3 a, vec3 b)
+{
+    vec4 clip = projection * view * vec4(0.5 * (a + b), 1.0);
+    float pixels = distance(a, b) * projection[1][1] * 0.5 * viewportHeight / max(clip.w, 1.0);
+    return clamp(pixels / tessPixels, 1.0, 64.0);
+}
+
 void main()
 {
     gl_out[gl_InvocationID].gl_Position = gl_in[gl_InvocationID].gl_Position;
@@ -53,6 +75,20 @@ void main()
             gl_TessLevelOuter[3] = 0.0;
             gl_TessLevelInner[0] = 0.0;
             gl_TessLevelInner[1] = 0.0;
+            return;
+        }
+
+        if (screenSpaceTess) {
+            vec3 c00 = surfaceCorner(0);
+            vec3 c01 = surfaceCorner(1);
+            vec3 c10 = surfaceCorner(2);
+            vec3 c11 = surfaceCorner(3);
+            gl_TessLevelOuter[0] = screenLevel(c10, c00);
+            gl_TessLevelOuter[1] = screenLevel(c00, c01);
+            gl_TessLevelOuter[2] = screenLevel(c01, c11);
+            gl_TessLevelOuter[3] = screenLevel(c11, c10);
+            gl_TessLevelInner[0] = max(gl_TessLevelOuter[1], gl_TessLevelOuter[3]);
+            gl_TessLevelInner[1] = max(gl_TessLevelOuter[0], gl_TessLevelOuter[2]);
             return;
         }
 

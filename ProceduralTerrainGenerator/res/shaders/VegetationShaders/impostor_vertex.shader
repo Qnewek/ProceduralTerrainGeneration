@@ -3,24 +3,20 @@
 //Impostor of a model: a quad around the bounding sphere of its variant, facing the camera, drawn as a triangle strip of 4 vertices
 //without vertex attributes. The fragment shader blends the four atlas frames around the view direction (VegetationModels::BakeImpostors)
 
-//One placed model, as in vegetation_vertex.shader: xz = base in world units, y = terrain height (times heightScale),
-//w = world units per metre of the model; rotation.x = turn around the vertical axis in radians
-struct Instance {
-    vec4 positionScale;
-    vec4 rotation;
-};
-layout(std430, binding = 1) readonly buffer Instances {
-    Instance instances[];
-};
+//One placed model per instance, as in vegetation_vertex.shader: xz = base in world units, y = terrain height (times heightScale),
+//w = world units per metre of the model; instanceData.x = turn around the vertical axis in radians, .y = variant
+layout(location = 0) in vec4 instancePositionScale;
+layout(location = 1) in vec4 instanceData;
 
-uniform int firstInstance;
+const int MAX_VARIANTS = 16;    //VegetationModels::maxImpostorVariants
+
 uniform float heightScale;
 uniform mat4 model;         //modelScale of the view, uniform in all axes
 uniform mat4 view;
 uniform mat4 projection;
 uniform vec3 eye;           //camera position before modelScale
-uniform vec3 boundsCenter;  //centre of the bounds of the variant, in metres of the model
-uniform float boundsRadius; //radius of the sphere around them, in metres; the frames of the atlas show this sphere
+//Per variant: xyz = centre of its bounds in metres of the model, w = radius of the sphere around them; the frames of the atlas show this sphere
+uniform vec4 variantSpheres[MAX_VARIANTS];
 uniform int frames;         //frames along each side of the atlas
 
 #include "../common/impostor.glsl"
@@ -30,17 +26,21 @@ out vec2 FrameUV;           //position in a frame, [0, 1]^2
 flat out ivec2 frame0;      //lower-left of the four frames blended
 flat out vec2 frameBlend;   //weights towards frame0 + (1, 0) and frame0 + (0, 1)
 flat out vec2 turnCosSin;
+flat out float layer;       //of the atlas = variant
 
 void main()
 {
-    Instance instance = instances[firstInstance + gl_InstanceID];
-    float c = cos(instance.rotation.x);
-    float s = sin(instance.rotation.x);
+    float c = cos(instanceData.x);
+    float s = sin(instanceData.x);
     mat3 turn = mat3(c, 0.0, -s,
                      0.0, 1.0, 0.0,
                      s, 0.0, c);
-    float scale = instance.positionScale.w;
-    vec3 base = instance.positionScale.xyz * vec3(1.0, heightScale, 1.0);
+    int variant = clamp(int(instanceData.y + 0.5), 0, MAX_VARIANTS - 1);
+    layer = float(variant);
+    vec3 boundsCenter = variantSpheres[variant].xyz;
+    float boundsRadius = variantSpheres[variant].w;
+    float scale = instancePositionScale.w;
+    vec3 base = instancePositionScale.xyz * vec3(1.0, heightScale, 1.0);
     vec3 center = base + turn * (boundsCenter * scale);
 
     //View direction in the space of the model; from below the horizon the side frames are used

@@ -27,6 +27,14 @@ class VegetationModels
 public:
 	enum class State { MISSING, LOADING, READY, FAILED };
 
+	//A draw of the indices of one part; instanceCount and baseInstance come from the culling (VegetationLayer)
+	struct MeshCommand {
+		uint32_t indexCount = 0;
+		uint32_t firstIndex = 0;
+		int variant = 0;
+		int lod = 0;
+	};
+
 	struct Model {
 		std::string name;
 		std::string asset;
@@ -43,6 +51,17 @@ public:
 		std::vector<GLuint> albedo, detail;		//per material
 		//Impostor atlases of trees (kind "tree"), GL_TEXTURE_2D_ARRAY with one layer per variant; 0 = none (see BakeImpostors)
 		GLuint impostorAlbedo = 0, impostorNormal = 0;
+		//Indirect drawing of the meshes: one command per part of every (variant, level), ordered by material (MeshCommand)
+		std::vector<MeshCommand> commands;
+		std::vector<int> commandMaterial;		//material of each command
+		//Commands of each material: [first, first + count) of commands; materials without parts are left out
+		struct MaterialRun { int material = 0; int first = 0; int count = 0; };
+		std::vector<MaterialRun> runs;
+	};
+	//Instance as the shaders read it (vertex attributes with divisor 1): (x, height, z, world units per metre), (yaw, variant, model, layer)
+	struct GpuInstance {
+		glm::vec4 positionScale;
+		glm::vec4 data;
 	};
 
 	//Defined where Loaded and Preview are complete
@@ -67,28 +86,33 @@ public:
 	const std::vector<Model>& GetModels() const { return models; }
 	int LoadingCount() const;
 
-	//Binds the shader and sets the per-frame uniforms; the instances must be bound to SSBO binding instanceBinding
+	//Binds the shader and sets the per-frame uniforms
 	//@param model - modelScale of the view
 	//@param heightScale - world units of height 1 (the y of the instances is a height of the map)
 	void BeginDraw(const glm::mat4& view, const glm::mat4& projection, const glm::vec3& viewPos, const glm::mat4& model, float heightScale,
 		const LightSource& light, bool fogOn, float fogStart, float fogDistance);
-	//Binding of the instance buffer (Instances in vegetation_vertex.shader): two vec4 per instance,
-	//(x, height, z, world units per metre) and (yaw, 0, 0, 0)
-	static constexpr unsigned int instanceBinding = 1;
+	//Buffer of GpuInstance the draws read their instances from
+	void SetInstanceBuffer(GLuint buffer) { instanceBuffer = buffer; }
 	//Draws instances [firstInstance, firstInstance + instanceCount) of a level of detail of a variant of a ready model
 	void Draw(int model, int variant, int lod, int firstInstance, int instanceCount);
+	//Draws all meshes of a model with the model's commands (Model::commands) as DrawElementsIndirectCommand, starting at
+	//firstCommand of the buffer bound to GL_DRAW_INDIRECT_BUFFER
+	void DrawMeshesIndirect(int model, int firstCommand);
 
 	//Impostors: each variant of a tree rendered from impostorFrames x impostorFrames directions of the upper hemisphere into
 	//cells of impostorCell pixels (octahedral mapping, Impostor.h); far away a camera-facing quad blends the four nearest frames
 	static constexpr int impostorFrames = 8;
 	static constexpr int impostorCell = 128;
+	//Variants of a model with impostors at most (MAX_VARIANTS in impostor_vertex.shader)
+	static constexpr int maxImpostorVariants = 16;
 	bool HasImpostors(int model) const { return models[model].impostorAlbedo != 0; }
-	//As BeginDraw, for DrawImpostors
+	//As BeginDraw, for DrawImpostorsIndirect
 	//@param eye - camera position before modelScale (the impostors face it)
 	void BeginImpostorDraw(const glm::mat4& view, const glm::mat4& projection, const glm::vec3& viewPos, const glm::mat4& model, const glm::vec3& eye,
 		float heightScale, const LightSource& light, bool fogOn, float fogStart, float fogDistance);
-	//Draws instances [firstInstance, firstInstance + instanceCount) of a variant as impostors; nothing without impostors
-	void DrawImpostors(int model, int variant, int firstInstance, int instanceCount);
+	//Draws the impostors of a model: one DrawArraysIndirectCommand per variant, starting at firstCommand of the buffer bound to
+	//GL_DRAW_INDIRECT_BUFFER (the variant of an instance is in its data); nothing without impostors
+	void DrawImpostorsIndirect(int model, int firstCommand);
 	//Albedo atlas of a variant (premultiplied RGBA, rows from the bottom up), ImpostorSize() pixels square; empty without impostors
 	std::vector<unsigned char> ImpostorAtlas(int model, int variant) const;
 	static int ImpostorSize() { return impostorFrames * impostorCell; }
@@ -120,8 +144,9 @@ private:
 	std::unique_ptr<Shader> shader;
 	std::unique_ptr<Shader> impostorShader;
 	GLuint fallbackAlbedo = 0, fallbackDetail = 0;
-	//Impostor quads have no vertex attributes, but drawing needs a vertex array
-	GLuint emptyVao = 0;
+	//Impostor quads: only the instance attributes (binding 0, divisor 1)
+	GLuint impostorVao = 0;
+	GLuint instanceBuffer = 0;
 	//Framebuffer and depth of impostor baking, made with the first tree
 	GLuint bakeFramebuffer = 0, bakeDepth = 0;
 

@@ -5,6 +5,7 @@ in vec2 FrameUV;
 flat in ivec2 frame0;
 flat in vec2 frameBlend;
 flat in vec2 turnCosSin;
+flat in float layer;
 
 out vec4 FragColor;
 
@@ -24,7 +25,6 @@ uniform vec3 viewPos;
 //albedo RGB, and the normal in model space as RGB = n * 0.5 + 0.5
 uniform sampler2DArray impostorAlbedo;
 uniform sampler2DArray impostorNormal;
-uniform float layer;
 uniform int frames;
 
 #include "../common/sky.glsl"

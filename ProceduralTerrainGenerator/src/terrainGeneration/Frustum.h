@@ -30,6 +30,9 @@ public:
 		return true;
 	}
 
+	//The six planes, for the same test on the GPU
+	const glm::vec4* Planes() const { return planes; }
+
 private:
 	glm::vec4 planes[6];	//left, right, bottom, top, near, far; (normal, distance), inside where dot >= 0
 };
