@@ -430,16 +430,43 @@ void VegetationLayer::Draw(Camera& camera, const LightSource& light, const Terra
 		std::fill(std::begin(drawnPerLod), std::end(drawnPerLod), 0);
 		return;
 	}
+	const glm::vec3 eye = camera.GetPosition() / settings.modelScale;
+	if (!Cull(eye, camera.GetViewProjection(), settings, detailScale, 0.0f, true)) {
+		drawnInstances = 0;
+		drawnTriangles = 0;
+		std::fill(std::begin(drawnPerLod), std::end(drawnPerLod), 0);
+		return;
+	}
+	DrawCulled(TerrainView::FrameBlock(camera, light, settings, glm::vec2(0.0f), glm::vec2(0.0f)), eye, settings, *models, settings.wireFrame);
+}
+
+bool VegetationLayer::CullShadows(Camera& camera, const glm::mat4& sunViewProjection, const TerrainRenderSettings& settings, VegetationModels* models)
+{
+	if (!enabled || !shadows || !models || settings.map2d || drawRanges.empty() || groupCount == 0) {
+		return false;
+	}
+	//Simpler models than the camera sees: a shadow hardly shows the difference and every cascade draws them
+	return Cull(camera.GetPosition() / settings.modelScale, sunViewProjection, settings, detailScale * shadowDetail, shadowSmallRange, false);
+}
+
+void VegetationLayer::DrawShadow(const FrameUniforms::Block& block, Camera& camera, const TerrainRenderSettings& settings, VegetationModels& models)
+{
+	//Impostors turn to the sun: the eye far away towards it
+	const glm::vec3 eye = camera.GetPosition() / settings.modelScale + glm::vec3(block.lightDirection) * 1.0e6f;
+	DrawCulled(block, eye, settings, models, false);
+}
+
+bool VegetationLayer::Cull(const glm::vec3& eye, const glm::mat4& viewProjection, const TerrainRenderSettings& settings, float lodScale, float smallRange, bool stats)
+{
 	if (!cullShader) {
 		cullShader = Shader::Compute("res/shaders/VegetationShaders/cull_compute.shader");
 	}
 	if (!cullShader || !cullShader->IsValid()) {
-		return;
+		return false;
 	}
 
 	//Ranges of chunks in the frustum and in range
-	const glm::vec3 eye = camera.GetPosition() / settings.modelScale;
-	const Frustum frustum(camera.GetViewProjection() * glm::scale(glm::mat4(1.0f), glm::vec3(settings.modelScale)));
+	const Frustum frustum(viewProjection * glm::scale(glm::mat4(1.0f), glm::vec3(settings.modelScale)));
 	const float units = vegetation::unitsPerMetre;
 	float maxRange = 0.0f;
 	for (const LayerRange& r : ranges) {
@@ -462,14 +489,13 @@ void VegetationLayer::Draw(Camera& camera, const LightSource& light, const Terra
 		total += r.count;
 	}
 	if (rangeData.empty()) {
-		drawnInstances = 0;
-		drawnTriangles = 0;
-		std::fill(std::begin(drawnPerLod), std::end(drawnPerLod), 0);
-		return;
+		return false;
 	}
 	rangesBuffer.Reserve(rangeData.size() * sizeof(glm::uvec4));
 	classifiedBuffer.Reserve(static_cast<size_t>(total) * sizeof(GLuint));
 	drawnBuffer.Reserve(static_cast<size_t>(total) * sizeof(GpuInstance));
+	//The buffers may still be read by the draws of a pass before (shadows)
+	glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT | GL_COMMAND_BARRIER_BIT | GL_VERTEX_ATTRIB_ARRAY_BARRIER_BIT);
 	glNamedBufferSubData(rangesBuffer.id, 0, static_cast<GLsizeiptr>(rangeData.size() * sizeof(glm::uvec4)), rangeData.data());
 	glClearNamedBufferData(countsBuffer, GL_R32UI, GL_RED_INTEGER, GL_UNSIGNED_INT, nullptr);
 
@@ -485,9 +511,10 @@ void VegetationLayer::Draw(Camera& camera, const LightSource& light, const Terra
 	glm::vec4 squared[vegetation::layerCount];
 	for (int l = 0; l < vegetation::layerCount; l++) {
 		const LayerRange& r = ranges[l];
+		const float range = l != static_cast<int>(vegetation::Layer::TREES) && smallRange > 0.0f ? std::min(r.max, smallRange) : r.max;
 		//Scaled detail distances stay within the range
-		const glm::vec3 detail = glm::min(glm::vec3(r.lod1, r.lod2, r.impostor) * detailScale, glm::vec3(r.max));
-		squared[l] = glm::vec4(detail, r.max) * units;
+		const glm::vec3 detail = glm::min(glm::vec3(r.lod1, r.lod2, r.impostor) * lodScale, glm::vec3(range));
+		squared[l] = glm::vec4(detail, range) * units;
 		squared[l] *= squared[l];
 	}
 	glUniform4fv(glGetUniformLocation(cullShader->GetRendererID(), "rangeSquared"), vegetation::layerCount, &squared[0].x);
@@ -505,38 +532,44 @@ void VegetationLayer::Draw(Camera& camera, const LightSource& light, const Terra
 	cullShader->SetUniform1i("pass", 2);
 	glDispatchCompute(rangeCount, 1, 1);
 	glMemoryBarrier(GL_VERTEX_ATTRIB_ARRAY_BARRIER_BIT | GL_COMMAND_BARRIER_BIT);
-	glCopyNamedBufferSubData(countsBuffer, statsBuffer, 0, 0, static_cast<GLsizeiptr>(groupCount) * sizeof(GLuint));
-	statsPending = true;
+	if (stats) {
+		glCopyNamedBufferSubData(countsBuffer, statsBuffer, 0, 0, static_cast<GLsizeiptr>(groupCount) * sizeof(GLuint));
+		statsPending = true;
+	}
+	return true;
+}
 
+void VegetationLayer::DrawCulled(const FrameUniforms::Block& frame, const glm::vec3& eye, const TerrainRenderSettings& settings, VegetationModels& models,
+	bool wireFrame)
+{
 	//Leaves are two-sided
 	const GLboolean culling = glIsEnabled(GL_CULL_FACE);
 	glDisable(GL_CULL_FACE);
-	if (settings.wireFrame) {
+	if (wireFrame) {
 		glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
 	}
 	const glm::mat4 model = glm::scale(glm::mat4(1.0f), glm::vec3(settings.modelScale));
-	const FrameUniforms::Block frame = FrameUniforms::Make(camera, light);
-	models->SetInstanceBuffer(drawnBuffer.id);
+	models.SetInstanceBuffer(drawnBuffer.id);
 	const int modelCount = static_cast<int>(meshCommandFirst.size());
 
 	glBindBuffer(GL_DRAW_INDIRECT_BUFFER, meshCommandBuffer);
-	models->BeginDraw(frame, model, settings.heightScale);
+	models.BeginDraw(frame, model, settings.heightScale);
 	for (int m = 0; m < modelCount; m++) {
 		if (meshCommandFirst[m] >= 0) {
-			models->DrawMeshesIndirect(m, meshCommandFirst[m]);
+			models.DrawMeshesIndirect(m, meshCommandFirst[m]);
 		}
 	}
 	if (impostorCommandCount > 0) {
 		glBindBuffer(GL_DRAW_INDIRECT_BUFFER, impostorCommandBuffer);
-		models->BeginImpostorDraw(frame, model, eye, settings.heightScale);
+		models.BeginImpostorDraw(frame, model, eye, settings.heightScale);
 		for (int m = 0; m < modelCount; m++) {
 			if (impostorCommandFirst[m] >= 0) {
-				models->DrawImpostorsIndirect(m, impostorCommandFirst[m]);
+				models.DrawImpostorsIndirect(m, impostorCommandFirst[m]);
 			}
 		}
 	}
 	glBindBuffer(GL_DRAW_INDIRECT_BUFFER, 0);
-	if (settings.wireFrame) {
+	if (wireFrame) {
 		glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
 	}
 	if (culling) {
@@ -564,6 +597,8 @@ void VegetationLayer::ImGuiDraw()
 		"Full tree models have about 150k triangles each, so larger values cost GPU time quickly", ranges[0].lod1 * detailScale);
 	ImGui::Checkbox("Impostors", &impostors);
 	ImGui::SetItemTooltip("Distant trees as camera-facing pictures baked from 64 directions; off = LOD 2 meshes up to the range");
+	ImGui::Checkbox("Plant shadows", &shadows);
+	ImGui::SetItemTooltip("Plants cast sun shadows (Display > Shadows); every cascade draws them again");
 	if (ImGui::TreeNode("Distances (m)")) {
 		for (int l = 0; l < vegetation::layerCount; l++) {
 			ImGui::PushID(l);

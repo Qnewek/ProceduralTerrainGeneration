@@ -30,7 +30,7 @@ int main(int argc, char* argv[])
 	//Frame times of the vegetation above a forest of the default world
 	if (argc > 1 && std::strcmp(argv[1], "--vegetation-bench") == 0) {
 		return RunVegetationBench(argc > 2 ? static_cast<float>(std::atof(argv[2])) : 1.0f, argc > 3 ? static_cast<float>(std::atof(argv[3])) : 30.0f,
-			argc > 4 ? argv[4] : "", argc > 5 ? static_cast<float>(std::atof(argv[5])) : 0.0f);
+			argc > 4 ? argv[4] : "", argc > 5 ? static_cast<float>(std::atof(argv[5])) : 0.0f, argc > 6 ? static_cast<float>(std::atof(argv[6])) : 0.0f);
 	}
 
 	TerrainGenApp* app = new TerrainGenApp();

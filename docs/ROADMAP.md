@@ -530,6 +530,9 @@ Kroki:
   🟡 2026-11-14 pierwsza wersja (`WaterSurface`): quad na chunkach gruntu, głębokość z mapy wysokości chunka (kolor, przezroczystość, piana),
   odbicie nieba + słońca z Fresnelem, fale z sinusów wygaszanych `fwidth`. Też na mapie 2D (z góry). Brak: odbicia terenu (SSR / planar), refrakcji (zniekształcenie dna), wody w mapie skończonej.
 - **Atmosfera:** fog zależny od wysokości, skybox/atmospheric scattering, cykl dnia, cienie (cascaded shadow maps).
+  ✅ 2026-11-14 cienie: `ShadowMap`, do 4 stabilizowanych kaskad 2048², teren i roślinność rzucają, wszystko (teren, rośliny, impostory, trawa, woda) przyjmuje;
+  PCF 3×3 na terenie, 1 próbka sprzętowa na roślinach. Koszt w dżungli (bench 1, oko 2 m): 3,3 ms przy wysokim słońcu, 5,5 ms przy 12°; teren 0,5 ms, reszta rośliny.
+  Dalej możliwe: tańsze rośliny w dalekich kaskadach (same impostory / co druga klatka), mieszanie granic kaskad, kontaktowe cienie trawy.
 - **Eksport:** heightmap 16-bit/EXR, splat mapy, mesh OBJ/glTF (z LOD), lista instancji roślinności (JSON) → import do Unity/Unreal/Godot.
 - **Tryb „Imported map”:** ✅ 2026-11-03 podgląd mapy z pliku (PNG 1/2/4/8/16-bit, kolorowy zamieniany na szary, oraz R16/RAW): `HeightmapImport.*` +
   `subSystems/MapImportSys.*`, wczytywanie w tle. Dalszy ciąg w Fazie 6.

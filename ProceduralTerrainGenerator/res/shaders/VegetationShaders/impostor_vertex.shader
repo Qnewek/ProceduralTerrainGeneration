@@ -26,6 +26,7 @@ flat out ivec2 frame0;      //lower-left of the four frames blended
 flat out vec2 frameBlend;   //weights towards frame0 + (1, 0) and frame0 + (0, 1)
 flat out vec2 turnCosSin;
 flat out float layer;       //of the atlas = variant
+flat out float ShadowLift;  //radius of the bounds in world space (after modelScale)
 
 void main()
 {
@@ -56,6 +57,7 @@ void main()
     frameBlend = clamp(grid - vec2(frame0), 0.0, 1.0);
     FrameUV = corner * 0.5 + 0.5;
     turnCosSin = vec2(c, s);
+    ShadowLift = boundsRadius * scale * model[0][0];
 
     vec4 position = model * vec4(world, 1.0);
     FragPos = position.xyz;

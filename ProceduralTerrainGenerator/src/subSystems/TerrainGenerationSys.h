@@ -23,6 +23,7 @@
 #include "PanelTabs.h"
 #include "GrassLayer.h"
 #include "VegetationLayer.h"
+#include "ShadowMap.h"
 #include "WaterSurface.h"
 
 //What has to be regenerated at the next Update; with infinite generation a terrain or biome request regenerates the chunks
@@ -55,6 +56,8 @@ private:
 	GrassLayer grass;
 	//Sea surface of the infinite world
 	WaterSurface water;
+	//Sun shadows of the infinite world
+	ShadowMap shadows;
 	const TerrainMaterials* terrainMaterials = nullptr;
 	TerrainRenderSettings renderSettings;
 	//infiniteGeneration as of the last Update

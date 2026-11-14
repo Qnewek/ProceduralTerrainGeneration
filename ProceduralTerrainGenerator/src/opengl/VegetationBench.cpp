@@ -24,6 +24,7 @@
 #include "TextureClass.h"
 #include "VegetationLayer.h"
 #include "VegetationModels.h"
+#include "ShadowMap.h"
 #include "WaterSurface.h"
 #include "WorldConfig.h"
 
@@ -193,7 +194,7 @@ namespace {
 	}
 
 	//Runs the frames of the infinite world with vegetation until everything in range is generated and placed, then measures
-	int Bench(float density, float eyeMetres, const std::string& screenshot, float viewMetres)
+	int Bench(float density, float eyeMetres, const std::string& screenshot, float viewMetres, float sunElevation)
 	{
 		WorldConfig world;
 		world.width = world.height = mapSize;
@@ -230,6 +231,9 @@ namespace {
 			eyeMetres, density);
 
 		LightSource light;
+		if (sunElevation > 0.0f) {
+			light.SetElevation(sunElevation);
+		}
 		Renderer renderer;
 		TerrainRenderSettings settings;
 		settings.heightScale = heightScale;
@@ -260,12 +264,13 @@ namespace {
 		glEnable(GL_DEPTH_TEST);
 		glViewport(0, 0, screenWidth, screenHeight);
 		renderer.SetPatches(4);
-		Timer terrainTimer, vegetationTimer, grassTimer;
+		Timer terrainTimer, vegetationTimer, grassTimer, shadowTimer;
+		ShadowMap shadows;
 		//Measured twice on the same placement: trees far away as LOD 2 meshes, then as impostors
 		struct Phase {
 			const char* name;
 			bool impostors;
-			Stats terrainGpu, grassGpu, vegetationGpu, vegetationCpu, updateCpu;
+			Stats terrainGpu, grassGpu, vegetationGpu, shadowGpu, vegetationCpu, updateCpu;
 			int blades = 0;
 			int drawn = 0, perLod[4] = {};
 			uint64_t triangles = 0;
@@ -300,6 +305,12 @@ namespace {
 			const double placeMs = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - placeStart).count();
 			const double updateMs = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - updateStart).count();
 
+			settings.shadows = nullptr;
+			shadowTimer.Begin();
+			if (shadows.Render(renderer, camera, light, settings, chunks, vegetation, &models)) {
+				settings.shadows = &shadows;
+			}
+			shadowTimer.End();
 			//As in TerrainGenerationSys::Draw: plants first, so the terrain behind them fails the depth test before its shader
 			vegetationTimer.Begin();
 			const auto drawStart = std::chrono::steady_clock::now();
@@ -313,7 +324,7 @@ namespace {
 			chunks.Draw(renderer, camera, light, settings);
 			terrainTimer.End();
 			water.Draw(chunks, camera, light, settings, world.terrain.WaterHeight() * heightScale);
-			const double terrainMs = terrainTimer.Ms(), grassMs = grassTimer.Ms(), vegetationMs = vegetationTimer.Ms();
+			const double terrainMs = terrainTimer.Ms(), grassMs = grassTimer.Ms(), vegetationMs = vegetationTimer.Ms(), shadowMs = shadowTimer.Ms();
 			if (lastFrame && target) {
 				const std::string file = screenshot + "_" + p.name + ".png";
 				if (!SaveScreenshot(file)) {
@@ -325,6 +336,7 @@ namespace {
 			if (measuring) {
 				p.terrainGpu.Add(terrainMs);
 				p.grassGpu.Add(grassMs);
+				p.shadowGpu.Add(shadowMs);
 				p.vegetationGpu.Add(vegetationMs);
 				p.vegetationCpu.Add(drawMs);
 				p.updateCpu.Add(updateMs);
@@ -367,6 +379,7 @@ namespace {
 			std::printf("%-28s %8s %8s\n", "per frame (ms)", "mean", "max");
 			std::printf("%-28s %8.2f %8.2f\n", "terrain GPU", p.terrainGpu.Mean(), p.terrainGpu.max);
 			std::printf("%-28s %8.2f %8.2f   (%d blades)\n", "grass GPU", p.grassGpu.Mean(), p.grassGpu.max, p.blades);
+			std::printf("%-28s %8.2f %8.2f\n", "shadows GPU", p.shadowGpu.Mean(), p.shadowGpu.max);
 			std::printf("%-28s %8.2f %8.2f\n", "vegetation GPU", p.vegetationGpu.Mean(), p.vegetationGpu.max);
 			std::printf("%-28s %8.2f %8.2f\n", "vegetation draw CPU", p.vegetationCpu.Mean(), p.vegetationCpu.max);
 			std::printf("%-28s %8.2f %8.2f\n", "update CPU (chunks, place)", p.updateCpu.Mean(), p.updateCpu.max);
@@ -375,7 +388,7 @@ namespace {
 	}
 }
 
-int RunVegetationBench(float density, float eyeMetres, const std::string& screenshot, float viewMetres)
+int RunVegetationBench(float density, float eyeMetres, const std::string& screenshot, float viewMetres, float sunElevation)
 {
 	if (!glfwInit()) {
 		std::cout << "[ERROR] Failed to initialize GLFW" << std::endl;
@@ -399,7 +412,7 @@ int RunVegetationBench(float density, float eyeMetres, const std::string& screen
 	}
 	else {
 		//The GL objects go before the context does
-		result = Bench(density, eyeMetres, screenshot, viewMetres);
+		result = Bench(density, eyeMetres, screenshot, viewMetres, sunElevation);
 	}
 	glfwDestroyWindow(window);
 	glfwTerminate();

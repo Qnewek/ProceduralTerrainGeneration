@@ -30,6 +30,7 @@ uniform float heightScale;
 #include "../common/sky.glsl"
 #include "../common/surface.glsl"
 #include "../common/materials.glsl"
+#include "../common/shadow.glsl"
 
 const int MODE_BIOMES = 3;
 const int MODE_TEXTURED = 6;
@@ -153,8 +154,13 @@ float sunSpecular(vec3 n, vec3 toLight, vec3 toViewer, float roughness)
 
 void main()
 {
+    //Shadow map: only the depth counts
+    if (depthPass) {
+        return;
+    }
     vec3 baseColor = displayMode == MODE_BIOMES ? texture(biomeMap, MapCoord).rgb : aColor;
     vec3 norm = normalize(normalMatrix * surfaceNormal(texture(surfaceMap, MapCoord), heightScale));
+    vec3 geometryNormal = norm;
     float occlusion = 1.0;
     float roughness = 1.0;
     bool textured = displayMode == MODE_TEXTURED;
@@ -175,7 +181,7 @@ void main()
         float diff = max(dot(norm, light.direction), 0.0);
         //The colors set in the UI change with the sun height, like the sky does
         vec3 ambient = light.ambient * ambientTint(light.direction);
-        vec3 sunlight = light.diffuse * sunlightTint(light.direction);
+        vec3 sunlight = light.diffuse * sunlightTint(light.direction) * sunShadow(FragPos, geometryNormal, 1);
         result = (ambient * occlusion + sunlight * diff) * baseColor;
         if (textured && diff > 0.0) {
             result += sunlight * diff * sunSpecular(norm, light.direction, normalize(viewPos - FragPos), roughness);

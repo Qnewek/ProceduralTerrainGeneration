@@ -11,6 +11,7 @@ out vec4 FragColor;
 
 #include "../common/frame.glsl"
 #include "../common/sky.glsl"
+#include "../common/shadow.glsl"
 
 uniform sampler2D heightMap;
 uniform float heightScale;
@@ -69,7 +70,7 @@ void main()
     vec3 r = reflect(-v, n);
     r.y = abs(r.y);     //waves never reflect the ground below the horizon
     vec3 reflection = skyColor(r, light.direction);
-    vec3 sunlight = light.diffuse * sunlightTint(light.direction);
+    vec3 sunlight = light.diffuse * sunlightTint(light.direction) * sunShadow(FragPos, vec3(0.0, 1.0, 0.0), 0);
     vec3 ambient = light.ambient * ambientTint(light.direction);
     float sunHeight = max(light.direction.y, 0.0);
     if (lightOn) {
