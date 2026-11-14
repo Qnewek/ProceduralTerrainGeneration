@@ -23,6 +23,7 @@
 #include "PanelTabs.h"
 #include "GrassLayer.h"
 #include "VegetationLayer.h"
+#include "WaterSurface.h"
 
 //What has to be regenerated at the next Update; with infinite generation a terrain or biome request regenerates the chunks
 struct WorldRequest {
@@ -52,6 +53,8 @@ private:
 	VegetationModels* vegetationModels = nullptr;
 	//Grass near the camera; grows on the materials of the application
 	GrassLayer grass;
+	//Sea surface of the infinite world
+	WaterSurface water;
 	const TerrainMaterials* terrainMaterials = nullptr;
 	TerrainRenderSettings renderSettings;
 	//infiniteGeneration as of the last Update
@@ -135,7 +138,7 @@ public:
 	bool FlatView() const { return renderSettings.map2d; }
 	//Infinite generation shows chunks with part of the view not generated yet
 	bool HoleInView() const { return chunksShown && chunks.HasHoleInView(); }
-	void ReloadShaders() { view.ReloadShader(); chunks.ReloadShader(); gpu.ReloadShaders(); noisePreview.ReloadShader(); vegetationLayer.ReloadShader(); grass.ReloadShader(); }
+	void ReloadShaders() { view.ReloadShader(); chunks.ReloadShader(); gpu.ReloadShaders(); noisePreview.ReloadShader(); vegetationLayer.ReloadShader(); grass.ReloadShader(); water.ReloadShader(); }
 	//Names of the surface materials for the biome editor, in the order of their ids
 	void SetMaterialNames(std::vector<std::string> names) { biomeEditor.SetMaterialNames(std::move(names)); }
 	//Models drawn on the infinite world; nullptr (before the models are destroyed) = no vegetation

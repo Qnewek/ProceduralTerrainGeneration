@@ -120,17 +120,22 @@ namespace {
 	}
 }
 
-void TerrainView::SetFrameUniforms(Shader& shader, FrameUniforms& frame, Camera& camera, LightSource& light, const TerrainRenderSettings& settings,
-	const glm::mat4& model, int heightUnit, glm::vec2 flatMin, glm::vec2 flatMax)
+FrameUniforms::Block TerrainView::FrameBlock(Camera& camera, const LightSource& light, const TerrainRenderSettings& settings, glm::vec2 flatMin, glm::vec2 flatMax)
 {
-	shader.Bind();
 	FrameUniforms::Block block = FrameUniforms::Make(camera, light);
 	//The fog needs the perspective camera, so the 2D map has none; it ends where the far plane cuts the terrain off
 	if (settings.map2d) {
 		block.fogOn = 0;
 		SetFlatCamera(block, settings, flatMin, flatMax);
 	}
-	frame.Upload(block);
+	return block;
+}
+
+void TerrainView::SetFrameUniforms(Shader& shader, FrameUniforms& frame, Camera& camera, LightSource& light, const TerrainRenderSettings& settings,
+	const glm::mat4& model, int heightUnit, glm::vec2 flatMin, glm::vec2 flatMax)
+{
+	shader.Bind();
+	frame.Upload(FrameBlock(camera, light, settings, flatMin, flatMax));
 	shader.SetModel(model);
 	shader.SetUniformMat3f("normalMatrix", glm::transpose(glm::inverse(glm::mat3(model))));
 	shader.SetUniform1i("displayMode", static_cast<int>(settings.displayMode));
