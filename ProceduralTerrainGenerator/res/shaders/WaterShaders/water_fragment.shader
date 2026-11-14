@@ -12,6 +12,7 @@ out vec4 FragColor;
 
 #include "../common/frame.glsl"
 #include "../common/sky.glsl"
+#include "../common/fog.glsl"
 #include "../common/shadow.glsl"
 
 uniform sampler2D heightMap;
@@ -150,6 +151,19 @@ void main()
     vec3 r = reflect(-v, n);
     r.y = abs(r.y);     //waves never reflect the ground below the horizon
     vec3 sky = skyColor(r, light.direction);
+    if (reflections && !flatView) {
+        //The sky with its clouds, where the direction of the reflection is on the screen and nothing stands in front of the sky there
+        vec3 skyView = mat3(view) * r;
+        if (skyView.z < -1e-4) {
+            vec4 clip = projection * vec4(skyView, 0.0);
+            vec2 skyUV = clip.xy / clip.w * 0.5 + 0.5;
+            vec2 edge = min(skyUV, 1.0 - skyUV);
+            float onScreen = smoothstep(0.0, 0.08, min(edge.x, edge.y));
+            if (onScreen > 0.0 && texture(sceneDepth, skyUV).r >= 1.0) {
+                sky = mix(sky, texture(sceneColor, skyUV).rgb, onScreen);
+            }
+        }
+    }
     vec3 sunlight = light.diffuse * sunlightTint(light.direction) * sunShadow(FragPos, vec3(0.0, 1.0, 0.0), 0);
     vec3 ambient = light.ambient * ambientTint(light.direction);
     float sunHeight = max(light.direction.y, 0.0);
@@ -211,9 +225,6 @@ void main()
     vec3 foamColor = vec3(0.92) * (lightOn ? ambient + sunlight * sunHeight : vec3(1.0));
     color = mix(color, foamColor, foam);
 
-    if (fogOn) {
-        float fog = smoothstep(fogStart, fogDistance, distanceToEye);
-        color = mix(color, fogColor(-toEye, light.direction), fog);
-    }
+    color = applyFog(color, FragPos);
     FragColor = vec4(color, 1.0);
 }

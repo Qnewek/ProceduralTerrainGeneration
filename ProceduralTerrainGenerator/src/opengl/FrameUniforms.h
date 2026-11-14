@@ -39,9 +39,16 @@ public:
 		float shadowStrength = 0.0f;					//share of the sunlight a shadow takes away
 		//Pass into a depth map (shadows): fragment shaders only test alpha
 		int32_t depthPass = 0;
-		float padding = 0.0f;
+		//Haze (common/fog.glsl): extinction per world unit at y = 0, falling by e every 1 / hazeFalloff world units up; 0 = none
+		float hazeDensity = 0.0f;
+		float hazeFalloff = 0.0f;
+		float padding[3] = {};
+		//Clouds (common/clouds.glsl): x = base, y = top (metres, top <= base = no clouds), z = coverage 0..1, w = strength of their shadows
+		glm::vec4 cloudLayer = glm::vec4(0.0f);
+		//xy = wind offset of the clouds (metres), z = world units per metre, w = density
+		glm::vec4 cloudWind = glm::vec4(0.0f, 0.0f, 1.0f, 0.0f);
 	};
-	static_assert(sizeof(Block) == 512, "FrameUniforms::Block must match FrameBlock (std140)");
+	static_assert(sizeof(Block) == 560, "FrameUniforms::Block must match FrameBlock (std140)");
 	static constexpr GLuint binding = 1;
 
 	FrameUniforms() = default;

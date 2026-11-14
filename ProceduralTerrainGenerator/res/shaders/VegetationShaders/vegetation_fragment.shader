@@ -22,6 +22,7 @@ uniform float specularStrength;
 uniform bool bake;
 
 #include "../common/sky.glsl"
+#include "../common/fog.glsl"
 #include "../common/shadow.glsl"
 
 //Alpha of distant mip levels is averaged down, so thin leaves would vanish; raising it with the mip level keeps their coverage
@@ -97,10 +98,6 @@ void main()
             result += sunlight * facing * specularStrength * smoothness * pow(max(dot(norm, h), 0.0), shininess);
         }
     }
-    if (fogOn) {
-        vec3 toFragment = FragPos - viewPos;
-        float fog = smoothstep(fogStart, fogDistance, length(toFragment));
-        result = mix(result, fogColor(toFragment, light.direction), fog);
-    }
+    result = applyFog(result, FragPos);
     FragColor = vec4(result, 1.0);
 }

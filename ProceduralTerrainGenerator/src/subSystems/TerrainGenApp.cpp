@@ -116,7 +116,7 @@ bool TerrainGenApp::Initialize()
 		std::cout << "[ERROR] Failed to initialize MapImportSys" << std::endl;
 		return false;
 	}
-    if (!sky.Initialize()) {
+    if (!sky.Initialize() || !clouds.Initialize()) {
         return false;
     }
 
@@ -155,6 +155,9 @@ void TerrainGenApp::Start()
             mapImportSys.Update();
 
         }
+        //The sky and the light colors of this frame, read by every lit shader (also in the 2D map)
+        light.Update(deltaTime);
+        sky.Update(camera, light);
 
 		Draw();
         ImGuiRender();
@@ -207,7 +210,7 @@ void TerrainGenApp::Draw()
     metrics->BeginScene();
     materials->Bind();
     if (!FlatView()) {
-        sky.Draw(camera, light);
+        sky.Draw(camera, light, clouds.RenderSky(camera, light));
     }
     if (currentMode == mode::NOISE_HEIGHTMAP)
     {
@@ -218,6 +221,9 @@ void TerrainGenApp::Draw()
     }
     else if (currentMode == mode::MAP_IMPORT) {
         mapImportSys.Draw(renderer, camera, light);
+    }
+    if (!FlatView()) {
+        clouds.DrawOver(camera, light);
     }
     metrics->EndScene();
 
@@ -230,6 +236,7 @@ void TerrainGenApp::ReloadShaders()
     terrainGenSys.ReloadShaders();
     mapImportSys.ReloadShaders();
     sky.ReloadShader();
+    clouds.ReloadShader();
     vegetation->ReloadShader();
 }
 

@@ -9,6 +9,7 @@ out vec4 FragColor;
 
 #include "../common/frame.glsl"
 #include "../common/sky.glsl"
+#include "../common/fog.glsl"
 #include "../common/shadow.glsl"
 
 //Share of the sunlight that passes through a blade lit from behind
@@ -27,10 +28,6 @@ void main()
         vec3 sunlight = light.diffuse * sunlightTint(light.direction) * sunShadow(FragPos, vec3(0.0, 1.0, 0.0), 0);
         result = (ambient + sunlight * diff) * albedo;
     }
-    if (fogOn) {
-        vec3 toFragment = FragPos - viewPos;
-        float fog = smoothstep(fogStart, fogDistance, length(toFragment));
-        result = mix(result, fogColor(toFragment, light.direction), fog);
-    }
+    result = applyFog(result, FragPos);
     FragColor = vec4(result, 1.0);
 }

@@ -19,6 +19,7 @@ uniform sampler2DArray impostorNormal;
 uniform int frames;
 
 #include "../common/sky.glsl"
+#include "../common/fog.glsl"
 #include "../common/shadow.glsl"
 
 //As in vegetation_fragment.shader: alpha of distant mip levels raised, light let through to the back of the leaves
@@ -66,10 +67,6 @@ void main()
         vec3 sunlight = light.diffuse * sunlightTint(light.direction) * sunShadow(FragPos + light.direction * ShadowLift, light.direction, 0);
         result = (ambient * OCCLUSION + sunlight * diff) * color;
     }
-    if (fogOn) {
-        vec3 toFragment = FragPos - viewPos;
-        float fog = smoothstep(fogStart, fogDistance, length(toFragment));
-        result = mix(result, fogColor(toFragment, light.direction), fog);
-    }
+    result = applyFog(result, FragPos);
     FragColor = vec4(result, 1.0);
 }

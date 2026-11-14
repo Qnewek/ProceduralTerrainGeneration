@@ -532,6 +532,12 @@ Kroki:
   ✅ 2026-11-14 dokończona: kopia sceny przed wodą → refrakcja (dno przesunięte falami, osłabiane wzdłuż promienia widzenia) i odbicia SSR (śledzone dla gładkiej
   tafli, fale marszczą odczyt; poza ekranem niebo); woda także na skończonej mapie. Koszt ok. 0,5 ms. Ograniczenie SSR: nie odbija tego, czego nie ma na ekranie.
 - **Atmosfera:** fog zależny od wysokości, skybox/atmospheric scattering, cykl dnia, cienie (cascaded shadow maps).
+  ✅ 2026-11-14 (`Sky`): niebo z rozpraszania (Hillaire 2020: LUT transmitancji raz, LUT widoku nieba co klatkę w compute; Rayleigh, Mie, ozon, przybliżone wielokrotne
+  rozpraszanie), kolory słońca i ambientu z tego samego modelu, zamglenie wysokościowe (`fog.glsl`) zamiast samej mgły odległości, pora dnia + cykl dnia (noc 3× szybciej),
+  gwiazdy. Brak: księżyca (noc oświetla tylko `NIGHT_AMBIENT`), perspektywy powietrznej z pełnego modelu (zamglenie jest artystyczne).
+  ✅ 2026-11-14 chmury (`Clouds`): wolumetryczne, ray march w compute w połowie rozdzielczości (szumy 3D Perlin-Worley + mapa pogody, wiatr), światło słońca i nieba,
+  cienie chmur na terenie i roślinach, odbicia w wodzie, kamera nad chmurami (składanie po scenie). Ok. 1 ms. Brak: akumulacji czasowej (szum ditheringu jest widoczny
+  z bliska), chmur wysokich (cirrus), deszczu.
   ✅ 2026-11-14 cienie: `ShadowMap`, do 4 stabilizowanych kaskad 2048², teren i roślinność rzucają, wszystko (teren, rośliny, impostory, trawa, woda) przyjmuje;
   PCF 3×3 na terenie, 1 próbka sprzętowa na roślinach. Koszt w dżungli (bench 1, oko 2 m): 3,3 ms przy wysokim słońcu, 5,5 ms przy 12°; teren 0,5 ms, reszta rośliny.
   Dalej możliwe: tańsze rośliny w dalekich kaskadach (same impostory / co druga klatka), mieszanie granic kaskad, kontaktowe cienie trawy.
