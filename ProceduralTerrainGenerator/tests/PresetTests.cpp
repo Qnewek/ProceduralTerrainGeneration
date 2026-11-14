@@ -107,7 +107,9 @@ static WorldConfig DistinctWorld()
 	biome::Biome alpha{ "Alpha", glm::vec3(0.31f, 0.32f, 0.33f),
 		{ biome::Range{ -0.41f, 0.42f }, biome::Range{ -0.43f, 0.44f }, biome::Range{ -0.45f, 0.46f }, biome::Range{ -0.47f, 0.48f }, biome::Range{ -0.49f, 0.51f } },
 		biome::TerrainModifier{ 0.71f, 0.072f, 0.073f, 7.4f, true },
-		{ { { 3, 0.25f }, { 7, 0.5f }, { 15, 0.125f } } } };
+		{ { { 3, 0.25f }, { 7, 0.5f }, { 15, 0.125f } } },
+		{ biome::Plant{ "Oak", 0.37f, 0.81f, 2.25f, 33.5f, biome::Range{ -0.11f, 0.62f }, 0.45f },
+			biome::Plant{ "Pebble", 0.0625f, 1.5f, 1.75f, 71.0f, biome::Range{ 0.13f, 0.14f }, 0.0f } } };
 	biome::Biome beta{ "Beta", glm::vec3(0.61f, 0.62f, 0.63f),
 		{ biome::Range{ 0.52f, 0.53f }, biome::Range{ 0.54f, 0.55f }, biome::Range{ 0.56f, 0.57f }, biome::Range{ 0.58f, 0.59f }, biome::Range{ 0.64f, 0.65f } },
 		biome::TerrainModifier{ 1.31f, -0.032f, 0.033f, 33.0f, false },
@@ -140,6 +142,7 @@ static void CheckSameBiomes(const std::vector<biome::Biome>& a, const std::vecto
 				CHECK(a[i].materials[l].material == b[i].materials[l].material);
 			}
 		}
+		CHECK(a[i].plants == b[i].plants);
 	}
 }
 
@@ -299,7 +302,26 @@ TEST_CASE("A biome missing fields in a preset keeps the values of a new biome")
 	CHECK(b.ranges[biome::TEMPERATURE].max == 1.0f);
 	CHECK(b.materials[0].material == 0);
 	CHECK(b.materials[0].weight == 1.0f);
+	//No default biome has this name: no plants
+	CHECK(b.plants.empty());
 	CHECK(loaded.biomes.materialPatchSize == BiomeConfig().materialPatchSize);
+}
+
+TEST_CASE("A biome saved before the plants existed gets the plants of the default biome of its name")
+{
+	WorldConfig loaded;
+	std::string error;
+	REQUIRE_MESSAGE(preset::FromJson(R"({"kind": "world", "version": 2, "width": 64, "height": 32,
+		"biomes": {"table": [{"name": "Forest"}, {"name": "Bare", "plants": []}, {"name": "Taiga", "plants": [{"model": "Fir"}]}]}})", loaded, error), error);
+	REQUIRE(loaded.biomes.table.size() == 3);
+	CHECK(loaded.biomes.table[0].plants == biome::DefaultPlants("Forest"));
+	CHECK_FALSE(loaded.biomes.table[0].plants.empty());
+	CHECK(loaded.biomes.table[1].plants.empty());
+	//Fields missing in a plant keep the values of a new Plant
+	REQUIRE(loaded.biomes.table[2].plants.size() == 1);
+	biome::Plant expected;
+	expected.model = "Fir";
+	CHECK(loaded.biomes.table[2].plants[0] == expected);
 }
 
 TEST_CASE("Unknown fields are ignored")
@@ -369,6 +391,17 @@ TEST_CASE("Invalid presets are rejected and the config stays unchanged")
 		{ "no material weight", Replaced(valid, "\"weight\": 2.5", "\"weight\": 0") },
 		{ "materials not an array", Replaced(valid, "\"materials\": [", "\"materials\": 1, \"unused\": [") },
 		{ "too many materials", Replaced(valid, "\"materials\": [", "\"materials\": [{}, {}, {}, {}, {},") },
+		{ "plants not an array", Replaced(valid, "\"plants\": [", "\"plants\": 1, \"unused\": [") },
+		{ "too many plants", Replaced(valid, "\"plants\": [", "\"plants\": [{}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {},") },
+		{ "plant model not a string", Replaced(valid, "\"Oak\"", "3") },
+		{ "plant density above 1", Replaced(valid, "\"density\": 0.37", "\"density\": 1.5") },
+		{ "negative plant density", Replaced(valid, "\"density\": 0.37", "\"density\": -0.1") },
+		{ "zero plant scale", Replaced(valid, "0.81,", "0.0,") },
+		{ "reversed plant scale", Replaced(valid, "0.81,", "3.0,") },
+		{ "plant scale of one number", Replaced(valid, "0.81,", "") },
+		{ "plant slope above 90", Replaced(valid, "\"maxSlope\": 33.5", "\"maxSlope\": 91") },
+		{ "reversed plant elevation", Replaced(valid, "-0.11", "0.9") },
+		{ "plant clustering above 1", Replaced(valid, "\"clustering\": 0.45", "\"clustering\": 1.5") },
 	};
 
 	for (const Case& c : cases) {

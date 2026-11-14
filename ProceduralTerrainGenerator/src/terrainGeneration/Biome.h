@@ -49,6 +49,27 @@ namespace biome {
 
 	using MaterialWeights = std::array<float, maxMaterials>;
 
+	//Most plants (vegetation and rock species) of one biome
+	constexpr size_t maxPlants = 16;
+
+	//A kind of vegetation or rock growing in a biome (vegetation::PlaceChunk). The model decides its layer (tree, shrub, rock: the kind
+	//in vegetation_models.json), and every layer has its own grid of cells, each holding at most one model
+	struct Plant {
+		std::string model;				//name in vegetation_models.json; an unknown model is never placed
+		float density = 0.1f;			//chance that a cell of its layer holds it, where it can grow; in [0, 1]
+		float minScale = 1.0f, maxScale = 1.0f;	//size relative to the model; 0 < min <= max
+		float maxSlope = 35.0f;			//degrees, in [0, 90]
+		Range elevation;				//where it grows, as the ELEVATION parameter (0 = the water surface)
+		float clustering = 1.0f;		//0 = spread evenly, 1 = forests and clearings (vegetation::ClusterFactor); in [0, 1]
+
+		bool operator==(const Plant& other) const
+		{
+			return model == other.model && density == other.density && minScale == other.minScale && maxScale == other.maxScale
+				&& maxSlope == other.maxSlope && elevation.min == other.elevation.min && elevation.max == other.elevation.max
+				&& clustering == other.clustering;
+		}
+	};
+
 	struct Biome {
 		std::string name;
 		glm::vec3 color = glm::vec3(0.0f);
@@ -56,6 +77,8 @@ namespace biome {
 		TerrainModifier terrain;
 		//Surface materials of the biome; at least one layer has weight > 0
 		std::array<MaterialLayer, materialLayers> materials = { MaterialLayer{ 0, 1.0f } };
+		//Vegetation and rocks, at most maxPlants; within a layer the plants share the cells, earlier ones first
+		std::vector<Plant> plants;
 
 		//Distance in the parameter space from the ranges of the biome: 0 inside all of them, otherwise
 		//the Euclidean length of how far each value lies outside its range
@@ -113,4 +136,8 @@ namespace biome {
 
 	//Biomes used by default; materials refer to the default material list (res/textures/terrain_materials.json)
 	std::vector<Biome> DefaultBiomes();
+
+	//Plants of the default biome with this name (models of res/vegetation/vegetation_models.json); none for other names.
+	//Biomes of presets saved before the plants existed get them by their name
+	std::vector<Plant> DefaultPlants(const std::string& biomeName);
 }

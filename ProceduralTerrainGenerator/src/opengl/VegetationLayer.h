@@ -29,7 +29,7 @@ public:
 
 	//What placement needs of the world, besides the chunks
 	struct World {
-		std::vector<std::string> biomeNames;	//biome table, id = index
+		const std::vector<biome::Biome>* biomes = nullptr;	//biome table, id = index; nullptr while biomes are off (no vegetation)
 		float waterHeight = 0.0f;
 		float heightScale = 1.0f;
 		uint32_t seed = 0;
@@ -48,6 +48,8 @@ public:
 private:
 	struct ChunkInstances {
 		uint64_t generation = 0;
+		//Placed with older settings: drawn until placed again, so a change does not make the vegetation blink out
+		bool stale = false;
 		std::vector<vegetation::Instance> instances;
 	};
 	//Per layer of vegetation::Layer, in metres
@@ -57,7 +59,7 @@ private:
 
 	std::unordered_map<uint64_t, ChunkInstances> placed;
 	//Settings the placed instances were made with; a change places everything again
-	std::vector<std::string> placedBiomes;
+	std::vector<std::vector<biome::Plant>> placedPlants;
 	float placedWater = 0.0f, placedDensity = 0.0f;
 	uint32_t placedSeed = 0;
 	int placedReadyModels = -1;
