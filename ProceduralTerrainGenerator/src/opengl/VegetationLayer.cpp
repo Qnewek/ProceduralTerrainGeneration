@@ -20,7 +20,21 @@ namespace {
 		glm::vec4 rotation;
 	};
 	constexpr int lodCount = 3;
-	const char* const layerNames[vegetation::layerCount] = { "Trees", "Shrubs", "Rocks" };
+
+	//true if the plants of the table are the ones placed (an empty table = biomes off)
+	bool SamePlants(const std::vector<biome::Biome>* biomes, const std::vector<std::vector<biome::Plant>>& placed)
+	{
+		const size_t count = biomes ? biomes->size() : 0;
+		if (count != placed.size()) {
+			return false;
+		}
+		for (size_t i = 0; i < count; i++) {
+			if ((*biomes)[i].plants != placed[i]) {
+				return false;
+			}
+		}
+		return true;
+	}
 }
 
 VegetationLayer::~VegetationLayer()
@@ -42,15 +56,22 @@ void VegetationLayer::Update(const ChunkWorld& chunks, const VegetationModels* m
 	int ready = 0;
 	for (const VegetationModels::Model& m : list) {
 		const bool isReady = m.state == VegetationModels::State::READY;
-		infos.push_back({ m.name, isReady ? static_cast<int>(m.variants.size()) : 0 });
+		infos.push_back({ m.name, isReady ? static_cast<int>(m.variants.size()) : 0, vegetation::LayerOfKind(m.kind) });
 		ready += isReady ? 1 : 0;
 	}
-	//Anything placement depends on changed: place every chunk again
-	if (ready != placedReadyModels || world.biomeNames != placedBiomes || world.waterHeight != placedWater || world.seed != placedSeed
+	//Anything placement depends on changed: place every chunk again, nearest first, showing the old instances meanwhile
+	if (ready != placedReadyModels || !SamePlants(world.biomes, placedPlants) || world.waterHeight != placedWater || world.seed != placedSeed
 		|| density != placedDensity) {
-		placed.clear();
+		for (auto& [key, chunk] : placed) {
+			chunk.stale = true;
+		}
 		placedReadyModels = ready;
-		placedBiomes = world.biomeNames;
+		placedPlants.clear();
+		if (world.biomes) {
+			for (const biome::Biome& b : *world.biomes) {
+				placedPlants.push_back(b.plants);
+			}
+		}
 		placedWater = world.waterHeight;
 		placedSeed = world.seed;
 		placedDensity = density;
@@ -71,16 +92,6 @@ void VegetationLayer::Update(const ChunkWorld& chunks, const VegetationModels* m
 		it = inRange.count(it->first) ? std::next(it) : placed.erase(it);
 	}
 
-	static const std::vector<vegetation::BiomeRules> rules = vegetation::DefaultRules();
-	std::vector<const vegetation::BiomeRules*> rulesOfBiome(world.biomeNames.size(), nullptr);
-	for (size_t i = 0; i < world.biomeNames.size(); i++) {
-		for (const vegetation::BiomeRules& r : rules) {
-			if (r.biome == world.biomeNames[i]) {
-				rulesOfBiome[i] = &r;
-			}
-		}
-	}
-
 	const auto start = std::chrono::steady_clock::now();
 	int placements = 0;
 	std::vector<float> height(ChunkWorld::textureSize * ChunkWorld::textureSize);
@@ -91,14 +102,15 @@ void VegetationLayer::Update(const ChunkWorld& chunks, const VegetationModels* m
 			break;
 		}
 		const auto found = placed.find(c.key);
-		if (found != placed.end() && found->second.generation == c.generation) {
+		if (found != placed.end() && found->second.generation == c.generation && !found->second.stale) {
 			continue;
 		}
 		ChunkInstances& chunk = placed[c.key];
 		chunk.generation = c.generation;
+		chunk.stale = false;
 		chunk.instances.clear();
-		//Without biomes there are no rules: the chunk stays empty
-		if (!c.ids || !c.height || !c.surface) {
+		//Without biomes there are no plants: the chunk stays empty
+		if (!c.ids || !c.height || !c.surface || placedPlants.empty()) {
 			continue;
 		}
 		placements++;
@@ -121,7 +133,7 @@ void VegetationLayer::Update(const ChunkWorld& chunks, const VegetationModels* m
 		settings.waterHeight = world.waterHeight;
 		settings.density = density;
 		settings.seed = world.seed;
-		vegetation::PlaceChunk(maps, rulesOfBiome, infos, settings, chunk.instances);
+		vegetation::PlaceChunk(maps, placedPlants, infos, settings, chunk.instances);
 	}
 	if (placements > 0) {
 		placementMs = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count();
@@ -243,7 +255,7 @@ void VegetationLayer::ImGuiDraw()
 	if (ImGui::TreeNode("Distances (m)")) {
 		for (int l = 0; l < vegetation::layerCount; l++) {
 			ImGui::PushID(l);
-			ImGui::TextUnformatted(layerNames[l]);
+			ImGui::TextUnformatted(vegetation::layerNames[l]);
 			LayerRange& r = ranges[l];
 			ImGui::DragFloat("LOD 1 from", &r.lod1, 1.0f, 1.0f, r.lod2);
 			ImGui::DragFloat("LOD 2 from", &r.lod2, 1.0f, r.lod1, r.max);

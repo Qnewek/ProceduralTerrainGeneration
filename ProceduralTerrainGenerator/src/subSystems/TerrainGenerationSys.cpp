@@ -8,6 +8,7 @@
 
 #include "Preset.h"
 #include "SplineSampling.h"
+#include "VegetationModels.h"
 
 TerrainGenerationSys::TerrainGenerationSys() {
 	renderSettings.displayMode = utilities::heightMapMode::TOPOGRAPHICAL;
@@ -50,11 +51,7 @@ void TerrainGenerationSys::Update(Camera& camera)
 	if (infiniteGeneration) {
 		UpdateChunks(camera);
 		VegetationLayer::World vegetationWorld;
-		if (biomesGeneration) {
-			for (const biome::Biome& b : world.biomes.table) {
-				vegetationWorld.biomeNames.push_back(b.name);
-			}
-		}
+		vegetationWorld.biomes = biomesGeneration ? &world.biomes.table : nullptr;
 		vegetationWorld.waterHeight = world.terrain.WaterHeight();
 		vegetationWorld.heightScale = renderSettings.heightScale;
 		vegetationWorld.seed = static_cast<uint32_t>(world.biomes.detailSeed);
@@ -192,6 +189,18 @@ void TerrainGenerationSys::RequestTerrain()
 	if (biomesGeneration) {
 		pending.biomes = true;
 	}
+}
+
+void TerrainGenerationSys::SetVegetationModels(VegetationModels* models)
+{
+	vegetationModels = models;
+	std::vector<BiomeEditor::PlantModel> names;
+	if (models) {
+		for (const VegetationModels::Model& m : models->GetModels()) {
+			names.push_back({ m.name, vegetation::LayerOfKind(m.kind) });
+		}
+	}
+	biomeEditor.SetPlantModels(std::move(names));
 }
 
 void TerrainGenerationSys::RequestBiomes()

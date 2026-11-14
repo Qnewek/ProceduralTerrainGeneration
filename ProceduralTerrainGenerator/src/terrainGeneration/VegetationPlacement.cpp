@@ -54,6 +54,12 @@ namespace vegetation
 			const float c = Unit(Hash(x, y + 1, seed)), d = Unit(Hash(x + 1, y + 1, seed));
 			return (a * (1.0f - s.x) + b * s.x) * (1.0f - s.y) + (c * (1.0f - s.x) + d * s.x) * s.y;
 		}
+
+		//A plant of a biome with its model resolved
+		struct ResolvedPlant {
+			const biome::Plant* plant = nullptr;
+			int model = 0;
+		};
 	}
 
 	float ClusterFactor(glm::vec2 texel, uint32_t seed)
@@ -64,47 +70,18 @@ namespace vegetation
 		return clusterLow + (clusterHigh - clusterLow) * n;
 	}
 
-	std::vector<BiomeRules> DefaultRules()
+	Layer LayerOfKind(const std::string& kind)
 	{
-		//Probabilities per cell: trees and rocks 8 x 8 m, shrubs 4 x 4 m. Scales turn the models (sizes in vegetation_models.json)
-		//into plausible sizes: the deciduous and island trees are 3 m, the saplings 1 m, the rock 0.3 m
-		const auto tree = [](const char* model, float p, float minScale, float maxScale) {
-			return Species{ model, Layer::TREES, p, minScale, maxScale, 32.0f };
-		};
-		const auto shrub = [](const char* model, float p, float minScale, float maxScale) {
-			return Species{ model, Layer::SHRUBS, p, minScale, maxScale, 40.0f };
-		};
-		const auto rock = [](const char* model, float p, float minScale, float maxScale) {
-			return Species{ model, Layer::ROCKS, p, minScale, maxScale, 70.0f };
-		};
-		return {
-			{ "Beach", { shrub("Dead trunk", 0.004f, 0.8f, 1.4f), rock("Stone", 0.02f, 2.0f, 5.0f) } },
-			{ "Stony shore", { rock("Boulder", 0.08f, 1.0f, 3.0f), rock("Rock", 0.15f, 3.0f, 8.0f), shrub("Shrub 2", 0.02f, 0.8f, 1.3f) } },
-			{ "Snowy shore", { rock("Stone", 0.05f, 2.0f, 5.0f) } },
-			{ "Tundra", { shrub("Pine sapling", 0.03f, 0.8f, 1.6f), shrub("Shrub 2", 0.04f, 0.8f, 1.4f), rock("Stone", 0.05f, 2.0f, 6.0f) } },
-			{ "Snowfields", { tree("Fir", 0.02f, 0.6f, 0.9f), rock("Stone", 0.03f, 2.0f, 6.0f) } },
-			{ "Taiga", { tree("Fir", 0.5f, 0.7f, 1.2f), shrub("Fir sapling", 0.06f, 1.0f, 2.5f), shrub("Pine sapling", 0.06f, 1.0f, 2.5f),
-				shrub("Fern", 0.05f, 0.8f, 1.3f), rock("Boulder", 0.02f, 0.8f, 2.0f) } },
-			{ "Steppe", { tree("Deciduous tree", 0.005f, 1.8f, 2.6f), shrub("Shrub 2", 0.05f, 0.8f, 1.5f), rock("Stone", 0.02f, 2.0f, 5.0f) } },
-			{ "Plains", { tree("Deciduous tree", 0.03f, 2.0f, 3.0f), shrub("Shrub", 0.03f, 0.8f, 1.3f), shrub("Shrub 2", 0.03f, 0.8f, 1.5f),
-				rock("Stone", 0.01f, 2.0f, 5.0f) } },
-			{ "Forest", { tree("Deciduous tree", 0.4f, 2.0f, 3.2f), tree("Fir", 0.12f, 0.7f, 1.1f), shrub("Shrub", 0.06f, 0.8f, 1.3f),
-				shrub("Fern", 0.12f, 0.8f, 1.4f), shrub("Dead trunk", 0.01f, 0.8f, 1.5f), rock("Rock", 0.02f, 3.0f, 7.0f) } },
-			{ "Desert", { tree("Quiver tree", 0.01f, 2.5f, 4.0f), shrub("Dead trunk", 0.003f, 0.8f, 1.2f), rock("Stone", 0.04f, 2.0f, 6.0f),
-				rock("Boulder", 0.01f, 1.0f, 3.0f) } },
-			{ "Savanna", { tree("Searsia", 0.04f, 1.5f, 2.5f), tree("Island tree", 0.015f, 2.0f, 3.0f), shrub("Shrub 2", 0.05f, 0.8f, 1.5f),
-				rock("Stone", 0.01f, 2.0f, 5.0f) } },
-			{ "Jungle", { tree("Island tree", 0.45f, 2.2f, 3.5f), tree("Deciduous tree", 0.1f, 2.5f, 3.5f), shrub("Fern", 0.3f, 1.0f, 1.8f),
-				shrub("Shrub", 0.12f, 1.0f, 1.6f) } },
-			{ "Hills", { tree("Fir", 0.1f, 0.7f, 1.1f), tree("Deciduous tree", 0.08f, 2.0f, 3.0f), shrub("Shrub", 0.04f, 0.8f, 1.3f),
-				rock("Boulder", 0.03f, 0.8f, 2.5f) } },
-			{ "Mountain", { tree("Fir", 0.08f, 0.6f, 1.0f), rock("Boulder", 0.06f, 1.0f, 4.0f), rock("Rock", 0.05f, 4.0f, 10.0f) } },
-			{ "Rocky peaks", { rock("Boulder", 0.1f, 1.5f, 5.0f), rock("Rock", 0.06f, 5.0f, 12.0f) } },
-			{ "Snowy peaks", { rock("Boulder", 0.02f, 1.0f, 3.0f) } },
-		};
+		if (kind == "tree") {
+			return Layer::TREES;
+		}
+		if (kind == "rock") {
+			return Layer::ROCKS;
+		}
+		return Layer::SHRUBS;
 	}
 
-	void PlaceChunk(const ChunkMaps& maps, const std::vector<const BiomeRules*>& rules, const std::vector<ModelInfo>& models,
+	void PlaceChunk(const ChunkMaps& maps, const std::vector<std::vector<biome::Plant>>& plants, const std::vector<ModelInfo>& models,
 		const PlacementSettings& settings, std::vector<Instance>& out)
 	{
 		if (!maps.height || !maps.surface || !maps.ids || maps.size < 2) {
@@ -113,6 +90,17 @@ namespace vegetation
 		std::unordered_map<std::string, int> modelOfName;
 		for (int i = 0; i < static_cast<int>(models.size()); i++) {
 			modelOfName.emplace(models[i].name, i);
+		}
+		//Plants of every biome and layer with their models; plants of unknown models are left out, while models still loading
+		//(no variants) keep their share of the cells, so the others do not move once they load
+		std::vector<std::array<std::vector<ResolvedPlant>, layerCount>> plantsOf(plants.size());
+		for (size_t id = 0; id < plants.size(); id++) {
+			for (const biome::Plant& plant : plants[id]) {
+				const auto found = modelOfName.find(plant.model);
+				if (found != modelOfName.end()) {
+					plantsOf[id][static_cast<int>(models[found->second].layer)].push_back({ &plant, found->second });
+				}
+			}
 		}
 
 		for (int layer = 0; layer < layerCount; layer++) {
@@ -130,48 +118,52 @@ namespace vegetation
 					const glm::ivec2 nearest = glm::clamp(glm::ivec2(glm::floor(local + 0.5f)), glm::ivec2(0), glm::ivec2(maps.size - 1));
 					const size_t index = static_cast<size_t>(nearest.y) * maps.size + nearest.x;
 					const int id = maps.ids[index];
-					if (id < 0 || id >= static_cast<int>(rules.size()) || !rules[id]) {
+					if (id < 0 || id >= static_cast<int>(plantsOf.size()) || plantsOf[id][layer].empty()) {
 						continue;
 					}
 					const float height = SampleHeight(maps, local);
 					if (height <= settings.waterHeight) {
 						continue;
 					}
-					//Pick at most one species of this layer: each takes its share of [0, 1)
-					const float cluster = layer == static_cast<int>(Layer::ROCKS) ? 1.0f : ClusterFactor(texel, settings.seed);
+					const float elevation = biome::Elevation(height, settings.waterHeight);
+					const glm::vec4 surface = maps.surface[index];
+					const float slope = std::atan(glm::length(glm::vec2(surface)) * settings.heightScale) * 180.0f / pi;
+
+					//Pick at most one plant of this layer: each one that can grow here takes its share of [0, 1)
+					float cluster = -1.0f;	//computed when a plant needs it
 					const float pick = Unit(h = Hash(h));
 					float sum = 0.0f;
-					const Species* chosen = nullptr;
-					for (const Species& species : rules[id]->species) {
-						if (static_cast<int>(species.layer) != layer) {
+					const ResolvedPlant* chosen = nullptr;
+					for (const ResolvedPlant& candidate : plantsOf[id][layer]) {
+						const biome::Plant& plant = *candidate.plant;
+						if (elevation < plant.elevation.min || elevation > plant.elevation.max || slope > plant.maxSlope) {
 							continue;
 						}
-						sum += species.probability * settings.density * cluster;
+						float factor = 1.0f;
+						if (plant.clustering != 0.0f) {
+							if (cluster < 0.0f) {
+								cluster = ClusterFactor(texel, settings.seed);
+							}
+							factor = PlantCluster(cluster, plant.clustering);
+						}
+						sum += plant.density * settings.density * factor;
 						if (pick < sum) {
-							chosen = &species;
+							chosen = &candidate;
 							break;
 						}
 					}
-					if (!chosen) {
+					if (!chosen || models[chosen->model].variants <= 0) {
 						continue;
 					}
-					const auto found = modelOfName.find(chosen->model);
-					if (found == modelOfName.end() || models[found->second].variants <= 0) {
-						continue;
-					}
-					const glm::vec4 surface = maps.surface[index];
-					const float slope = std::atan(glm::length(glm::vec2(surface)) * settings.heightScale) * 180.0f / pi;
-					if (slope > chosen->maxSlope) {
-						continue;
-					}
+					const biome::Plant& plant = *chosen->plant;
 					Instance instance;
 					instance.position = glm::vec3(settings.mapOrigin.x + texel.x * settings.worldUnitsPerTexel, height,
 						settings.mapOrigin.y + texel.y * settings.worldUnitsPerTexel);
 					const float size = Unit(h = Hash(h));
-					instance.scale = unitsPerMetre * (chosen->minScale + (chosen->maxScale - chosen->minScale) * size);
+					instance.scale = unitsPerMetre * (plant.minScale + (plant.maxScale - plant.minScale) * size);
 					instance.yaw = Unit(h = Hash(h)) * 2.0f * pi;
-					instance.model = found->second;
-					instance.variant = static_cast<int>(Hash(h) % static_cast<uint32_t>(models[found->second].variants));
+					instance.model = chosen->model;
+					instance.variant = static_cast<int>(Hash(h) % static_cast<uint32_t>(models[chosen->model].variants));
 					instance.layer = static_cast<Layer>(layer);
 					out.push_back(instance);
 				}

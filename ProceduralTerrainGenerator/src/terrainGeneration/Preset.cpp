@@ -159,6 +159,18 @@ namespace preset {
 				}
 			}
 			j["materials"] = std::move(materials);
+			json plants = json::array();
+			for (const biome::Plant& p : b.plants) {
+				json plant;
+				plant["model"] = p.model;
+				plant["density"] = ReadableFloat(p.density);
+				plant["scale"] = FloatArray({ p.minScale, p.maxScale });
+				plant["maxSlope"] = ReadableFloat(p.maxSlope);
+				plant["elevation"] = FloatArray({ p.elevation.min, p.elevation.max });
+				plant["clustering"] = ReadableFloat(p.clustering);
+				plants.push_back(std::move(plant));
+			}
+			j["plants"] = std::move(plants);
 			return j;
 		}
 
@@ -484,6 +496,32 @@ namespace preset {
 						m.Read("weight", biome.materials[l].weight);
 					}
 				}
+				//Missing in presets saved before the plants existed (2026-11-14): the plants of the default biome of the same name.
+				//Fields missing in a plant keep the values of a new Plant
+				const json* plants = entry.Find("plants");
+				if (!plants) {
+					biome.plants = biome::DefaultPlants(biome.name);
+					continue;
+				}
+				const std::string path = entry.PathOf("plants");
+				if (!plants->is_array() || plants->size() > biome::maxPlants) {
+					throw std::runtime_error(path + " must be an array of at most " + std::to_string(biome::maxPlants) + " plants");
+				}
+				for (size_t l = 0; l < plants->size(); l++) {
+					const Reader p((*plants)[l], path + "[" + std::to_string(l) + "]");
+					biome::Plant& plant = biome.plants.emplace_back();
+					p.Read("model", plant.model);
+					p.Read("density", plant.density);
+					float scale[2] = { plant.minScale, plant.maxScale };
+					p.ReadFixed("scale", scale, 2);
+					plant.minScale = scale[0];
+					plant.maxScale = scale[1];
+					p.Read("maxSlope", plant.maxSlope);
+					float elevation[2] = { plant.elevation.min, plant.elevation.max };
+					p.ReadFixed("elevation", elevation, 2);
+					plant.elevation = { elevation[0], elevation[1] };
+					p.Read("clustering", plant.clustering);
+				}
 			}
 		}
 
@@ -595,6 +633,27 @@ namespace preset {
 				//The layers are normalized by their sum
 				if (materialSum <= 0.0f) {
 					throw std::runtime_error(name + ": at least one material needs a weight greater than 0");
+				}
+				if (biome.plants.size() > biome::maxPlants) {
+					throw std::runtime_error(name + ": at most " + std::to_string(biome::maxPlants) + " plants");
+				}
+				for (const biome::Plant& plant : biome.plants) {
+					const std::string plantName = name + ", plant \"" + plant.model + "\"";
+					if (!(plant.density >= 0.0f && plant.density <= 1.0f)) {
+						throw std::runtime_error(plantName + ": density must be between 0 and 1");
+					}
+					if (!(plant.minScale > 0.0f && plant.minScale <= plant.maxScale && std::isfinite(plant.maxScale))) {
+						throw std::runtime_error(plantName + ": scale must be a range [min, max] with 0 < min <= max");
+					}
+					if (!(plant.maxSlope >= 0.0f && plant.maxSlope <= 90.0f)) {
+						throw std::runtime_error(plantName + ": maxSlope must be between 0 and 90");
+					}
+					if (!std::isfinite(plant.elevation.min) || !std::isfinite(plant.elevation.max) || plant.elevation.min > plant.elevation.max) {
+						throw std::runtime_error(plantName + ": elevation must be a range [min, max] with min <= max");
+					}
+					if (!(plant.clustering >= 0.0f && plant.clustering <= 1.0f)) {
+						throw std::runtime_error(plantName + ": clustering must be between 0 and 1");
+					}
 				}
 			}
 		}
