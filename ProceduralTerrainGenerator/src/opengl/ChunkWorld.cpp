@@ -218,6 +218,13 @@ int ChunkWorld::Plan(const View& requested)
 			Select(rootLevel, { x, z }, local, view);
 		}
 	}
+	//Drawn nearest first: nearer terrain hides farther terrain, so hidden pixels fail the depth test before the material shader runs.
+	//In a fixed order looking one way drew far chunks first and doubled the cost of the TEXTURED mode
+	const auto chunkDistance = [&](const Chunk* c) {
+		const float size = NodeSize(c->level);
+		return DistanceToSquare(local, glm::vec2(c->coord) * size, size);
+	};
+	std::sort(visible.begin(), visible.end(), [&](const Chunk* a, const Chunk* b) { return chunkDistance(a) < chunkDistance(b); });
 	//By rank, then nearest first; a parent is never farther than its children, so coarse chunks come before fine ones
 	std::sort(pending.begin(), pending.end(), [](const PendingChunk& a, const PendingChunk& b) {
 		if (a.rank != b.rank) {

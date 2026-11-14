@@ -113,14 +113,15 @@ TEST_CASE("SimplifyCards keeps part of the cards, enlarged to the same area")
 	CHECK(indices.size() == part.indices.size());
 }
 
-TEST_CASE("SimplifyCards enlarges the cards at most four times")
+TEST_CASE("SimplifyCards enlarges the cards at most eight times")
 {
+	//One card of 100 kept: keeping the area would need 10 times, so the area grows only 8 x 8 times
 	const SourcePart part = Cards(100);
 	std::vector<Vertex> vertices;
 	std::vector<uint32_t> indices;
 	SimplifyCards(part, 2, vertices, indices);
 	CHECK(indices.size() / 3 == 2);
-	CHECK(Area(vertices, indices) == doctest::Approx(16.0f));
+	CHECK(Area(vertices, indices) == doctest::Approx(64.0f));
 }
 
 TEST_CASE("SimplifySurface gets close to the target and keeps the shape")

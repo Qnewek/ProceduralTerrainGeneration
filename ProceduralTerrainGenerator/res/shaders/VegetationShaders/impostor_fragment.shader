@@ -22,6 +22,8 @@ uniform int frames;
 //As in vegetation_fragment.shader: alpha of distant mip levels raised, light let through to the back of the leaves
 const float ALPHA_MIP_BOOST = 0.25;
 const float TRANSLUCENCY = 0.35;
+//Ambient occlusion of the meshes (detail map A) is not baked; the ambient light gets its typical value instead
+const float OCCLUSION = 0.8;
 
 void main()
 {
@@ -53,7 +55,7 @@ void main()
         float diff = max(facing, 0.0) + max(-facing, 0.0) * TRANSLUCENCY;
         vec3 ambient = light.ambient * ambientTint(light.direction);
         vec3 sunlight = light.diffuse * sunlightTint(light.direction);
-        result = (ambient + sunlight * diff) * color;
+        result = (ambient * OCCLUSION + sunlight * diff) * color;
     }
     if (fogOn) {
         vec3 toFragment = FragPos - viewPos;
