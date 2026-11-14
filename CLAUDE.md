@@ -213,6 +213,12 @@ Wartości szumów są w [-1, 1]. Konwencja indeksowania: `map[y * width + x]`.
   terenu (edytor nie zgłasza jej jako zmiany biomów) — `VegetationLayer` porównuje rośliny sam i rozmieszcza chunki od nowa, rysując stare instancje do czasu podmiany.
   `VegetationLayer` (w `TerrainGenerationSys`) czyta mapy
   chunków poziomu 0 z GPU (`ChunkWorld::FineChunks`, ≤ 4 chunki na klatkę) i rysuje instancje (SSBO, grupy model/wariant/LOD wg odległości). Bez biomów roślinności nie ma.
+  Impostory (tylko `kind` "tree"): przy instalacji `VegetationModels::BakeImpostors` renderuje LOD0 każdego wariantu z 8×8 kierunków półsfery (hemi-octahedral,
+  `Impostor.h` = `common/impostor.glsl`, zmiana w obu; testy `ImpostorTests.cpp`) do tablicy tekstur 1024² (warstwa = wariant): albedo i normalna w przestrzeni modelu,
+  tło przezroczyste, więc mipmapy są „premultiplied” (shader dzieli przez A). Rysowane jako czwarty poziom (`VegetationLayer::impostorLod`) od „Impostors from”,
+  quad do kamery mieszający 4 najbliższe klatki (`impostor_vertex/fragment.shader`); checkbox „Impostors” = LOD2 zamiast nich. Atlas zapisuje też `--vegetation-preview`.
+  Pomiar: `--vegetation-bench [gęstość] [wysokość oka m] [prefiks zrzutów]` — las domyślnego świata, ten sam układ mierzony z siatkami i z impostorami, zrzuty PNG.
+  Narzędzia z własnym oknem (`--gpu-check`, bench) muszą same ustawić `glPatchParameteri(GL_PATCH_VERTICES, 4)` (w aplikacji robi to `TerrainGenApp`), inaczej teren to śmieci.
   Klify, height blending, triplanar, specular i anti-tiling są w FS (`Terrain_fragment.shader`, `common/materials.glsl`), parametry w UBO `TerrainMaterials::Block`,
   który musi odpowiadać `TerrainMaterialBlock` (std140) pole w pole. Odczyty materiałów w FS przez `textureGrad` (pochodne z `surfaceSampling`, liczone w jednolitym
   przepływie sterowania). W FS uniform izolinii nazywa się `step` i zasłania wbudowane `step()` — nie używaj go w tym shaderze.

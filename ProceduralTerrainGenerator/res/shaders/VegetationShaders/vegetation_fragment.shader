@@ -4,7 +4,9 @@ in vec3 FragPos;
 in vec3 Normal;
 in vec2 UV;
 
-out vec4 FragColor;
+layout(location = 0) out vec4 FragColor;
+//Only while baking impostors (VegetationModels::BakeImpostors): normal in model space as RGB = n * 0.5 + 0.5, A = 1
+layout(location = 1) out vec4 NormalOut;
 
 struct Light {
     vec3 direction;     //unit vector towards the sun
@@ -26,6 +28,8 @@ uniform bool alphaTest;
 uniform bool foliage;
 uniform float normalStrength;
 uniform float specularStrength;
+//Baking impostors: unlit albedo with alpha 1 to attachment 0 and the normal to attachment 1, the model drawn with yaw 0 at the origin
+uniform bool bake;
 
 #include "../common/sky.glsl"
 
@@ -71,6 +75,12 @@ void main()
     vec3 norm = normalize(tbn * tangentNormal);
     float occlusion = detail.a;
     float roughness = detail.b;
+    if (bake) {
+        //Occlusion darkens the albedo, since the impostor has no ambient occlusion of its own
+        FragColor = vec4(albedo.rgb * mix(1.0, occlusion, 0.5), 1.0);
+        NormalOut = vec4(norm * 0.5 + 0.5, 1.0);
+        return;
+    }
 
     vec3 result = albedo.rgb;
     if (lightOn) {

@@ -42,6 +42,22 @@ public:
 	//Settings and statistics, in the Vegetation tab
 	void ImGuiDraw();
 
+	//Multiplies the density of every plant (the Density slider); a change places everything again
+	void SetDensity(float value) { density = value; }
+	//Instances placed on all chunks
+	size_t PlacedCount() const;
+	//Chunks placed with older settings or not at all, among those in range at the last Update
+	int UnplacedCount() const { return unplaced; }
+	//Last Draw
+	int DrawnInstances() const { return drawnInstances; }
+	uint64_t DrawnTriangles() const { return drawnTriangles; }
+	//Off = LOD 2 instead of impostors, for comparing them
+	void SetImpostors(bool on) { impostors = on; }
+	//@param lod - 0 to 2, or impostorLod
+	int DrawnInLod(int lod) const { return drawnPerLod[lod]; }
+	static constexpr int impostorLod = 3;
+	double LastPlacementMs() const { return placementMs; }
+
 	//Chunks whose maps are read back per frame at most
 	static constexpr int maxPlacementsPerFrame = 4;
 
@@ -52,9 +68,9 @@ private:
 		bool stale = false;
 		std::vector<vegetation::Instance> instances;
 	};
-	//Per layer of vegetation::Layer, in metres
+	//Per layer of vegetation::Layer, in metres; impostors only for models that have them (trees), others keep LOD 2 to the range
 	struct LayerRange {
-		float lod1 = 0.0f, lod2 = 0.0f, max = 0.0f;
+		float lod1 = 0.0f, lod2 = 0.0f, impostor = 0.0f, max = 0.0f;
 	};
 
 	std::unordered_map<uint64_t, ChunkInstances> placed;
@@ -65,8 +81,9 @@ private:
 	int placedReadyModels = -1;
 
 	bool enabled = true;
+	bool impostors = true;
 	float density = 1.0f;
-	LayerRange ranges[vegetation::layerCount] = { { 40.0f, 120.0f, 450.0f }, { 15.0f, 40.0f, 120.0f }, { 20.0f, 60.0f, 200.0f } };
+	LayerRange ranges[vegetation::layerCount] = { { 40.0f, 100.0f, 150.0f, 450.0f }, { 15.0f, 40.0f, 120.0f, 120.0f }, { 20.0f, 60.0f, 200.0f, 200.0f } };
 
 	//Instance buffer (VegetationModels::instanceBinding), regrown when too small
 	GLuint instanceBuffer = 0;
@@ -75,6 +92,7 @@ private:
 	//Last frame
 	int drawnInstances = 0;
 	uint64_t drawnTriangles = 0;
-	int drawnPerLod[3] = {};
+	int drawnPerLod[4] = {};	//LOD 0 - 2 and impostors
 	double placementMs = 0.0;
+	int unplaced = 0;
 };

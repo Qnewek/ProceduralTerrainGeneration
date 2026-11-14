@@ -13,6 +13,7 @@
 #include "stb_image.h"
 #include "glm/gtc/matrix_transform.hpp"
 
+#include "Impostor.h"
 #include "LightSource.h"
 
 namespace {
@@ -24,7 +25,16 @@ namespace {
 	constexpr unsigned int maxWorkers = 4;
 	constexpr int albedoUnit = 7;
 	constexpr int detailUnit = 8;
+	constexpr int impostorAlbedoUnit = 9;
+	constexpr int impostorNormalUnit = 10;
 	constexpr int previewSize = 512;
+
+	//Centre and radius (metres of the model) of the sphere around a variant: what an impostor frame shows
+	void BoundingSphere(const vegetation::Variant& variant, glm::vec3& center, float& radius)
+	{
+		center = (variant.boundsMin + variant.boundsMax) / 2.0f;
+		radius = std::max(glm::length(variant.boundsMax - variant.boundsMin) / 2.0f, 0.01f);
+	}
 
 	struct Image {
 		int width = 0, height = 0;
@@ -194,19 +204,26 @@ VegetationModels::~VegetationModels()
 		glDeleteBuffers(1, &model.indexBuffer);
 		glDeleteTextures(static_cast<GLsizei>(model.albedo.size()), model.albedo.data());
 		glDeleteTextures(static_cast<GLsizei>(model.detail.size()), model.detail.data());
+		glDeleteTextures(1, &model.impostorAlbedo);
+		glDeleteTextures(1, &model.impostorNormal);
 	}
 	glDeleteTextures(1, &fallbackAlbedo);
 	glDeleteTextures(1, &fallbackDetail);
+	glDeleteVertexArrays(1, &emptyVao);
+	glDeleteFramebuffers(1, &bakeFramebuffer);
+	glDeleteRenderbuffers(1, &bakeDepth);
 }
 
 bool VegetationModels::Initialize(const std::string& _resourceDir)
 {
 	resourceDir = _resourceDir;
 	shader = std::make_unique<Shader>("res/shaders/VegetationShaders/vegetation_vertex.shader", "res/shaders/VegetationShaders/vegetation_fragment.shader");
-	if (!shader->IsValid()) {
-		std::cout << "[ERROR] VegetationModels: the shader could not be built" << std::endl;
+	impostorShader = std::make_unique<Shader>("res/shaders/VegetationShaders/impostor_vertex.shader", "res/shaders/VegetationShaders/impostor_fragment.shader");
+	if (!shader->IsValid() || !impostorShader->IsValid()) {
+		std::cout << "[ERROR] VegetationModels: the shaders could not be built" << std::endl;
 		return false;
 	}
+	glCreateVertexArrays(1, &emptyVao);
 	const std::filesystem::path manifestPath = std::filesystem::path(resourceDir) / "vegetation_models.json";
 	try {
 		std::ifstream file(manifestPath);
@@ -386,8 +403,146 @@ void VegetationModels::Install(size_t index, Loaded& loaded)
 		model.albedo.push_back(CreateTexture(maps.width, maps.height, maps.albedo.data(), true));
 		model.detail.push_back(CreateTexture(maps.width, maps.height, maps.detail.data(), true));
 	}
+	BakeImpostors(index);
 	std::cout << "[LOG] VegetationModels: " << model.name << " ready in " << static_cast<int>(model.loadMs) << " ms"
 		<< (model.fromCache ? " (cache)" : " (levels built)") << std::endl;
+}
+
+void VegetationModels::BakeImpostors(size_t index)
+{
+	Model& model = models[index];
+	if (model.kind != "tree" || model.variants.empty()) {
+		return;
+	}
+	const int size = ImpostorSize();
+	const int layers = static_cast<int>(model.variants.size());
+	const int levels = 1 + static_cast<int>(std::floor(std::log2(static_cast<float>(size))));
+	for (GLuint* texture : { &model.impostorAlbedo, &model.impostorNormal }) {
+		glCreateTextures(GL_TEXTURE_2D_ARRAY, 1, texture);
+		glTextureStorage3D(*texture, levels, GL_RGBA8, size, size, layers);
+		glTextureParameteri(*texture, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+		glTextureParameteri(*texture, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+		glTextureParameteri(*texture, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+		glTextureParameteri(*texture, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+	}
+	if (!bakeFramebuffer) {
+		glCreateRenderbuffers(1, &bakeDepth);
+		glNamedRenderbufferStorage(bakeDepth, GL_DEPTH_COMPONENT24, size, size);
+		glCreateFramebuffers(1, &bakeFramebuffer);
+		glNamedFramebufferRenderbuffer(bakeFramebuffer, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, bakeDepth);
+		const GLenum buffers[2] = { GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1 };
+		glNamedFramebufferDrawBuffers(bakeFramebuffer, 2, buffers);
+	}
+
+	GLint viewport[4], framebuffer = 0;
+	GLfloat clearColor[4];
+	glGetIntegerv(GL_VIEWPORT, viewport);
+	glGetIntegerv(GL_DRAW_FRAMEBUFFER_BINDING, &framebuffer);
+	glGetFloatv(GL_COLOR_CLEAR_VALUE, clearColor);
+	const GLboolean scissor = glIsEnabled(GL_SCISSOR_TEST), culling = glIsEnabled(GL_CULL_FACE), depthTest = glIsEnabled(GL_DEPTH_TEST);
+	glDisable(GL_SCISSOR_TEST);
+	glDisable(GL_CULL_FACE);
+	glEnable(GL_DEPTH_TEST);
+	glBindFramebuffer(GL_FRAMEBUFFER, bakeFramebuffer);
+	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, instanceBinding, preview->instances);
+	glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
+	//Unused while baking (the albedo is unlit), but BeginDraw sets its uniforms
+	LightSource light;
+
+	for (int v = 0; v < layers; v++) {
+		glNamedFramebufferTextureLayer(bakeFramebuffer, GL_COLOR_ATTACHMENT0, model.impostorAlbedo, 0, v);
+		glNamedFramebufferTextureLayer(bakeFramebuffer, GL_COLOR_ATTACHMENT1, model.impostorNormal, 0, v);
+		if (v == 0 && glCheckNamedFramebufferStatus(bakeFramebuffer, GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
+			std::cout << "[ERROR] VegetationModels: the impostor framebuffer is incomplete" << std::endl;
+			break;
+		}
+		glViewport(0, 0, size, size);
+		//Transparent black outside the model: the mip levels then hold colors premultiplied by the coverage
+		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+		glm::vec3 center;
+		float radius;
+		BoundingSphere(model.variants[v], center, radius);
+		const glm::mat4 projection = glm::ortho(-radius, radius, -radius, radius, radius * 0.5f, radius * 3.5f);
+		for (int j = 0; j < impostorFrames; j++) {
+			for (int i = 0; i < impostorFrames; i++) {
+				const glm::vec3 direction = impostor::FrameDirection(i, j, impostorFrames);
+				glm::vec3 right, up;
+				impostor::FrameAxes(direction, right, up);
+				const glm::vec3 eye = center + direction * radius * 2.0f;
+				glViewport(i * impostorCell, j * impostorCell, impostorCell, impostorCell);
+				BeginDraw(glm::lookAt(eye, center, up), projection, eye, glm::mat4(1.0f), 1.0f, light, false, 0.0f, 1.0f);
+				shader->SetUniform1i("bake", 1);
+				Draw(static_cast<int>(index), v, 0, 0, 1);
+			}
+		}
+	}
+	shader->SetUniform1i("bake", 0);
+	glGenerateTextureMipmap(model.impostorAlbedo);
+	glGenerateTextureMipmap(model.impostorNormal);
+
+	glBindFramebuffer(GL_FRAMEBUFFER, static_cast<GLuint>(framebuffer));
+	glViewport(viewport[0], viewport[1], viewport[2], viewport[3]);
+	glClearColor(clearColor[0], clearColor[1], clearColor[2], clearColor[3]);
+	if (scissor) {
+		glEnable(GL_SCISSOR_TEST);
+	}
+	if (culling) {
+		glEnable(GL_CULL_FACE);
+	}
+	if (!depthTest) {
+		glDisable(GL_DEPTH_TEST);
+	}
+}
+
+void VegetationModels::BeginImpostorDraw(const glm::mat4& view, const glm::mat4& projection, const glm::vec3& viewPos, const glm::mat4& model,
+	const glm::vec3& eye, float heightScale, const LightSource& light, bool fogOn, float fogStart, float fogDistance)
+{
+	impostorShader->Bind();
+	impostorShader->SetUniform1f("heightScale", heightScale);
+	impostorShader->SetView(view);
+	impostorShader->SetProjection(projection);
+	impostorShader->SetViewPos(viewPos);
+	impostorShader->SetModel(model);
+	impostorShader->SetUniform3fv("eye", eye);
+	light.SetLightUniforms(*impostorShader);
+	impostorShader->SetUniform1i("fogOn", fogOn);
+	impostorShader->SetUniform1f("fogStart", fogStart);
+	impostorShader->SetUniform1f("fogDistance", fogDistance);
+	impostorShader->SetUniform1i("impostorAlbedo", impostorAlbedoUnit);
+	impostorShader->SetUniform1i("impostorNormal", impostorNormalUnit);
+	impostorShader->SetUniform1i("frames", impostorFrames);
+}
+
+void VegetationModels::DrawImpostors(int modelIndex, int variant, int firstInstance, int instanceCount)
+{
+	const Model& model = models[modelIndex];
+	if (model.state != State::READY || !model.impostorAlbedo || variant < 0 || variant >= static_cast<int>(model.variants.size())) {
+		return;
+	}
+	glm::vec3 center;
+	float radius;
+	BoundingSphere(model.variants[variant], center, radius);
+	impostorShader->SetUniform3fv("boundsCenter", center);
+	impostorShader->SetUniform1f("boundsRadius", radius);
+	impostorShader->SetUniform1f("layer", static_cast<float>(variant));
+	impostorShader->SetUniform1i("firstInstance", firstInstance);
+	glBindTextureUnit(impostorAlbedoUnit, model.impostorAlbedo);
+	glBindTextureUnit(impostorNormalUnit, model.impostorNormal);
+	glBindVertexArray(emptyVao);
+	glDrawArraysInstanced(GL_TRIANGLE_STRIP, 0, 4, instanceCount);
+	glBindVertexArray(0);
+}
+
+std::vector<unsigned char> VegetationModels::ImpostorAtlas(int modelIndex, int variant) const
+{
+	const Model& model = models[modelIndex];
+	if (!model.impostorAlbedo || variant < 0 || variant >= static_cast<int>(model.variants.size())) {
+		return {};
+	}
+	const int size = ImpostorSize();
+	std::vector<unsigned char> pixels(static_cast<size_t>(size) * size * 4);
+	glGetTextureSubImage(model.impostorAlbedo, 0, 0, 0, variant, size, size, 1, GL_RGBA, GL_UNSIGNED_BYTE, static_cast<GLsizei>(pixels.size()), pixels.data());
+	return pixels;
 }
 
 void VegetationModels::Update()
@@ -424,6 +579,7 @@ void VegetationModels::BeginDraw(const glm::mat4& view, const glm::mat4& project
 	shader->SetUniform1i("detailMap", detailUnit);
 	shader->SetUniform1f("normalStrength", normalStrength);
 	shader->SetUniform1f("specularStrength", specularStrength);
+	shader->SetUniform1i("bake", 0);
 }
 
 void VegetationModels::Draw(int modelIndex, int variant, int lod, int firstInstance, int instanceCount)

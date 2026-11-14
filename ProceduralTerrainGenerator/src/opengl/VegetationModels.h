@@ -41,6 +41,8 @@ public:
 		double loadMs = 0.0;
 		GLuint vao = 0, vertexBuffer = 0, indexBuffer = 0;
 		std::vector<GLuint> albedo, detail;		//per material
+		//Impostor atlases of trees (kind "tree"), GL_TEXTURE_2D_ARRAY with one layer per variant; 0 = none (see BakeImpostors)
+		GLuint impostorAlbedo = 0, impostorNormal = 0;
 	};
 
 	//Defined where Loaded and Preview are complete
@@ -55,7 +57,12 @@ public:
 	bool Initialize(const std::string& resourceDir);
 	//Installs models whose loading finished; call every frame on the GL thread
 	void Update();
-	bool ReloadShader() { return shader && shader->Reload(); }
+	bool ReloadShader()
+	{
+		const bool mesh = shader && shader->Reload();
+		const bool impostors = impostorShader && impostorShader->Reload();
+		return mesh && impostors;
+	}
 
 	const std::vector<Model>& GetModels() const { return models; }
 	int LoadingCount() const;
@@ -70,6 +77,21 @@ public:
 	static constexpr unsigned int instanceBinding = 1;
 	//Draws instances [firstInstance, firstInstance + instanceCount) of a level of detail of a variant of a ready model
 	void Draw(int model, int variant, int lod, int firstInstance, int instanceCount);
+
+	//Impostors: each variant of a tree rendered from impostorFrames x impostorFrames directions of the upper hemisphere into
+	//cells of impostorCell pixels (octahedral mapping, Impostor.h); far away a camera-facing quad blends the four nearest frames
+	static constexpr int impostorFrames = 8;
+	static constexpr int impostorCell = 128;
+	bool HasImpostors(int model) const { return models[model].impostorAlbedo != 0; }
+	//As BeginDraw, for DrawImpostors
+	//@param eye - camera position before modelScale (the impostors face it)
+	void BeginImpostorDraw(const glm::mat4& view, const glm::mat4& projection, const glm::vec3& viewPos, const glm::mat4& model, const glm::vec3& eye,
+		float heightScale, const LightSource& light, bool fogOn, float fogStart, float fogDistance);
+	//Draws instances [firstInstance, firstInstance + instanceCount) of a variant as impostors; nothing without impostors
+	void DrawImpostors(int model, int variant, int firstInstance, int instanceCount);
+	//Albedo atlas of a variant (premultiplied RGBA, rows from the bottom up), ImpostorSize() pixels square; empty without impostors
+	std::vector<unsigned char> ImpostorAtlas(int model, int variant) const;
+	static int ImpostorSize() { return impostorFrames * impostorCell; }
 
 	//"Vegetation" tab: list of models and their levels of detail, preview of the selected model
 	void ImGuiDraw(const LightSource& light);
@@ -86,6 +108,8 @@ private:
 	//Runs on a worker: cache or glTF, then textures; no OpenGL here
 	Loaded Load(size_t index) const;
 	void Install(size_t index, Loaded& loaded);
+	//Renders the impostor atlases of a just installed tree (its first level of detail); other kinds get none
+	void BakeImpostors(size_t index);
 	//Preview of the tab: turns the camera and renders the selected model
 	void DrawPreview(const LightSource& light);
 	//Renders a model into the preview framebuffer
@@ -94,7 +118,12 @@ private:
 	std::string resourceDir;
 	std::vector<Model> models;
 	std::unique_ptr<Shader> shader;
+	std::unique_ptr<Shader> impostorShader;
 	GLuint fallbackAlbedo = 0, fallbackDetail = 0;
+	//Impostor quads have no vertex attributes, but drawing needs a vertex array
+	GLuint emptyVao = 0;
+	//Framebuffer and depth of impostor baking, made with the first tree
+	GLuint bakeFramebuffer = 0, bakeDepth = 0;
 
 	//Background loading: workers take the next model index and leave the result in finished
 	std::vector<std::thread> workers;
