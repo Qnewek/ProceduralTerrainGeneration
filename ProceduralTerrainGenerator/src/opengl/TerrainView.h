@@ -22,6 +22,7 @@ struct TerrainRenderSettings {
 	utilities::heightMapMode displayMode = utilities::heightMapMode::GREYSCALE;
 	bool wireFrame = false;
 	bool map2d = false;		//top-down orthographic view instead of the camera
+	float tessPixels = 6.0f;	//3D view: length of a terrain triangle edge on screen in pixels (smaller = more detail); the 2D map ignores it
 };
 
 //Renders a height field as a tessellated patch grid. Owns the mesh, the shader and the textures,

@@ -62,6 +62,31 @@ namespace vegetation
 		};
 	}
 
+	std::vector<uint32_t> SortByBlock(std::vector<Instance>& instances, glm::vec2 mapOrigin, float worldUnitsPerTexel, glm::ivec2 chunkTexel,
+		int blockTexels, int blocksPerSide)
+	{
+		const size_t blocks = static_cast<size_t>(blocksPerSide) * blocksPerSide;
+		std::vector<uint32_t> codes(instances.size());
+		std::vector<uint32_t> starts(blocks + 1, 0);
+		for (size_t i = 0; i < instances.size(); i++) {
+			const glm::vec2 texel = (glm::vec2(instances[i].position.x, instances[i].position.z) - mapOrigin) / worldUnitsPerTexel - glm::vec2(chunkTexel);
+			const glm::ivec2 block = glm::clamp(glm::ivec2(glm::floor(texel / static_cast<float>(blockTexels))), glm::ivec2(0), glm::ivec2(blocksPerSide - 1));
+			codes[i] = Morton(static_cast<uint32_t>(block.x), static_cast<uint32_t>(block.y));
+			starts[codes[i] + 1]++;
+		}
+		for (size_t b = 0; b < blocks; b++) {
+			starts[b + 1] += starts[b];
+		}
+		//Counting sort, stable
+		std::vector<Instance> sorted(instances.size());
+		std::vector<uint32_t> next(starts.begin(), starts.end() - 1);
+		for (size_t i = 0; i < instances.size(); i++) {
+			sorted[next[codes[i]]++] = instances[i];
+		}
+		instances.swap(sorted);
+		return starts;
+	}
+
 	float ClusterFactor(glm::vec2 texel, uint32_t seed)
 	{
 		//Two octaves, so the edges of forests are not straight
@@ -103,7 +128,11 @@ namespace vegetation
 			}
 		}
 
+		const float step = static_cast<float>(std::max(maps.step, 1));
 		for (int layer = 0; layer < layerCount; layer++) {
+			if (!(settings.layerMask & (1u << layer))) {
+				continue;
+			}
 			const int cell = cellTexels[layer];
 			const int cells = settings.chunkTexels / cell;
 			const uint32_t salt = settings.seed * 3u + static_cast<uint32_t>(layer) + 1u;
@@ -114,7 +143,7 @@ namespace vegetation
 					uint32_t h = Hash(cellTexel.x, cellTexel.y, salt);
 					const float jitterX = Unit(h = Hash(h)), jitterY = Unit(h = Hash(h));
 					const glm::vec2 texel = glm::vec2(cellTexel) + glm::vec2(jitterX, jitterY) * static_cast<float>(cell);
-					const glm::vec2 local = texel - glm::vec2(maps.firstTexel);
+					const glm::vec2 local = (texel - glm::vec2(maps.firstTexel)) / step;
 					const glm::ivec2 nearest = glm::clamp(glm::ivec2(glm::floor(local + 0.5f)), glm::ivec2(0), glm::ivec2(maps.size - 1));
 					const size_t index = static_cast<size_t>(nearest.y) * maps.size + nearest.x;
 					const int id = maps.ids[index];

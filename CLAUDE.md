@@ -113,7 +113,7 @@ CMakeLists.txt, CMakePresets.json, vcpkg.json   build; GLFW, GLEW, glm, ImGui, I
    a wynik wgrywa `TerrainView::SetLayer`; tak samo mapa z pliku w trybie Imported map. Tekstury mają niezmienny storage, nowa powstaje przy zmianie rozmiaru.
 3. Siatka (`TerrainView`): stała siatka `mapResolution × mapResolution` (50×50) patchy-quadów o rozmiarze
    `width * worldUnitsPerTexel` (= 4, `GetWorldWidth()`), rysowana `GL_PATCHES` (4 wierzchołki).
-4. TCS: poziom teselacji 4–64 zależnie od odległości w przestrzeni oka. TES: próbkuje `heightMap`,
+4. TCS: w 3D poziom teselacji z długości krawędzi na ekranie (`tessPixels`, suwak „Terrain detail”, 1–64), w widoku 2D po staremu 4–64 od odległości (ma zostać ostry). Normalna i kolor biomów liczone w FS na piksel (z `surfaceMap` / `biomeMap`). TES: próbkuje `heightMap`,
    przesuwa wierzchołek o `height * heightScale`, bierze normalną z `surfaceMap`, koloruje wg `displayMode`
    (0 grey, 1 topo, 2 mono, 3 biomy z `biomeMap`, 4 nachylenie, 5 krzywizna, 6 TEXTURED — materiały liczy FS z `splatMap`). `surfaceMap` (gradient + laplasjan surowej wysokości, `RGBA32F`)
    liczy `TerrainView::Draw` przez `GpuSurfacePass`, tylko gdy warstwa wysokości zmieniła się od ostatniego razu (`LayerTexture` oznacza ją jako nieaktualną).
@@ -211,13 +211,20 @@ Wartości szumów są w [-1, 1]. Konwencja indeksowania: `map[y * width + x]`.
   maks. nachylenie, zakres elewacji, klastrowanie), edytowane w edytorze biomów i zapisywane w presetach; warstwę (komórki 8 / 4 m) wyznacza `kind` modelu w JSON
   (`vegetation::LayerOfKind`). Domyślne rośliny: `biome::DefaultPlants(nazwa)`; biom z presetu bez pola `plants` dostaje je po nazwie. Zmiana roślin nie regeneruje
   terenu (edytor nie zgłasza jej jako zmiany biomów) — `VegetationLayer` porównuje rośliny sam i rozmieszcza chunki od nowa, rysując stare instancje do czasu podmiany.
-  `VegetationLayer` (w `TerrainGenerationSys`) czyta mapy
-  chunków poziomu 0 z GPU (`ChunkWorld::FineChunks`, ≤ 4 chunki na klatkę) i rysuje instancje (SSBO, grupy model/wariant/LOD wg odległości). Bez biomów roślinności nie ma.
+  `VegetationLayer` (w `TerrainGenerationSys`) rozmieszcza na liściach quadtree w zasięgu (`ChunkWorld::GroundChunks`: nie nakładają się, teren rysowany
+  z tych samych map): poziom 0 = wszystkie warstwy, grubsze (daleko) tylko drzewa (`PlacementSettings::layerMask`, `ChunkMaps::step`; ten sam hash komórki, więc
+  te same drzewa co na drobnych chunkach). Mapy czyta wątek GL (≤ 4 chunki na klatkę), `PlaceChunk` idzie na wątku roboczym (`GenerationJob`, ≤ 8 naraz).
+  Instancje chunka leżą na GPU na stałe (jeden bufor, `RangeAllocator`), posortowane po blokach 128 m w porządku Morton (`SortByBlock`), więc część grubszego
+  chunka zastępuje nierozmieszczone drobniejsze (i odwrotnie). Co klatkę `cull_compute.shader` (3 przebiegi: klasyfikacja frustum/odległość/LOD z licznikami,
+  sumy prefiksowe + komendy, rozrzut do grup) i `glMultiDrawElementsIndirect` per (model, materiał) / `glMultiDrawArraysIndirect` dla impostorów.
+  Instancje idą do shaderów jako atrybuty z dzielnikiem (GL 4.5 nie ma `gl_BaseInstance`), wariant impostora w danych instancji. Statystyki wracają z GPU klatkę później.
+  Bez biomów roślinności nie ma.
   Impostory (tylko `kind` "tree"): przy instalacji `VegetationModels::BakeImpostors` renderuje LOD0 każdego wariantu z 8×8 kierunków półsfery (hemi-octahedral,
   `Impostor.h` = `common/impostor.glsl`, zmiana w obu; testy `ImpostorTests.cpp`) do tablicy tekstur 1024² (warstwa = wariant): albedo i normalna w przestrzeni modelu,
   tło przezroczyste, więc mipmapy są „premultiplied” (shader dzieli przez A). Rysowane jako czwarty poziom (`VegetationLayer::impostorLod`) od „Impostors from”,
   quad do kamery mieszający 4 najbliższe klatki (`impostor_vertex/fragment.shader`); checkbox „Impostors” = LOD2 zamiast nich. Atlas zapisuje też `--vegetation-preview`.
-  Pomiar: `--vegetation-bench [gęstość] [wysokość oka m] [prefiks zrzutów]` — las domyślnego świata, ten sam układ mierzony z siatkami i z impostorami, zrzuty PNG.
+  Pomiar: `--vegetation-bench [gęstość] [wysokość oka m] [prefiks zrzutów, - = bez] [zasięg widoku m]` — las domyślnego świata, kamera w stronę największego lądu
+  z roślinnością, ten sam układ mierzony z siatkami i z impostorami, czasy CPU też w czasie ładowania, zrzuty PNG.
   Narzędzia z własnym oknem (`--gpu-check`, bench) muszą same ustawić `glPatchParameteri(GL_PATCH_VERTICES, 4)` (w aplikacji robi to `TerrainGenApp`), inaczej teren to śmieci.
   Klify, height blending, triplanar, specular i anti-tiling są w FS (`Terrain_fragment.shader`, `common/materials.glsl`), parametry w UBO `TerrainMaterials::Block`,
   który musi odpowiadać `TerrainMaterialBlock` (std140) pole w pole. Odczyty materiałów w FS przez `textureGrad` (pochodne z `surfaceSampling`, liczone w jednolitym

@@ -144,6 +144,11 @@ void TerrainView::SetFrameUniforms(Shader& shader, Camera& camera, LightSource& 
 	shader.SetUniform2f("texelWorldSize", worldUnitsPerTexel, worldUnitsPerTexel);
 	shader.SetUniform1f("meshScale", 1.0f);
 	shader.SetUniform1f("skirtDepth", 0.0f);
+	GLint viewport[4] = {};
+	glGetIntegerv(GL_VIEWPORT, viewport);
+	shader.SetUniform1i("screenSpaceTess", !settings.map2d);
+	shader.SetUniform1f("tessPixels", settings.tessPixels);
+	shader.SetUniform1f("viewportHeight", static_cast<float>(viewport[3]));
 	shader.SetUniform1i("heightMap", heightUnit);
 	shader.SetUniform1i("biomeMap", static_cast<int>(Layer::BIOMES));
 	shader.SetUniform1i("surfaceMap", surfaceUnit);

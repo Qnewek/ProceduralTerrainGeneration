@@ -498,6 +498,20 @@ Kroki:
      nie mogą rosnąć, nie zabierają udziału pozostałym. Modele jeszcze wczytywane zachowują swoje komórki (puste), więc reszta nie przeskakuje po wczytaniu.
      Zmiana roślin nie regeneruje terenu; chunki są rozmieszczane od nowa, a do tego czasu widać stare instancje.
 4. **Impostory i culling na GPU:** impostory pieczone przy wczytaniu (octahedral), frustum/distance culling w compute, `glMultiDrawElementsIndirect`; pomiar 100k instancji.
+   - Wynik (2026-11-14, do oceny właściciela): impostory (8×8 klatek hemi-octahedral, atlas 1024² na wariant, od 150 m, checkbox „Impostors”), drzewa także na grubszych
+     chunkach (daleki las do końca zasięgu widoku, tylko impostory), instancje na GPU na stałe, culling i wybór LOD w compute, rysowanie pośrednie, rozmieszczanie na wątkach.
+     Pierwszy pomiar pokazał, że 100k drzew było nieosiągalne konstrukcyjnie: drzewa stały tylko na chunkach poziomu 0 (~770 m), maks. ~42 tys. rozmieszczonych.
+   - Pomiar `--vegetation-bench` (1920×1080, dżungla, oko 30 m, kamera w stronę lądu; GPU roślinności, siatki LOD2 → impostory):
+
+     | zasięg, gęstość | rozmieszczone | w kadrze | siatki | impostory | CPU rysowania |
+     |---|---|---|---|---|---|
+     | 1250 m (domyślny), ×1 | 22 tys. | 5,5 tys. | 8,3 ms | 1,2 ms | 0,10 ms |
+     | 4 km, ×1 | 50 tys. | 9,4 tys. | 13,6 ms | 0,8 ms | 0,10 ms |
+     | 8 km, ×3 | 509 tys. | 64 tys. | 84 ms | 1,4 ms | 0,11 ms |
+
+     Kryterium 100k+ drzew przy 60 FPS spełnione z zapasem (pół miliona w świecie, 64 tys. w kadrze za 1,4 ms). Teren 0,3–0,6 ms.
+   - Znane: przy dużym zasięgu w czasie ładowania zdarzają się klatki 70–90 ms (odczyt map czeka na kolejkę generacji GPU, wgrywanie dużych chunków) —
+     do zrobienia asynchroniczny odczyt (PBO + fence); impostory nieco ciemniejsze od siatek, granica 150 m widoczna.
 5. **Trawa:** osobny system blisko kamery (compute + wiatr w VS).
 6. **Wspólny UBO kamery i światła** (pkt 6 wyżej) — przy kroku 2, gdy dojdą shadery roślinności.
 

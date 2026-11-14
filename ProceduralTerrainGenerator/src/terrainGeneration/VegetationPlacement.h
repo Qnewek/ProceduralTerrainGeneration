@@ -42,10 +42,12 @@ namespace vegetation
 		Layer layer = Layer::TREES;
 	};
 
-	//Maps of one chunk as read from the GPU: size x size texels, row-major, texel t is map texel firstTexel + t
+	//Maps of one chunk as read from the GPU: size x size texels, row-major, texel t is map texel firstTexel + t * step
+	//(a coarser chunk samples every step-th map texel)
 	struct ChunkMaps {
 		int size = 0;
 		glm::ivec2 firstTexel = glm::ivec2(0);
+		int step = 1;
 		const float* height = nullptr;
 		const glm::vec4* surface = nullptr;		//xy = height gradient per world unit (GpuSurfacePass)
 		const int* ids = nullptr;				//biome ids
@@ -60,6 +62,7 @@ namespace vegetation
 		float waterHeight = 0.0f;				//nothing stands at or below it
 		float density = 1.0f;					//multiplies every probability
 		uint32_t seed = 0;
+		unsigned layerMask = (1u << layerCount) - 1u;	//bit l = layer l is placed
 	};
 
 	//Places the plants of the biomes on a chunk. In each cell of a layer at most one plant stands: of the plants of the cell's biome
@@ -70,6 +73,26 @@ namespace vegetation
 	//@param out - instances of the chunk are appended
 	void PlaceChunk(const ChunkMaps& maps, const std::vector<std::vector<biome::Plant>>& plants, const std::vector<ModelInfo>& models,
 		const PlacementSettings& settings, std::vector<Instance>& out);
+
+	//Z-order (Morton) index of a block in a square of blocks: every aligned power-of-two square of blocks is a contiguous range
+	inline uint32_t Morton(uint32_t x, uint32_t y)
+	{
+		auto spread = [](uint32_t v) {
+			v &= 0xFFFFu;
+			v = (v | (v << 8)) & 0x00FF00FFu;
+			v = (v | (v << 4)) & 0x0F0F0F0Fu;
+			v = (v | (v << 2)) & 0x33333333u;
+			v = (v | (v << 1)) & 0x55555555u;
+			return v;
+		};
+		return spread(x) | (spread(y) << 1);
+	}
+	//Sorts the instances of a chunk by the Morton index of the block (blockTexels square) they stand in, so the instances of any
+	//aligned power-of-two square of blocks are contiguous
+	//@param chunkTexel - first map texel of the chunk; it spans blocksPerSide blocks (a power of two) per side
+	//@return start of every block's instances by Morton index, blocksPerSide^2 + 1 entries (the last = instance count)
+	std::vector<uint32_t> SortByBlock(std::vector<Instance>& instances, glm::vec2 mapOrigin, float worldUnitsPerTexel, glm::ivec2 chunkTexel,
+		int blockTexels, int blocksPerSide);
 
 	//Clustering of trees and shrubs (forests and clearings): a factor around 1 from a smooth noise of the map position
 	float ClusterFactor(glm::vec2 texel, uint32_t seed);

@@ -194,6 +194,13 @@ namespace utilities
 		ImGui::SliderFloat("Band width", &topoBandWidth, 0.1f, 1.0f);
 		return change;
 	}
+	void TerrainDetailImGui(float& tessPixels)
+	{
+		//Reversed range: to the right = more detail
+		ImGui::SliderFloat("Terrain detail", &tessPixels, 24.0f, 2.0f, "%.1f px per triangle", ImGuiSliderFlags_Logarithmic);
+		ImGui::SetItemTooltip("3D view: terrain triangles are about this many pixels wide at any distance (at most 64 per patch side).\n"
+			"Fewer pixels = sharper distant terrain and more GPU time. The 2D map is not affected");
+	}
 	bool ImGuiButtonWrapper(const char* label, bool disabled)
 	{
 		if (disabled) {
