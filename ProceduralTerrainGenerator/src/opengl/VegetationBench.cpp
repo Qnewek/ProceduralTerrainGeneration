@@ -25,6 +25,8 @@
 #include "VegetationLayer.h"
 #include "VegetationModels.h"
 #include "ShadowMap.h"
+#include "Clouds.h"
+#include "Sky.h"
 #include "WaterSurface.h"
 #include "WorldConfig.h"
 
@@ -234,6 +236,11 @@ namespace {
 		if (sunElevation > 0.0f) {
 			light.SetElevation(sunElevation);
 		}
+		Sky sky;
+		Clouds clouds;
+		if (!sky.Initialize() || !clouds.Initialize()) {
+			return -1;
+		}
 		Renderer renderer;
 		TerrainRenderSettings settings;
 		settings.heightScale = heightScale;
@@ -264,13 +271,13 @@ namespace {
 		glEnable(GL_DEPTH_TEST);
 		glViewport(0, 0, screenWidth, screenHeight);
 		renderer.SetPatches(4);
-		Timer terrainTimer, vegetationTimer, grassTimer, shadowTimer, waterTimer;
+		Timer terrainTimer, vegetationTimer, grassTimer, shadowTimer, waterTimer, cloudTimer;
 		ShadowMap shadows;
 		//Measured twice on the same placement: trees far away as LOD 2 meshes, then as impostors
 		struct Phase {
 			const char* name;
 			bool impostors;
-			Stats terrainGpu, grassGpu, vegetationGpu, shadowGpu, waterGpu, vegetationCpu, updateCpu;
+			Stats terrainGpu, grassGpu, vegetationGpu, shadowGpu, waterGpu, cloudGpu, vegetationCpu, updateCpu;
 			int blades = 0;
 			int drawn = 0, perLod[4] = {};
 			uint64_t triangles = 0;
@@ -289,6 +296,11 @@ namespace {
 			vegetation.SetImpostors(p.impostors);
 			const bool lastFrame = measuring && p.terrainGpu.count + 1 == measuredFrames;
 			renderer.Clear(glm::vec3(0.5f, 0.6f, 0.7f));
+			sky.Update(camera, light);
+			cloudTimer.Begin();
+			const bool cloudsDrawn = clouds.RenderSky(camera, light);
+			cloudTimer.End();
+			sky.Draw(camera, light, cloudsDrawn);
 			const auto updateStart = std::chrono::steady_clock::now();
 			if (chunks.Plan(ChunkWorld::ViewFrom(camera, settings)) > 0) {
 				chunks.GenerateNext([&](const MapArea& area, TextureClass& height, TextureClass* colors, TextureClass* ids, TextureClass* splat) {
@@ -326,7 +338,9 @@ namespace {
 			waterTimer.Begin();
 			water.Draw(chunks, camera, light, settings, world.terrain.WaterHeight() * heightScale);
 			waterTimer.End();
-			const double terrainMs = terrainTimer.Ms(), grassMs = grassTimer.Ms(), vegetationMs = vegetationTimer.Ms(), shadowMs = shadowTimer.Ms(), waterMs = waterTimer.Ms();
+			clouds.DrawOver(camera, light);
+			const double terrainMs = terrainTimer.Ms(), grassMs = grassTimer.Ms(), vegetationMs = vegetationTimer.Ms(), shadowMs = shadowTimer.Ms(), waterMs = waterTimer.Ms(),
+				cloudMs = cloudTimer.Ms();
 			if (lastFrame && target) {
 				const std::string file = screenshot + "_" + p.name + ".png";
 				if (!SaveScreenshot(file)) {
@@ -340,6 +354,7 @@ namespace {
 				p.grassGpu.Add(grassMs);
 				p.shadowGpu.Add(shadowMs);
 				p.waterGpu.Add(waterMs);
+				p.cloudGpu.Add(cloudMs);
 				p.vegetationGpu.Add(vegetationMs);
 				p.vegetationCpu.Add(drawMs);
 				p.updateCpu.Add(updateMs);
@@ -384,6 +399,7 @@ namespace {
 			std::printf("%-28s %8.2f %8.2f   (%d blades)\n", "grass GPU", p.grassGpu.Mean(), p.grassGpu.max, p.blades);
 			std::printf("%-28s %8.2f %8.2f\n", "shadows GPU", p.shadowGpu.Mean(), p.shadowGpu.max);
 			std::printf("%-28s %8.2f %8.2f\n", "water GPU", p.waterGpu.Mean(), p.waterGpu.max);
+			std::printf("%-28s %8.2f %8.2f\n", "clouds GPU", p.cloudGpu.Mean(), p.cloudGpu.max);
 			std::printf("%-28s %8.2f %8.2f\n", "vegetation GPU", p.vegetationGpu.Mean(), p.vegetationGpu.max);
 			std::printf("%-28s %8.2f %8.2f\n", "vegetation draw CPU", p.vegetationCpu.Mean(), p.vegetationCpu.max);
 			std::printf("%-28s %8.2f %8.2f\n", "update CPU (chunks, place)", p.updateCpu.Mean(), p.updateCpu.max);

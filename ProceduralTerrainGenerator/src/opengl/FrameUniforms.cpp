@@ -31,6 +31,12 @@ FrameUniforms::Block FrameUniforms::Make(const glm::mat4& view, const glm::mat4&
 	b.fogOn = fogOn ? 1 : 0;
 	b.fogStart = fogStart;
 	b.fogDistance = fogDistance;
+	if (fogOn) {
+		b.hazeDensity = light.GetHazeDensity();
+		b.hazeFalloff = light.GetHazeFalloff();
+	}
+	b.cloudLayer = light.GetCloudLayer();
+	b.cloudWind = light.GetCloudWind();
 	return b;
 }
 
