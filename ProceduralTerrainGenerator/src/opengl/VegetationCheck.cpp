@@ -54,6 +54,32 @@ namespace {
 		}
 		return lodepng::encode(file.string(), sheet, static_cast<unsigned>(width), static_cast<unsigned>(height)) == 0;
 	}
+
+	//Impostor atlases of all variants of a model side by side, on the background of the previews
+	bool SaveImpostors(const VegetationModels& models, int index, const std::filesystem::path& file)
+	{
+		const int size = VegetationModels::ImpostorSize();
+		const int variants = static_cast<int>(models.GetModels()[index].variants.size());
+		const int width = size * variants;
+		std::vector<unsigned char> sheet(static_cast<size_t>(width) * size * 4);
+		const float background[3] = { 0.16f * 255.0f, 0.18f * 255.0f, 0.22f * 255.0f };
+		for (int v = 0; v < variants; v++) {
+			const std::vector<unsigned char> atlas = models.ImpostorAtlas(index, v);
+			for (int y = 0; y < size; y++) {
+				for (int x = 0; x < size; x++) {
+					//Bottom-up and premultiplied: over the background, top-down
+					const unsigned char* source = &atlas[(static_cast<size_t>(size - 1 - y) * size + x) * 4];
+					unsigned char* target = &sheet[(static_cast<size_t>(y) * width + static_cast<size_t>(v) * size + x) * 4];
+					const float uncovered = 1.0f - source[3] / 255.0f;
+					for (int c = 0; c < 3; c++) {
+						target[c] = static_cast<unsigned char>(std::min(255.0f, source[c] + background[c] * uncovered));
+					}
+					target[3] = 255;
+				}
+			}
+		}
+		return lodepng::encode(file.string(), sheet, static_cast<unsigned>(width), static_cast<unsigned>(size)) == 0;
+	}
 }
 
 int RunVegetationPreview(const std::string& folder)
@@ -110,6 +136,11 @@ int RunVegetationPreview(const std::string& folder)
 				const std::filesystem::path file = std::filesystem::path(folder) / (model.asset + ".png");
 				if (!SaveSheet(models, i, light, file)) {
 					std::cout << "[ERROR] cannot write " << file.string() << std::endl;
+					result = 1;
+				}
+				const std::filesystem::path impostors = std::filesystem::path(folder) / (model.asset + "_impostors.png");
+				if (models.HasImpostors(i) && !SaveImpostors(models, i, impostors)) {
+					std::cout << "[ERROR] cannot write " << impostors.string() << std::endl;
 					result = 1;
 				}
 			}

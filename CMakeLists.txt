@@ -74,6 +74,7 @@ add_executable(ProceduralTerrainGenerator
 	${PTG_SRC}/opengl/TerrainMaterials.cpp
 	${PTG_SRC}/opengl/TerrainView.cpp
 	${PTG_SRC}/opengl/TextureClass.cpp
+	${PTG_SRC}/opengl/VegetationBench.cpp
 	${PTG_SRC}/opengl/VegetationCheck.cpp
 	${PTG_SRC}/opengl/VegetationModels.cpp
 	${PTG_SRC}/opengl/VegetationLayer.cpp
@@ -125,6 +126,7 @@ add_executable(ptg_tests
 	${PTG_DIR}/tests/GridTests.cpp
 	${PTG_DIR}/tests/HeightmapExportTests.cpp
 	${PTG_DIR}/tests/HeightmapImportTests.cpp
+	${PTG_DIR}/tests/ImpostorTests.cpp
 	${PTG_DIR}/tests/LandStatsTests.cpp
 	${PTG_DIR}/tests/PermutationTests.cpp
 	${PTG_DIR}/tests/PresetTests.cpp

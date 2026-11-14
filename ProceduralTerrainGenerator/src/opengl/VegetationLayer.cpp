@@ -19,7 +19,8 @@ namespace {
 		glm::vec4 positionScale;
 		glm::vec4 rotation;
 	};
-	constexpr int lodCount = 3;
+	//Groups per variant: the three levels of detail and the impostors (VegetationLayer::impostorLod)
+	constexpr int lodCount = 4;
 
 	//true if the plants of the table are the ones placed (an empty table = biomes off)
 	bool SamePlants(const std::vector<biome::Biome>* biomes, const std::vector<std::vector<biome::Plant>>& placed)
@@ -97,12 +98,14 @@ void VegetationLayer::Update(const ChunkWorld& chunks, const VegetationModels* m
 	std::vector<float> height(ChunkWorld::textureSize * ChunkWorld::textureSize);
 	std::vector<glm::vec4> surface(height.size());
 	std::vector<int> ids(height.size());
+	unplaced = 0;
 	for (const ChunkWorld::FineChunk& c : fine) {
-		if (placements >= maxPlacementsPerFrame) {
-			break;
-		}
 		const auto found = placed.find(c.key);
 		if (found != placed.end() && found->second.generation == c.generation && !found->second.stale) {
+			continue;
+		}
+		if (placements >= maxPlacementsPerFrame) {
+			unplaced++;
 			continue;
 		}
 		ChunkInstances& chunk = placed[c.key];
@@ -164,7 +167,8 @@ void VegetationLayer::Draw(Camera& camera, const LightSource& light, const Terra
 		const float units = vegetation::unitsPerMetre;
 		rangeSquared[l][0] = ranges[l].lod1 * ranges[l].lod1 * units * units;
 		rangeSquared[l][1] = ranges[l].lod2 * ranges[l].lod2 * units * units;
-		rangeSquared[l][2] = ranges[l].max * ranges[l].max * units * units;
+		rangeSquared[l][2] = ranges[l].impostor * ranges[l].impostor * units * units;
+		rangeSquared[l][3] = ranges[l].max * ranges[l].max * units * units;
 	}
 	for (const auto& [key, chunk] : placed) {
 		for (const vegetation::Instance& i : chunk.instances) {
@@ -176,7 +180,7 @@ void VegetationLayer::Draw(Camera& camera, const LightSource& light, const Terra
 			const glm::vec3 offset = base - eye;
 			const float distanceSquared = glm::dot(offset, offset);
 			const int layer = static_cast<int>(i.layer);
-			if (distanceSquared > rangeSquared[layer][2]) {
+			if (distanceSquared > rangeSquared[layer][3]) {
 				continue;
 			}
 			//The box of the variant turned any way: its largest horizontal extent around the base
@@ -187,10 +191,19 @@ void VegetationLayer::Draw(Camera& camera, const LightSource& light, const Terra
 				base + glm::vec3(reach, variant.boundsMax.y * i.scale, reach))) {
 				continue;
 			}
-			const int lod = distanceSquared < rangeSquared[layer][0] ? 0 : distanceSquared < rangeSquared[layer][1] ? 1 : 2;
-			const int usedLod = std::min(lod, static_cast<int>(variant.lods.size()) - 1);
-			if (usedLod < 0) {
-				continue;
+			int lod = 0;
+			while (lod < impostorLod && distanceSquared >= rangeSquared[layer][lod]) {
+				lod++;
+			}
+			int usedLod = lod;
+			if (lod == impostorLod && (!impostors || !models->HasImpostors(i.model))) {
+				usedLod = impostorLod - 1;
+			}
+			if (usedLod < impostorLod) {
+				usedLod = std::min(usedLod, static_cast<int>(variant.lods.size()) - 1);
+				if (usedLod < 0) {
+					continue;
+				}
 			}
 			groups[static_cast<size_t>(firstGroup[i.model] + i.variant * lodCount + usedLod)].push_back(
 				{ glm::vec4(i.position, i.scale), glm::vec4(i.yaw, 0.0f, 0.0f, 0.0f) });
@@ -221,21 +234,40 @@ void VegetationLayer::Draw(Camera& camera, const LightSource& light, const Terra
 		glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
 	}
 	const glm::mat4 scale = glm::scale(glm::mat4(1.0f), glm::vec3(settings.modelScale));
-	models->BeginDraw(*camera.GetViewMatrix(), *camera.GetProjectionMatrix(), camera.GetPosition(), scale, settings.heightScale, light,
-		light.IsFogOn(), light.GetFogStart(camera.GetRenderDistance()), camera.GetRenderDistance());
-	int first = 0;
-	for (size_t m = 0; m < list.size(); m++) {
-		for (int g = firstGroup[m]; g < firstGroup[m + 1]; g++) {
-			const int count = static_cast<int>(groups[static_cast<size_t>(g)].size());
-			if (count == 0) {
-				continue;
+	const bool fogOn = light.IsFogOn();
+	const float fogStart = light.GetFogStart(camera.GetRenderDistance()), fogDistance = camera.GetRenderDistance();
+	//Meshes first, then impostors with their own shader; the instances of a group start where the groups before it end
+	for (int pass = 0; pass < 2; pass++) {
+		const bool impostorPass = pass == 1;
+		if (impostorPass) {
+			models->BeginImpostorDraw(*camera.GetViewMatrix(), *camera.GetProjectionMatrix(), camera.GetPosition(), scale, eye, settings.heightScale,
+				light, fogOn, fogStart, fogDistance);
+		}
+		else {
+			models->BeginDraw(*camera.GetViewMatrix(), *camera.GetProjectionMatrix(), camera.GetPosition(), scale, settings.heightScale, light,
+				fogOn, fogStart, fogDistance);
+		}
+		int first = 0;
+		for (size_t m = 0; m < list.size(); m++) {
+			for (int g = firstGroup[m]; g < firstGroup[m + 1]; g++) {
+				const int count = static_cast<int>(groups[static_cast<size_t>(g)].size());
+				const int variant = (g - firstGroup[m]) / lodCount, lod = (g - firstGroup[m]) % lodCount;
+				if (count == 0 || (lod == impostorLod) != impostorPass) {
+					first += count;
+					continue;
+				}
+				if (impostorPass) {
+					models->DrawImpostors(static_cast<int>(m), variant, first, count);
+					drawnTriangles += 2ull * static_cast<uint64_t>(count);
+				}
+				else {
+					models->Draw(static_cast<int>(m), variant, lod, first, count);
+					drawnTriangles += static_cast<uint64_t>(list[m].variants[variant].lods[lod].triangles) * static_cast<uint64_t>(count);
+				}
+				first += count;
+				drawnInstances += count;
+				drawnPerLod[lod] += count;
 			}
-			const int variant = (g - firstGroup[m]) / lodCount, lod = (g - firstGroup[m]) % lodCount;
-			models->Draw(static_cast<int>(m), variant, lod, first, count);
-			first += count;
-			drawnInstances += count;
-			drawnPerLod[lod] += count;
-			drawnTriangles += static_cast<uint64_t>(list[m].variants[variant].lods[lod].triangles) * static_cast<uint64_t>(count);
 		}
 	}
 	if (settings.wireFrame) {
@@ -246,29 +278,39 @@ void VegetationLayer::Draw(Camera& camera, const LightSource& light, const Terra
 	}
 }
 
+size_t VegetationLayer::PlacedCount() const
+{
+	size_t total = 0;
+	for (const auto& [key, chunk] : placed) {
+		total += chunk.instances.size();
+	}
+	return total;
+}
+
 void VegetationLayer::ImGuiDraw()
 {
 	ImGui::Checkbox("Show in the infinite world", &enabled);
 	ImGui::SetItemTooltip("Trees, shrubs and rocks on chunks of full detail; needs biomes (species are picked per biome)");
 	ImGui::SliderFloat("Density", &density, 0.0f, 3.0f);
 	ImGui::SetItemTooltip("Multiplies the chance of every species; a change places everything again");
+	ImGui::Checkbox("Impostors", &impostors);
+	ImGui::SetItemTooltip("Distant trees as camera-facing pictures baked from 64 directions; off = LOD 2 meshes up to the range");
 	if (ImGui::TreeNode("Distances (m)")) {
 		for (int l = 0; l < vegetation::layerCount; l++) {
 			ImGui::PushID(l);
 			ImGui::TextUnformatted(vegetation::layerNames[l]);
 			LayerRange& r = ranges[l];
 			ImGui::DragFloat("LOD 1 from", &r.lod1, 1.0f, 1.0f, r.lod2);
-			ImGui::DragFloat("LOD 2 from", &r.lod2, 1.0f, r.lod1, r.max);
-			ImGui::DragFloat("Range", &r.max, 2.0f, r.lod2, 2000.0f);
+			ImGui::DragFloat("LOD 2 from", &r.lod2, 1.0f, r.lod1, r.impostor);
+			ImGui::DragFloat("Impostors from", &r.impostor, 1.0f, r.lod2, r.max);
+			ImGui::SetItemTooltip("Only models with impostors (trees); others keep LOD 2 up to the range");
+			ImGui::DragFloat("Range", &r.max, 2.0f, r.impostor, 2000.0f);
 			ImGui::PopID();
 		}
 		ImGui::TreePop();
 	}
-	size_t total = 0;
-	for (const auto& [key, chunk] : placed) {
-		total += chunk.instances.size();
-	}
-	ImGui::Text("Placed: %zu on %zu chunks (last placement %.2f ms)", total, placed.size(), placementMs);
-	ImGui::Text("Drawn: %d (LOD 0/1/2: %d / %d / %d)", drawnInstances, drawnPerLod[0], drawnPerLod[1], drawnPerLod[2]);
+	ImGui::Text("Placed: %zu on %zu chunks (last placement %.2f ms)", PlacedCount(), placed.size(), placementMs);
+	ImGui::Text("Drawn: %d (LOD 0/1/2: %d / %d / %d, impostors %d)", drawnInstances, drawnPerLod[0], drawnPerLod[1], drawnPerLod[2],
+		drawnPerLod[impostorLod]);
 	ImGui::Text("Triangles: %.2f M", static_cast<double>(drawnTriangles) / 1e6);
 }
