@@ -515,14 +515,12 @@ void VegetationLayer::Draw(Camera& camera, const LightSource& light, const Terra
 		glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
 	}
 	const glm::mat4 model = glm::scale(glm::mat4(1.0f), glm::vec3(settings.modelScale));
-	const bool fogOn = light.IsFogOn();
-	const float fogStart = light.GetFogStart(camera.GetRenderDistance()), fogDistance = camera.GetRenderDistance();
+	const FrameUniforms::Block frame = FrameUniforms::Make(camera, light);
 	models->SetInstanceBuffer(drawnBuffer.id);
 	const int modelCount = static_cast<int>(meshCommandFirst.size());
 
 	glBindBuffer(GL_DRAW_INDIRECT_BUFFER, meshCommandBuffer);
-	models->BeginDraw(*camera.GetViewMatrix(), *camera.GetProjectionMatrix(), camera.GetPosition(), model, settings.heightScale, light,
-		fogOn, fogStart, fogDistance);
+	models->BeginDraw(frame, model, settings.heightScale);
 	for (int m = 0; m < modelCount; m++) {
 		if (meshCommandFirst[m] >= 0) {
 			models->DrawMeshesIndirect(m, meshCommandFirst[m]);
@@ -530,8 +528,7 @@ void VegetationLayer::Draw(Camera& camera, const LightSource& light, const Terra
 	}
 	if (impostorCommandCount > 0) {
 		glBindBuffer(GL_DRAW_INDIRECT_BUFFER, impostorCommandBuffer);
-		models->BeginImpostorDraw(*camera.GetViewMatrix(), *camera.GetProjectionMatrix(), camera.GetPosition(), model, eye, settings.heightScale,
-			light, fogOn, fogStart, fogDistance);
+		models->BeginImpostorDraw(frame, model, eye, settings.heightScale);
 		for (int m = 0; m < modelCount; m++) {
 			if (impostorCommandFirst[m] >= 0) {
 				models->DrawImpostorsIndirect(m, impostorCommandFirst[m]);

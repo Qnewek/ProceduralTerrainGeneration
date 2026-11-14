@@ -219,6 +219,11 @@ Wartości szumów są w [-1, 1]. Konwencja indeksowania: `map[y * width + x]`.
   sumy prefiksowe + komendy, rozrzut do grup) i `glMultiDrawElementsIndirect` per (model, materiał) / `glMultiDrawArraysIndirect` dla impostorów.
   Instancje idą do shaderów jako atrybuty z dzielnikiem (GL 4.5 nie ma `gl_BaseInstance`), wariant impostora w danych instancji. Statystyki wracają z GPU klatkę później.
   Bez biomów roślinności nie ma.
+  Trawa (`GrassLayer`, w `TerrainGenerationSys`): co klatkę `grass_compute.shader` przechodzi po tekselach wokół kamery na chunkach gruntu i dopisuje do bufora źdźbła,
+  które tam rosną (udział trawy materiałów ze splat mapy: pola `grass` i `grassColor` w `terrain_materials.json`, mniej na klifach, rzadsze z odległością)
+  i są w kadrze; jedno `glDrawArraysIndirect`, źdźbło budowane z `gl_VertexID`, wiatr w VS. Nic nie jest trzymane między klatkami ani czytane z GPU.
+  Kamera, słońce i mgła idą do shaderów terenu, roślinności i trawy przez blok `FrameBlock` (`common/frame.glsl`, std140, binding 1) = `FrameUniforms::Block`
+  (pole w pole); każdy renderer ma własny `FrameUniforms` i wgrywa blok przed rysowaniem (widok 2D, pieczenie impostorów i podgląd podmieniają kamerę).
   Impostory (tylko `kind` "tree"): przy instalacji `VegetationModels::BakeImpostors` renderuje LOD0 każdego wariantu z 8×8 kierunków półsfery (hemi-octahedral,
   `Impostor.h` = `common/impostor.glsl`, zmiana w obu; testy `ImpostorTests.cpp`) do tablicy tekstur 1024² (warstwa = wariant): albedo i normalna w przestrzeni modelu,
   tło przezroczyste, więc mipmapy są „premultiplied” (shader dzieli przez A). Rysowane jako czwarty poziom (`VegetationLayer::impostorLod`) od „Impostors from”,

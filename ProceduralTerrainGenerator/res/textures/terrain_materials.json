@@ -1,9 +1,9 @@
 {
-  "comment": "Terrain materials. Textures are not in git: tools/fetch_textures.py downloads them (CC0, Poly Haven / ambientCG) to res/textures/terrain/<asset>/. tileSize = world units covered by one repeat of the texture; fallbackColor is drawn when the textures are missing; cliffMaterial = name of the material that replaces this one on steep slopes (missing = the material itself). The order is the material id in the shaders.",
+  "comment": "Terrain materials. Textures are not in git: tools/fetch_textures.py downloads them (CC0, Poly Haven / ambientCG) to res/textures/terrain/<asset>/. tileSize = world units covered by one repeat of the texture; fallbackColor is drawn when the textures are missing; cliffMaterial = name of the material that replaces this one on steep slopes (missing = the material itself); grass = blades of grass on it, as a share of the Grass density (missing = none), grassColor = their color (missing = fallbackColor). The order is the material id in the shaders.",
   "materials": [
-    { "name": "Grass",        "source": "ambientcg", "asset": "Grass004",          "tileSize": 4.0,  "fallbackColor": [0.30, 0.40, 0.15], "cliffMaterial": "Cliff rock" },
-    { "name": "Dry grass",    "source": "ambientcg", "asset": "Ground037",         "tileSize": 4.0,  "fallbackColor": [0.50, 0.50, 0.25], "cliffMaterial": "Cliff rock" },
-    { "name": "Forest floor", "source": "polyhaven", "asset": "forrest_ground_01", "tileSize": 3.0,  "fallbackColor": [0.35, 0.30, 0.20], "cliffMaterial": "Cliff rock" },
+    { "name": "Grass",        "source": "ambientcg", "asset": "Grass004",          "tileSize": 4.0,  "fallbackColor": [0.30, 0.40, 0.15], "cliffMaterial": "Cliff rock", "grass": 1.0,  "grassColor": [0.30, 0.45, 0.12] },
+    { "name": "Dry grass",    "source": "ambientcg", "asset": "Ground037",         "tileSize": 4.0,  "fallbackColor": [0.50, 0.50, 0.25], "cliffMaterial": "Cliff rock", "grass": 0.8,  "grassColor": [0.58, 0.54, 0.26] },
+    { "name": "Forest floor", "source": "polyhaven", "asset": "forrest_ground_01", "tileSize": 3.0,  "fallbackColor": [0.35, 0.30, 0.20], "cliffMaterial": "Cliff rock", "grass": 0.25, "grassColor": [0.26, 0.36, 0.12] },
     { "name": "Dirt",         "source": "polyhaven", "asset": "dirt_floor",        "tileSize": 3.0,  "fallbackColor": [0.55, 0.42, 0.30], "cliffMaterial": "Cliff rock" },
     { "name": "Sand",         "source": "ambientcg", "asset": "Ground080",         "tileSize": 4.0,  "fallbackColor": [0.80, 0.72, 0.52], "cliffMaterial": "Sandstone" },
     { "name": "Beach",        "source": "polyhaven", "asset": "coast_sand_01",     "tileSize": 15.0, "fallbackColor": [0.55, 0.50, 0.42], "cliffMaterial": "Cliff rock" },
@@ -11,6 +11,6 @@
     { "name": "Sandstone",    "source": "polyhaven", "asset": "cliff_side",        "tileSize": 6.0,  "fallbackColor": [0.55, 0.35, 0.22] },
     { "name": "Scree",        "source": "polyhaven", "asset": "rocks_ground_02",   "tileSize": 3.0,  "fallbackColor": [0.35, 0.32, 0.28], "cliffMaterial": "Cliff rock" },
     { "name": "Snow",         "source": "polyhaven", "asset": "snow_02",           "tileSize": 4.0,  "fallbackColor": [0.90, 0.92, 0.95], "cliffMaterial": "Cliff rock" },
-    { "name": "Tundra",       "source": "ambientcg", "asset": "Ground068",         "tileSize": 4.0,  "fallbackColor": [0.40, 0.38, 0.20], "cliffMaterial": "Cliff rock" }
+    { "name": "Tundra",       "source": "ambientcg", "asset": "Ground068",         "tileSize": 4.0,  "fallbackColor": [0.40, 0.38, 0.20], "cliffMaterial": "Cliff rock", "grass": 0.5,  "grassColor": [0.46, 0.43, 0.22] }
   ]
 }

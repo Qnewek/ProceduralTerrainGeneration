@@ -44,12 +44,11 @@ public:
 	glm::mat4* GetViewMatrix();
 	glm::mat4* GetProjectionMatrix();
 	glm::vec3 GetPosition() const { return position; }
-	//projection * view as SetUniforms will set them for the current position and settings
+	//projection * view as GetProjectionMatrix and GetViewMatrix give them for the current position and settings
 	glm::mat4 GetViewProjection() const { return ComputeProjection() * ComputeView(); }
 
 	void EnableMouseControl(GLFWwindow* window);
 	void DisableMouseControl(GLFWwindow* window);
-	void SetUniforms(Shader& shader);
 
 	void SetCameraConfig(glm::vec3 position, glm::vec3 front, glm::vec3 up, float yaw, float pitch, float speed, float sensitivity, float fov);
 	void SetViewDist(glm::vec2 value) { viewDist = value; }

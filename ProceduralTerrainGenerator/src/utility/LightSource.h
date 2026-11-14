@@ -2,8 +2,6 @@
 
 #include "glm/glm.hpp"
 
-#include "Shader.h"
-
 //The sun: a directional light that lights the whole world the same way, set by its azimuth and elevation.
 //Sky draws the sun disc in this direction and the terrain fog takes the sky color
 class LightSource
@@ -21,12 +19,11 @@ public:
 
 	//Unit vector from the ground towards the sun
 	glm::vec3 GetDirection() const;
+	glm::vec3 GetAmbient() const { return ambient; }
+	glm::vec3 GetDiffuse() const { return diffuse; }
 	bool IsLightOn() const { return lightOn; }
 	//Terrain fades into the sky color near the view distance
 	bool IsFogOn() const { return fog; }
 	//Distance where the fog begins
 	float GetFogStart(float viewDistance) const { return fogStart * viewDistance; }
-
-	//Sets light.direction, light.ambient, light.diffuse and lightOn; the shader must be bound
-	void SetLightUniforms(Shader& shader) const;
 };

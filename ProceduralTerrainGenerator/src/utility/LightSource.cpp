@@ -28,11 +28,3 @@ void LightSource::ImGuiDraw() {
 		}
 	}
 }
-
-void LightSource::SetLightUniforms(Shader& shader) const
-{
-	shader.SetUniform3fv("light.direction", GetDirection());
-	shader.SetUniform3fv("light.ambient", ambient);
-	shader.SetUniform3fv("light.diffuse", diffuse);
-	shader.SetUniform1i("lightOn", lightOn);
-}

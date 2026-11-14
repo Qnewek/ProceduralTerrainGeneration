@@ -400,7 +400,7 @@ void ChunkWorld::Draw(Renderer& renderer, Camera& camera, LightSource& light, co
 	}
 	const glm::mat4 scale = glm::scale(glm::mat4(1.0f), glm::vec3(settings.modelScale));
 	//The 2D map frames the area in view around the camera
-	TerrainView::SetFrameUniforms(*shader, camera, light, settings, scale, 0, lastCenter - lastRadius, lastCenter + lastRadius);
+	TerrainView::SetFrameUniforms(*shader, frameUniforms, camera, light, settings, scale, 0, lastCenter - lastRadius, lastCenter + lastRadius);
 
 	if (settings.wireFrame) {
 		glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
@@ -440,7 +440,7 @@ std::vector<ChunkWorld::GroundChunk> ChunkWorld::GroundChunks(int coarsest, floa
 			continue;
 		}
 		result.push_back({ Key(chunk->level, chunk->coord), chunk->level, chunk->coord, chunk->generation, chunk->height.get(), chunk->surface.get(),
-			chunk->ids.get(), distance });
+			chunk->ids.get(), chunk->splat.get(), distance });
 	}
 	std::sort(result.begin(), result.end(), [](const GroundChunk& a, const GroundChunk& b) { return a.distance < b.distance; });
 	return result;

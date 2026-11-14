@@ -9,23 +9,11 @@ in vec2 MapCoord;
 
 out vec4 FragColor;
 
-//The sun: a directional light, the same everywhere
-struct Light {
-    vec3 direction;     //unit vector towards the sun
-    vec3 ambient;
-    vec3 diffuse;
-};
-
-uniform bool lightOn;
-uniform Light light;
+//Camera, sun and fog (the 2D map has no fog)
+#include "../common/frame.glsl"
 //Isolines: darken a band of bandWidth every step units of height (bandWidth = 0 disables them)
 uniform float step;
 uniform float bandWidth;
-//Fog: the terrain fades into the sky color between fogStart and fogDistance from the camera
-uniform bool fogOn;
-uniform float fogStart;
-uniform float fogDistance;
-uniform vec3 viewPos;
 uniform mat4 model;         //model[0][0] = modelScale (as in the TES)
 uniform int displayMode;    //values of utilities::heightMapMode; the colors of the other modes come from the TES
 //Share of every material (GpuHeightGenerator::GenerateBiomes): material m in layer m / 4, channel m % 4.
