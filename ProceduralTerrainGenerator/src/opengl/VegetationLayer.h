@@ -47,6 +47,10 @@ public:
 	//@param models - nullptr = no vegetation
 	void Update(const ChunkWorld& chunks, const VegetationModels* models, const World& world);
 	void Draw(Camera& camera, const LightSource& light, const TerrainRenderSettings& settings, VegetationModels* models);
+	//Shadows: culls the plants to the sun view of a cascade (simpler levels of detail than the camera); false = nothing to draw.
+	//Then DrawShadow into that cascade. Before Draw, which culls for the camera into the same buffers
+	bool CullShadows(Camera& camera, const glm::mat4& sunViewProjection, const TerrainRenderSettings& settings, VegetationModels* models);
+	void DrawShadow(const FrameUniforms::Block& block, Camera& camera, const TerrainRenderSettings& settings, VegetationModels& models);
 	//Settings and statistics, in the Vegetation tab
 	void ImGuiDraw();
 	bool ReloadShader();
@@ -74,6 +78,13 @@ public:
 	static constexpr int maxPlacingJobs = 8;
 
 private:
+	//Fills the draw commands and instances of the plants in the frustum of viewProjection (world space after modelScale), levels of detail by
+	//the distance from eye (before modelScale) times lodScale; smallRange > 0 = metres up to which layers other than trees are drawn;
+	//stats = copy the counts for the statistics. false = nothing in view
+	bool Cull(const glm::vec3& eye, const glm::mat4& viewProjection, const TerrainRenderSettings& settings, float lodScale, float smallRange, bool stats);
+	//Draws what Cull left; eye turns the impostors
+	void DrawCulled(const FrameUniforms::Block& frame, const glm::vec3& eye, const TerrainRenderSettings& settings, VegetationModels& models, bool wireFrame);
+
 	struct ChunkInstances {
 		uint64_t generation = 0;
 		//Placed with older settings: drawn until placed again, so a change does not make the vegetation blink out
@@ -141,6 +152,9 @@ private:
 
 	bool enabled = true;
 	bool impostors = true;
+	bool shadows = true;		//plants cast sun shadows (ShadowMap)
+	static constexpr float shadowDetail = 0.3f;	//detail distances of the shadow casters, times detailScale
+	static constexpr float shadowSmallRange = 30.0f;	//metres up to which shrubs and rocks cast shadows
 	float density = 1.0f;
 	//Multiplies the distances of the levels of detail and impostors of every layer (not the ranges)
 	float detailScale = 1.0f;

@@ -75,6 +75,10 @@ public:
 	void GenerateNext(const GenerateFn& generate);
 
 	void Draw(Renderer& renderer, Camera& camera, LightSource& light, const TerrainRenderSettings& settings);
+	//Depth pass of a shadow cascade: the chunks in range (not only the visible ones: terrain behind the camera casts shadows into view)
+	//inside the sun view
+	//@param block - ShadowMap::CascadeBlock; @param sunViewProjection - its projection * view
+	void DrawShadow(Renderer& renderer, const FrameUniforms::Block& block, const glm::mat4& sunViewProjection, const TerrainRenderSettings& settings);
 
 	//Id of the biome at a world position (XZ before modelScale), -1 if not generated yet.
 	//Reads the finest chunk there, which is the one under the camera; copies its ids from the GPU when it changes
@@ -99,6 +103,9 @@ public:
 	static uint64_t Key(int level, glm::ivec2 coord);
 	//World XZ (before modelScale) of map texel (0, 0)
 	glm::vec2 GetMapOrigin() const { return mapOrigin; }
+	//Area framed by the 2D map (XZ, world units before modelScale): the planned range around the camera
+	glm::vec2 FlatViewMin() const { return lastCenter - lastRadius; }
+	glm::vec2 FlatViewMax() const { return lastCenter + lastRadius; }
 
 	//Chunks drawn: in range and in the frustum
 	int GetVisibleCount() const { return static_cast<int>(visible.size()); }
@@ -138,6 +145,8 @@ private:
 	void Select(int level, glm::ivec2 coord, glm::vec2 local, const View& view);
 	//Whether the chunk can be seen; the box spans all heights a map can have
 	bool InView(int level, glm::ivec2 coord, const View& view) const;
+	//Draws chunks with the terrain shader after its frame uniforms are set
+	void DrawChunks(Renderer& renderer, const std::vector<Chunk*>& list, const TerrainRenderSettings& settings);
 	//Existing chunk, or a new one with textures of a freed chunk if there is one
 	Chunk& Obtain(int level, glm::ivec2 coord);
 	void AllocateTextures(Chunk& chunk);
@@ -152,6 +161,7 @@ private:
 	std::vector<Chunk*> visible;
 	//Chunks in range that would be drawn without the frustum test (the leaves of the quadtree)
 	std::vector<Chunk*> leaves;
+	std::vector<Chunk*> shadowCasters;
 	std::vector<PendingChunk> pending;
 	size_t visited = 0;
 	int inRange = 0;

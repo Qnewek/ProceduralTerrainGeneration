@@ -16,6 +16,8 @@ private:
 	float fogStart = 0.5f;		//share of the view distance where the fog begins; it is full at the view distance
 public:
 	void ImGuiDraw();
+	//Degrees from the horizon on the azimuth side (0) over the zenith (90) to the opposite horizon (180)
+	void SetElevation(float degrees) { elevation = degrees; }
 
 	//Unit vector from the ground towards the sun
 	glm::vec3 GetDirection() const;

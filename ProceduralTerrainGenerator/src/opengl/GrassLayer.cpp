@@ -165,7 +165,7 @@ void GrassLayer::Draw(const ChunkWorld& chunks, Camera& camera, const LightSourc
 	statsPending = true;
 
 	drawShader->Bind();
-	frameUniforms.Upload(FrameUniforms::Make(camera, light));
+	frameUniforms.Upload(TerrainView::FrameBlock(camera, light, settings, glm::vec2(0.0f), glm::vec2(0.0f)));
 	drawShader->SetModel(glm::scale(glm::mat4(1.0f), glm::vec3(modelScale)));
 	glUniform1ui(glGetUniformLocation(drawShader->GetRendererID(), "capacity"), capacity);
 	const float angle = glm::radians(windAngle);

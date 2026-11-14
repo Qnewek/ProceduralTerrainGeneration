@@ -14,6 +14,8 @@
 #include "Grid.h"
 #include "utilities.h"
 
+class ShadowMap;
+
 //Display parameters of a terrain view, edited by the UI
 struct TerrainRenderSettings {
 	float modelScale = 1.0f;
@@ -24,6 +26,8 @@ struct TerrainRenderSettings {
 	bool wireFrame = false;
 	bool map2d = false;		//top-down orthographic view instead of the camera
 	float tessPixels = 6.0f;	//3D view: length of a terrain triangle edge on screen in pixels (smaller = more detail); the 2D map ignores it
+	//Sun shadows of this frame (set by the subsystem after rendering them), added to the FrameBlock of the 3D view; nullptr = none
+	const ShadowMap* shadows = nullptr;
 };
 
 //Renders a height field as a tessellated patch grid. Owns the mesh, the shader and the textures,
@@ -102,6 +106,11 @@ public:
 	//Sets useSplat to false; a map with a splat map sets it to true after binding it to splatUnit
 	static void SetFrameUniforms(Shader& shader, FrameUniforms& frame, Camera& camera, LightSource& light, const TerrainRenderSettings& settings,
 		const glm::mat4& model, int heightUnit, glm::vec2 flatMin, glm::vec2 flatMax);
+	//The same with a ready frame block (depth passes of shadows)
+	static void SetFrameUniforms(Shader& shader, FrameUniforms& frame, const FrameUniforms::Block& block, const TerrainRenderSettings& settings,
+		const glm::mat4& model, int heightUnit);
+	//Camera, light and fog of a frame as the terrain sees it: in the 2D map the top-down camera framing flatMin - flatMax, without fog
+	static FrameUniforms::Block FrameBlock(Camera& camera, const LightSource& light, const TerrainRenderSettings& settings, glm::vec2 flatMin, glm::vec2 flatMax);
 
 private:
 	void BuildMesh();
