@@ -66,8 +66,8 @@ void main()
     float occlusion = detail.a;
     float roughness = detail.b;
     if (bake) {
-        //Occlusion darkens the albedo, since the impostor has no ambient occlusion of its own
-        FragColor = vec4(albedo.rgb * mix(1.0, occlusion, 0.5), 1.0);
+        //Plain albedo: the impostor darkens only its ambient light by an average occlusion, as the mesh does per pixel
+        FragColor = vec4(albedo.rgb, 1.0);
         NormalOut = vec4(norm * 0.5 + 0.5, 1.0);
         return;
     }

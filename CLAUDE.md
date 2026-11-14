@@ -219,6 +219,8 @@ Wartości szumów są w [-1, 1]. Konwencja indeksowania: `map[y * width + x]`.
   sumy prefiksowe + komendy, rozrzut do grup) i `glMultiDrawElementsIndirect` per (model, materiał) / `glMultiDrawArraysIndirect` dla impostorów.
   Instancje idą do shaderów jako atrybuty z dzielnikiem (GL 4.5 nie ma `gl_BaseInstance`), wariant impostora w danych instancji. Statystyki wracają z GPU klatkę później.
   Bez biomów roślinności nie ma.
+  Kolejność rysowania (`TerrainGenerationSys::Draw`): roślinność, trawa, teren — teren za drzewami odpada na teście głębi przed shaderem materiałów;
+  chunki terenu rysowane od najbliższego (sort w `ChunkWorld::Plan`). W stałej kolejności patrzenie w stronę −X/−Z podwajało koszt trybu TEXTURED.
   Trawa (`GrassLayer`, w `TerrainGenerationSys`): co klatkę `grass_compute.shader` przechodzi po tekselach wokół kamery na chunkach gruntu i dopisuje do bufora źdźbła,
   które tam rosną (udział trawy materiałów ze splat mapy: pola `grass` i `grassColor` w `terrain_materials.json`, mniej na klifach, rzadsze z odległością)
   i są w kadrze; jedno `glDrawArraysIndirect`, źdźbło budowane z `gl_VertexID`, wiatr w VS. Nic nie jest trzymane między klatkami ani czytane z GPU.

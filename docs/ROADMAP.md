@@ -510,8 +510,11 @@ Kroki:
      | 8 km, ×3 | 509 tys. | 64 tys. | 84 ms | 1,4 ms | 0,11 ms |
 
      Kryterium 100k+ drzew przy 60 FPS spełnione z zapasem (pół miliona w świecie, 64 tys. w kadrze za 1,4 ms). Teren 0,3–0,6 ms.
-   - Znane: przy dużym zasięgu w czasie ładowania zdarzają się klatki 70–90 ms (odczyt map czeka na kolejkę generacji GPU, wgrywanie dużych chunków) —
-     do zrobienia asynchroniczny odczyt (PBO + fence); impostory nieco ciemniejsze od siatek, granica 150 m widoczna.
+   - Sprawdzone 2026-11-14: klatki 70–110 ms to tylko 2 pierwsze klatki (jednorazowe przygotowanie generacji); potem przy domyślnym zasięgu żadna klatka ładowania
+     nie przekracza 16,7 ms (rozmieszczanie ≤ 5 ms). Dłuższe klatki przy 8 km były w fazie benchmarku z siatkami (GPU 84 ms/klatkę, odczyt map na to czeka) — PBO niepotrzebne.
+   - Granica 150 m: impostor ma średnio kolor pełnego modelu LOD0 (pas koron 45/53/27 wobec 44/53/28; AO już nie wpieczone w albedo, tylko stała okluzja światła otoczenia).
+     Różnicę robiło za rzadkie LOD2 (ok. 1 na 40 liści, powiększanie ograniczone do 4×): limit podniesiony do 8× (`maxCardScale`, cache LOD-ów v6).
+     Jodła w LOD2 nadal rzadsza (gałązki z igłami słabo wypełniają koronę po powiększeniu).
 5. **Trawa:** osobny system blisko kamery (compute + wiatr w VS).
    - 2026-11-14: `GrassLayer` — źdźbła z compute co klatkę wokół kamery według materiałów splat mapy (`grass` w `terrain_materials.json`), jedno rysowanie pośrednie,
      wiatr w VS; ~8 tys. źdźbeł w dżungli za 0,05 ms GPU. Do oceny wyglądu właściciela (gęstość, kolory, łąki).

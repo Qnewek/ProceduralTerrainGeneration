@@ -18,7 +18,7 @@ namespace vegetation
 {
 	namespace {
 		//Bumped whenever the cache layout or the way levels are built changes, so old caches are rebuilt
-		constexpr uint32_t cacheVersion = 5;
+		constexpr uint32_t cacheVersion = 6;
 		constexpr char cacheMagic[4] = { 'P', 'T', 'G', 'V' };
 		//Relative error allowed when collapsing edges (meshoptimizer: a part of the mesh extent)
 		constexpr float surfaceError = 0.05f;
@@ -29,8 +29,8 @@ namespace vegetation
 		constexpr size_t manyPieces = 16;
 		//Pieces are dropped until the rest has at most this many times the target before collapsing edges
 		constexpr size_t keptOverTarget = 4;
-		//Kept pieces of foliage are enlarged at most this many times
-		constexpr float maxCardScale = 4.0f;
+		//Kept pieces of foliage are enlarged at most this many times (LOD 2 of a tree keeps about 1 in 40 leaf cards: 6x keeps its area)
+		constexpr float maxCardScale = 8.0f;
 		//Height of the lowest part of a model (as a part of its height) whose middle becomes x = z = 0
 		constexpr float basePart = 0.03f;
 		//Bases of grounded root nodes closer than this part of their footprint are pieces of one model, not variants

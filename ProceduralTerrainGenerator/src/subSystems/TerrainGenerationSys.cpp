@@ -258,11 +258,13 @@ void TerrainGenerationSys::ApplyWorld(const WorldConfig& loaded)
 
 void TerrainGenerationSys::Draw(Renderer& renderer, Camera& camera, LightSource& light) {
 	if (chunksShown) {
-		chunks.Draw(renderer, camera, light, renderSettings);
+		//Plants first: the terrain behind them then fails the depth test before its (expensive) shader runs; in a forest this
+		//halves the cost of the terrain
+		vegetationLayer.Draw(camera, light, renderSettings, vegetationModels);
 		if (terrainMaterials) {
 			grass.Draw(chunks, camera, light, renderSettings, *terrainMaterials);
 		}
-		vegetationLayer.Draw(camera, light, renderSettings, vegetationModels);
+		chunks.Draw(renderer, camera, light, renderSettings);
 		return;
 	}
 	view.Draw(renderer, camera, light, renderSettings, TerrainView::Layer::TERRAIN);

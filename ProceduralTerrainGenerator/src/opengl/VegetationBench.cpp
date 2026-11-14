@@ -271,6 +271,9 @@ namespace {
 		Phase phases[2] = { { "meshes", false }, { "impostors", true } };
 		int phase = 0;
 		Stats loadingUpdate, loadingPlace;
+		constexpr int firstFrames = 2;
+		double firstUpdateMs = 0.0;
+		int slowLoadingFrames = 0;
 		int settled = 0, frame = 0;
 		const auto start = std::chrono::steady_clock::now();
 		for (; frame < 5000 && phase < 2; frame++) {
@@ -295,17 +298,18 @@ namespace {
 			const double placeMs = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - placeStart).count();
 			const double updateMs = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - updateStart).count();
 
-			terrainTimer.Begin();
-			chunks.Draw(renderer, camera, light, settings);
-			terrainTimer.End();
-			grassTimer.Begin();
-			grass.Draw(chunks, camera, light, settings, materials);
-			grassTimer.End();
+			//As in TerrainGenerationSys::Draw: plants first, so the terrain behind them fails the depth test before its shader
 			vegetationTimer.Begin();
 			const auto drawStart = std::chrono::steady_clock::now();
 			vegetation.Draw(camera, light, settings, &models);
 			const double drawMs = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - drawStart).count();
 			vegetationTimer.End();
+			grassTimer.Begin();
+			grass.Draw(chunks, camera, light, settings, materials);
+			grassTimer.End();
+			terrainTimer.Begin();
+			chunks.Draw(renderer, camera, light, settings);
+			terrainTimer.End();
 			const double terrainMs = terrainTimer.Ms(), grassMs = grassTimer.Ms(), vegetationMs = vegetationTimer.Ms();
 			if (lastFrame && target) {
 				const std::string file = screenshot + "_" + p.name + ".png";
@@ -334,8 +338,15 @@ namespace {
 			else {
 				const bool done = chunks.GetPendingCount() == 0 && vegetation.UnplacedCount() == 0;
 				settled = done ? settled + 1 : 0;
-				loadingUpdate.Add(updateMs);
-				loadingPlace.Add(placeMs);
+				//The first frames prepare the generation once (programs, buffers); they are reported apart
+				if (frame < firstFrames) {
+					firstUpdateMs += updateMs;
+				}
+				else {
+					loadingUpdate.Add(updateMs);
+					loadingPlace.Add(placeMs);
+					slowLoadingFrames += updateMs > 16.7 ? 1 : 0;
+				}
 			}
 		}
 		const double seconds = std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count();
@@ -344,8 +355,9 @@ namespace {
 			return -1;
 		}
 		std::printf("Settled and measured in %d frames (%.1f s); placed %zu instances\n", frame, seconds, vegetation.PlacedCount());
-		std::printf("While loading: update CPU (chunks, place) mean %.2f ms, max %.2f ms; of it placement mean %.2f ms, max %.2f ms\n",
-			loadingUpdate.Mean(), loadingUpdate.max, loadingPlace.Mean(), loadingPlace.max);
+		std::printf("While loading: first %d frames %.1f ms; then update CPU (chunks, place) mean %.2f ms, max %.2f ms, %d frames over 16.7 ms;"
+			" of it placement mean %.2f ms, max %.2f ms\n", firstFrames, firstUpdateMs, loadingUpdate.Mean(), loadingUpdate.max, slowLoadingFrames,
+			loadingPlace.Mean(), loadingPlace.max);
 		for (const Phase& p : phases) {
 			std::printf("\nFar trees as %s: drawn %d (LOD 0/1/2: %d / %d / %d, impostors %d), %.2f M triangles\n", p.name, p.drawn,
 				p.perLod[0], p.perLod[1], p.perLod[2], p.perLod[VegetationLayer::impostorLod], static_cast<double>(p.triangles) / 1e6);
