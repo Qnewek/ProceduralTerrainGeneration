@@ -191,6 +191,7 @@ int ChunkWorld::Plan(const View& requested)
 {
 	frame++;
 	visible.clear();
+	leaves.clear();
 	pending.clear();
 	visited = 0;
 	inRange = 0;
@@ -323,6 +324,7 @@ void ChunkWorld::Select(int level, glm::ivec2 coord, glm::vec2 local, const View
 
 	if (drawable && distance <= view.radius) {
 		inRange++;
+		leaves.push_back(chunk);
 		if (inView) {
 			visible.push_back(chunk);
 			coarsestLevel = std::max(coarsestLevel, level);
@@ -424,22 +426,23 @@ void ChunkWorld::Draw(Renderer& renderer, Camera& camera, LightSource& light, co
 	}
 }
 
-std::vector<ChunkWorld::FineChunk> ChunkWorld::FineChunks(float maxDistance) const
+std::vector<ChunkWorld::GroundChunk> ChunkWorld::GroundChunks(int coarsest, float maxDistance) const
 {
-	std::vector<FineChunk> result;
+	std::vector<GroundChunk> result;
 	const glm::vec2 local = lastCenter - mapOrigin;
-	const float size = NodeSize(0);
-	for (const auto& [key, chunk] : chunks) {
-		if (chunk.level != 0 || chunk.version == 0) {
+	for (const Chunk* chunk : leaves) {
+		if (chunk->level > coarsest) {
 			continue;
 		}
-		const float distance = DistanceToSquare(local, glm::vec2(chunk.coord) * size, size);
+		const float size = NodeSize(chunk->level);
+		const float distance = DistanceToSquare(local, glm::vec2(chunk->coord) * size, size);
 		if (distance > maxDistance) {
 			continue;
 		}
-		result.push_back({ key, chunk.coord, chunk.generation, chunk.height.get(), chunk.surface.get(), chunk.ids.get(), distance });
+		result.push_back({ Key(chunk->level, chunk->coord), chunk->level, chunk->coord, chunk->generation, chunk->height.get(), chunk->surface.get(),
+			chunk->ids.get(), distance });
 	}
-	std::sort(result.begin(), result.end(), [](const FineChunk& a, const FineChunk& b) { return a.distance < b.distance; });
+	std::sort(result.begin(), result.end(), [](const GroundChunk& a, const GroundChunk& b) { return a.distance < b.distance; });
 	return result;
 }
 

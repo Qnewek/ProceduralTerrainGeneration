@@ -259,3 +259,85 @@ TEST_CASE("Default plants: land biomes have them, the sea has none, densities of
 	}
 	CHECK(biome::DefaultPlants("No such biome").empty());
 }
+
+TEST_CASE("PlaceChunk: a coarse chunk places the same trees as the fine chunks it covers, and only the layers of the mask")
+{
+	//Level 1: a chunk of 256 texels sampled every 2nd texel, over the four fine chunks of 128 texels
+	const glm::ivec2 origin(256, -512);
+	std::vector<Instance> fine;
+	for (int y = 0; y < 2; y++) {
+		for (int x = 0; x < 2; x++) {
+			const glm::ivec2 chunk = origin + glm::ivec2(x, y) * chunkTexels;
+			const TestMaps maps(chunk, Flat, glm::vec2(0.0f), 0);
+			PlacementSettings s = Settings(chunk);
+			s.layerMask = 1u << static_cast<int>(Layer::TREES);
+			PlaceChunk(maps.maps, Plants(0.5f), models, s, fine);
+		}
+	}
+	TestMaps coarse(origin, Flat, glm::vec2(0.0f), 0);
+	coarse.maps.step = 2;
+	coarse.maps.firstTexel = origin - 2;
+	PlacementSettings s = Settings(origin);
+	s.chunkTexels = 2 * chunkTexels;
+	s.layerMask = 1u << static_cast<int>(Layer::TREES);
+	std::vector<Instance> far;
+	PlaceChunk(coarse.maps, Plants(0.5f), models, s, far);
+
+	REQUIRE(!fine.empty());
+	CHECK(CountLayer(fine, Layer::SHRUBS) == 0);
+	CHECK(CountLayer(fine, Layer::ROCKS) == 0);
+	REQUIRE(far.size() == fine.size());
+	auto key = [](const Instance& i) { return std::make_pair(i.position.x, i.position.z); };
+	std::set<std::pair<float, float>> a, b;
+	for (const Instance& i : fine) {
+		a.insert(key(i));
+	}
+	for (const Instance& i : far) {
+		b.insert(key(i));
+	}
+	CHECK(a == b);
+}
+
+TEST_CASE("Morton: aligned squares of blocks are contiguous ranges")
+{
+	CHECK(Morton(0, 0) == 0);
+	CHECK(Morton(1, 0) == 1);
+	CHECK(Morton(0, 1) == 2);
+	CHECK(Morton(1, 1) == 3);
+	CHECK(Morton(2, 0) == 4);
+	//The 2 x 2 square at (2, 2) of a 4 x 4 grid is 12..15
+	std::set<uint32_t> square;
+	for (uint32_t y = 2; y < 4; y++) {
+		for (uint32_t x = 2; x < 4; x++) {
+			square.insert(Morton(x, y));
+		}
+	}
+	CHECK(square == std::set<uint32_t>{ 12, 13, 14, 15 });
+}
+
+TEST_CASE("SortByBlock: instances grouped by block in Morton order, starts cover them all")
+{
+	const glm::ivec2 chunk(128, 0);
+	const glm::vec2 mapOrigin(-100.0f, 40.0f);
+	const float units = 4.0f;
+	std::vector<Instance> instances;
+	//Blocks of 32 texels, 4 x 4 of them; one instance in the middle of every block, listed backwards
+	for (int y = 3; y >= 0; y--) {
+		for (int x = 3; x >= 0; x--) {
+			Instance i;
+			const glm::vec2 texel = glm::vec2(chunk) + glm::vec2(x * 32 + 16, y * 32 + 16);
+			i.position = glm::vec3(mapOrigin.x + texel.x * units, 0.0f, mapOrigin.y + texel.y * units);
+			i.variant = x + 4 * y;
+			instances.push_back(i);
+		}
+	}
+	const std::vector<uint32_t> starts = SortByBlock(instances, mapOrigin, units, chunk, 32, 4);
+	REQUIRE(starts.size() == 17);
+	CHECK(starts.front() == 0);
+	CHECK(starts.back() == 16);
+	for (uint32_t m = 0; m < 16; m++) {
+		REQUIRE(starts[m + 1] - starts[m] == 1);
+		const Instance& i = instances[starts[m]];
+		CHECK(Morton(static_cast<uint32_t>(i.variant % 4), static_cast<uint32_t>(i.variant / 4)) == m);
+	}
+}

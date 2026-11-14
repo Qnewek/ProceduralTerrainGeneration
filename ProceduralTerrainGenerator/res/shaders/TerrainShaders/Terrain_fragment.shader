@@ -32,10 +32,18 @@ uniform int displayMode;    //values of utilities::heightMapMode; the colors of 
 //Without it (no biomes) the TEXTURED mode draws previewMaterial
 uniform sampler2DArray splatMap;
 uniform bool useSplat;
+//Normal per pixel from the surface map (the TES one is interpolated between vertices, which blurs distant, sparsely tessellated terrain)
+uniform sampler2D surfaceMap;
+//Biome colors per pixel too (mode 3)
+uniform sampler2D biomeMap;
+uniform mat3 normalMatrix;
+uniform float heightScale;
 
 #include "../common/sky.glsl"
+#include "../common/surface.glsl"
 #include "../common/materials.glsl"
 
+const int MODE_BIOMES = 3;
 const int MODE_TEXTURED = 6;
 //Materials with a smaller share are not sampled
 const float MIN_MATERIAL_WEIGHT = 0.01;
@@ -157,8 +165,8 @@ float sunSpecular(vec3 n, vec3 toLight, vec3 toViewer, float roughness)
 
 void main()
 {
-    vec3 baseColor = aColor;
-    vec3 norm = normalize(aNormal);
+    vec3 baseColor = displayMode == MODE_BIOMES ? texture(biomeMap, MapCoord).rgb : aColor;
+    vec3 norm = normalize(normalMatrix * surfaceNormal(texture(surfaceMap, MapCoord), heightScale));
     float occlusion = 1.0;
     float roughness = 1.0;
     bool textured = displayMode == MODE_TEXTURED;

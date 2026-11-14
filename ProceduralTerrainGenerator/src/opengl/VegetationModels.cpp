@@ -29,6 +29,17 @@ namespace {
 	constexpr int impostorNormalUnit = 10;
 	constexpr int previewSize = 512;
 
+	//Instance attributes (VegetationModels::GpuInstance) at two consecutive locations from a binding with divisor 1
+	void SetInstanceAttributes(GLuint vao, GLuint firstLocation, GLuint binding)
+	{
+		for (GLuint a = 0; a < 2; a++) {
+			glEnableVertexArrayAttrib(vao, firstLocation + a);
+			glVertexArrayAttribFormat(vao, firstLocation + a, 4, GL_FLOAT, GL_FALSE, a * sizeof(glm::vec4));
+			glVertexArrayAttribBinding(vao, firstLocation + a, binding);
+		}
+		glVertexArrayBindingDivisor(vao, binding, 1);
+	}
+
 	//Centre and radius (metres of the model) of the sphere around a variant: what an impostor frame shows
 	void BoundingSphere(const vegetation::Variant& variant, glm::vec3& center, float& radius)
 	{
@@ -209,7 +220,7 @@ VegetationModels::~VegetationModels()
 	}
 	glDeleteTextures(1, &fallbackAlbedo);
 	glDeleteTextures(1, &fallbackDetail);
-	glDeleteVertexArrays(1, &emptyVao);
+	glDeleteVertexArrays(1, &impostorVao);
 	glDeleteFramebuffers(1, &bakeFramebuffer);
 	glDeleteRenderbuffers(1, &bakeDepth);
 }
@@ -223,7 +234,8 @@ bool VegetationModels::Initialize(const std::string& _resourceDir)
 		std::cout << "[ERROR] VegetationModels: the shaders could not be built" << std::endl;
 		return false;
 	}
-	glCreateVertexArrays(1, &emptyVao);
+	glCreateVertexArrays(1, &impostorVao);
+	SetInstanceAttributes(impostorVao, 0, 0);
 	const std::filesystem::path manifestPath = std::filesystem::path(resourceDir) / "vegetation_models.json";
 	try {
 		std::ifstream file(manifestPath);
@@ -394,6 +406,35 @@ void VegetationModels::Install(size_t index, Loaded& loaded)
 		glVertexArrayAttribFormat(model.vao, a, sizes[a], GL_FLOAT, GL_FALSE, offsets[a]);
 		glVertexArrayAttribBinding(model.vao, a, 0);
 	}
+	SetInstanceAttributes(model.vao, 3, 1);
+	//Indirect commands of all parts of all levels, grouped by material so one multi-draw per material draws them
+	for (int v = 0; v < static_cast<int>(model.variants.size()); v++) {
+		for (int l = 0; l < static_cast<int>(model.variants[v].lods.size()); l++) {
+			for (const vegetation::Part& part : model.variants[v].lods[l].parts) {
+				model.commands.push_back({ part.indexCount, part.firstIndex, v, l });
+				model.commandMaterial.push_back(part.material);
+			}
+		}
+	}
+	std::vector<size_t> order(model.commands.size());
+	for (size_t i = 0; i < order.size(); i++) {
+		order[i] = i;
+	}
+	std::stable_sort(order.begin(), order.end(), [&](size_t a, size_t b) { return model.commandMaterial[a] < model.commandMaterial[b]; });
+	std::vector<MeshCommand> sorted;
+	std::vector<int> sortedMaterial;
+	for (size_t i : order) {
+		sorted.push_back(model.commands[i]);
+		sortedMaterial.push_back(model.commandMaterial[i]);
+	}
+	model.commands.swap(sorted);
+	model.commandMaterial.swap(sortedMaterial);
+	for (int c = 0; c < static_cast<int>(model.commands.size()); c++) {
+		if (model.runs.empty() || model.runs.back().material != model.commandMaterial[c]) {
+			model.runs.push_back({ model.commandMaterial[c], c, 0 });
+		}
+		model.runs.back().count++;
+	}
 	for (const Loaded::Maps& maps : loaded.maps) {
 		if (maps.albedo.empty()) {
 			model.albedo.push_back(0);
@@ -411,7 +452,7 @@ void VegetationModels::Install(size_t index, Loaded& loaded)
 void VegetationModels::BakeImpostors(size_t index)
 {
 	Model& model = models[index];
-	if (model.kind != "tree" || model.variants.empty()) {
+	if (model.kind != "tree" || model.variants.empty() || static_cast<int>(model.variants.size()) > maxImpostorVariants) {
 		return;
 	}
 	const int size = ImpostorSize();
@@ -444,7 +485,7 @@ void VegetationModels::BakeImpostors(size_t index)
 	glDisable(GL_CULL_FACE);
 	glEnable(GL_DEPTH_TEST);
 	glBindFramebuffer(GL_FRAMEBUFFER, bakeFramebuffer);
-	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, instanceBinding, preview->instances);
+	SetInstanceBuffer(preview->instances);
 	glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
 	//Unused while baking (the albedo is unlit), but BeginDraw sets its uniforms
 	LightSource light;
@@ -513,23 +554,48 @@ void VegetationModels::BeginImpostorDraw(const glm::mat4& view, const glm::mat4&
 	impostorShader->SetUniform1i("frames", impostorFrames);
 }
 
-void VegetationModels::DrawImpostors(int modelIndex, int variant, int firstInstance, int instanceCount)
+void VegetationModels::DrawImpostorsIndirect(int modelIndex, int firstCommand)
 {
 	const Model& model = models[modelIndex];
-	if (model.state != State::READY || !model.impostorAlbedo || variant < 0 || variant >= static_cast<int>(model.variants.size())) {
+	if (model.state != State::READY || !model.impostorAlbedo) {
 		return;
 	}
-	glm::vec3 center;
-	float radius;
-	BoundingSphere(model.variants[variant], center, radius);
-	impostorShader->SetUniform3fv("boundsCenter", center);
-	impostorShader->SetUniform1f("boundsRadius", radius);
-	impostorShader->SetUniform1f("layer", static_cast<float>(variant));
-	impostorShader->SetUniform1i("firstInstance", firstInstance);
+	glm::vec4 spheres[maxImpostorVariants] = {};
+	for (size_t v = 0; v < model.variants.size(); v++) {
+		glm::vec3 center;
+		float radius;
+		BoundingSphere(model.variants[v], center, radius);
+		spheres[v] = glm::vec4(center, radius);
+	}
+	impostorShader->Bind();
+	glUniform4fv(glGetUniformLocation(impostorShader->GetRendererID(), "variantSpheres"), maxImpostorVariants, &spheres[0].x);
 	glBindTextureUnit(impostorAlbedoUnit, model.impostorAlbedo);
 	glBindTextureUnit(impostorNormalUnit, model.impostorNormal);
-	glBindVertexArray(emptyVao);
-	glDrawArraysInstanced(GL_TRIANGLE_STRIP, 0, 4, instanceCount);
+	glVertexArrayVertexBuffer(impostorVao, 0, instanceBuffer, 0, sizeof(GpuInstance));
+	glBindVertexArray(impostorVao);
+	glMultiDrawArraysIndirect(GL_TRIANGLE_STRIP, reinterpret_cast<const void*>(static_cast<uintptr_t>(firstCommand) * 4 * sizeof(GLuint)),
+		static_cast<GLsizei>(model.variants.size()), 0);
+	glBindVertexArray(0);
+}
+
+void VegetationModels::DrawMeshesIndirect(int modelIndex, int firstCommand)
+{
+	const Model& model = models[modelIndex];
+	if (model.state != State::READY) {
+		return;
+	}
+	glVertexArrayVertexBuffer(model.vao, 1, instanceBuffer, 0, sizeof(GpuInstance));
+	glBindVertexArray(model.vao);
+	for (const Model::MaterialRun& run : model.runs) {
+		const vegetation::Material& material = model.materials[run.material];
+		const GLuint albedo = model.albedo[run.material];
+		glBindTextureUnit(albedoUnit, albedo ? albedo : fallbackAlbedo);
+		glBindTextureUnit(detailUnit, albedo ? model.detail[run.material] : fallbackDetail);
+		shader->SetUniform1i("alphaTest", material.alphaTest);
+		shader->SetUniform1i("foliage", material.foliage);
+		glMultiDrawElementsIndirect(GL_TRIANGLES, GL_UNSIGNED_INT,
+			reinterpret_cast<const void*>(static_cast<uintptr_t>(firstCommand + run.first) * 5 * sizeof(GLuint)), run.count, 0);
+	}
 	glBindVertexArray(0);
 }
 
@@ -592,7 +658,7 @@ void VegetationModels::Draw(int modelIndex, int variant, int lod, int firstInsta
 	if (lod < 0 || lod >= static_cast<int>(lods.size())) {
 		return;
 	}
-	shader->SetUniform1i("firstInstance", firstInstance);
+	glVertexArrayVertexBuffer(model.vao, 1, instanceBuffer, 0, sizeof(GpuInstance));
 	glBindVertexArray(model.vao);
 	for (const vegetation::Part& part : lods[lod].parts) {
 		const vegetation::Material& material = model.materials[part.material];
@@ -601,8 +667,8 @@ void VegetationModels::Draw(int modelIndex, int variant, int lod, int firstInsta
 		glBindTextureUnit(detailUnit, albedo ? model.detail[part.material] : fallbackDetail);
 		shader->SetUniform1i("alphaTest", material.alphaTest);
 		shader->SetUniform1i("foliage", material.foliage);
-		glDrawElementsInstanced(GL_TRIANGLES, static_cast<GLsizei>(part.indexCount), GL_UNSIGNED_INT,
-			reinterpret_cast<const void*>(static_cast<uintptr_t>(part.firstIndex) * sizeof(uint32_t)), instanceCount);
+		glDrawElementsInstancedBaseInstance(GL_TRIANGLES, static_cast<GLsizei>(part.indexCount), GL_UNSIGNED_INT,
+			reinterpret_cast<const void*>(static_cast<uintptr_t>(part.firstIndex) * sizeof(uint32_t)), instanceCount, static_cast<GLuint>(firstInstance));
 	}
 	glBindVertexArray(0);
 }
@@ -654,7 +720,7 @@ void VegetationModels::RenderPreview(int modelIndex, int variantIndex, int lod, 
 		const glm::mat4 view = glm::lookAt(eye, center, glm::vec3(0.0f, 1.0f, 0.0f));
 		const glm::mat4 projection = glm::perspective(glm::radians(35.0f), 1.0f, radius * 0.1f, radius * 10.0f);
 		BeginDraw(view, projection, eye, glm::mat4(1.0f), 1.0f, light, false, 0.0f, 1.0f);
-		glBindBufferBase(GL_SHADER_STORAGE_BUFFER, instanceBinding, p.instances);
+		SetInstanceBuffer(p.instances);
 		if (wireframe) {
 			glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
 		}

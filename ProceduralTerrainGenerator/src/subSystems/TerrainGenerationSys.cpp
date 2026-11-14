@@ -370,6 +370,7 @@ void TerrainGenerationSys::ImGuiDisplay()
 			s.displayMode = utilities::heightMapMode::TOPOGRAPHICAL;
 		}
 	}
+	utilities::TerrainDetailImGui(s.tessPixels);
 	if (infiniteGeneration) {
 		ImGui::SeparatorText("Infinite generation");
 		chunks.ImGuiDraw();

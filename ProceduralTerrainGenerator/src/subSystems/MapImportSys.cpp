@@ -188,6 +188,7 @@ void MapImportSys::ImGuiDisplay()
 			s.displayMode = utilities::heightMapMode::GREYSCALE;
 		}
 	}
+	utilities::TerrainDetailImGui(s.tessPixels);
 }
 
 void MapImportSys::ImGuiOutput()
