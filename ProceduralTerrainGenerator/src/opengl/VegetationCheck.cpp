@@ -13,7 +13,9 @@
 
 #include <lodepng.h>
 
+#include "Camera.h"
 #include "LightSource.h"
+#include "Sky.h"
 #include "VegetationModels.h"
 
 namespace {
@@ -112,6 +114,11 @@ int RunVegetationPreview(const std::string& folder)
 			std::error_code error;
 			std::filesystem::create_directories(folder, error);
 			LightSource light;
+			//The light colors of the lit shaders come from the sky table
+			Sky sky;
+			if (sky.Initialize()) {
+				sky.Update(Camera(512, 512, glm::vec3(0.0f), 100.0f, 1000.0f), light);
+			}
 			result = 0;
 			std::printf("\n%-16s %8s %10s  %-24s %8s\n", "model", "variant", "source", "levels (triangles)", "load ms");
 			for (int i = 0; i < static_cast<int>(models.GetModels().size()); i++) {

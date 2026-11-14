@@ -28,6 +28,7 @@ uniform mat3 normalMatrix;
 uniform float heightScale;
 
 #include "../common/sky.glsl"
+#include "../common/fog.glsl"
 #include "../common/surface.glsl"
 #include "../common/materials.glsl"
 #include "../common/shadow.glsl"
@@ -188,10 +189,6 @@ void main()
         }
     }
 
-    if (fogOn) {
-        vec3 toFragment = FragPos - viewPos;
-        float fog = smoothstep(fogStart, fogDistance, length(toFragment));
-        result = mix(result, fogColor(toFragment, light.direction), fog);
-    }
+    result = applyFog(result, FragPos);
     FragColor = vec4(result, 1.0);
 }

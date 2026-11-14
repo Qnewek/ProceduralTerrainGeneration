@@ -1,16 +1,15 @@
-//Sun shadows (ShadowMap): cascaded depth maps from the sun, one array layer per cascade. Needs frame.glsl.
-//The cascade comes from the depth along the camera view; shadows fade out over the last part of the last cascade
+//Sun shadows (ShadowMap): cascaded depth maps from the sun, one array layer per cascade, times the shadows of the clouds (clouds.glsl).
+//Needs frame.glsl. The cascade comes from the depth along the camera view; shadows fade out over the last part of the last cascade
+
+#include "clouds.glsl"
 
 layout(binding = 15) uniform sampler2DArrayShadow shadowMap;   //FrameUniforms::shadowUnit
 
 //Share of the last cascade over which shadows fade out
 const float SHADOW_FADE = 0.15;
 
-//Sunlight reaching a point: 1 = lit, 1 - shadowStrength = fully shadowed
-//@param worldPos - world space (after modelScale), as FragPos
-//@param normal - unit normal of the surface; the point is moved along it by about a texel of its cascade, against self-shadowing (acne)
-//@param pcfRadius - 1 = 3 x 3 filtered taps (terrain), 0 = one filtered tap (cheap, small surfaces)
-float sunShadow(vec3 worldPos, vec3 normal, int pcfRadius)
+//Sunlight reaching a point past the shadow casters: 1 = lit, 1 - shadowStrength = fully shadowed
+float cascadeShadow(vec3 worldPos, vec3 normal, int pcfRadius)
 {
     if (shadowCascades <= 0 || depthPass) {
         return 1.0;
@@ -44,4 +43,16 @@ float sunShadow(vec3 worldPos, vec3 normal, int pcfRadius)
     lit /= taps;
     float fade = smoothstep(last * (1.0 - SHADOW_FADE), last, depth);
     return 1.0 - shadowStrength * (1.0 - lit) * (1.0 - fade);
+}
+
+//Sunlight reaching a point: 1 = lit, 0 = none
+//@param worldPos - world space (after modelScale), as FragPos
+//@param normal - unit normal of the surface; the point is moved along it by about a texel of its cascade, against self-shadowing (acne)
+//@param pcfRadius - 1 = 3 x 3 filtered taps (terrain), 0 = one filtered tap (cheap, small surfaces)
+float sunShadow(vec3 worldPos, vec3 normal, int pcfRadius)
+{
+    if (depthPass) {
+        return 1.0;
+    }
+    return cascadeShadow(worldPos, normal, pcfRadius) * cloudShadow(worldPos);
 }

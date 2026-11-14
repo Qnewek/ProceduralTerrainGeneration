@@ -12,6 +12,7 @@
 #include "Noise.h"
 #include "Erosion.h"
 #include "LightSource.h"
+#include "Clouds.h"
 #include "Sky.h"
 #include "TerrainMaterials.h"
 #include "VegetationModels.h"
@@ -80,6 +81,7 @@ private:
 	//The sun
 	LightSource light;
 	Sky sky;
+	Clouds clouds;
 	//true if the active mode shows the 2D map, which has no sky
 	bool FlatView() const;
 
