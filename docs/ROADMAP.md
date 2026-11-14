@@ -492,6 +492,11 @@ Kroki:
      gatunki po nazwie biomu (`vegetation::DefaultRules`). Rysowanie: instancje w zasięgu i we frustum, posortowane w grupy model/wariant/LOD, jeden SSBO na klatkę.
      Przeniesienie do compute — w kroku 4 razem z cullingiem na GPU, jeśli odczyt map okaże się za wolny.
 3. **Reguły per biom:** tabela roślinności w `BiomeConfig` (model, gęstość, zakres nachylenia/wysokości, skala, klastrowanie), edytor, presety.
+   - Wynik (2026-11-14, do oceny właściciela): `biome::Plant` w `Biome::plants` (≤ 16 na biom), sekcja „Vegetation” w edytorze biomów (dodawanie, kolejność,
+     udział komórek warstwy z ostrzeżeniem > 100%, „Default plants”), pole `plants` w presetach bez nowej wersji — biom bez niego dostaje `DefaultPlants` po nazwie.
+     Warstwa z rodzaju modelu (`kind` w `vegetation_models.json`), nie z reguły. Roślina rośnie tylko w swoim zakresie elewacji i nachylenia; te, które w danej komórce
+     nie mogą rosnąć, nie zabierają udziału pozostałym. Modele jeszcze wczytywane zachowują swoje komórki (puste), więc reszta nie przeskakuje po wczytaniu.
+     Zmiana roślin nie regeneruje terenu; chunki są rozmieszczane od nowa, a do tego czasu widać stare instancje.
 4. **Impostory i culling na GPU:** impostory pieczone przy wczytaniu (octahedral), frustum/distance culling w compute, `glMultiDrawElementsIndirect`; pomiar 100k instancji.
 5. **Trawa:** osobny system blisko kamery (compute + wiatr w VS).
 6. **Wspólny UBO kamery i światła** (pkt 6 wyżej) — przy kroku 2, gdy dojdą shadery roślinności.

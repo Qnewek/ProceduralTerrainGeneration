@@ -143,12 +143,125 @@ bool BiomeEditor::ImGuiDraw(std::vector<biome::Biome>& table)
 	ImGui::SetItemTooltip("The biome keeps the terrain as it is");
 
 	changed |= MaterialLayers(b);
+	Plants(b);
 	return changed;
 }
 
 void BiomeEditor::SetMaterialNames(std::vector<std::string> names)
 {
 	materialNames = std::move(names);
+}
+
+void BiomeEditor::SetPlantModels(std::vector<PlantModel> models)
+{
+	plantModels = std::move(models);
+}
+
+void BiomeEditor::Plants(biome::Biome& b)
+{
+	ImGui::SeparatorText("Vegetation");
+	ImGui::TextDisabled("Trees, shrubs and rocks of the infinite world; a cell of a layer holds at most one of them, earlier plants first");
+	auto modelOf = [&](const std::string& name) -> const PlantModel* {
+		const auto found = std::find_if(plantModels.begin(), plantModels.end(), [&](const PlantModel& m) { return m.name == name; });
+		return found == plantModels.end() ? nullptr : &*found;
+	};
+
+	//Share of the cells of each layer the plants ask for, on flat land at average clustering
+	float shares[vegetation::layerCount] = {};
+	for (const biome::Plant& plant : b.plants) {
+		if (const PlantModel* model = modelOf(plant.model)) {
+			shares[static_cast<int>(model->layer)] += plant.density;
+		}
+	}
+	for (int l = 0; l < vegetation::layerCount; l++) {
+		if (l > 0) {
+			ImGui::SameLine();
+		}
+		const float percent = 100.0f * shares[l];
+		if (shares[l] > 1.0f) {
+			ImGui::TextColored(ImVec4(1.0f, 0.6f, 0.2f, 1.0f), "%s %.0f%%", vegetation::layerNames[l], percent);
+			ImGui::SetItemTooltip("Over 100%%: the plants after the full share never grow (outside forests the clustering lowers the share)");
+		}
+		else {
+			ImGui::Text("%s %.1f%%", vegetation::layerNames[l], percent);
+			ImGui::SetItemTooltip("Share of the cells of the layer the plants take, before clustering, slopes and elevations");
+		}
+	}
+
+	int remove = -1, moveUp = -1;
+	for (int i = 0; i < static_cast<int>(b.plants.size()); i++) {
+		biome::Plant& plant = b.plants[i];
+		ImGui::PushID(i);
+		const PlantModel* model = modelOf(plant.model);
+		const std::string title = (plant.model.empty() ? std::string("(no model)") : plant.model) + " - "
+			+ (model ? vegetation::layerNames[static_cast<int>(model->layer)] : "unknown model") + "###plant";
+		const bool open = ImGui::TreeNode(title.c_str());
+		ImGui::SameLine(ImGui::GetContentRegionAvail().x - ImGui::GetFrameHeight() * 3.0f);
+		ImGui::BeginDisabled(i == 0);
+		if (ImGui::ArrowButton("##up", ImGuiDir_Up)) {
+			moveUp = i;
+		}
+		ImGui::EndDisabled();
+		ImGui::SameLine(0.0f, 2.0f);
+		ImGui::BeginDisabled(i + 1 == static_cast<int>(b.plants.size()));
+		if (ImGui::ArrowButton("##down", ImGuiDir_Down)) {
+			moveUp = i + 1;
+		}
+		ImGui::EndDisabled();
+		ImGui::SameLine(0.0f, 2.0f);
+		if (ImGui::Button("X", ImVec2(ImGui::GetFrameHeight(), 0.0f))) {
+			remove = i;
+		}
+		ImGui::SetItemTooltip("Remove the plant");
+		if (open) {
+			if (ImGui::BeginCombo("Model", plant.model.c_str())) {
+				for (const PlantModel& m : plantModels) {
+					const std::string label = m.name + " (" + vegetation::layerNames[static_cast<int>(m.layer)] + ")";
+					if (ImGui::Selectable(label.c_str(), m.name == plant.model)) {
+						plant.model = m.name;
+					}
+				}
+				ImGui::EndCombo();
+			}
+			ImGui::SetItemTooltip("The model decides the layer: trees and rocks on 8 m cells, shrubs on 4 m cells");
+			ImGui::SliderFloat("Density", &plant.density, 0.0f, 1.0f, "%.3f", ImGuiSliderFlags_Logarithmic | ImGuiSliderFlags_AlwaysClamp);
+			ImGui::SetItemTooltip("Chance that a cell of its layer holds this plant, where it can grow");
+			//Kept above 0 and ordered by the widget
+			ImGui::DragFloatRange2("Scale", &plant.minScale, &plant.maxScale, 0.01f, 0.05f, 20.0f, "%.2f", nullptr, ImGuiSliderFlags_AlwaysClamp);
+			ImGui::SetItemTooltip("Size relative to the model, random between min and max");
+			ImGui::SliderFloat("Max slope", &plant.maxSlope, 0.0f, 90.0f, "%.0f deg", ImGuiSliderFlags_AlwaysClamp);
+			ImGui::DragFloatRange2("Elevation", &plant.elevation.min, &plant.elevation.max, 0.005f, -1.0f, 1.0f, "%.3f", nullptr,
+				ImGuiSliderFlags_AlwaysClamp);
+			ImGui::SetItemTooltip("Where it grows, as the Elevation range of biomes: 0 = the water surface, 1 = the highest peak");
+			ImGui::SliderFloat("Clustering", &plant.clustering, 0.0f, 1.0f, "%.2f", ImGuiSliderFlags_AlwaysClamp);
+			ImGui::SetItemTooltip("0 = spread evenly, 1 = in forests and clearings");
+			ImGui::TreePop();
+		}
+		ImGui::PopID();
+	}
+	if (remove >= 0) {
+		b.plants.erase(b.plants.begin() + remove);
+	}
+	if (moveUp > 0) {
+		std::swap(b.plants[moveUp], b.plants[moveUp - 1]);
+	}
+
+	ImGui::BeginDisabled(b.plants.size() >= biome::maxPlants);
+	if (ImGui::Button("Add plant")) {
+		biome::Plant plant;
+		plant.model = plantModels.empty() ? std::string() : plantModels.front().name;
+		b.plants.push_back(plant);
+	}
+	ImGui::EndDisabled();
+	ImGui::SetItemTooltip("At most %d plants per biome", static_cast<int>(biome::maxPlants));
+	ImGui::SameLine();
+	const std::vector<biome::Plant> defaults = biome::DefaultPlants(b.name);
+	ImGui::BeginDisabled(defaults.empty());
+	if (ImGui::Button("Default plants")) {
+		b.plants = defaults;
+	}
+	ImGui::EndDisabled();
+	ImGui::SetItemTooltip("The plants of the default biome with this name");
 }
 
 bool BiomeEditor::MaterialLayers(biome::Biome& b)

@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 #include <limits>
+#include <utility>
 
 namespace biome {
 	float Biome::Distance(const ParameterValues& values) const
@@ -161,7 +162,7 @@ namespace biome {
 		//the deep sea floor is dark while there is no water surface, so the sea does not look like a beach
 		enum { GRASS, DRY_GRASS, FOREST_FLOOR, DIRT, SAND, BEACH, CLIFF_ROCK, SANDSTONE, SCREE, SNOW, TUNDRA };
 		using Layers = std::array<MaterialLayer, materialLayers>;
-		return {
+		std::vector<Biome> table{
 			{ "Deep ocean", glm::vec3(0.1f, 0.2f, 0.55f), ranges(all, all, all, all, { -1.0f, seaFloor }), deepSea,
 				Layers{ { { DIRT, 0.6f }, { SCREE, 0.4f } } } },
 			{ "Ocean", glm::vec3(0.2f, 0.4f, 0.85f), ranges(all, all, all, all, { seaFloor, 0.0f }), shelf,
@@ -199,5 +200,57 @@ namespace biome {
 			{ "Snowy peaks", glm::vec3(0.85f, 0.9f, 1.0f), ranges(hilly, all, { -1.0f, frozen }, all, inland), rock,
 				Layers{ { { SNOW, 0.6f }, { CLIFF_ROCK, 0.3f }, { SCREE, 0.1f } } } },
 		};
+		for (Biome& b : table) {
+			b.plants = DefaultPlants(b.name);
+		}
+		return table;
+	}
+
+	std::vector<Plant> DefaultPlants(const std::string& biomeName)
+	{
+		//Densities per cell: trees and rocks 8 x 8 m, shrubs 4 x 4 m. Scales turn the models (sizes in vegetation_models.json)
+		//into plausible sizes: the deciduous and island trees are 3 m, the saplings 1 m, the rock 0.3 m. Trees and shrubs grow
+		//in forests and clearings, rocks lie evenly
+		const Range anywhere{ -1.0f, 1.0f };
+		const auto tree = [&](const char* model, float density, float minScale, float maxScale) {
+			return Plant{ model, density, minScale, maxScale, 32.0f, anywhere, 1.0f };
+		};
+		const auto shrub = [&](const char* model, float density, float minScale, float maxScale) {
+			return Plant{ model, density, minScale, maxScale, 40.0f, anywhere, 1.0f };
+		};
+		const auto rock = [&](const char* model, float density, float minScale, float maxScale) {
+			return Plant{ model, density, minScale, maxScale, 70.0f, anywhere, 0.0f };
+		};
+		static const std::vector<std::pair<std::string, std::vector<Plant>>> plants{
+			{ "Beach", { shrub("Dead trunk", 0.004f, 0.8f, 1.4f), rock("Stone", 0.02f, 2.0f, 5.0f) } },
+			{ "Stony shore", { rock("Boulder", 0.08f, 1.0f, 3.0f), rock("Rock", 0.15f, 3.0f, 8.0f), shrub("Shrub 2", 0.02f, 0.8f, 1.3f) } },
+			{ "Snowy shore", { rock("Stone", 0.05f, 2.0f, 5.0f) } },
+			{ "Tundra", { shrub("Pine sapling", 0.03f, 0.8f, 1.6f), shrub("Shrub 2", 0.04f, 0.8f, 1.4f), rock("Stone", 0.05f, 2.0f, 6.0f) } },
+			{ "Snowfields", { tree("Fir", 0.02f, 0.6f, 0.9f), rock("Stone", 0.03f, 2.0f, 6.0f) } },
+			{ "Taiga", { tree("Fir", 0.5f, 0.7f, 1.2f), shrub("Fir sapling", 0.06f, 1.0f, 2.5f), shrub("Pine sapling", 0.06f, 1.0f, 2.5f),
+				shrub("Fern", 0.05f, 0.8f, 1.3f), rock("Boulder", 0.02f, 0.8f, 2.0f) } },
+			{ "Steppe", { tree("Deciduous tree", 0.005f, 1.8f, 2.6f), shrub("Shrub 2", 0.05f, 0.8f, 1.5f), rock("Stone", 0.02f, 2.0f, 5.0f) } },
+			{ "Plains", { tree("Deciduous tree", 0.03f, 2.0f, 3.0f), shrub("Shrub", 0.03f, 0.8f, 1.3f), shrub("Shrub 2", 0.03f, 0.8f, 1.5f),
+				rock("Stone", 0.01f, 2.0f, 5.0f) } },
+			{ "Forest", { tree("Deciduous tree", 0.4f, 2.0f, 3.2f), tree("Fir", 0.12f, 0.7f, 1.1f), shrub("Shrub", 0.06f, 0.8f, 1.3f),
+				shrub("Fern", 0.12f, 0.8f, 1.4f), shrub("Dead trunk", 0.01f, 0.8f, 1.5f), rock("Rock", 0.02f, 3.0f, 7.0f) } },
+			{ "Desert", { tree("Quiver tree", 0.01f, 2.5f, 4.0f), shrub("Dead trunk", 0.003f, 0.8f, 1.2f), rock("Stone", 0.04f, 2.0f, 6.0f),
+				rock("Boulder", 0.01f, 1.0f, 3.0f) } },
+			{ "Savanna", { tree("Searsia", 0.04f, 1.5f, 2.5f), tree("Island tree", 0.015f, 2.0f, 3.0f), shrub("Shrub 2", 0.05f, 0.8f, 1.5f),
+				rock("Stone", 0.01f, 2.0f, 5.0f) } },
+			{ "Jungle", { tree("Island tree", 0.45f, 2.2f, 3.5f), tree("Deciduous tree", 0.1f, 2.5f, 3.5f), shrub("Fern", 0.3f, 1.0f, 1.8f),
+				shrub("Shrub", 0.12f, 1.0f, 1.6f) } },
+			{ "Hills", { tree("Fir", 0.1f, 0.7f, 1.1f), tree("Deciduous tree", 0.08f, 2.0f, 3.0f), shrub("Shrub", 0.04f, 0.8f, 1.3f),
+				rock("Boulder", 0.03f, 0.8f, 2.5f) } },
+			{ "Mountain", { tree("Fir", 0.08f, 0.6f, 1.0f), rock("Boulder", 0.06f, 1.0f, 4.0f), rock("Rock", 0.05f, 4.0f, 10.0f) } },
+			{ "Rocky peaks", { rock("Boulder", 0.1f, 1.5f, 5.0f), rock("Rock", 0.06f, 5.0f, 12.0f) } },
+			{ "Snowy peaks", { rock("Boulder", 0.02f, 1.0f, 3.0f) } },
+		};
+		for (const auto& [name, list] : plants) {
+			if (name == biomeName) {
+				return list;
+			}
+		}
+		return {};
 	}
 }
