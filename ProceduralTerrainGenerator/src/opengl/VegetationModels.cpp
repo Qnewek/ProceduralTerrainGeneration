@@ -22,8 +22,6 @@ namespace {
 	constexpr unsigned char noOcclusion = 255;
 	//Models loaded at the same time; a large tree takes a few hundred MB while its levels are built
 	constexpr unsigned int maxWorkers = 4;
-	//Binding of the instance buffer (Instances in vegetation_vertex.shader)
-	constexpr GLuint instanceBinding = 1;
 	constexpr int albedoUnit = 7;
 	constexpr int detailUnit = 8;
 	constexpr int previewSize = 512;
@@ -409,10 +407,11 @@ int VegetationModels::LoadingCount() const
 	return static_cast<int>(std::count_if(models.begin(), models.end(), [](const Model& m) { return m.state == State::LOADING; }));
 }
 
-void VegetationModels::BeginDraw(const glm::mat4& view, const glm::mat4& projection, const glm::vec3& viewPos, const glm::mat4& model,
+void VegetationModels::BeginDraw(const glm::mat4& view, const glm::mat4& projection, const glm::vec3& viewPos, const glm::mat4& model, float heightScale,
 	const LightSource& light, bool fogOn, float fogStart, float fogDistance)
 {
 	shader->Bind();
+	shader->SetUniform1f("heightScale", heightScale);
 	shader->SetView(view);
 	shader->SetProjection(projection);
 	shader->SetViewPos(viewPos);
@@ -498,7 +497,7 @@ void VegetationModels::RenderPreview(int modelIndex, int variantIndex, int lod, 
 		const glm::vec3 eye = center + radius * 2.6f * glm::vec3(std::cos(pitch) * std::sin(yaw), std::sin(pitch), std::cos(pitch) * std::cos(yaw));
 		const glm::mat4 view = glm::lookAt(eye, center, glm::vec3(0.0f, 1.0f, 0.0f));
 		const glm::mat4 projection = glm::perspective(glm::radians(35.0f), 1.0f, radius * 0.1f, radius * 10.0f);
-		BeginDraw(view, projection, eye, glm::mat4(1.0f), light, false, 0.0f, 1.0f);
+		BeginDraw(view, projection, eye, glm::mat4(1.0f), 1.0f, light, false, 0.0f, 1.0f);
 		glBindBufferBase(GL_SHADER_STORAGE_BUFFER, instanceBinding, p.instances);
 		if (wireframe) {
 			glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);

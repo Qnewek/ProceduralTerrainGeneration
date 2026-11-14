@@ -18,7 +18,7 @@ namespace vegetation
 {
 	namespace {
 		//Bumped whenever the cache layout or the way levels are built changes, so old caches are rebuilt
-		constexpr uint32_t cacheVersion = 3;
+		constexpr uint32_t cacheVersion = 5;
 		constexpr char cacheMagic[4] = { 'P', 'T', 'G', 'V' };
 		//Relative error allowed when collapsing edges (meshoptimizer: a part of the mesh extent)
 		constexpr float surfaceError = 0.05f;
@@ -106,12 +106,29 @@ namespace vegetation
 			return i;
 		}
 
-		//Triangles of each connected piece of a part (connected through shared vertices)
+		//Triangles of each connected piece of a part, connected through shared vertices or vertices at the same position:
+		//UV and normal seams duplicate vertices, and a trunk cut by them into strips is still one piece
 		std::vector<std::vector<uint32_t>> Pieces(const SourcePart& part)
 		{
 			const size_t triangleCount = part.indices.size() / 3;
 			std::vector<uint32_t> parent(part.vertices.size());
 			std::iota(parent.begin(), parent.end(), 0u);
+			struct PositionHash {
+				size_t operator()(const glm::vec3& p) const
+				{
+					uint32_t bits[3];
+					std::memcpy(bits, &p, sizeof(bits));
+					return std::hash<uint64_t>()((static_cast<uint64_t>(bits[0]) * 0x9E3779B1u) ^ (static_cast<uint64_t>(bits[1]) << 21) ^ (static_cast<uint64_t>(bits[2]) << 42));
+				}
+			};
+			std::unordered_map<glm::vec3, uint32_t, PositionHash> vertexAt;
+			vertexAt.reserve(part.vertices.size());
+			for (uint32_t i = 0; i < static_cast<uint32_t>(part.vertices.size()); i++) {
+				const auto [found, added] = vertexAt.emplace(part.vertices[i].position, i);
+				if (!added) {
+					parent[i] = found->second;
+				}
+			}
 			for (size_t t = 0; t < triangleCount; t++) {
 				const uint32_t a = Find(parent, part.indices[t * 3]);
 				for (int k = 1; k < 3; k++) {
@@ -162,12 +179,13 @@ namespace vegetation
 		}
 
 		//Collapses edges of these indices towards targetIndices
-		std::vector<uint32_t> Collapse(const SourcePart& part, const std::vector<uint32_t>& indices, size_t targetIndices)
+		//@param options - meshopt_Simplify* flags
+		std::vector<uint32_t> Collapse(const SourcePart& part, const std::vector<uint32_t>& indices, size_t targetIndices, unsigned int options = 0)
 		{
 			std::vector<uint32_t> result(indices.size());
 			float error = 0.0f;
 			const size_t count = meshopt_simplify(result.data(), indices.data(), indices.size(), &part.vertices[0].position.x, part.vertices.size(),
-				sizeof(Vertex), targetIndices, surfaceError, 0, &error);
+				sizeof(Vertex), targetIndices, surfaceError, options, &error);
 			result.resize(count);
 			return result;
 		}
@@ -581,7 +599,11 @@ namespace vegetation
 		std::vector<uint32_t> result;
 		if (pieces.size() < manyPieces) {
 			result = Collapse(part, part.indices, targetIndices);
-			//Collapses stop at the error limit or where the mesh cannot collapse further (seams): cluster vertices instead
+			//Collapses stop at the error limit or at UV seams: collapse across the seams (the texture stretches a little there),
+			//and only then cluster vertices, which can cut away thin parts such as the bottom of a trunk
+			if (result.size() > acceptable) {
+				result = Collapse(part, part.indices, targetIndices, meshopt_SimplifyPermissive);
+			}
 			if (result.size() > acceptable) {
 				result.resize(part.indices.size());
 				float error = 0.0f;
