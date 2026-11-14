@@ -175,6 +175,14 @@ bool TerrainMaterials::Initialize(const std::string& manifestPath, const std::st
 					material.fallbackColor = glm::vec3(color[0], color[1], color[2]);
 				}
 			}
+			material.grass = std::clamp(entry.value("grass", 0.0f), 0.0f, 1.0f);
+			material.grassColor = material.fallbackColor;
+			if (entry.contains("grassColor")) {
+				const std::vector<float> color = entry.at("grassColor").get<std::vector<float>>();
+				if (color.size() == 3) {
+					material.grassColor = glm::vec3(color[0], color[1], color[2]);
+				}
+			}
 			if (material.tileSize <= 0.0f) {
 				std::cout << "[ERROR] TerrainMaterials: material " << material.name << " has tileSize <= 0" << std::endl;
 				return false;

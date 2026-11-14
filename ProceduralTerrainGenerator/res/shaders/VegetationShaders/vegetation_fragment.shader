@@ -8,17 +8,7 @@ layout(location = 0) out vec4 FragColor;
 //Only while baking impostors (VegetationModels::BakeImpostors): normal in model space as RGB = n * 0.5 + 0.5, A = 1
 layout(location = 1) out vec4 NormalOut;
 
-struct Light {
-    vec3 direction;     //unit vector towards the sun
-    vec3 ambient;
-    vec3 diffuse;
-};
-uniform bool lightOn;
-uniform Light light;
-uniform bool fogOn;
-uniform float fogStart;
-uniform float fogDistance;
-uniform vec3 viewPos;
+#include "../common/frame.glsl"
 
 //Maps of the material (VegetationModels): RGB = albedo, A = alpha; RG = normal XY (OpenGL convention), B = roughness, A = ambient occlusion
 uniform sampler2D albedoMap;
