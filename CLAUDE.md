@@ -207,7 +207,11 @@ Wartości szumów są w [-1, 1]. Konwencja indeksowania: `map[y * width + x]`.
   w `res/vegetation/cache/` — zmiana algorytmu LOD-ów lub formatu wymaga podbicia `cacheVersion` w `VegetationMesh.cpp`, inaczej zostaną stare. Modele są w metrach
   (1 m = 4 jednostki świata), podstawa w początku układu; jeden plik = kilka wariantów. Jakość LOD-ów sprawdza `--vegetation-preview [folder]` (PNG).
   Rozmieszczenie (`VegetationPlacement.*`, CPU, testy): siatka komórek z jitterem na warstwę (drzewa/krzewy/skały), komórki w całości w jednym chunku, wszystko
-  z hasha pozycji komórki → deterministyczne i bez szwów. Gatunki per biom wg nazwy biomu (`DefaultRules`). `VegetationLayer` (w `TerrainGenerationSys`) czyta mapy
+  z hasha pozycji komórki → deterministyczne i bez szwów. Co rośnie, mówią rośliny biomu (`biome::Plant` w `Biome::plants`, ≤ 16: model po nazwie, gęstość, skala,
+  maks. nachylenie, zakres elewacji, klastrowanie), edytowane w edytorze biomów i zapisywane w presetach; warstwę (komórki 8 / 4 m) wyznacza `kind` modelu w JSON
+  (`vegetation::LayerOfKind`). Domyślne rośliny: `biome::DefaultPlants(nazwa)`; biom z presetu bez pola `plants` dostaje je po nazwie. Zmiana roślin nie regeneruje
+  terenu (edytor nie zgłasza jej jako zmiany biomów) — `VegetationLayer` porównuje rośliny sam i rozmieszcza chunki od nowa, rysując stare instancje do czasu podmiany.
+  `VegetationLayer` (w `TerrainGenerationSys`) czyta mapy
   chunków poziomu 0 z GPU (`ChunkWorld::FineChunks`, ≤ 4 chunki na klatkę) i rysuje instancje (SSBO, grupy model/wariant/LOD wg odległości). Bez biomów roślinności nie ma.
   Klify, height blending, triplanar, specular i anti-tiling są w FS (`Terrain_fragment.shader`, `common/materials.glsl`), parametry w UBO `TerrainMaterials::Block`,
   który musi odpowiadać `TerrainMaterialBlock` (std140) pole w pole. Odczyty materiałów w FS przez `textureGrad` (pochodne z `surfaceSampling`, liczone w jednolitym

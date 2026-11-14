@@ -135,7 +135,7 @@ public:
 	//Names of the surface materials for the biome editor, in the order of their ids
 	void SetMaterialNames(std::vector<std::string> names) { biomeEditor.SetMaterialNames(std::move(names)); }
 	//Models drawn on the infinite world; nullptr (before the models are destroyed) = no vegetation
-	void SetVegetationModels(VegetationModels* models) { vegetationModels = models; }
+	void SetVegetationModels(VegetationModels* models);
 	//Placement settings and statistics, in the Vegetation tab
 	void ImGuiVegetation() { vegetationLayer.ImGuiDraw(); }
 	//Right panel: the generation tabs
