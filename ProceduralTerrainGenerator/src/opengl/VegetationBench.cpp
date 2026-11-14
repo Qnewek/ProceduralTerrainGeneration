@@ -16,8 +16,10 @@
 #include "Camera.h"
 #include "ChunkWorld.h"
 #include "GpuHeightGenerator.h"
+#include "GrassLayer.h"
 #include "LightSource.h"
 #include "Renderer.h"
+#include "TerrainMaterials.h"
 #include "TerrainView.h"
 #include "TextureClass.h"
 #include "VegetationLayer.h"
@@ -236,6 +238,12 @@ namespace {
 		if (viewMetres > 0.0f) {
 			vegetation.SetTreeRange(viewMetres);
 		}
+		//Grass grows by the materials of the splat map; their textures are not needed for it
+		TerrainMaterials materials;
+		if (!materials.Initialize("res/textures/terrain_materials.json", "res/textures/terrain")) {
+			return -1;
+		}
+		GrassLayer grass;
 		VegetationLayer::World vegetationWorld;
 		vegetationWorld.biomes = &world.biomes.table;
 		vegetationWorld.waterHeight = world.terrain.WaterHeight();
@@ -250,12 +258,13 @@ namespace {
 		glEnable(GL_DEPTH_TEST);
 		glViewport(0, 0, screenWidth, screenHeight);
 		renderer.SetPatches(4);
-		Timer terrainTimer, vegetationTimer;
+		Timer terrainTimer, vegetationTimer, grassTimer;
 		//Measured twice on the same placement: trees far away as LOD 2 meshes, then as impostors
 		struct Phase {
 			const char* name;
 			bool impostors;
-			Stats terrainGpu, vegetationGpu, vegetationCpu, updateCpu;
+			Stats terrainGpu, grassGpu, vegetationGpu, vegetationCpu, updateCpu;
+			int blades = 0;
 			int drawn = 0, perLod[4] = {};
 			uint64_t triangles = 0;
 		};
@@ -289,12 +298,15 @@ namespace {
 			terrainTimer.Begin();
 			chunks.Draw(renderer, camera, light, settings);
 			terrainTimer.End();
+			grassTimer.Begin();
+			grass.Draw(chunks, camera, light, settings, materials);
+			grassTimer.End();
 			vegetationTimer.Begin();
 			const auto drawStart = std::chrono::steady_clock::now();
 			vegetation.Draw(camera, light, settings, &models);
 			const double drawMs = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - drawStart).count();
 			vegetationTimer.End();
-			const double terrainMs = terrainTimer.Ms(), vegetationMs = vegetationTimer.Ms();
+			const double terrainMs = terrainTimer.Ms(), grassMs = grassTimer.Ms(), vegetationMs = vegetationTimer.Ms();
 			if (lastFrame && target) {
 				const std::string file = screenshot + "_" + p.name + ".png";
 				if (!SaveScreenshot(file)) {
@@ -305,6 +317,7 @@ namespace {
 
 			if (measuring) {
 				p.terrainGpu.Add(terrainMs);
+				p.grassGpu.Add(grassMs);
 				p.vegetationGpu.Add(vegetationMs);
 				p.vegetationCpu.Add(drawMs);
 				p.updateCpu.Add(updateMs);
@@ -314,6 +327,7 @@ namespace {
 						p.perLod[l] = vegetation.DrawnInLod(l);
 					}
 					p.triangles = vegetation.DrawnTriangles();
+					p.blades = grass.DrawnBlades();
 					phase++;
 				}
 			}
@@ -337,6 +351,7 @@ namespace {
 				p.perLod[0], p.perLod[1], p.perLod[2], p.perLod[VegetationLayer::impostorLod], static_cast<double>(p.triangles) / 1e6);
 			std::printf("%-28s %8s %8s\n", "per frame (ms)", "mean", "max");
 			std::printf("%-28s %8.2f %8.2f\n", "terrain GPU", p.terrainGpu.Mean(), p.terrainGpu.max);
+			std::printf("%-28s %8.2f %8.2f   (%d blades)\n", "grass GPU", p.grassGpu.Mean(), p.grassGpu.max, p.blades);
 			std::printf("%-28s %8.2f %8.2f\n", "vegetation GPU", p.vegetationGpu.Mean(), p.vegetationGpu.max);
 			std::printf("%-28s %8.2f %8.2f\n", "vegetation draw CPU", p.vegetationCpu.Mean(), p.vegetationCpu.max);
 			std::printf("%-28s %8.2f %8.2f\n", "update CPU (chunks, place)", p.updateCpu.Mean(), p.updateCpu.max);

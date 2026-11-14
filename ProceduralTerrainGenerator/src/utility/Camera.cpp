@@ -180,10 +180,3 @@ void Camera::DisableMouseControl(GLFWwindow* window) {
 	glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
 	mouseControl = false;
 }
-
-void Camera::SetUniforms(Shader& shader)
-{
-	shader.SetProjection(*GetProjectionMatrix());
-	shader.SetView(*GetViewMatrix());
-	shader.SetViewPos(position);
-}

@@ -513,7 +513,9 @@ Kroki:
    - Znane: przy dużym zasięgu w czasie ładowania zdarzają się klatki 70–90 ms (odczyt map czeka na kolejkę generacji GPU, wgrywanie dużych chunków) —
      do zrobienia asynchroniczny odczyt (PBO + fence); impostory nieco ciemniejsze od siatek, granica 150 m widoczna.
 5. **Trawa:** osobny system blisko kamery (compute + wiatr w VS).
-6. **Wspólny UBO kamery i światła** (pkt 6 wyżej) — przy kroku 2, gdy dojdą shadery roślinności.
+   - 2026-11-14: `GrassLayer` — źdźbła z compute co klatkę wokół kamery według materiałów splat mapy (`grass` w `terrain_materials.json`), jedno rysowanie pośrednie,
+     wiatr w VS; ~8 tys. źdźbeł w dżungli za 0,05 ms GPU. Do oceny wyglądu właściciela (gęstość, kolory, łąki).
+6. **Wspólny UBO kamery i światła:** ✅ 2026-11-14 `FrameUniforms` + `common/frame.glsl` (teren, roślinność, impostory, trawa; niebo ma nadal własne uniformy).
 
 ### Faza 5 — realizm i narzędzia (otwarte)
 - **Erozja na GPU:** hydrauliczna (pipe model / virtual pipes lub kroplowa w compute z atomics) + termiczna;

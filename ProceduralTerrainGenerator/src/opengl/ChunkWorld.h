@@ -90,6 +90,7 @@ public:
 		const TextureClass* height = nullptr;
 		const TextureClass* surface = nullptr;
 		const TextureClass* ids = nullptr;		//nullptr while biomes are off
+		const TextureClass* splat = nullptr;	//material shares (as ids)
 		float distance = 0.0f;					//from the camera of the last Plan, XZ in world units
 	};
 	//Ground chunks of level at most coarsest within maxDistance of the camera of the last Plan, nearest first
@@ -180,6 +181,7 @@ private:
 	uint64_t biomeCopyKey = 0, biomeCopyGeneration = 0;
 
 	GpuSurfacePass surfacePass;
+	FrameUniforms frameUniforms;
 	std::unique_ptr<Shader> shader;
 	//Bound as biome colors for chunks without them, e.g. right after biomes were turned on
 	std::unique_ptr<TextureClass> noBiomes;

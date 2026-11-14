@@ -14,6 +14,8 @@ struct TerrainMaterial {
 	glm::vec3 fallbackColor = glm::vec3(0.5f);
 	int cliffMaterial = -1;		//material that replaces this one on steep slopes; the material itself if none is given
 	bool loaded = false;		//false if the textures were missing and the layer holds fallbackColor
+	float grass = 0.0f;			//blades of grass on it, as a share of the grass density (GrassLayer); 0 = none
+	glm::vec3 grassColor = glm::vec3(0.5f);	//fallbackColor unless given
 };
 
 //Textures of all terrain materials as two texture arrays (one layer per material) and their parameters in a uniform block:
@@ -42,6 +44,8 @@ public:
 	void ImGuiDraw();
 
 	const std::vector<TerrainMaterial>& GetMaterials() const { return materials; }
+	//Slopes in radians over which materials give way to their cliff materials (no grass grows on cliffs either)
+	glm::vec2 CliffSlopes() const { return glm::radians(glm::vec2(cliffSlopeStart, cliffSlopeEnd)); }
 
 	static constexpr int albedoUnit = 4;
 	static constexpr int detailUnit = 5;

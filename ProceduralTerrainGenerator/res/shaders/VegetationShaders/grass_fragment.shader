@@ -1,0 +1,35 @@
+#version 450 core
+
+in vec3 FragPos;
+in vec3 Normal;
+in vec3 Color;
+in float Along;
+
+out vec4 FragColor;
+
+#include "../common/frame.glsl"
+#include "../common/sky.glsl"
+
+//Share of the sunlight that passes through a blade lit from behind
+const float TRANSLUCENCY = 0.35;
+
+void main()
+{
+    vec3 n = normalize(Normal);
+    //Darker at the base, where the blades shade each other
+    vec3 albedo = Color * mix(0.6, 1.1, Along);
+    vec3 result = albedo;
+    if (lightOn) {
+        float facing = dot(n, light.direction);
+        float diff = max(facing, 0.0) + max(-facing, 0.0) * TRANSLUCENCY;
+        vec3 ambient = light.ambient * ambientTint(light.direction);
+        vec3 sunlight = light.diffuse * sunlightTint(light.direction);
+        result = (ambient + sunlight * diff) * albedo;
+    }
+    if (fogOn) {
+        vec3 toFragment = FragPos - viewPos;
+        float fog = smoothstep(fogStart, fogDistance, length(toFragment));
+        result = mix(result, fogColor(toFragment, light.direction), fog);
+    }
+    FragColor = vec4(result, 1.0);
+}

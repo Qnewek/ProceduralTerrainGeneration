@@ -259,6 +259,9 @@ void TerrainGenerationSys::ApplyWorld(const WorldConfig& loaded)
 void TerrainGenerationSys::Draw(Renderer& renderer, Camera& camera, LightSource& light) {
 	if (chunksShown) {
 		chunks.Draw(renderer, camera, light, renderSettings);
+		if (terrainMaterials) {
+			grass.Draw(chunks, camera, light, renderSettings, *terrainMaterials);
+		}
 		vegetationLayer.Draw(camera, light, renderSettings, vegetationModels);
 		return;
 	}
