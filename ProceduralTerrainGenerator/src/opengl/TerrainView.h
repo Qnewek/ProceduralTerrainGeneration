@@ -64,6 +64,8 @@ public:
 	//Area (XZ, world units before modelScale) framed by the 2D map view; defaults to the map itself.
 	//Set it when drawing several maps side by side so all of them fit.
 	void SetFlatViewBounds(glm::vec2 min, glm::vec2 max) { flatMin = min; flatMax = max; }
+	glm::vec2 GetFlatViewMin() const { return flatMin; }
+	glm::vec2 GetFlatViewMax() const { return flatMax; }
 	void ResetFlatViewBounds();
 
 	//If the camera is not above the map, moves it to a raised point beyond the +Z edge looking at the map center,
@@ -78,6 +80,8 @@ public:
 	//Copies a height layer to the CPU, waiting for the GPU; the layer must exist
 	HeightField ReadLayer(Layer layer) const;
 	bool HasLayer(Layer layer) const { return textures[static_cast<int>(layer)] != nullptr; }
+	//Texture of a layer, nullptr if it has none (drawing over the map, e.g. water)
+	const TextureClass* GetLayerTexture(Layer layer) const { return textures[static_cast<int>(layer)].get(); }
 	//Splat map (share of every surface material, GpuHeightGenerator::GenerateBiomes) with the given size, for writing to it directly.
 	//Without one the TEXTURED mode draws the material chosen in TerrainMaterials
 	TextureClass& SplatTexture(int _width, int _height);

@@ -1,11 +1,11 @@
 #version 450 core
-//Water surface over one ground chunk (WaterSurface): a flat quad at waterLevel built from gl_VertexID (triangle strip)
+//Water surface over one ground chunk or a whole map (WaterSurface): a flat quad at waterLevel built from gl_VertexID (triangle strip)
 
 #include "../common/frame.glsl"
 
 uniform mat4 model;         //modelScale of the view
-uniform vec2 corner;        //world XZ of the chunk corner, before modelScale
-uniform float size;         //side of the chunk in world units
+uniform vec2 corner;        //world XZ of the quad corner, before modelScale
+uniform vec2 size;          //sides of the quad in world units
 uniform vec2 uvMin;         //height map coordinates of the corner and of the opposite corner
 uniform vec2 uvMax;
 uniform float waterLevel;   //world units

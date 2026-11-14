@@ -76,5 +76,6 @@ private:
 	int textureResolution = 0;
 	GLint sceneFramebuffer = 0;
 	GLint sceneViewport[4] = {};
+	GLboolean sceneScissor = GL_FALSE;
 	bool sceneSaved = false;
 };
