@@ -80,18 +80,22 @@ public:
 	//Reads the finest chunk there, which is the one under the camera; copies its ids from the GPU when it changes
 	int BiomeAt(glm::vec2 position);
 
-	//A generated chunk of level 0 (full detail) with its maps
-	struct FineChunk {
-		uint64_t key = 0;
-		glm::ivec2 coord = glm::ivec2(0);		//in chunks; its first map texel is coord * chunkSize
+	//A chunk of the ground: a leaf of the quadtree in range at the last Plan (drawn if in the frustum), with its maps.
+	//The ground chunks never overlap and together cover the range
+	struct GroundChunk {
+		uint64_t key = 0;						//Key(level, coord)
+		int level = 0;
+		glm::ivec2 coord = glm::ivec2(0);		//in chunks of its level; its first map texel is coord * chunkSize * 2^level
 		uint64_t generation = 0;				//changes whenever the chunk is generated again
 		const TextureClass* height = nullptr;
 		const TextureClass* surface = nullptr;
 		const TextureClass* ids = nullptr;		//nullptr while biomes are off
 		float distance = 0.0f;					//from the camera of the last Plan, XZ in world units
 	};
-	//Generated chunks of level 0 within maxDistance of the camera of the last Plan, nearest first; drawn or not
-	std::vector<FineChunk> FineChunks(float maxDistance) const;
+	//Ground chunks of level at most coarsest within maxDistance of the camera of the last Plan, nearest first
+	std::vector<GroundChunk> GroundChunks(int coarsest, float maxDistance) const;
+	//Key of a chunk: level and coordinates in one number
+	static uint64_t Key(int level, glm::ivec2 coord);
 	//World XZ (before modelScale) of map texel (0, 0)
 	glm::vec2 GetMapOrigin() const { return mapOrigin; }
 
@@ -125,7 +129,6 @@ private:
 		int rank;
 	};
 
-	static uint64_t Key(int level, glm::ivec2 coord);
 	//Size of a chunk of a level in world units
 	static float NodeSize(int level);
 	Chunk* Find(int level, glm::ivec2 coord);
@@ -146,6 +149,8 @@ private:
 	std::vector<Chunk> spare;
 	//Chunks to draw (pointers stay valid: removing chunks happens only in Plan, before this is filled)
 	std::vector<Chunk*> visible;
+	//Chunks in range that would be drawn without the frustum test (the leaves of the quadtree)
+	std::vector<Chunk*> leaves;
 	std::vector<PendingChunk> pending;
 	size_t visited = 0;
 	int inRange = 0;

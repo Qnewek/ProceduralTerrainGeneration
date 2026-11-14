@@ -27,5 +27,7 @@ namespace utilities
 	bool MapSizeImGui(int& width, int& height);
     //@param infGen - infinite generation switch, nullptr hides it in modes without generation
     bool DisplayModeImGui(float& modelSclae, float& topoStep, float& topoBandWidth, float& heightScale, heightMapMode& m, bool& wireFrame, bool& map2d, bool* infGen);
+	//Slider of the terrain tessellation of the 3D view (pixels per triangle edge)
+	void TerrainDetailImGui(float& tessPixels);
 	bool ImGuiButtonWrapper(const char* label, bool disabled);
 }

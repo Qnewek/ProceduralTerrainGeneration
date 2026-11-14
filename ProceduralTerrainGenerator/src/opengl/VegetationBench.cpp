@@ -29,7 +29,8 @@ namespace {
 	//As TerrainGenApp: the map size of the default world, the displayed height of 1 and the camera
 	constexpr int mapSize = 250;
 	constexpr float heightScale = 1024.0f;
-	constexpr float renderDistance = 5000.0f;
+	//Render distance of the application (world units)
+	constexpr float defaultRenderDistance = 5000.0f;
 	//Frames measured after everything around the camera is generated and placed
 	constexpr int measuredFrames = 120;
 
@@ -57,9 +58,11 @@ namespace {
 		double Mean() const { return count ? sum / count : 0.0; }
 	};
 
-	//Map position of the middle of the largest patch of a dense forest biome near the map, found on a coarse biome map
+	//Map position of the middle of the largest patch of a dense forest biome near the map, found on a coarse biome map, and the
+	//direction (map XZ) whose quarter of the view up to viewMetres holds the most land with plants
 	//@return false if there is none
-	bool FindForest(GpuHeightGenerator& gpu, const WorldConfig& world, glm::vec2& position, std::string& biomeName)
+	bool FindForest(GpuHeightGenerator& gpu, const WorldConfig& world, float viewMetres, glm::vec2& position, glm::vec2& direction,
+		std::string& biomeName)
 	{
 		constexpr int size = 256;
 		constexpr float step = 32.0f;
@@ -104,6 +107,30 @@ namespace {
 			}
 			if (best < INFINITY) {
 				biomeName = name;
+				//Directions every 10 degrees; samples within 45 degrees of one and the view distance count for it
+				constexpr int directions = 36;
+				int bestCount = -1;
+				for (int d = 0; d < directions; d++) {
+					const float angle = 6.2831853f * static_cast<float>(d) / directions;
+					const glm::vec2 dir(std::cos(angle), std::sin(angle));
+					int count = 0;
+					for (int y = 0; y < size; y++) {
+						for (int x = 0; x < size; x++) {
+							const glm::vec2 offset = area.origin + glm::vec2(x, y) * step - position;
+							const float distance = glm::length(offset);
+							const int sampleId = map[y * size + x];
+							if (distance < 1.0f || distance > viewMetres || glm::dot(offset / distance, dir) < 0.7071f || sampleId < 0
+								|| sampleId >= static_cast<int>(world.biomes.table.size()) || world.biomes.table[sampleId].plants.empty()) {
+								continue;
+							}
+							count++;
+						}
+					}
+					if (count > bestCount) {
+						bestCount = count;
+						direction = dir;
+					}
+				}
 				return true;
 			}
 		}
@@ -163,7 +190,7 @@ namespace {
 	}
 
 	//Runs the frames of the infinite world with vegetation until everything in range is generated and placed, then measures
-	int Bench(float density, float eyeMetres, const std::string& screenshot)
+	int Bench(float density, float eyeMetres, const std::string& screenshot, float viewMetres)
 	{
 		WorldConfig world;
 		world.width = world.height = mapSize;
@@ -180,20 +207,22 @@ namespace {
 		}
 		models.Update();
 
-		glm::vec2 forest;
+		const float renderDistance = viewMetres > 0.0f ? viewMetres * vegetation::unitsPerMetre : defaultRenderDistance;
+		glm::vec2 forest, direction(1.0f, 0.0f);
 		std::string biomeName;
-		if (!FindForest(gpu, world, forest, biomeName)) {
+		if (!FindForest(gpu, world, renderDistance / vegetation::unitsPerMetre, forest, direction, biomeName)) {
 			std::cout << "[ERROR] No forest near the map" << std::endl;
 			return -1;
 		}
 		chunks.SetBiomes(true);
 		chunks.AlignWithMap(world.width, world.height);
-		//Camera eyeMetres above the forest, looking along it slightly down
+		//Camera eyeMetres above the forest, looking at the ground 300 m away towards the most land with plants
 		const glm::vec2 xz = chunks.GetMapOrigin() + forest * TerrainView::worldUnitsPerTexel;
 		const float ground = HeightAt(gpu, world, forest);
 		Camera camera(screenWidth, screenHeight, glm::vec3(0.0f), 100.0f, renderDistance);
 		const glm::vec3 eye(xz.x, ground + eyeMetres * vegetation::unitsPerMetre, xz.y);
-		camera.LookAt(eye, eye + glm::vec3(600.0f, -eyeMetres * vegetation::unitsPerMetre, 200.0f));
+		const float ahead = 300.0f * vegetation::unitsPerMetre;
+		camera.LookAt(eye, eye + glm::vec3(direction.x * ahead, -eyeMetres * vegetation::unitsPerMetre, direction.y * ahead));
 		std::printf("Camera in %s at map (%.0f, %.0f), ground %.0f units, eye %.0f m, density %.2f\n", biomeName.c_str(), forest.x, forest.y, ground,
 			eyeMetres, density);
 
@@ -204,6 +233,9 @@ namespace {
 		settings.displayMode = utilities::heightMapMode::BIOMES;
 		VegetationLayer vegetation;
 		vegetation.SetDensity(density);
+		if (viewMetres > 0.0f) {
+			vegetation.SetTreeRange(viewMetres);
+		}
 		VegetationLayer::World vegetationWorld;
 		vegetationWorld.biomes = &world.biomes.table;
 		vegetationWorld.waterHeight = world.terrain.WaterHeight();
@@ -211,7 +243,7 @@ namespace {
 		vegetationWorld.seed = static_cast<uint32_t>(world.biomes.detailSeed);
 
 		std::unique_ptr<OffscreenTarget> target;
-		if (!screenshot.empty()) {
+		if (!screenshot.empty() && screenshot != "-") {
 			target = std::make_unique<OffscreenTarget>();
 			glBindFramebuffer(GL_FRAMEBUFFER, target->framebuffer);
 		}
@@ -229,6 +261,7 @@ namespace {
 		};
 		Phase phases[2] = { { "meshes", false }, { "impostors", true } };
 		int phase = 0;
+		Stats loadingUpdate, loadingPlace;
 		int settled = 0, frame = 0;
 		const auto start = std::chrono::steady_clock::now();
 		for (; frame < 5000 && phase < 2; frame++) {
@@ -248,7 +281,9 @@ namespace {
 					}
 				});
 			}
+			const auto placeStart = std::chrono::steady_clock::now();
 			vegetation.Update(chunks, &models, vegetationWorld);
+			const double placeMs = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - placeStart).count();
 			const double updateMs = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - updateStart).count();
 
 			terrainTimer.Begin();
@@ -260,7 +295,7 @@ namespace {
 			const double drawMs = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - drawStart).count();
 			vegetationTimer.End();
 			const double terrainMs = terrainTimer.Ms(), vegetationMs = vegetationTimer.Ms();
-			if (lastFrame && !screenshot.empty()) {
+			if (lastFrame && target) {
 				const std::string file = screenshot + "_" + p.name + ".png";
 				if (!SaveScreenshot(file)) {
 					std::cout << "[ERROR] cannot write " << file << std::endl;
@@ -285,6 +320,8 @@ namespace {
 			else {
 				const bool done = chunks.GetPendingCount() == 0 && vegetation.UnplacedCount() == 0;
 				settled = done ? settled + 1 : 0;
+				loadingUpdate.Add(updateMs);
+				loadingPlace.Add(placeMs);
 			}
 		}
 		const double seconds = std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count();
@@ -293,6 +330,8 @@ namespace {
 			return -1;
 		}
 		std::printf("Settled and measured in %d frames (%.1f s); placed %zu instances\n", frame, seconds, vegetation.PlacedCount());
+		std::printf("While loading: update CPU (chunks, place) mean %.2f ms, max %.2f ms; of it placement mean %.2f ms, max %.2f ms\n",
+			loadingUpdate.Mean(), loadingUpdate.max, loadingPlace.Mean(), loadingPlace.max);
 		for (const Phase& p : phases) {
 			std::printf("\nFar trees as %s: drawn %d (LOD 0/1/2: %d / %d / %d, impostors %d), %.2f M triangles\n", p.name, p.drawn,
 				p.perLod[0], p.perLod[1], p.perLod[2], p.perLod[VegetationLayer::impostorLod], static_cast<double>(p.triangles) / 1e6);
@@ -306,7 +345,7 @@ namespace {
 	}
 }
 
-int RunVegetationBench(float density, float eyeMetres, const std::string& screenshot)
+int RunVegetationBench(float density, float eyeMetres, const std::string& screenshot, float viewMetres)
 {
 	if (!glfwInit()) {
 		std::cout << "[ERROR] Failed to initialize GLFW" << std::endl;
@@ -330,7 +369,7 @@ int RunVegetationBench(float density, float eyeMetres, const std::string& screen
 	}
 	else {
 		//The GL objects go before the context does
-		result = Bench(density, eyeMetres, screenshot);
+		result = Bench(density, eyeMetres, screenshot, viewMetres);
 	}
 	glfwDestroyWindow(window);
 	glfwTerminate();
