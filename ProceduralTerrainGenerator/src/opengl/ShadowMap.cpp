@@ -148,6 +148,9 @@ void ShadowMap::BeginCascade(int cascade)
 	if (!sceneSaved) {
 		glGetIntegerv(GL_DRAW_FRAMEBUFFER_BINDING, &sceneFramebuffer);
 		glGetIntegerv(GL_VIEWPORT, sceneViewport);
+		//The scene viewport has a scissor rectangle (TerrainGenApp); it would leave the map outside it uncleared and undrawn (depth 0 = shadow)
+		sceneScissor = glIsEnabled(GL_SCISSOR_TEST);
+		glDisable(GL_SCISSOR_TEST);
 		sceneSaved = true;
 		//The map is the render target now, so it must not stay bound for sampling
 		glBindTextureUnit(FrameUniforms::shadowUnit, 0);
@@ -170,6 +173,9 @@ void ShadowMap::Finish()
 	if (sceneSaved) {
 		glBindFramebuffer(GL_DRAW_FRAMEBUFFER, static_cast<GLuint>(sceneFramebuffer));
 		glViewport(sceneViewport[0], sceneViewport[1], sceneViewport[2], sceneViewport[3]);
+		if (sceneScissor) {
+			glEnable(GL_SCISSOR_TEST);
+		}
 		sceneSaved = false;
 	}
 	if (active) {
