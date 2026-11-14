@@ -407,7 +407,7 @@ void ChunkWorld::Draw(Renderer& renderer, Camera& camera, LightSource& light, co
 	}
 	const glm::mat4 scale = glm::scale(glm::mat4(1.0f), glm::vec3(settings.modelScale));
 	//The 2D map frames the area in view around the camera
-	TerrainView::SetFrameUniforms(*shader, frameUniforms, camera, light, settings, scale, 0, lastCenter - lastRadius, lastCenter + lastRadius);
+	TerrainView::SetFrameUniforms(*shader, frameUniforms, camera, light, settings, scale, 0, FlatViewMin(), FlatViewMax());
 
 	if (settings.wireFrame) {
 		glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);

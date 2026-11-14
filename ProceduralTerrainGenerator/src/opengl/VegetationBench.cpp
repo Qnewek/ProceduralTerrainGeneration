@@ -24,6 +24,7 @@
 #include "TextureClass.h"
 #include "VegetationLayer.h"
 #include "VegetationModels.h"
+#include "WaterSurface.h"
 #include "WorldConfig.h"
 
 namespace {
@@ -244,6 +245,7 @@ namespace {
 			return -1;
 		}
 		GrassLayer grass;
+		WaterSurface water;
 		VegetationLayer::World vegetationWorld;
 		vegetationWorld.biomes = &world.biomes.table;
 		vegetationWorld.waterHeight = world.terrain.WaterHeight();
@@ -310,6 +312,7 @@ namespace {
 			terrainTimer.Begin();
 			chunks.Draw(renderer, camera, light, settings);
 			terrainTimer.End();
+			water.Draw(chunks, camera, light, settings, world.terrain.WaterHeight() * heightScale);
 			const double terrainMs = terrainTimer.Ms(), grassMs = grassTimer.Ms(), vegetationMs = vegetationTimer.Ms();
 			if (lastFrame && target) {
 				const std::string file = screenshot + "_" + p.name + ".png";

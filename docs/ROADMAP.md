@@ -527,6 +527,8 @@ Kroki:
 - **Zagnieżdżone splajny** (z „Teren 2.0”, pkt 3): punkty splajnu C są splajnami po M (i dalej po PV), wypiekane do tekstury LUT 2D/3D próbkowanej jednym odczytem.
   Daje klify tam, gdzie góry dochodzą do morza, płaskie plaże gdzie indziej, doliny wcięte poniżej podstawy. Najwięcej pracy: edytor UI (lista punktów C z wykresem po M, podgląd C×M jako mapa ciepła).
 - **Woda:** płaszczyzna oceanu z refleksją/refrakcją, głębia, piana przy brzegu.
+  🟡 2026-11-14 pierwsza wersja (`WaterSurface`): quad na chunkach gruntu, głębokość z mapy wysokości chunka (kolor, przezroczystość, piana),
+  odbicie nieba + słońca z Fresnelem, fale z sinusów wygaszanych `fwidth`. Też na mapie 2D (z góry). Brak: odbicia terenu (SSR / planar), refrakcji (zniekształcenie dna), wody w mapie skończonej.
 - **Atmosfera:** fog zależny od wysokości, skybox/atmospheric scattering, cykl dnia, cienie (cascaded shadow maps).
 - **Eksport:** heightmap 16-bit/EXR, splat mapy, mesh OBJ/glTF (z LOD), lista instancji roślinności (JSON) → import do Unity/Unreal/Godot.
 - **Tryb „Imported map”:** ✅ 2026-11-03 podgląd mapy z pliku (PNG 1/2/4/8/16-bit, kolorowy zamieniany na szary, oraz R16/RAW): `HeightmapImport.*` +

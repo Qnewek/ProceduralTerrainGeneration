@@ -99,6 +99,9 @@ public:
 	static uint64_t Key(int level, glm::ivec2 coord);
 	//World XZ (before modelScale) of map texel (0, 0)
 	glm::vec2 GetMapOrigin() const { return mapOrigin; }
+	//Area framed by the 2D map (XZ, world units before modelScale): the planned range around the camera
+	glm::vec2 FlatViewMin() const { return lastCenter - lastRadius; }
+	glm::vec2 FlatViewMax() const { return lastCenter + lastRadius; }
 
 	//Chunks drawn: in range and in the frustum
 	int GetVisibleCount() const { return static_cast<int>(visible.size()); }

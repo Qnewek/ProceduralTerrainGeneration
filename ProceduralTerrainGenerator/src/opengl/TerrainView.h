@@ -102,6 +102,8 @@ public:
 	//Sets useSplat to false; a map with a splat map sets it to true after binding it to splatUnit
 	static void SetFrameUniforms(Shader& shader, FrameUniforms& frame, Camera& camera, LightSource& light, const TerrainRenderSettings& settings,
 		const glm::mat4& model, int heightUnit, glm::vec2 flatMin, glm::vec2 flatMax);
+	//Camera, light and fog of a frame as the terrain sees it: in the 2D map the top-down camera framing flatMin - flatMax, without fog
+	static FrameUniforms::Block FrameBlock(Camera& camera, const LightSource& light, const TerrainRenderSettings& settings, glm::vec2 flatMin, glm::vec2 flatMax);
 
 private:
 	void BuildMesh();

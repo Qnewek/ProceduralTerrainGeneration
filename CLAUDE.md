@@ -221,6 +221,9 @@ Wartości szumów są w [-1, 1]. Konwencja indeksowania: `map[y * width + x]`.
   Bez biomów roślinności nie ma.
   Kolejność rysowania (`TerrainGenerationSys::Draw`): roślinność, trawa, teren — teren za drzewami odpada na teście głębi przed shaderem materiałów;
   chunki terenu rysowane od najbliższego (sort w `ChunkWorld::Plan`). W stałej kolejności patrzenie w stronę −X/−Z podwajało koszt trybu TEXTURED.
+  Woda (`WaterSurface`, w `TerrainGenerationSys`, sekcja „Water” w Display): po terenie, quad na poziomie `TerrainConfig::WaterHeight() * heightScale` na każdym
+  chunku gruntu, blending premultiplied, bez zapisu głębi. Głębokość = poziom wody − mapa wysokości chunka (kolor, przezroczystość, piana przy brzegu); odbicie
+  nieba z `skyColor` (`sky.glsl`) + refleks słońca, Fresnel; fale = normalne z kilku sinusów wygaszanych przez `fwidth`. Tylko tryb infinite; w 2D widziana z góry (`flatView`, kamera z `TerrainView::FrameBlock`), nigdy całkiem przezroczysta.
   Trawa (`GrassLayer`, w `TerrainGenerationSys`): co klatkę `grass_compute.shader` przechodzi po tekselach wokół kamery na chunkach gruntu i dopisuje do bufora źdźbła,
   które tam rosną (udział trawy materiałów ze splat mapy: pola `grass` i `grassColor` w `terrain_materials.json`, mniej na klifach, rzadsze z odległością)
   i są w kadrze; jedno `glDrawArraysIndirect`, źdźbło budowane z `gl_VertexID`, wiatr w VS. Nic nie jest trzymane między klatkami ani czytane z GPU.

@@ -265,6 +265,8 @@ void TerrainGenerationSys::Draw(Renderer& renderer, Camera& camera, LightSource&
 			grass.Draw(chunks, camera, light, renderSettings, *terrainMaterials);
 		}
 		chunks.Draw(renderer, camera, light, renderSettings);
+		//Blended over the terrain, so after it
+		water.Draw(chunks, camera, light, renderSettings, world.terrain.WaterHeight() * renderSettings.heightScale);
 		return;
 	}
 	view.Draw(renderer, camera, light, renderSettings, TerrainView::Layer::TERRAIN);
@@ -379,6 +381,7 @@ void TerrainGenerationSys::ImGuiDisplay()
 	if (infiniteGeneration) {
 		ImGui::SeparatorText("Infinite generation");
 		chunks.ImGuiDraw();
+		water.ImGuiDraw();
 	}
 }
 
