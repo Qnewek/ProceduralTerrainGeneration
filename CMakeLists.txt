@@ -72,6 +72,8 @@ add_executable(ProceduralTerrainGenerator
 	${PTG_SRC}/opengl/Renderer.cpp
 	${PTG_SRC}/opengl/Shader.cpp
 	${PTG_SRC}/opengl/TerrainMaterials.cpp
+	${PTG_SRC}/opengl/FrameUniforms.cpp
+	${PTG_SRC}/opengl/GrassLayer.cpp
 	${PTG_SRC}/opengl/TerrainView.cpp
 	${PTG_SRC}/opengl/TextureClass.cpp
 	${PTG_SRC}/opengl/VegetationBench.cpp

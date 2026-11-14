@@ -10,6 +10,7 @@
 
 #include <GL/glew.h>
 
+#include "FrameUniforms.h"
 #include "Shader.h"
 #include "VegetationMesh.h"
 
@@ -86,11 +87,10 @@ public:
 	const std::vector<Model>& GetModels() const { return models; }
 	int LoadingCount() const;
 
-	//Binds the shader and sets the per-frame uniforms
+	//Binds the shader, uploads the camera, sun and fog of the pass and sets the per-frame uniforms
 	//@param model - modelScale of the view
 	//@param heightScale - world units of height 1 (the y of the instances is a height of the map)
-	void BeginDraw(const glm::mat4& view, const glm::mat4& projection, const glm::vec3& viewPos, const glm::mat4& model, float heightScale,
-		const LightSource& light, bool fogOn, float fogStart, float fogDistance);
+	void BeginDraw(const FrameUniforms::Block& frame, const glm::mat4& model, float heightScale);
 	//Buffer of GpuInstance the draws read their instances from
 	void SetInstanceBuffer(GLuint buffer) { instanceBuffer = buffer; }
 	//Draws instances [firstInstance, firstInstance + instanceCount) of a level of detail of a variant of a ready model
@@ -108,8 +108,7 @@ public:
 	bool HasImpostors(int model) const { return models[model].impostorAlbedo != 0; }
 	//As BeginDraw, for DrawImpostorsIndirect
 	//@param eye - camera position before modelScale (the impostors face it)
-	void BeginImpostorDraw(const glm::mat4& view, const glm::mat4& projection, const glm::vec3& viewPos, const glm::mat4& model, const glm::vec3& eye,
-		float heightScale, const LightSource& light, bool fogOn, float fogStart, float fogDistance);
+	void BeginImpostorDraw(const FrameUniforms::Block& frame, const glm::mat4& model, const glm::vec3& eye, float heightScale);
 	//Draws the impostors of a model: one DrawArraysIndirectCommand per variant, starting at firstCommand of the buffer bound to
 	//GL_DRAW_INDIRECT_BUFFER (the variant of an instance is in its data); nothing without impostors
 	void DrawImpostorsIndirect(int model, int firstCommand);
@@ -142,6 +141,7 @@ private:
 	std::string resourceDir;
 	std::vector<Model> models;
 	std::unique_ptr<Shader> shader;
+	FrameUniforms frameUniforms;
 	std::unique_ptr<Shader> impostorShader;
 	GLuint fallbackAlbedo = 0, fallbackDetail = 0;
 	//Impostor quads: only the instance attributes (binding 0, divisor 1)

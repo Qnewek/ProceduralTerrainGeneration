@@ -12,8 +12,7 @@ const int MAX_VARIANTS = 16;    //VegetationModels::maxImpostorVariants
 
 uniform float heightScale;
 uniform mat4 model;         //modelScale of the view, uniform in all axes
-uniform mat4 view;
-uniform mat4 projection;
+#include "../common/frame.glsl"
 uniform vec3 eye;           //camera position before modelScale
 //Per variant: xyz = centre of its bounds in metres of the model, w = radius of the sphere around them; the frames of the atlas show this sphere
 uniform vec4 variantSpheres[MAX_VARIANTS];

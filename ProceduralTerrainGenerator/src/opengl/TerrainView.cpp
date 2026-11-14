@@ -94,7 +94,7 @@ std::unique_ptr<Shader> TerrainView::CreateTerrainShader()
 
 namespace {
 	//Sets view/projection of a top-down orthographic camera framing the given area
-	void SetFlatCameraUniforms(Shader& shader, const TerrainRenderSettings& settings, glm::vec2 flatMin, glm::vec2 flatMax)
+	void SetFlatCamera(FrameUniforms::Block& frame, const TerrainRenderSettings& settings, glm::vec2 flatMin, glm::vec2 flatMax)
 	{
 		//Bounds are given before modelScale; model = scale * translate(offset), so scaling them is enough
 		glm::vec2 min = flatMin * settings.modelScale;
@@ -115,26 +115,22 @@ namespace {
 
 		//Camera above the highest possible point looking straight down; +X to the right, -Z up
 		float top = std::abs(settings.heightScale * settings.modelScale) + 1.0f;
-		glm::mat4 flatView = glm::lookAt(glm::vec3(center.x, top, center.y), glm::vec3(center.x, 0.0f, center.y), glm::vec3(0.0f, 0.0f, -1.0f));
-		glm::mat4 flatProjection = glm::ortho(-half.x, half.x, -half.y, half.y, 0.0f, 2.0f * top);
-		shader.SetView(flatView);
-		shader.SetProjection(flatProjection);
+		frame.view = glm::lookAt(glm::vec3(center.x, top, center.y), glm::vec3(center.x, 0.0f, center.y), glm::vec3(0.0f, 0.0f, -1.0f));
+		frame.projection = glm::ortho(-half.x, half.x, -half.y, half.y, 0.0f, 2.0f * top);
 	}
 }
 
-void TerrainView::SetFrameUniforms(Shader& shader, Camera& camera, LightSource& light, const TerrainRenderSettings& settings,
+void TerrainView::SetFrameUniforms(Shader& shader, FrameUniforms& frame, Camera& camera, LightSource& light, const TerrainRenderSettings& settings,
 	const glm::mat4& model, int heightUnit, glm::vec2 flatMin, glm::vec2 flatMax)
 {
 	shader.Bind();
-	light.SetLightUniforms(shader);
-	camera.SetUniforms(shader);
+	FrameUniforms::Block block = FrameUniforms::Make(camera, light);
 	//The fog needs the perspective camera, so the 2D map has none; it ends where the far plane cuts the terrain off
-	shader.SetUniform1i("fogOn", light.IsFogOn() && !settings.map2d);
-	shader.SetUniform1f("fogStart", light.GetFogStart(camera.GetRenderDistance()));
-	shader.SetUniform1f("fogDistance", camera.GetRenderDistance());
 	if (settings.map2d) {
-		SetFlatCameraUniforms(shader, settings, flatMin, flatMax);
+		block.fogOn = 0;
+		SetFlatCamera(block, settings, flatMin, flatMax);
 	}
+	frame.Upload(block);
 	shader.SetModel(model);
 	shader.SetUniformMat3f("normalMatrix", glm::transpose(glm::inverse(glm::mat3(model))));
 	shader.SetUniform1i("displayMode", static_cast<int>(settings.displayMode));
@@ -220,7 +216,7 @@ void TerrainView::Draw(Renderer& renderer, Camera& camera, LightSource& light, c
 	model = glm::scale(model, glm::vec3(settings.modelScale));
 	model = glm::translate(model, offset);
 
-	SetFrameUniforms(*shader, camera, light, settings, model, static_cast<int>(heightLayer), flatMin, flatMax);
+	SetFrameUniforms(*shader, frameUniforms, camera, light, settings, model, static_cast<int>(heightLayer), flatMin, flatMax);
 
 	for (int i = 0; i < 3; i++) {
 		if (textures[i]) {

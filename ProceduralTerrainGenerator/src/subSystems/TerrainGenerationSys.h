@@ -21,6 +21,7 @@
 #include "ExportPanel.h"
 #include "BiomeEditor.h"
 #include "PanelTabs.h"
+#include "GrassLayer.h"
 #include "VegetationLayer.h"
 
 //What has to be regenerated at the next Update; with infinite generation a terrain or biome request regenerates the chunks
@@ -49,6 +50,9 @@ private:
 	//Vegetation on the chunks; the models belong to the application
 	VegetationLayer vegetationLayer;
 	VegetationModels* vegetationModels = nullptr;
+	//Grass near the camera; grows on the materials of the application
+	GrassLayer grass;
+	const TerrainMaterials* terrainMaterials = nullptr;
 	TerrainRenderSettings renderSettings;
 	//infiniteGeneration as of the last Update
 	bool chunksShown = false;
@@ -131,13 +135,15 @@ public:
 	bool FlatView() const { return renderSettings.map2d; }
 	//Infinite generation shows chunks with part of the view not generated yet
 	bool HoleInView() const { return chunksShown && chunks.HasHoleInView(); }
-	void ReloadShaders() { view.ReloadShader(); chunks.ReloadShader(); gpu.ReloadShaders(); noisePreview.ReloadShader(); vegetationLayer.ReloadShader(); }
+	void ReloadShaders() { view.ReloadShader(); chunks.ReloadShader(); gpu.ReloadShaders(); noisePreview.ReloadShader(); vegetationLayer.ReloadShader(); grass.ReloadShader(); }
 	//Names of the surface materials for the biome editor, in the order of their ids
 	void SetMaterialNames(std::vector<std::string> names) { biomeEditor.SetMaterialNames(std::move(names)); }
 	//Models drawn on the infinite world; nullptr (before the models are destroyed) = no vegetation
 	void SetVegetationModels(VegetationModels* models);
 	//Placement settings and statistics, in the Vegetation tab
-	void ImGuiVegetation() { vegetationLayer.ImGuiDraw(); }
+	void ImGuiVegetation() { vegetationLayer.ImGuiDraw(); grass.ImGuiDraw(); }
+	//Materials the grass grows on (TerrainMaterial::grass); nullptr (before they are destroyed) = no grass
+	void SetTerrainMaterials(const TerrainMaterials* materials) { terrainMaterials = materials; }
 	//Right panel: the generation tabs
 	void ImGuiRightPanel();
 	//Content of the Display, Presets and Saving tabs of the left panel

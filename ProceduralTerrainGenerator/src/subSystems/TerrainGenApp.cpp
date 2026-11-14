@@ -111,6 +111,7 @@ bool TerrainGenApp::Initialize()
 	}
 	terrainGenSys.SetMaterialNames(std::move(materialNames));
 	terrainGenSys.SetVegetationModels(vegetation.get());
+	terrainGenSys.SetTerrainMaterials(materials.get());
 	if (!mapImportSys.Initialize(width, height, heightScale)) {
 		std::cout << "[ERROR] Failed to initialize MapImportSys" << std::endl;
 		return false;
@@ -174,6 +175,7 @@ void TerrainGenApp::Start()
     metrics.reset();
     materials.reset();
     terrainGenSys.SetVegetationModels(nullptr);
+    terrainGenSys.SetTerrainMaterials(nullptr);
     vegetation.reset();
     ImGui_ImplOpenGL3_Shutdown();
     ImGui_ImplGlfw_Shutdown();

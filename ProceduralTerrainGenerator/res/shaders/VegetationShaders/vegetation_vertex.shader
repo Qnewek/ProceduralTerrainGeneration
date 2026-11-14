@@ -13,8 +13,7 @@ layout(location = 4) in vec4 instanceData;
 
 uniform float heightScale;  //world units of height 1, as for the terrain
 uniform mat4 model;         //modelScale of the view, uniform in all axes
-uniform mat4 view;
-uniform mat4 projection;
+#include "../common/frame.glsl"
 
 out vec3 FragPos;
 out vec3 Normal;

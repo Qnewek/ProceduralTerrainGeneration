@@ -9,17 +9,7 @@ flat in float layer;
 
 out vec4 FragColor;
 
-struct Light {
-    vec3 direction;     //unit vector towards the sun
-    vec3 ambient;
-    vec3 diffuse;
-};
-uniform bool lightOn;
-uniform Light light;
-uniform bool fogOn;
-uniform float fogStart;
-uniform float fogDistance;
-uniform vec3 viewPos;
+#include "../common/frame.glsl"
 
 //Atlas of the model, one layer per variant (VegetationModels::BakeImpostors), both premultiplied by the coverage in A:
 //albedo RGB, and the normal in model space as RGB = n * 0.5 + 0.5

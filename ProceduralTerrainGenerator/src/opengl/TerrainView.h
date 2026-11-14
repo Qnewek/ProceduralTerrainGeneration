@@ -5,6 +5,7 @@
 
 #include "glm/glm.hpp"
 
+#include "FrameUniforms.h"
 #include "GpuSurfacePass.h"
 #include "Renderer.h"
 #include "VertexBufferLayout.h"
@@ -99,7 +100,7 @@ public:
 	//@param heightUnit - texture unit of the height map
 	//@param flatMin, flatMax - area (XZ, world units before modelScale) framed by the 2D map view
 	//Sets useSplat to false; a map with a splat map sets it to true after binding it to splatUnit
-	static void SetFrameUniforms(Shader& shader, Camera& camera, LightSource& light, const TerrainRenderSettings& settings,
+	static void SetFrameUniforms(Shader& shader, FrameUniforms& frame, Camera& camera, LightSource& light, const TerrainRenderSettings& settings,
 		const glm::mat4& model, int heightUnit, glm::vec2 flatMin, glm::vec2 flatMax);
 
 private:
@@ -122,6 +123,7 @@ private:
 	std::unique_ptr<TextureClass> splat;
 
 	GpuSurfacePass surfacePass;
+	FrameUniforms frameUniforms;
 	//Surface maps of TERRAIN and OVERLAY (GL_RGBA32F), indexed like the layers
 	std::unique_ptr<TextureClass> surfaces[2];
 	bool surfaceOutdated[2] = { true, true };
