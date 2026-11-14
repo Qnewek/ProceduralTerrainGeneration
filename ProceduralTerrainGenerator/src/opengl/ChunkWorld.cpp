@@ -21,6 +21,8 @@ namespace {
 	constexpr float prefetchFactor = 1.15f;
 	//Largest absolute height of a map (noises are in [-1, 1]), with a margin; the same bound is used by the TCS
 	constexpr float heightBound = 1.5f;
+	//Shadow maps tessellate the terrain this many times coarser than the view (tessPixels)
+	constexpr float shadowTessFactor = 4.0f;
 	//Bits of a chunk coordinate in a key
 	constexpr int coordBits = 28;
 	constexpr uint64_t coordMask = (uint64_t(1) << coordBits) - 1;
@@ -408,11 +410,46 @@ void ChunkWorld::Draw(Renderer& renderer, Camera& camera, LightSource& light, co
 	const glm::mat4 scale = glm::scale(glm::mat4(1.0f), glm::vec3(settings.modelScale));
 	//The 2D map frames the area in view around the camera
 	TerrainView::SetFrameUniforms(*shader, frameUniforms, camera, light, settings, scale, 0, FlatViewMin(), FlatViewMax());
+	DrawChunks(renderer, visible, settings);
+}
 
+void ChunkWorld::DrawShadow(Renderer& renderer, const FrameUniforms::Block& block, const glm::mat4& sunViewProjection, const TerrainRenderSettings& settings)
+{
+	const glm::mat4 scale = glm::scale(glm::mat4(1.0f), glm::vec3(settings.modelScale));
+	const Frustum frustum(sunViewProjection * scale);
+	const float heightScale = std::abs(settings.heightScale);
+	shadowCasters.clear();
+	for (Chunk* chunk : leaves) {
+		const float size = NodeSize(chunk->level);
+		const glm::vec2 corner = mapOrigin + glm::vec2(chunk->coord) * size;
+		if (frustum.Intersects(glm::vec3(corner.x, -heightBound * heightScale, corner.y), glm::vec3(corner.x + size, heightBound * heightScale, corner.y + size))) {
+			shadowCasters.push_back(chunk);
+		}
+	}
+	if (shadowCasters.empty()) {
+		return;
+	}
+	//Coarser than the view: tessellated to texels of the shadow map, a shadow outline needs far fewer triangles than lit terrain
+	TerrainRenderSettings solid = settings;
+	solid.wireFrame = false;
+	solid.tessPixels = settings.tessPixels * shadowTessFactor;
+	TerrainView::SetFrameUniforms(*shader, frameUniforms, block, solid, scale, 0);
+	//Both sides: the depth of the side facing the sun is what matters, whichever way the triangles wind
+	const GLboolean culling = glIsEnabled(GL_CULL_FACE);
+	glDisable(GL_CULL_FACE);
+	DrawChunks(renderer, shadowCasters, solid);
+	if (culling) {
+		glEnable(GL_CULL_FACE);
+	}
+}
+
+void ChunkWorld::DrawChunks(Renderer& renderer, const std::vector<Chunk*>& list, const TerrainRenderSettings& settings)
+{
+	const glm::mat4 scale = glm::scale(glm::mat4(1.0f), glm::vec3(settings.modelScale));
 	if (settings.wireFrame) {
 		glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
 	}
-	for (const Chunk* chunk : visible) {
+	for (const Chunk* chunk : list) {
 		const float step = static_cast<float>(1 << chunk->level);
 		const glm::vec2 corner = mapOrigin + glm::vec2(chunk->coord) * NodeSize(chunk->level);
 		shader->SetModel(glm::translate(scale, glm::vec3(corner.x, 0.0f, corner.y)));

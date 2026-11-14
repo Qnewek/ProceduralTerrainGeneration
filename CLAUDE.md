@@ -73,6 +73,7 @@ ProceduralTerrainGenerator/
       GpuHeightGenerator.*       jedyna generacja: szum, teren i biomy w compute shaderach (GenerateWorld = teren + biomy w jednym przebiegu); GpuHeightCheck.* = testy generacji (--gpu-check)
       NoisePreview.*             podgląd edytowanego szumu jako mapa 2D w panelu ImGui (≤ 512 tekseli na dłuższym boku, preview_compute.shader = skala szarości)
       GpuSurfacePass.*           mapa pochodnych (gradient + laplasjan) z mapy wysokości; uruchamia ją TerrainView i ChunkWorld
+      ShadowMap.*                cienie słońca: cascaded shadow maps (teren + roślinność), dane kaskad w FrameBlock; WaterSurface.* = woda
       ChunkWorld.*               „Infinite generation”: quadtree chunków 128² z LOD wokół kamery, kolejka wg odległości, cache, skirts, rysowanie shaderem terenu
       TerrainMaterials.*         materiały terenu (tryb TEXTURED): lista z terrain_materials.json, texture arrays (albedo+wysokość, normal+roughness+AO; jednostki 4, 5)
                                  + UBO parametrów FS (binding 0), sekcja „Terrain materials”
@@ -224,6 +225,16 @@ Wartości szumów są w [-1, 1]. Konwencja indeksowania: `map[y * width + x]`.
   Woda (`WaterSurface`, w `TerrainGenerationSys`, sekcja „Water” w Display): po terenie, quad na poziomie `TerrainConfig::WaterHeight() * heightScale` na każdym
   chunku gruntu, blending premultiplied, bez zapisu głębi. Głębokość = poziom wody − mapa wysokości chunka (kolor, przezroczystość, piana przy brzegu); odbicie
   nieba z `skyColor` (`sky.glsl`) + refleks słońca, Fresnel; fale = normalne z kilku sinusów wygaszanych przez `fwidth`. Tylko tryb infinite; w 2D widziana z góry (`flatView`, kamera z `TerrainView::FrameBlock`), nigdy całkiem przezroczysta.
+  Cienie słońca (`ShadowMap`, w `TerrainGenerationSys`, sekcja „Shadows” w Display): cascaded shadow maps, do 4 kaskad w tablicy głębokości (`GL_DEPTH_COMPONENT32F`,
+  porównanie sprzętowe), zasięg „Shadow distance”. Kaskada = ortho ze słońca wokół sfery swojego wycinka frustum, środek przyciągany do tekseli (bez migotania),
+  zakres głębokości wydłużony ku słońcu o najwyższy teren + `GL_DEPTH_CLAMP`. `ShadowMap::Render` idzie w `Draw` **przed** roślinnością: na kaskadę teren
+  (`ChunkWorld::DrawShadow`: wszystkie liście quadtree w frustum słońca, nie tylko widoczne; teselacja 4× rzadsza) i rośliny (`VegetationLayer::CullShadows` +
+  `DrawShadow`: przycinanie per kaskada w te same bufory co kamera, krótsze LOD-y `shadowDetail`, krzewy i skały do `shadowSmallRange`; impostory obrócone do słońca).
+  Dane kaskad idą przez `FrameBlock` (`shadowMatrices`, `shadowSplits`, `shadowTexels`, `shadowCascades` = 0 → brak cieni), a tekstura na jednostce 15
+  (`FrameUniforms::shadowUnit`, `layout(binding = 15)` w `common/shadow.glsl`) — nie używaj jej do niczego innego. `TerrainView::FrameBlock` dokłada cienie z
+  `TerrainRenderSettings::shadows` (subsystem ustawia wskaźnik co klatkę). Odbiorcy wołają `sunShadow(FragPos, normalna, pcf)` (offset po normalnej ~ teksel kaskady);
+  przebieg głębokości = `FrameBlock::depthPass`: FS terenu wraca od razu, FS roślin robi tylko test alfa. Impostor bierze cień przesunięty ku słońcu o promień
+  (płaski quad nie cieniuje sam siebie). Koszt w gęstym lesie ok. 3–5,5 ms (głównie rośliny; połowa to wypełnianie alfa-testowanych liści w 2048²).
   Trawa (`GrassLayer`, w `TerrainGenerationSys`): co klatkę `grass_compute.shader` przechodzi po tekselach wokół kamery na chunkach gruntu i dopisuje do bufora źdźbła,
   które tam rosną (udział trawy materiałów ze splat mapy: pola `grass` i `grassColor` w `terrain_materials.json`, mniej na klifach, rzadsze z odległością)
   i są w kadrze; jedno `glDrawArraysIndirect`, źdźbło budowane z `gl_VertexID`, wiatr w VS. Nic nie jest trzymane między klatkami ani czytane z GPU.
@@ -233,7 +244,7 @@ Wartości szumów są w [-1, 1]. Konwencja indeksowania: `map[y * width + x]`.
   `Impostor.h` = `common/impostor.glsl`, zmiana w obu; testy `ImpostorTests.cpp`) do tablicy tekstur 1024² (warstwa = wariant): albedo i normalna w przestrzeni modelu,
   tło przezroczyste, więc mipmapy są „premultiplied” (shader dzieli przez A). Rysowane jako czwarty poziom (`VegetationLayer::impostorLod`) od „Impostors from”,
   quad do kamery mieszający 4 najbliższe klatki (`impostor_vertex/fragment.shader`); checkbox „Impostors” = LOD2 zamiast nich. Atlas zapisuje też `--vegetation-preview`.
-  Pomiar: `--vegetation-bench [gęstość] [wysokość oka m] [prefiks zrzutów, - = bez] [zasięg widoku m]` — las domyślnego świata, kamera w stronę największego lądu
+  Pomiar: `--vegetation-bench [gęstość] [wysokość oka m] [prefiks zrzutów, - = bez] [zasięg widoku m] [wysokość słońca °]` — las domyślnego świata, kamera w stronę największego lądu
   z roślinnością, ten sam układ mierzony z siatkami i z impostorami, czasy CPU też w czasie ładowania, zrzuty PNG.
   Narzędzia z własnym oknem (`--gpu-check`, bench) muszą same ustawić `glPatchParameteri(GL_PATCH_VERTICES, 4)` (w aplikacji robi to `TerrainGenApp`), inaczej teren to śmieci.
   Klify, height blending, triplanar, specular i anti-tiling są w FS (`Terrain_fragment.shader`, `common/materials.glsl`), parametry w UBO `TerrainMaterials::Block`,

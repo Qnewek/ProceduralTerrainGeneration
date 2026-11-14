@@ -15,6 +15,10 @@ class FrameUniforms
 {
 public:
 	//Must match FrameBlock field by field
+	//Cascades of the sun shadow map, and its texture unit while drawing (sampler shadowMap in common/shadow.glsl)
+	static constexpr int maxShadowCascades = 4;
+	static constexpr int shadowUnit = 15;
+
 	struct Block {
 		glm::mat4 view = glm::mat4(1.0f);
 		glm::mat4 projection = glm::mat4(1.0f);
@@ -27,8 +31,17 @@ public:
 		int32_t fogOn = 0;
 		float fogStart = 0.0f;
 		float fogDistance = 1.0f;
+		//Sun shadows (ShadowMap): world space after modelScale -> shadow map [0, 1]^3 per cascade
+		glm::mat4 shadowMatrices[maxShadowCascades] = {};
+		glm::vec4 shadowSplits = glm::vec4(0.0f);		//far end of every cascade, as depth along the camera view
+		glm::vec4 shadowTexels = glm::vec4(0.0f);		//world size of a shadow map texel of every cascade
+		int32_t shadowCascades = 0;						//0 = no shadows
+		float shadowStrength = 0.0f;					//share of the sunlight a shadow takes away
+		//Pass into a depth map (shadows): fragment shaders only test alpha
+		int32_t depthPass = 0;
+		float padding = 0.0f;
 	};
-	static_assert(sizeof(Block) == 208, "FrameUniforms::Block must match FrameBlock (std140)");
+	static_assert(sizeof(Block) == 512, "FrameUniforms::Block must match FrameBlock (std140)");
 	static constexpr GLuint binding = 1;
 
 	FrameUniforms() = default;

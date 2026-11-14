@@ -257,7 +257,12 @@ void TerrainGenerationSys::ApplyWorld(const WorldConfig& loaded)
 }
 
 void TerrainGenerationSys::Draw(Renderer& renderer, Camera& camera, LightSource& light) {
+	renderSettings.shadows = nullptr;
 	if (chunksShown) {
+		//Shadow maps first: they need the plants culled for the sun before the camera culling reuses the buffers
+		if (shadows.Render(renderer, camera, light, renderSettings, chunks, vegetationLayer, vegetationModels)) {
+			renderSettings.shadows = &shadows;
+		}
 		//Plants first: the terrain behind them then fails the depth test before its (expensive) shader runs; in a forest this
 		//halves the cost of the terrain
 		vegetationLayer.Draw(camera, light, renderSettings, vegetationModels);
@@ -382,6 +387,7 @@ void TerrainGenerationSys::ImGuiDisplay()
 		ImGui::SeparatorText("Infinite generation");
 		chunks.ImGuiDraw();
 		water.ImGuiDraw();
+		shadows.ImGuiDraw();
 	}
 }
 
