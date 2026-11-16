@@ -19,7 +19,7 @@ Plan napraw i rozwoju: `docs/ROADMAP.md` (ID zadań `B*`, `A*`, `F*` są tam zde
   cmake --build --preset x64-release
   ```
   W VS: *Open Folder* na katalogu repo — VS czyta presety sam.
-- Targety: `ptg_vendor` (Simplex, stb_image impl., bez ostrzeżeń), `ptg_core` (`terrainGeneration/`: configi, presety, erozja,
+- Targety: `ptg_vendor` (Simplex, stb_image impl., bez ostrzeżeń), `ptg_core` (`terrainGeneration/`: configi, presety,
   pliki map, bez GL/ImGui — pod testy), `ProceduralTerrainGenerator` (exe). `/W4 /WX /permissive-` dla `ptg_core` i exe;
   nagłówki zależności są `SYSTEM` (`/external:W0`), więc ich ostrzeżenia nie przerywają buildu.
 - Shadery/tekstury czytane z `res/...` względem katalogu roboczego; jeśli go tam nie ma, `main` przechodzi do
@@ -32,7 +32,7 @@ Plan napraw i rozwoju: `docs/ROADMAP.md` (ID zadań `B*`, `A*`, `F*` są tam zde
 - **Test generacji: `out\build\x64-release\ProceduralTerrainGenerator.exe --gpu-check`** (ukryte okno, potrzebny GPU z OpenGL 4.5; uruchamiaj po każdej
   zmianie shaderów generacji). Sprawdza: wartości skończone i w zakresie opcji (każda opcja, ridge, wyspy, metody terenu), determinizm i wpływ seeda,
   zgodność id i kolorów biomów, chunki i poziomy LOD bit w bit z pełną mapą, mapę pochodnych na mapach o znanych pochodnych, udział wody domyślnego świata
-  (55–65%, ≥ 80% lądu w kontynentach); potem czasy GPU.
+  (55–65%, ≥ 80% lądu w kontynentach), erozję (krople i rury); potem czasy GPU generacji i erozji.
   Nowa opcja generacji = nowy przypadek w `CheckRanges` (`GpuHeightCheck.cpp`).
 - **Wielkość liter ścieżek = dokładnie taka jak w gicie** (`git ls-files`): `src/opengl`, `src/subSystems`,
   `src/terrainGeneration`, `src/utility`, `src/vendor`, `res/shaders`, `res/textures`.
@@ -59,7 +59,6 @@ ProceduralTerrainGenerator/
       WorldConfig.h              same dane: WorldConfig (TerrainConfig + BiomeConfig), NoiseMapConfig, ErosionConfig
       Noise.h                    noise::NoiseConfigParameters (fBm, ridge, island, redistribution); sam szum jest tylko w GLSL
       Biome.*                    biom = zakresy 6 parametrów (5 szumów + elewacja) + kolor; najbliższy biom (Nearest) i wagi przejść (BlendWeight) — opis reguł, które liczy biome_compute.shader
-      Erosion.*                  erozja kroplowa (CPU, lista jednokierunkowa kropel)
       Grid.h                     mapy Grid<T>
       SplineSampling.*           próbkowanie splajnu do tablicy (dla GPU i wykresu w edytorze)
       Frustum.h                  płaszczyzny frustum z macierzy i test AABB (culling chunków)
@@ -73,6 +72,8 @@ ProceduralTerrainGenerator/
       GpuHeightGenerator.*       jedyna generacja: szum, teren i biomy w compute shaderach (GenerateWorld = teren + biomy w jednym przebiegu); GpuHeightCheck.* = testy generacji (--gpu-check)
       NoisePreview.*             podgląd edytowanego szumu jako mapa 2D w panelu ImGui (≤ 512 tekseli na dłuższym boku, preview_compute.shader = skala szarości)
       GpuSurfacePass.*           mapa pochodnych (gradient + laplasjan) z mapy wysokości; uruchamia ją TerrainView i ChunkWorld
+      GpuErosion.*               erozja w compute: kroplowa (erosion_droplet_compute.shader, algorytm dawnej wersji CPU) albo rury wirtualne + termiczna
+                                 (erosion_pipe_compute.shader); metoda = ErosionConfig::method
       Clouds.*                   chmury wolumetryczne: szumy 3D + mapa pogody (raz), ray march w compute w połowie rozdzielczości, składane przez niebo / po scenie
       ShadowMap.*                cienie słońca: cascaded shadow maps (teren + roślinność), dane kaskad w FrameBlock; WaterSurface.* = woda
       ChunkWorld.*               „Infinite generation”: quadtree chunków 128² z LOD wokół kamery, kolejka wg odległości, cache, skirts, rysowanie shaderem terenu
@@ -92,9 +93,10 @@ ProceduralTerrainGenerator/
       utilities.*                helpery ImGui (NoiseImGui, DisplayModeImGui...), siatka patchy, kolory biomów
     vendor/                      SimplexNoise (z niego tylko makePermutation: tablice permutacji dla GPU), stb_image
   tests/                         testy jednostkowe ptg_core (doctest)
+  legacy/cpuErosion/             LEGACY, niekompilowane: erozja kroplowa na CPU z pracy dyplomowej + jej testy, tylko poglądowo
   res/shaders/
     TerrainShaders/              VS → TCS → TES → FS, jedyny zestaw dla terenu (oba tryby)
-    ComputeShaders/              height_compute.shader (szum, teren), biome_compute.shader, surface_compute.shader; wspólne: common/noise.glsl, noise_params.glsl, simplex.glsl, surface.glsl,
+    ComputeShaders/              height_compute.shader (szum, teren), biome_compute.shader, surface_compute.shader, erosion_droplet/pipe_compute.shader; wspólne: common/noise.glsl, noise_params.glsl, simplex.glsl, surface.glsl,
                                  terrain.glsl (wysokość terenu z C/M/W), world_input.glsl (wspólny bufor wejściowy), biomes.glsl (reguły biomów, klimat, modyfikatory terenu, mieszanie materiałów)
     common/materials.glsl        próbkowanie materiałów w trybie TEXTURED (triplanar, anti-tiling), blok TerrainMaterialBlock = TerrainMaterials::Block
     sky_vertex/fragment.shader   niebo; kolory nieba i światła w common/sky.glsl (z LUT), mgła w common/fog.glsl; model atmosfery common/atmosphere_model.glsl, LUT-y w AtmosphereShaders/;
@@ -112,8 +114,9 @@ CMakeLists.txt, CMakePresets.json, vcpkg.json   build; GLFW, GLEW, glm, ImGui, I
    (co klatkę, przed `Draw`, w wątku głównym) uruchamia compute shader, który pisze wprost do tekstury warstwy `TerrainView` (`LayerTexture`).
    Biomy liczą w shaderze wszystkie 5 szumów, więc nie ma osobnych tekstur szumów ani zależności między krokami.
    Generacji na CPU nie ma (usunięta 2026-11-08; ostatnia wersja z nią: `56eae39`).
-2. Mapy na CPU powstają tylko na żądanie przez `TerrainView::ReadLayer`: eksport i start erozji. Erozja nadal działa na CPU, w tle (`GenerationJob`),
-   a wynik wgrywa `TerrainView::SetLayer`; tak samo mapa z pliku w trybie Imported map. Tekstury mają niezmienny storage, nowa powstaje przy zmianie rozmiaru.
+2. Mapy na CPU powstają tylko na żądanie przez `TerrainView::ReadLayer` (eksport). Erozja (od 2026-11-16) też na GPU: `GpuErosion` w `Update()`
+   czyta warstwę TERRAIN (albo OVERLAY, gdy erozja się kumuluje) i pisze OVERLAY. Mapa z pliku w trybie Imported map idzie przez `TerrainView::SetLayer`.
+   Tekstury mają niezmienny storage, nowa powstaje przy zmianie rozmiaru.
 3. Siatka (`TerrainView`): stała siatka `mapResolution × mapResolution` (50×50) patchy-quadów o rozmiarze
    `width * worldUnitsPerTexel` (= 4, `GetWorldWidth()`), rysowana `GL_PATCHES` (4 wierzchołki).
 4. TCS: w 3D poziom teselacji z długości krawędzi na ekranie (`tessPixels`, suwak „Terrain detail”, 1–64), w widoku 2D po staremu 4–64 od odległości (ma zostać ostry). Normalna i kolor biomów liczone w FS na piksel (z `surfaceMap` / `biomeMap`). TES: próbkuje `heightMap`,
@@ -135,7 +138,7 @@ Wartości szumów są w [-1, 1]. Konwencja indeksowania: `map[y * width + x]`.
 - Mapy jako `Grid<T>` (`terrainGeneration/Grid.h`: `HeightField`, `BiomeMap`) — bez surowych `new[]/delete[]`.
   Do OpenGL przez `.Data()`. OpenGL obiekty w `std::unique_ptr`.
 - Warstwy (A3): parametry świata to same dane w `WorldConfig.h`, trzymane przez subsystem (`world` / `config`).
-  Generatory (`GpuHeightGenerator`, `Erosion`) **nie trzymają configu** — dostają `const XxxConfig&` w każdym wywołaniu.
+  Generatory (`GpuHeightGenerator`, `GpuErosion`) **nie trzymają configu** — dostają `const XxxConfig&` w każdym wywołaniu.
   UI (immediate-mode w subsystemach: `ImGuiDisplay/Presets/Saving`, `ImGuiRightPanel`, `ImGuiOutput`) edytuje config i zgłasza żądanie (`Request*`),
   subsystem generuje w tle i przekazuje wynik do `TerrainView`. Stan edytorów (wybrany szum, wciśnięte przyciski) to nie config.
 - Includy własne po nazwie pliku (`#include "Noise.h"` — katalogi `src/*` są w include path targetów).
@@ -149,8 +152,17 @@ Wartości szumów są w [-1, 1]. Konwencja indeksowania: `map[y * width + x]`.
   powinny działać; zmieniając generację sprawdź też taki przypadek.
 - Tablica permutacji szumu zależy tylko od seeda (`SimplexNoise::makePermutation`, test z ustalonymi wartościami w `PermutationTests.cpp`);
   zmiana tablicy lub tasowania zmienia każdy wygenerowany świat.
-- **Mapę po erozji (`NoiseBasedGenerationSys::eroded`) zmienia tylko instalacja wyniku zadania**, bo zadanie liczy na kopii. Kod w `RunErosion` działa na
-  wątku roboczym: bez OpenGL, bez ImGui, bez pól subsystemu (jest `static`). OpenGL tylko w wątku głównym, więc `GpuHeightGenerator` działa w `Update()`.
+- Erozja (`GpuErosion`, tryb Noise heightmap, tylko skończona mapa): każda metoda ma własną mapę wynikową — krople w warstwie OVERLAY `view`, rury w warstwie TERRAIN
+  drugiego widoku `pipesView` (TerrainView ma tylko jedną wolną warstwę wysokości; jednostki tekstur 0–2 są zajęte). Kolejne „Erode map” kumulują się na mapie metody
+  (`ErodedMap::fromBase`), nowy szum lub „Reset” zaczyna obie od TERRAIN. „Compare both methods” eroduje obiema naraz i rysuje 3 mapy obok siebie (oba widoki dostają
+  te same `SetFlatViewBounds`). Podpisy map (`PlaceLabels` w `Draw` rzutuje środek górnej krawędzi każdej mapy macierzą kamery albo kamery 2D z `TerrainView::FrameBlock`,
+  `ImGuiMapLabels` rysuje je na `GetBackgroundDrawList` — nad sceną, pod panelami) pojawiają się, gdy obok szumu jest choć jedna mapa po erozji. Krople: mapa w buforze stałoprzecinkowym (2^-24, |h| ≤ 127) zmienianym `atomicAdd` (GL 4.5 nie ma
+  atomików float), krok `i` wszystkich kropel przed krokiem `i + 1` jak w wersji CPU (dispatch na krok, paczki po `dropletBatch`); kolejność zapisów nie jest stała,
+  więc wynik nie jest bit w bit powtarzalny (statystycznie zgodny z CPU — sprawdzone na legacy). Rury: deterministyczne, osad płynie rurami razem z wodą
+  (zachowanie masy poza tym, co woda wynosi za krawędź), wymywanie nie schodzi poniżej najniższego sąsiada (bez dołów), a odkładanie i końcowy zrzut osadu
+  nie podnoszą teksela ponad najwyższego sąsiada + wysokość kąta zsypu (bez linii kolców wzdłuż strużek); po iteracjach faza wysychania bez deszczu
+  (`dryingEvaporation` w `GpuErosion.cpp` — szybsze wysychanie = więcej kolców). Nowa metoda = `erosion::Method` + shader +
+  przypadki w `CheckErosion` (`GpuHeightCheck.cpp`). OpenGL tylko w wątku głównym, więc `GpuHeightGenerator` i `GpuErosion` działają w `Update()`.
 - Odczyt z GPU (`ReadLayer`, `TextureClass::Read`) czeka na zakończenie pracy GPU; nie wołaj go co klatkę. Wyjątek: identyfikatory biomów po każdej ich generacji, dla nazwy biomu pod kamerą.
 - `GpuHeightGenerator::BeginMeasure`/`EndMeasure` to `GL_TIME_ELAPSED`, więc nie mogą nachodzić na pomiary sceny; działają, bo `Update()` idzie przed `BeginScene`.
 - Splajny: liniowe albo kubiczne wg `SplinePoints::cubic` (checkbox „Smooth (cubic)” w edytorze). Kubiczny = monotoniczny PCHIP (własna implementacja,

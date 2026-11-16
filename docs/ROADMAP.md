@@ -523,6 +523,19 @@ Kroki:
 ### Faza 5 — realizm i narzędzia (otwarte)
 - **Erozja na GPU:** hydrauliczna (pipe model / virtual pipes lub kroplowa w compute z atomics) + termiczna;
   tryb „bake” dla obszaru (erozja jest nielokalna — dla chunków: erozja na większym regionie z marginesem i zszywanie).
+  ✅ 2026-11-16 (`GpuErosion`, decyzja właściciela: najpierw ta sama metoda na GPU, potem rury; wersja CPU do `legacy/cpuErosion/`, niekompilowana,
+  zapisywanie ścieżek kropel usunięte): (1) **krople** — algorytm wersji CPU 1:1 (kroki w lockstepie, mapa w buforze stałoprzecinkowym + `atomicAdd`);
+  na tej samej mapie statystyki zgodne z CPU w granicach rozrzutu między uruchomieniami (200k kropel: wymyte 2331–2335, osadzone 1953–1958). Jedyna różnica
+  zamierzona: komórka poniżej 0 nie jest już podnoszona do 0 przy wymywaniu. 20k kropel na 1024²: 4,2 ms (GPU), 1M: 177 ms.
+  (2) **rury wirtualne + erozja termiczna** (Mei i in. 2007), deterministyczne; zmiany względem artykułu: osad płynie rurami z wodą (masa zachowana,
+  strata = osad wyniesiony za krawędź, ok. 1,5% na mapie testowej), pojemność ∝ przepływ (prędkość × głębokość) zamiast samej prędkości (inaczej cienka
+  warstwa wody unosiła więcej materiału niż sama miała i strata sięgała 69%), wymywanie nie schodzi poniżej najniższego sąsiada (inaczej doły „+”).
+  Poprawka tego samego dnia (zgłoszenie właściciela: linie spiczastych kolców): osad niesiony cienkimi strużkami spadał naraz na pojedyncze teksele —
+  głównie przy końcowym zrzucie (ok. 85% kolców), reszta przy gwałtownym spadku przepływu. Teraz odkładanie i końcowy zrzut nie podnoszą teksela ponad
+  najwyższego sąsiada + wysokość kąta zsypu (nadmiar płynie dalej / ginie, +0,2–0,3 pkt proc. straty), a po iteracjach deszcz ustaje i woda wysycha
+  powoli (parowanie 1, do 1% wody; szybsze wysychanie dawało więcej kolców). Kolce na mapach testowych: 255–444 (do 10 tekseli) → ok. 30, ≤ 0,72 teksela;
+  test „pipes: no spikes” w `--gpu-check`. 300 iteracji (+ ok. 90 wysychania): 1024² 330 ms, 2048² 1,3 s — liczone w jednej klatce. Wybór metody w zakładce Erosion, w presetach `erosion.method` i `erosion.pipes`.
+  Dalej: erozja rozłożona na klatki (podgląd na żywo, bez przycięcia przy dużych mapach), chunki / „bake” obszaru, erozja w trybie TerrainGen.
 - **Rzeki i jeziora:** flow accumulation / priority-flood na mapie niskiej rozdzielczości, rzeźbienie koryt, maska wilgotności dla biomów.
 - **Zagnieżdżone splajny** (z „Teren 2.0”, pkt 3): punkty splajnu C są splajnami po M (i dalej po PV), wypiekane do tekstury LUT 2D/3D próbkowanej jednym odczytem.
   Daje klify tam, gdzie góry dochodzą do morza, płaskie plaże gdzie indziej, doliny wcięte poniżej podstawy. Najwięcej pracy: edytor UI (lista punktów C z wykresem po M, podgląd C×M jako mapa ciepła).

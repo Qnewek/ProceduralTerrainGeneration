@@ -125,8 +125,38 @@ namespace erosion {
 	//@param dropletCount: The number of simulated droplets
 	//@param initialWater: The initial amount of water in the droplet
 	//@param initialVelocity: The initial velocity of the droplet
-	//@param initialCapacity: The initial capacity of the droplet
+	//@param initialCapacity: The initial capacity of the droplet (unused: the capacity is computed before its first use)
+	//@param method: which simulation erodes the map; droplets use the fields above, pipes their own
+	enum class Method {
+		DROPLETS,	//particles, the algorithm of the former CPU version (erosion_droplet_compute.shader)
+		PIPES		//water on a grid, virtual pipes model + thermal erosion (erosion_pipe_compute.shader)
+	};
+
+	//Virtual pipes model (Mei, Decaudin, Hu: "Fast Hydraulic Erosion Simulation and Visualization on GPU", 2007) with thermal erosion.
+	//Lengths in texels: the map height 1 is heightScale texels high. After the iterations the rain stops and the water dries up (more iterations, GpuErosion)
+	struct PipeConfig {
+		int iterations = 300;
+		float timeStep = 0.05f;
+		//Height of the map value 1 in texels; 64 = how the Noise heightmap mode shows it (256 world units, 4 per texel)
+		float heightScale = 64.0f;
+		//Water added to every texel per unit of time, and the part of it evaporating per unit of time
+		float rainRate = 0.02f;
+		float evaporationRate = 0.02f;
+		//Sediment the water carries: sedimentCapacity * sin(slope) * flow (speed * depth); below minTilt the slope counts as minTilt
+		float sedimentCapacity = 1.0f;
+		float minTilt = 0.05f;
+		//Part of the free capacity dissolved and of the surplus deposited per unit of time
+		float dissolvingRate = 0.5f;
+		float depositionRate = 1.0f;
+		//Thermal erosion: material slides down where the slope is steeper than talusAngle (degrees); thermalRate 0 = off
+		float talusAngle = 35.0f;
+		float thermalRate = 1.0f;
+	};
+
 	struct ErosionConfig {
+		Method method = Method::DROPLETS;
+		PipeConfig pipes;
+
 		//Erosion parameters
 		float erosionRate = 0.6f;
 		float depositionRate = 0.5f;

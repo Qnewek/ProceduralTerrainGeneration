@@ -76,20 +76,9 @@ namespace erosion {
 	//Simulation functions
 	//--------------------------------------------------------------------------------------
 
-	//Track the path of the droplet
-	//@param vertices - pointer to the array of vertices to store the path of the droplet
-	//@param pos - position of the droplet
-	//@param step - step of the simulation (basically auxiliary index to save the pos of the function)
-	void Erosion::TrackDroplets(float* vertices, vec2 pos, int step) {
-		vertices[step * 3] = pos.x / width;
-		vertices[step * 3 + 1] = GetInterpolatedGridHeight(pos);
-		vertices[step * 3 + 2] = pos.y / height;
-	}
-
 	//Main simulation function
 	//@param config - erosion parameters
-	//@param Track - optional pointer to the array of vertices to store the path of the droplet (pass std::nullopt to disable)
-	void Erosion::Erode(const ErosionConfig& config, std::optional<float*> Track)
+	void Erosion::Erode(const ErosionConfig& config)
 	{
 		ListNode* dropletsHead = nullptr;
 		ListNode* dropletPrev = nullptr;
@@ -103,7 +92,6 @@ namespace erosion {
 		vec2 oldPosition;
 
 		int fellOff = 0;
-		int step = 0;
 
 		//Placeholder node
 		dropletsHead = new ListNode({ 0.0f, 0.0f }, 0.0f, 0.0f, 0.0f);
@@ -114,10 +102,6 @@ namespace erosion {
 		for (int i = 0; i < config.dropletCount; i++) {
 			dropletCurrent->next = new ListNode({ dist(gen) * width, dist(gen) * height }, config.initialVelocity, config.initialWater, config.initialCapacity);
 			dropletCurrent = dropletCurrent->next;
-
-			//If tracking enabled, save the droplets initial positions
-			if(Track.has_value() && Track.value())
-				TrackDroplets(Track.value(), dropletCurrent->d->GetPosition(), step++);
 		}
 
 		dropletCurrent = dropletsHead->next;
@@ -140,10 +124,6 @@ namespace erosion {
 				gradient = GetGradient(dropletCurrent->d->GetPosition());
 				oldPosition = dropletCurrent->d->GetPosition();
 				dropletCurrent->d->AdjustDirection(gradient, config.inertia);
-				
-				//If tracking enabled, save the droplets path
-				if (Track.has_value() && Track.value())
-					TrackDroplets(Track.value(), dropletCurrent->d->GetPosition(), step++);
 
 				//Check if the droplet is still on the map
 				if (IsOnMap(dropletCurrent->d->GetPosition())) {
