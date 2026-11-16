@@ -7,6 +7,7 @@
 in vec3 FragPos;
 in vec2 WaterXZ;
 in vec2 MapUV;
+in vec2 Flow;                   //metres per second (rivers); 0 = still water
 
 out vec4 FragColor;
 
@@ -32,6 +33,13 @@ uniform mat4 inverseProjection;
 uniform float modelScale;
 uniform float refraction;       //shift of the ground under the water by the waves, 1 = default
 uniform bool reflections;       //screen-space reflections; off = the sky only
+//Rivers and lakes (water_mesh_vertex.shader): no height map, the depth comes from the copied scene; drawn only inside clipRect
+//(world XZ before modelScale: min, max), so the finite map has no water outside it
+uniform bool meshWater;
+uniform vec4 clipRect;
+uniform mat4 inverseView;
+//Flowing water: the wave pattern is carried along the flow, two copies a half period apart cross-faded (flow map)
+const float FLOW_PERIOD = 2.0;      //seconds
 
 //Screen-space reflections: steps along the ray, each longer by SSR_GROWTH, then a binary search of the hit
 const int SSR_STEPS = 40;
@@ -129,8 +137,21 @@ bool traceReflection(vec3 origin, vec3 dir, float metre, out vec2 hitUV)
 
 void main()
 {
-    float ground = texture(heightMap, MapUV).r * heightScale;
-    float depth = (waterLevel - ground) / unitsPerMetre;
+    float metre = unitsPerMetre * modelScale;     //view space units per metre
+    vec2 screenUV = (gl_FragCoord.xy - viewportRect.xy) / viewportRect.zw;
+    float depth;
+    if (meshWater) {
+        if (any(lessThan(WaterXZ, clipRect.xy)) || any(greaterThan(WaterXZ, clipRect.zw))) {
+            discard;
+        }
+        //Vertical depth down to what the copied scene shows here (nothing drawn = deep)
+        float groundY = (inverseView * vec4(sceneViewPosition(screenUV), 1.0)).y;
+        depth = texture(sceneDepth, screenUV).r >= 1.0 ? 100.0 : (FragPos.y - groundY) / metre;
+    }
+    else {
+        float ground = texture(heightMap, MapUV).r * heightScale;
+        depth = (waterLevel - ground) / unitsPerMetre;
+    }
     if (depth <= 0.0) {
         discard;
     }
@@ -139,11 +160,21 @@ void main()
     vec3 v = flatView ? vec3(0.0, 1.0, 0.0) : toEye / distanceToEye;
     vec2 p = WaterXZ / unitsPerMetre;
     vec2 footprint2 = fwidth(p);
-    vec2 slope = waveSlope(p, max(footprint2.x, footprint2.y));
+    float footprint = max(footprint2.x, footprint2.y);
+    vec2 slope;
+    if (dot(Flow, Flow) > 0.0) {
+        //Rivers: smaller waves, carried downstream
+        float phase0 = fract(time / FLOW_PERIOD), phase1 = fract(time / FLOW_PERIOD + 0.5);
+        float weight0 = 1.0 - abs(2.0 * phase0 - 1.0);
+        vec2 slope0 = waveSlope(p - Flow * phase0 * FLOW_PERIOD + vec2(17.0, 3.0), footprint);
+        vec2 slope1 = waveSlope(p - Flow * phase1 * FLOW_PERIOD, footprint);
+        slope = 0.6 * (slope0 * weight0 + slope1 * (1.0 - weight0));
+    }
+    else {
+        slope = waveSlope(p, footprint);
+    }
     vec3 n = normalize(vec3(-slope.x, 1.0, -slope.y));
 
-    float metre = unitsPerMetre * modelScale;     //view space units per metre
-    vec2 screenUV = (gl_FragCoord.xy - viewportRect.xy) / viewportRect.zw;
     vec3 surfaceView = (view * vec4(FragPos, 1.0)).xyz;
     float surfaceDistance = length(surfaceView);
 

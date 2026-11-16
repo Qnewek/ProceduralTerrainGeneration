@@ -84,10 +84,15 @@ private:
 	//rivers) and uploaded to riverMap; the terrain is generated with the last uploaded network until a new one arrives
 	struct RiverResult {
 		hydrology::Network network;
+		std::vector<hydrology::WaterVertex> water;
 		double ms = 0.0;
 	};
+	//The network whose water WaterSurface draws: only while the REGION method is chosen
+	const RiverMap* RiverWater() const { return world.rivers.method == rivers::Method::REGION && riverMap.Ready() ? &riverMap : nullptr; }
 	GenerationJob<RiverResult> riverJob;
 	RiverMap riverMap;
+	//The uploaded network on the CPU, for the vegetation (nothing grows in rivers and lakes); shared with its placement threads
+	std::shared_ptr<const hydrology::Network> riverNetwork;
 	//The terrain, the biome modifiers, the map size or the river parameters changed since the last network was started
 	bool riversStale = true;
 	//Statistics of the uploaded network, for the Rivers tab
@@ -145,6 +150,8 @@ private:
 	void BiomeTableEditor();
 	void BiomeNoisesEditor();
 	void RiversEditor();
+	//Names of the surface materials in the order of their ids (the river bed material)
+	std::vector<std::string> materialNames;
 	//Checkbox and 2D picture of the edited noise, shown only in the editor of that noise
 	void NoisePreviewImGui(const noise::NoiseConfigParameters& noise);
 	//Shows a note instead of a biome tab while biomes are off
@@ -167,7 +174,7 @@ public:
 	bool HoleInView() const { return chunksShown && chunks.HasHoleInView(); }
 	void ReloadShaders() { view.ReloadShader(); chunks.ReloadShader(); gpu.ReloadShaders(); noisePreview.ReloadShader(); vegetationLayer.ReloadShader(); grass.ReloadShader(); water.ReloadShader(); }
 	//Names of the surface materials for the biome editor, in the order of their ids
-	void SetMaterialNames(std::vector<std::string> names) { biomeEditor.SetMaterialNames(std::move(names)); }
+	void SetMaterialNames(std::vector<std::string> names) { materialNames = names; biomeEditor.SetMaterialNames(std::move(names)); }
 	//Models drawn on the infinite world; nullptr (before the models are destroyed) = no vegetation
 	void SetVegetationModels(VegetationModels* models);
 	//Placement settings and statistics, in the Vegetation tab

@@ -40,6 +40,8 @@ public:
 		float waterHeight = 0.0f;
 		float heightScale = 1.0f;
 		uint32_t seed = 0;
+		//Rivers and lakes nothing stands in; immutable, shared with the placement threads; nullptr = none
+		std::shared_ptr<const hydrology::Network> rivers;
 	};
 
 	//Places instances on new and regenerated ground chunks and forgets the others. The maps of a few chunks per frame are read back
@@ -148,6 +150,7 @@ private:
 	std::vector<std::vector<biome::Plant>> placedPlants;
 	float placedWater = 0.0f, placedDensity = 0.0f;
 	uint32_t placedSeed = 0;
+	std::shared_ptr<const hydrology::Network> placedRivers;
 	int placedReadyModels = -1;
 
 	bool enabled = true;

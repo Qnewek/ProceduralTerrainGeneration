@@ -1,14 +1,16 @@
 #pragma once
 
 #include <memory>
+#include <vector>
 
+#include <GL/glew.h>
 #include "glm/glm.hpp"
 
 #include "Hydrology.h"
 #include "TextureClass.h"
 
-//River network of a region (hydrology::Network) on the GPU, sampled bilinearly by common/rivers.glsl while the terrain is generated.
-//Only for the thread owning the GL context.
+//River network of a region (hydrology::Network) on the GPU: maps sampled bilinearly by common/rivers.glsl while the terrain is generated,
+//and the water surface of rivers and lakes (hydrology::BuildWaterMesh) drawn by WaterSurface. Only for the thread owning the GL context.
 class RiverMap
 {
 public:
@@ -16,8 +18,13 @@ public:
 	static constexpr unsigned int riverUnit = 20;
 	static constexpr unsigned int levelUnit = 21;
 
-	//Replaces the maps; a new size gets new textures
-	void Upload(const hydrology::Network& network);
+	RiverMap() = default;
+	~RiverMap();
+	RiverMap(const RiverMap&) = delete;
+	RiverMap& operator=(const RiverMap&) = delete;
+
+	//Replaces the maps and the water surface; a new size gets new textures
+	void Upload(const hydrology::Network& network, const std::vector<hydrology::WaterVertex>& water);
 	void Clear();
 	bool Ready() const { return rivers != nullptr; }
 
@@ -29,12 +36,14 @@ public:
 	float CellSize() const { return cellSize; }
 	glm::ivec2 Size() const { return rivers ? glm::ivec2(rivers->GetWidth(), rivers->GetHeight()) : glm::ivec2(0); }
 
-	//RGBA32F: offset to the nearest course (x, y), distance, half width; RG32F: river surface, lake surface
-	const TextureClass* RiverTexture() const { return rivers.get(); }
-	const TextureClass* LevelTexture() const { return levels.get(); }
+	//Water surface: triangles of hydrology::WaterVertex (attributes 0 = map position, 1 = level, 2 = flow); 0 vertices = none
+	GLuint WaterVertexArray() const { return waterVao; }
+	GLsizei WaterVertexCount() const { return waterVertices; }
 
 private:
 	std::unique_ptr<TextureClass> rivers, levels;
 	glm::vec2 origin = glm::vec2(0.0f);
 	float cellSize = 1.0f;
+	GLuint waterVao = 0, waterBuffer = 0;
+	GLsizei waterVertices = 0;
 };

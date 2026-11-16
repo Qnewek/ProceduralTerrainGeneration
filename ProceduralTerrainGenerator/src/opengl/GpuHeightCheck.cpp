@@ -753,7 +753,9 @@ namespace {
 			for (int x = 0; x < size; x++) {
 				const float h = s.At(x, y);
 				const glm::vec2 offset = glm::vec2(x, y) - glm::vec2(size / 2);
-				if (h > water + 0.01f && h < water + 0.03f && glm::dot(offset, offset) < bestDistance) {
+				//Sea 256 texels to the east, inside the checked map: the rivers have to stop at the coast
+				const bool coast = x + 4 < size && s.At(x + 4, y) < water - 0.02f;
+				if (h > water + 0.01f && h < water + 0.03f && coast && glm::dot(offset, offset) < bestDistance) {
 					bestDistance = glm::dot(offset, offset);
 					best = offset * step;
 				}
@@ -781,46 +783,92 @@ namespace {
 		const HeightField sample = gpu.SampleTerrain(terrain, center, cells, cellSize, island, &biomes);
 		const hydrology::Network network = hydrology::Compute(sample, center - glm::vec2(cells * cellSize * 0.5f), cellSize, terrain.WaterHeight(), region);
 		const double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count();
+		const std::vector<hydrology::WaterVertex> water = hydrology::BuildWaterMesh(network, terrain.WaterHeight(), 256.0f);
 		RiverMap map;
-		map.Upload(network);
+		map.Upload(network, water);
 		std::ostringstream networkDetails;
 		networkDetails << network.riverCells << " river cells, " << network.lakes << " lakes, " << std::fixed << std::setprecision(0) << ms << " ms";
 		bool allOk = network.riverCells > 0;
 		Report("rivers: network of " + std::to_string(cells) + "^2 cells", networkDetails.str(), allOk);
+		const bool meshOk = !water.empty();
+		Report("rivers: water surface", std::to_string(water.size() / 6) + " quads", meshOk);
+		allOk = allOk && meshOk;
+
+		//The water shaders are drawn only in the application; this at least builds them (the river mesh with the shared fragment shader)
+		const Shader seaShader("res/shaders/WaterShaders/water_vertex.shader", "res/shaders/WaterShaders/water_fragment.shader");
+		const Shader meshShader("res/shaders/WaterShaders/water_mesh_vertex.shader", "res/shaders/WaterShaders/water_fragment.shader");
+		const bool built = seaShader.IsValid() && meshShader.IsValid();
+		Report("rivers: water shaders build", built ? "sea and rivers" : "see the errors above", built);
+		allOk = allOk && built;
 
 		rivers::RiverConfig noise;
 		noise.method = rivers::Method::NOISE;
 		const std::pair<std::string, const rivers::RiverConfig*> cases[] = { { "region", &region }, { "noise", &noise } };
 		for (const auto& [name, config] : cases) {
 			const RiverInput input{ *config, &map };
-			TextureClass plain(mapWidth, mapHeight, GL_R32F), carved(mapWidth, mapHeight, GL_R32F);
+			//Without their humidity: it changes the biomes and so the biome modifiers, which may raise the terrain
+			rivers::RiverConfig dryConfig = *config;
+			dryConfig.humidity = 0.0f;
+			const RiverInput dry{ dryConfig, &map };
+			TextureClass plain(mapWidth, mapHeight, GL_R32F), carved(mapWidth, mapHeight, GL_R32F), wet(mapWidth, mapHeight, GL_R32F);
 			gpu.GenerateTerrain(terrain, area, plain, &biomes);
-			gpu.GenerateTerrain(terrain, area, carved, &biomes, &input);
-			const HeightField before = ReadHeight(plain), after = ReadHeight(carved);
-			int lowered = 0, wrong = 0;
+			gpu.GenerateTerrain(terrain, area, carved, &biomes, &dry);
+			gpu.GenerateTerrain(terrain, area, wet, &biomes, &input);
+			const HeightField before = ReadHeight(plain), dryAfter = ReadHeight(carved), after = ReadHeight(wet);
+			int lowered = 0, wrong = 0, sea = 0;
 			float deepest = 0.0f;
+			//Noise rivers end at the coast: the sea floor deeper than a channel stays as it was
+			const bool noiseRivers = config->method == rivers::Method::NOISE;
+			const float seaFloor = terrain.WaterHeight() - config->depthPerWidth * config->noiseHalfWidth;
 			for (size_t i = 0; i < after.Size(); i++) {
-				if (!std::isfinite(after[i]) || after[i] < 0.0f || after[i] > 1.0f || after[i] > before[i]) {
+				if (!std::isfinite(after[i]) || after[i] < 0.0f || after[i] > 1.0f || dryAfter[i] > before[i]) {
 					wrong++;
 				}
-				lowered += after[i] < before[i] ? 1 : 0;
-				deepest = std::max(deepest, before[i] - after[i]);
+				if (noiseRivers && before[i] < seaFloor) {
+					sea++;
+					wrong += dryAfter[i] != before[i] ? 1 : 0;
+				}
+				lowered += dryAfter[i] < before[i] ? 1 : 0;
+				deepest = std::max(deepest, before[i] - dryAfter[i]);
 			}
 			std::ostringstream details;
 			details << lowered << " lowered, deepest " << std::fixed << std::setprecision(4) << deepest << ", " << wrong << " wrong";
-			bool ok = wrong == 0 && lowered > 0;
-			Report("rivers: " + name + " carves", details.str(), ok);
+			bool ok = wrong == 0 && lowered > 0 && (!noiseRivers || sea > 0);
+			Report("rivers: " + name + " carves" + (noiseRivers ? ", sea " + std::to_string(sea) + " kept" : ""), details.str(), ok);
 			allOk = allOk && ok;
 
+			//One pass equals the terrain and the biomes generated apart (the humidity of rivers changes the biomes and their modifiers,
+			//the bed material the splat map), and the bed shows in the splat map
 			TextureClass height(mapWidth, mapHeight, GL_R32F), colors(mapWidth, mapHeight, GL_RGBA32F), ids(mapWidth, mapHeight, GL_R32I);
-			gpu.GenerateWorld(terrain, biomes, area, height, colors, ids, nullptr, &input);
+			TextureClass splat(mapWidth, mapHeight, GL_RGBA8, GpuHeightGenerator::splatLayers);
+			gpu.GenerateWorld(terrain, biomes, area, height, colors, ids, &splat, &input);
+			TextureClass colors2(mapWidth, mapHeight, GL_RGBA32F), ids2(mapWidth, mapHeight, GL_R32I);
+			TextureClass splat2(mapWidth, mapHeight, GL_RGBA8, GpuHeightGenerator::splatLayers);
+			gpu.GenerateBiomes(biomes, terrain, area, colors2, ids2, &splat2, &input);
 			const HeightField single = ReadHeight(height);
 			int different = 0;
 			for (size_t i = 0; i < single.Size(); i++) {
 				different += std::memcmp(&single[i], &after[i], sizeof(float)) != 0 ? 1 : 0;
 			}
-			ok = different == 0;
-			Report("rivers: " + name + ", one pass", std::to_string(different) + " texels differ", ok);
+			const bool biomesSame = ReadBytes(colors, GL_RGBA, GL_FLOAT, 16) == ReadBytes(colors2, GL_RGBA, GL_FLOAT, 16)
+				&& ReadBytes(ids, GL_RED_INTEGER, GL_INT, 4) == ReadBytes(ids2, GL_RED_INTEGER, GL_INT, 4);
+			const std::vector<unsigned char> splatBytes = ReadBytes(splat, GL_RGBA, GL_UNSIGNED_BYTE, 4);
+			const bool splatSame = splatBytes == ReadBytes(splat2, GL_RGBA, GL_UNSIGNED_BYTE, 4);
+			//Texels where the bed material took over only because of the river (some biomes use it too).
+			//Material m is byte (m / 4) layer, m % 4 channel; layers follow each other
+			TextureClass colors3(mapWidth, mapHeight, GL_RGBA32F), ids3(mapWidth, mapHeight, GL_R32I);
+			TextureClass splat3(mapWidth, mapHeight, GL_RGBA8, GpuHeightGenerator::splatLayers);
+			gpu.GenerateBiomes(biomes, terrain, area, colors3, ids3, &splat3);
+			const std::vector<unsigned char> noRiverBytes = ReadBytes(splat3, GL_RGBA, GL_UNSIGNED_BYTE, 4);
+			const size_t layerBytes = static_cast<size_t>(mapWidth) * mapHeight * 4;
+			int bedTexels = 0;
+			for (size_t t = 0; t < static_cast<size_t>(mapWidth) * mapHeight; t++) {
+				const size_t b = (config->bedMaterial / 4) * layerBytes + t * 4 + config->bedMaterial % 4;
+				bedTexels += splatBytes[b] > 200 && noRiverBytes[b] < 100 ? 1 : 0;
+			}
+			ok = different == 0 && biomesSame && splatSame && bedTexels > 0;
+			Report("rivers: " + name + ", one pass", std::to_string(different) + " heights differ, biomes " + (biomesSame && splatSame ? "same" : "DIFFER")
+				+ ", bed " + std::to_string(bedTexels), ok);
 			allOk = allOk && ok;
 
 			constexpr int partWidth = 131, partHeight = 50;

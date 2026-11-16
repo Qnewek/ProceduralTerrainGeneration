@@ -46,14 +46,18 @@ namespace hydrology {
 		};
 
 		//Writes the segment into every cell it is the nearest course of, within radius cells of it
-		void Rasterize(const Segment& s, int radius, float cellSize, Grid<RiverTexel>& rivers, Grid<LevelTexel>& levels)
+		void Rasterize(const Segment& s, int radius, float cellSize, Network& net)
 		{
+			Grid<RiverTexel>& rivers = net.rivers;
 			const int width = rivers.GetWidth(), height = rivers.GetHeight();
 			const glm::vec2 lo = glm::min(s.a, s.b), hi = glm::max(s.a, s.b);
 			const int x0 = std::max(0, static_cast<int>(std::floor(lo.x)) - radius), x1 = std::min(width - 1, static_cast<int>(std::ceil(hi.x)) + radius);
 			const int y0 = std::max(0, static_cast<int>(std::floor(lo.y)) - radius), y1 = std::min(height - 1, static_cast<int>(std::ceil(hi.y)) + radius);
 			const glm::vec2 ab = s.b - s.a;
 			const float length2 = glm::dot(ab, ab);
+			const float length = std::sqrt(length2);
+			const FlowTexel flow = length > 0.0f
+				? FlowTexel{ ab.x / length, ab.y / length, std::max(s.levelA - s.levelB, 0.0f) / (length * cellSize) } : FlowTexel{};
 			for (int y = y0; y <= y1; y++) {
 				for (int x = x0; x <= x1; x++) {
 					const glm::vec2 q(static_cast<float>(x), static_cast<float>(y));
@@ -63,7 +67,8 @@ namespace hydrology {
 					RiverTexel& r = rivers.At(x, y);
 					if (distance < r.distance) {
 						r = { offset.x, offset.y, distance, glm::mix(s.widthA, s.widthB, t) };
-						levels.At(x, y).river = glm::mix(s.levelA, s.levelB, t);
+						net.levels.At(x, y).river = glm::mix(s.levelA, s.levelB, t);
+						net.flow.At(x, y) = flow;
 					}
 				}
 			}
@@ -201,6 +206,8 @@ namespace hydrology {
 		net.cellSize = cellSize;
 		net.rivers.Resize(width, height);
 		net.levels.Resize(width, height);
+		net.flow.Resize(width, height);
+		net.ground = terrain;
 		if (count == 0) {
 			return net;
 		}
@@ -285,8 +292,105 @@ namespace hydrology {
 			const int r = d.receiver[c];
 			const Segment s{ point[c], river[r] ? point[r] : center(r), level[c], river[r] ? level[r] : endLevel(r), halfWidth[c],
 				river[r] ? halfWidth[r] : halfWidth[c] };
-			Rasterize(s, radius, cellSize, net.rivers, net.levels);
+			Rasterize(s, radius, cellSize, net);
 		}
 		return net;
+	}
+
+	float WaterLevelAt(const Network& network, glm::vec2 position)
+	{
+		constexpr float none = -std::numeric_limits<float>::infinity();
+		const int width = network.rivers.GetWidth(), height = network.rivers.GetHeight();
+		const glm::vec2 cell = (position - network.origin) / network.cellSize;
+		if (width < 2 || height < 2 || cell.x < 0.0f || cell.y < 0.0f || cell.x > static_cast<float>(width - 1) || cell.y > static_cast<float>(height - 1)) {
+			return none;
+		}
+		const int x = std::min(static_cast<int>(cell.x), width - 2), y = std::min(static_cast<int>(cell.y), height - 2);
+		const glm::vec2 f = cell - glm::vec2(static_cast<float>(x), static_cast<float>(y));
+		const auto bilinear = [&](auto value) {
+			const float bottom = glm::mix(value(x, y), value(x + 1, y), f.x);
+			const float top = glm::mix(value(x, y + 1), value(x + 1, y + 1), f.x);
+			return glm::mix(bottom, top, f.y);
+		};
+		const glm::vec2 offset(bilinear([&](int i, int j) { return network.rivers.At(i, j).offsetX; }),
+			bilinear([&](int i, int j) { return network.rivers.At(i, j).offsetY; }));
+		const float distance = std::max(glm::length(offset), bilinear([&](int i, int j) { return network.rivers.At(i, j).distance; }) - network.cellSize);
+		const float halfWidth = bilinear([&](int i, int j) { return network.rivers.At(i, j).halfWidth; });
+		float level = distance < std::max(halfWidth, 0.5f) ? bilinear([&](int i, int j) { return network.levels.At(i, j).river; }) : none;
+		//Lake of the nearest cell
+		const LevelTexel& nearest = network.levels.At(static_cast<int>(cell.x + 0.5f), static_cast<int>(cell.y + 0.5f));
+		if (nearest.lake != noLake) {
+			level = std::max(level, nearest.lake);
+		}
+		return level;
+	}
+
+	float FlowSpeed(float slope)
+	{
+		//About 0.5 m/s on a plain, a few m/s on a mountain stream
+		return std::clamp(0.4f + 6.0f * std::sqrt(std::max(slope, 0.0f)), 0.4f, 4.0f);
+	}
+
+	std::vector<WaterVertex> BuildWaterMesh(const Network& network, float waterHeight, float texelsPerHeight)
+	{
+		const int width = network.rivers.GetWidth(), height = network.rivers.GetHeight();
+		const float reach = 1.5f * network.cellSize;
+		//The surface sinks this far (1 texel) under the ground where it must not show; the ground between cells is interpolated
+		const float sink = 1.0f / std::max(texelsPerHeight, 1.0f);
+		const bool hasGround = network.ground.Size() == network.rivers.Size();
+		//Below the ground at a cell: carving never lowers the terrain outside a channel under min(ground, river level)
+		const auto underGround = [&](int c, float l) {
+			return hasGround ? std::min(l, network.ground[c] - sink) : l;
+		};
+		//Surface of every cell, waterHeight where it is dry (or not above the sea)
+		std::vector<float> level(network.rivers.Size(), waterHeight);
+		std::vector<char> wet(network.rivers.Size(), 0);
+		for (size_t c = 0; c < level.size(); c++) {
+			const RiverTexel& r = network.rivers[c];
+			float l = network.levels[c].lake;
+			if (r.distance < r.halfWidth + reach) {
+				const float river = network.levels[c].river;
+				l = std::max(l, r.distance < r.halfWidth ? river : underGround(static_cast<int>(c), river));
+			}
+			if (l > waterHeight) {
+				level[c] = l;
+				wet[c] = 1;
+			}
+		}
+
+		std::vector<WaterVertex> vertices;
+		for (int y = 0; y + 1 < height; y++) {
+			for (int x = 0; x + 1 < width; x++) {
+				const int corners[4] = { y * width + x, y * width + x + 1, (y + 1) * width + x, (y + 1) * width + x + 1 };
+				float top = waterHeight;
+				bool any = false;
+				for (const int c : corners) {
+					if (wet[c]) {
+						any = true;
+						top = std::max(top, level[c]);
+					}
+				}
+				if (!any) {
+					continue;
+				}
+				WaterVertex v[4];
+				for (int k = 0; k < 4; k++) {
+					const int c = corners[k];
+					const glm::vec2 p = network.origin + glm::vec2(static_cast<float>(c % width), static_cast<float>(c / width)) * network.cellSize;
+					v[k] = { p.x, p.y, wet[c] ? level[c] : underGround(c, top), 0.0f, 0.0f };
+					//Lakes stand still; a river flows along its course
+					const FlowTexel& f = network.flow[c];
+					if (wet[c] && network.levels[c].lake == noLake) {
+						const float speed = FlowSpeed(f.slope * texelsPerHeight);
+						v[k].flowX = f.x * speed;
+						v[k].flowY = f.y * speed;
+					}
+				}
+				for (const int k : { 0, 1, 2, 2, 1, 3 }) {
+					vertices.push_back(v[k]);
+				}
+			}
+		}
+		return vertices;
 	}
 }
