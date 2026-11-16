@@ -47,6 +47,7 @@ add_library(ptg_core STATIC
 	${PTG_SRC}/terrainGeneration/FileIO.cpp
 	${PTG_SRC}/terrainGeneration/HeightmapExport.cpp
 	${PTG_SRC}/terrainGeneration/HeightmapImport.cpp
+	${PTG_SRC}/terrainGeneration/Hydrology.cpp
 	${PTG_SRC}/terrainGeneration/LandStats.cpp
 	${PTG_SRC}/terrainGeneration/Preset.cpp
 	${PTG_SRC}/terrainGeneration/SplineSampling.cpp
@@ -70,6 +71,7 @@ add_executable(ProceduralTerrainGenerator
 	${PTG_SRC}/opengl/IndexBuffer.cpp
 	${PTG_SRC}/opengl/NoisePreview.cpp
 	${PTG_SRC}/opengl/Renderer.cpp
+	${PTG_SRC}/opengl/RiverMap.cpp
 	${PTG_SRC}/opengl/Shader.cpp
 	${PTG_SRC}/opengl/TerrainMaterials.cpp
 	${PTG_SRC}/opengl/FrameUniforms.cpp
@@ -130,6 +132,7 @@ add_executable(ptg_tests
 	${PTG_DIR}/tests/GridTests.cpp
 	${PTG_DIR}/tests/HeightmapExportTests.cpp
 	${PTG_DIR}/tests/HeightmapImportTests.cpp
+	${PTG_DIR}/tests/HydrologyTests.cpp
 	${PTG_DIR}/tests/ImpostorTests.cpp
 	${PTG_DIR}/tests/LandStatsTests.cpp
 	${PTG_DIR}/tests/PermutationTests.cpp

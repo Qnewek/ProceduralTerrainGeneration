@@ -2,6 +2,7 @@
 
 #include <iostream>
 #include <algorithm>
+#include <chrono>
 
 #include "imgui.h"
 #include "implot.h"
@@ -48,6 +49,7 @@ void TerrainGenerationSys::Update(Camera& camera)
 	}
 	GeneratePreview();
 	MeasureLand();
+	UpdateRivers();
 	if (infiniteGeneration) {
 		UpdateChunks(camera);
 		VegetationLayer::World vegetationWorld;
@@ -83,6 +85,44 @@ void TerrainGenerationSys::MeasureLand()
 	landStatsOld = false;
 }
 
+void TerrainGenerationSys::UpdateRivers()
+{
+	if (std::optional<RiverResult> result = riverJob.TryTake()) {
+		riverMap.Upload(result->network);
+		riverCells = result->network.riverCells;
+		lakeCells = result->network.lakeCells;
+		lakeCount = result->network.lakes;
+		riverMs = result->ms;
+		//Not RequestTerrain: that would start the network again
+		if (world.rivers.method == rivers::Method::REGION) {
+			pending.terrain = true;
+		}
+	}
+	const rivers::RiverConfig& config = world.rivers;
+	if (config.method != rivers::Method::REGION || !riversStale || riverJob.IsRunning()) {
+		return;
+	}
+	if (world.width < 2 || world.height < 2 || world.width > 8192 || world.height > 8192 || config.cellSize < 1) {
+		return;
+	}
+	riversStale = false;
+	//Around the middle of the finite map, with the island and biome modifiers of the terrain shown (the sample reads the GPU back)
+	const float cellSize = static_cast<float>(config.cellSize);
+	const int cells = std::clamp(config.regionSize / config.cellSize, 16, 2048);
+	const glm::vec2 center = glm::vec2(world.width, world.height) * 0.5f;
+	HeightField sample = gpu.SampleTerrain(world.terrain, center, cells, cellSize, glm::ivec2(world.width, world.height),
+		biomesGeneration ? &world.biomes : nullptr);
+	const glm::vec2 origin = center - glm::vec2(static_cast<float>(cells) * cellSize * 0.5f);
+	const float waterHeight = world.terrain.WaterHeight();
+	riverJob.Start([sample = std::move(sample), origin, cellSize, waterHeight, config]() {
+		const auto start = std::chrono::steady_clock::now();
+		RiverResult result;
+		result.network = hydrology::Compute(sample, origin, cellSize, waterHeight, config);
+		result.ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count();
+		return result;
+	});
+}
+
 void TerrainGenerationSys::UpdateChunks(const Camera& camera)
 {
 	if (pending.Any()) {
@@ -99,13 +139,14 @@ void TerrainGenerationSys::UpdateChunks(const Camera& camera)
 		return;
 	}
 	gpu.BeginMeasure();
+	const RiverInput rivers = Rivers();
 	chunks.GenerateNext([&](const MapArea& area, TextureClass& height, TextureClass* colors, TextureClass* ids, TextureClass* splat) {
 		//The maps of a chunk are generated together, so with biomes one pass gives all of them
 		if (colors && ids) {
-			gpu.GenerateWorld(world.terrain, world.biomes, area, height, *colors, *ids, splat);
+			gpu.GenerateWorld(world.terrain, world.biomes, area, height, *colors, *ids, splat, &rivers);
 		}
 		else {
-			gpu.GenerateTerrain(world.terrain, area, height, biomesGeneration ? &world.biomes : nullptr);
+			gpu.GenerateTerrain(world.terrain, area, height, biomesGeneration ? &world.biomes : nullptr, &rivers);
 		}
 	});
 	gpu.EndMeasure();
@@ -130,14 +171,16 @@ void TerrainGenerationSys::GenerateFinite()
 		biomeIds = std::make_unique<TextureClass>(width, height, GL_R32I);
 	}
 	gpu.BeginMeasure();
+	const RiverInput rivers = Rivers();
 	if (request.terrain && request.biomes && biomesGeneration) {
 		//Both in one pass: the noises and the biome table are evaluated once
 		gpu.GenerateWorld(world.terrain, world.biomes, MapArea{}, view.LayerTexture(TerrainView::Layer::TERRAIN, width, height),
-			view.LayerTexture(TerrainView::Layer::BIOMES, width, height), *biomeIds, &view.SplatTexture(width, height));
+			view.LayerTexture(TerrainView::Layer::BIOMES, width, height), *biomeIds, &view.SplatTexture(width, height), &rivers);
 	}
 	else {
 		if (request.terrain) {
-			gpu.GenerateTerrain(world.terrain, MapArea{}, view.LayerTexture(TerrainView::Layer::TERRAIN, width, height), biomesGeneration ? &world.biomes : nullptr);
+			gpu.GenerateTerrain(world.terrain, MapArea{}, view.LayerTexture(TerrainView::Layer::TERRAIN, width, height), biomesGeneration ? &world.biomes : nullptr,
+				&rivers);
 		}
 		if (request.biomes) {
 			gpu.GenerateBiomes(world.biomes, world.terrain, MapArea{}, view.LayerTexture(TerrainView::Layer::BIOMES, width, height), *biomeIds,
@@ -185,6 +228,8 @@ void TerrainGenerationSys::RequestPreview()
 void TerrainGenerationSys::RequestTerrain()
 {
 	pending.terrain = true;
+	//The river network flows over the terrain
+	RequestRivers();
 	//The climate of biomes depends on the terrain height
 	if (biomesGeneration) {
 		pending.biomes = true;
@@ -209,6 +254,7 @@ void TerrainGenerationSys::RequestBiomes()
 	//The biome modifiers change the terrain, so any biome change may change it
 	if (world.biomes.modifyTerrain) {
 		pending.terrain = true;
+		RequestRivers();
 	}
 }
 
@@ -289,6 +335,7 @@ void TerrainGenerationSys::ImGuiRightPanel()
 		{ tabBiomes, [this] { BiomesEditor(); } },
 		{ tabBiomeTable, [this] { BiomeTableEditor(); } },
 		{ tabBiomeNoises, [this] { BiomeNoisesEditor(); } },
+		{ tabRivers, [this] { RiversEditor(); } },
 	};
 	generationTabs.Draw("generation", tabs);
 	//The 2D picture shows the noise of the open tab
@@ -596,6 +643,100 @@ void TerrainGenerationSys::BiomeNoisesEditor()
 	if (utilities::NoiseImGui(world.biomes.Noise(editedBiomeComponent))) {
 		RequestPreview();
 		RequestBiomes();
+	}
+}
+
+void TerrainGenerationSys::RiversEditor()
+{
+	rivers::RiverConfig& r = world.rivers;
+	bool changed = false;
+	int method = static_cast<int>(r.method);
+	const char* methods[] = { "None", "Region (hydrology)", "Noise" };
+	if (ImGui::Combo("Method##rivers", &method, methods, IM_ARRAYSIZE(methods))) {
+		r.method = static_cast<rivers::Method>(method);
+		changed = true;
+	}
+	ImGui::SetItemTooltip("Region: water flows downhill over a region around the map, depressions fill into lakes,\n"
+		"rivers start where enough area drains and widen downstream (computed in the background).\n"
+		"Noise: channels along the zero lines of a noise, down to the sea level, only in the lowlands; covers the infinite world");
+	if (r.method == rivers::Method::NONE) {
+		return;
+	}
+
+	ImGui::SeparatorText("Channel");
+	changed |= ImGui::SliderFloat("Bank width", &r.bankWidth, 4.0f, 256.0f, "%.0f texels", ImGuiSliderFlags_AlwaysClamp | ImGuiSliderFlags_Logarithmic);
+	ImGui::SetItemTooltip("Distance from the channel over which the carving fades out (the valley)");
+	changed |= ImGui::SliderFloat("Bank slope", &r.bankSlope, 0.0f, 0.01f, "%.4f", ImGuiSliderFlags_AlwaysClamp);
+	ImGui::SetItemTooltip("Height per texel the banks rise from the water; 0.004 = 45 degrees in TerrainGen");
+	changed |= ImGui::SliderFloat("Depth per width", &r.depthPerWidth, 0.0f, 0.005f, "%.4f", ImGuiSliderFlags_AlwaysClamp);
+	ImGui::SetItemTooltip("Depth of the bed below the water per texel of half width");
+
+	if (r.method == rivers::Method::REGION) {
+		ImGui::SeparatorText("Region");
+		const int cellSizes[] = { 4, 8, 16, 32 };
+		const char* cellNames[] = { "4", "8", "16", "32" };
+		int cellIndex = 1;
+		for (int i = 0; i < IM_ARRAYSIZE(cellSizes); i++) {
+			cellIndex = cellSizes[i] == r.cellSize ? i : cellIndex;
+		}
+		if (ImGui::Combo("Cell size", &cellIndex, cellNames, IM_ARRAYSIZE(cellNames))) {
+			r.cellSize = cellSizes[cellIndex];
+			changed = true;
+		}
+		ImGui::SetItemTooltip("Map texels between samples of the terrain the water flows over");
+		//Region between 16 and 2048 cells (Preset.cpp)
+		int regionSize = r.regionSize;
+		if (ImGui::SliderInt("Region size", &regionSize, 16 * r.cellSize, 2048 * r.cellSize, "%d texels", ImGuiSliderFlags_Logarithmic)) {
+			r.regionSize = regionSize;
+		}
+		changed |= ImGui::IsItemDeactivatedAfterEdit();
+		r.regionSize = std::clamp(r.regionSize, 16 * r.cellSize, 2048 * r.cellSize);
+		ImGui::SetItemTooltip("Side of the square around the middle of the finite map that gets rivers; they fade out at its border.\n"
+			"Applied on release: the network is computed again");
+		changed |= ImGui::SliderFloat("Border fade", &r.borderFade, 16.0f, 2048.0f, "%.0f texels", ImGuiSliderFlags_AlwaysClamp | ImGuiSliderFlags_Logarithmic);
+
+		ImGui::SeparatorText("Rivers");
+		changed |= ImGui::SliderFloat("Source area", &r.sourceArea, 1.0e4f, 1.0e7f, "%.3g texels^2", ImGuiSliderFlags_AlwaysClamp | ImGuiSliderFlags_Logarithmic);
+		ImGui::SetItemTooltip("Area that has to drain through a place for a river to start there; less = more rivers");
+		changed |= ImGui::SliderFloat("Min half width", &r.minHalfWidth, 0.5f, 32.0f, "%.1f texels", ImGuiSliderFlags_AlwaysClamp);
+		changed |= ImGui::SliderFloat("Max half width", &r.maxHalfWidth, 0.5f, 128.0f, "%.1f texels", ImGuiSliderFlags_AlwaysClamp);
+		r.maxHalfWidth = std::max(r.maxHalfWidth, r.minHalfWidth);
+		ImGui::SetItemTooltip("Rivers widen with the square root of the drained area, from the min at the source up to this");
+		changed |= ImGui::SliderFloat("Meander", &r.meander, 0.0f, 64.0f, "%.1f texels", ImGuiSliderFlags_AlwaysClamp);
+		ImGui::SetItemTooltip("Amplitude of the bends added to the course");
+		changed |= ImGui::SliderInt("Smoothing", &r.smoothing, 0, 32, "%d", ImGuiSliderFlags_AlwaysClamp);
+		ImGui::SetItemTooltip("Passes smoothing the staircase of the sampling grid out of the courses");
+		changed |= ImGui::SliderFloat("Surface drop", &r.surfaceDrop, 0.0f, 0.02f, "%.4f", ImGuiSliderFlags_AlwaysClamp);
+		ImGui::SetItemTooltip("How far below the terrain of its course the water surface lies");
+		changed |= ImGui::SliderFloat("Min lake depth", &r.minLakeDepth, 0.0f, 0.05f, "%.4f", ImGuiSliderFlags_AlwaysClamp);
+		ImGui::SetItemTooltip("A filled depression deeper than this is a lake; rivers cross lakes without a channel");
+
+		ImGui::SeparatorText("Network");
+		if (riverJob.IsRunning()) {
+			ImGui::TextDisabled("Computing...");
+		}
+		else if (!riverMap.Ready()) {
+			ImGui::TextDisabled("Not computed yet");
+		}
+		if (riverMap.Ready()) {
+			ImGui::Text("River cells: %d, lakes: %d (%d cells)", riverCells, lakeCount, lakeCells);
+			ImGui::Text("Computed in %.0f ms (%d x %d cells)", riverMs, riverMap.Size().x, riverMap.Size().y);
+		}
+		ImGui::TextDisabled("Lakes are found, but their water is not drawn yet");
+	}
+	else {
+		ImGui::SeparatorText("Noise");
+		changed |= ImGui::SliderFloat("Scale##rivers", &r.noiseScale, 100.0f, 20000.0f, "%.0f texels", ImGuiSliderFlags_AlwaysClamp | ImGuiSliderFlags_Logarithmic);
+		ImGui::SetItemTooltip("Wavelength of the noise: typical distance between rivers");
+		changed |= ImGui::SliderFloat("Half width", &r.noiseHalfWidth, 0.5f, 64.0f, "%.1f texels", ImGuiSliderFlags_AlwaysClamp);
+		changed |= ImGui::SliderFloat("Max elevation", &r.maxElevation, 0.005f, 0.5f, "%.3f", ImGuiSliderFlags_AlwaysClamp | ImGuiSliderFlags_Logarithmic);
+		ImGui::SetItemTooltip("Height above the water where rivers end (they fade out from half of it)");
+		changed |= ImGui::SliderFloat("Warp", &r.noiseWarp, 0.0f, 2.0f, "%.2f", ImGuiSliderFlags_AlwaysClamp);
+		ImGui::SetItemTooltip("How strongly the channels bend");
+		changed |= ImGui::InputInt("Seed##rivers", &r.noiseSeed);
+	}
+	if (changed) {
+		RequestTerrain();
 	}
 }
 

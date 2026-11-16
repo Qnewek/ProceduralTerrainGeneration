@@ -115,7 +115,32 @@ static WorldConfig DistinctWorld()
 		biome::TerrainModifier{ 1.31f, -0.032f, 0.033f, 33.0f, false },
 		{ { { 1, 2.5f } } } };
 	c.biomes.table = { alpha, beta };
+	c.rivers = { rivers::Method::NOISE, 41.5f, 0.0031f, 0.0017f, 4096, 4, 123456.0f, 2.5f, 17.5f, 6.25f, 3, 0.0013f, 0.0055f, 300.0f,
+		1234.0f, 7.5f, 0.15f, 0.45f, 98765 };
 	return c;
+}
+
+static void CheckSameRivers(const rivers::RiverConfig& a, const rivers::RiverConfig& b)
+{
+	CHECK(a.method == b.method);
+	CHECK(a.bankWidth == b.bankWidth);
+	CHECK(a.bankSlope == b.bankSlope);
+	CHECK(a.depthPerWidth == b.depthPerWidth);
+	CHECK(a.regionSize == b.regionSize);
+	CHECK(a.cellSize == b.cellSize);
+	CHECK(a.sourceArea == b.sourceArea);
+	CHECK(a.minHalfWidth == b.minHalfWidth);
+	CHECK(a.maxHalfWidth == b.maxHalfWidth);
+	CHECK(a.meander == b.meander);
+	CHECK(a.smoothing == b.smoothing);
+	CHECK(a.surfaceDrop == b.surfaceDrop);
+	CHECK(a.minLakeDepth == b.minLakeDepth);
+	CHECK(a.borderFade == b.borderFade);
+	CHECK(a.noiseScale == b.noiseScale);
+	CHECK(a.noiseHalfWidth == b.noiseHalfWidth);
+	CHECK(a.maxElevation == b.maxElevation);
+	CHECK(a.noiseWarp == b.noiseWarp);
+	CHECK(a.noiseSeed == b.noiseSeed);
 }
 
 static void CheckSameBiomes(const std::vector<biome::Biome>& a, const std::vector<biome::Biome>& b)
@@ -188,6 +213,23 @@ TEST_CASE("A world preset keeps every field")
 	CHECK(loaded.biomes.materialPatchContrast == original.biomes.materialPatchContrast);
 	CHECK(loaded.biomes.materialPatchSize == original.biomes.materialPatchSize);
 	CheckSameBiomes(loaded.biomes.table, original.biomes.table);
+	CheckSameRivers(loaded.rivers, original.rivers);
+}
+
+TEST_CASE("Every river method survives saving, and a preset without rivers has none")
+{
+	for (rivers::Method method : { rivers::Method::NONE, rivers::Method::REGION, rivers::Method::NOISE }) {
+		WorldConfig original = DistinctWorld();
+		original.rivers.method = method;
+		WorldConfig loaded;
+		std::string error;
+		REQUIRE_MESSAGE(preset::FromJson(preset::ToJson(original), loaded, error), error);
+		CHECK(loaded.rivers.method == method);
+	}
+	WorldConfig loaded;
+	std::string error;
+	REQUIRE_MESSAGE(preset::FromJson(R"({"kind": "world", "version": 2, "width": 64, "height": 32})", loaded, error), error);
+	CheckSameRivers(loaded.rivers, rivers::RiverConfig{});
 }
 
 TEST_CASE("Every terrain method survives saving")
@@ -446,6 +488,15 @@ TEST_CASE("Invalid presets are rejected and the config stays unchanged")
 		{ "plant slope above 90", Replaced(valid, "\"maxSlope\": 33.5", "\"maxSlope\": 91") },
 		{ "reversed plant elevation", Replaced(valid, "-0.11", "0.9") },
 		{ "plant clustering above 1", Replaced(valid, "\"clustering\": 0.45", "\"clustering\": 1.5") },
+		{ "unknown river method", Replaced(valid, "\"NOISE\"", "\"LAVA\"") },
+		{ "zero river bank width", Replaced(valid, "\"bankWidth\": 41.5", "\"bankWidth\": 0") },
+		{ "river region of too few cells", Replaced(valid, "\"regionSize\": 4096", "\"regionSize\": 32") },
+		{ "river region of too many cells", Replaced(valid, "\"regionSize\": 4096", "\"regionSize\": 40000") },
+		{ "zero river cell size", Replaced(valid, "\"cellSize\": 4", "\"cellSize\": 0") },
+		{ "zero river source area", Replaced(valid, "\"sourceArea\": 123456", "\"sourceArea\": 0") },
+		{ "reversed river half width", Replaced(valid, "\"maxHalfWidth\": 17.5", "\"maxHalfWidth\": 1") },
+		{ "negative river smoothing", Replaced(valid, "\"smoothing\": 3", "\"smoothing\": -1") },
+		{ "zero river noise scale", Replaced(valid, "\"noiseScale\": 1234", "\"noiseScale\": 0") },
 	};
 
 	for (const Case& c : cases) {

@@ -69,6 +69,17 @@ namespace preset {
 			{ erosion::Method::PIPES, "PIPES" },
 		};
 
+		constexpr EnumName<rivers::Method> riverMethodNames[] = {
+			{ rivers::Method::NONE, "NONE" },
+			{ rivers::Method::REGION, "REGION" },
+			{ rivers::Method::NOISE, "NOISE" },
+		};
+
+		//Cells of a river region along each side (RiverConfig::regionSize / cellSize): the network takes ~40 bytes per cell
+		constexpr int minRiverCells = 16;
+		constexpr int maxRiverCells = 2048;
+		constexpr int maxRiverSmoothing = 32;
+
 		template<typename E, size_t N>
 		const char* NameOf(const EnumName<E>(&names)[N], E value)
 		{
@@ -211,6 +222,32 @@ namespace preset {
 			pipes["talusAngle"] = ReadableFloat(p.talusAngle);
 			pipes["thermalRate"] = ReadableFloat(p.thermalRate);
 			j["pipes"] = std::move(pipes);
+			return j;
+		}
+
+		//Added 2026-11-16 without a new version: older presets read as no rivers
+		json RiversToJson(const rivers::RiverConfig& r)
+		{
+			json j;
+			j["method"] = NameOf(riverMethodNames, r.method);
+			j["bankWidth"] = ReadableFloat(r.bankWidth);
+			j["bankSlope"] = ReadableFloat(r.bankSlope);
+			j["depthPerWidth"] = ReadableFloat(r.depthPerWidth);
+			j["regionSize"] = r.regionSize;
+			j["cellSize"] = r.cellSize;
+			j["sourceArea"] = ReadableFloat(r.sourceArea);
+			j["minHalfWidth"] = ReadableFloat(r.minHalfWidth);
+			j["maxHalfWidth"] = ReadableFloat(r.maxHalfWidth);
+			j["meander"] = ReadableFloat(r.meander);
+			j["smoothing"] = r.smoothing;
+			j["surfaceDrop"] = ReadableFloat(r.surfaceDrop);
+			j["minLakeDepth"] = ReadableFloat(r.minLakeDepth);
+			j["borderFade"] = ReadableFloat(r.borderFade);
+			j["noiseScale"] = ReadableFloat(r.noiseScale);
+			j["noiseHalfWidth"] = ReadableFloat(r.noiseHalfWidth);
+			j["maxElevation"] = ReadableFloat(r.maxElevation);
+			j["noiseWarp"] = ReadableFloat(r.noiseWarp);
+			j["noiseSeed"] = r.noiseSeed;
 			return j;
 		}
 
@@ -443,6 +480,34 @@ namespace preset {
 			pipes.Read("depositionRate", p.depositionRate);
 			pipes.Read("talusAngle", p.talusAngle);
 			pipes.Read("thermalRate", p.thermalRate);
+		}
+
+		void ReadRivers(const Reader& parent, const char* key, rivers::RiverConfig& c)
+		{
+			const json* field = parent.Find(key);
+			if (!field) {
+				return;
+			}
+			Reader r(*field, parent.PathOf(key));
+			r.ReadEnum("method", riverMethodNames, c.method);
+			r.Read("bankWidth", c.bankWidth);
+			r.Read("bankSlope", c.bankSlope);
+			r.Read("depthPerWidth", c.depthPerWidth);
+			r.Read("regionSize", c.regionSize);
+			r.Read("cellSize", c.cellSize);
+			r.Read("sourceArea", c.sourceArea);
+			r.Read("minHalfWidth", c.minHalfWidth);
+			r.Read("maxHalfWidth", c.maxHalfWidth);
+			r.Read("meander", c.meander);
+			r.Read("smoothing", c.smoothing);
+			r.Read("surfaceDrop", c.surfaceDrop);
+			r.Read("minLakeDepth", c.minLakeDepth);
+			r.Read("borderFade", c.borderFade);
+			r.Read("noiseScale", c.noiseScale);
+			r.Read("noiseHalfWidth", c.noiseHalfWidth);
+			r.Read("maxElevation", c.maxElevation);
+			r.Read("noiseWarp", c.noiseWarp);
+			r.Read("noiseSeed", c.noiseSeed);
 		}
 
 		void ReadTerrain(const Reader& parent, const char* key, TerrainConfig& t)
@@ -697,6 +762,36 @@ namespace preset {
 			}
 		}
 
+		void CheckRivers(const rivers::RiverConfig& r)
+		{
+			const auto positive = [](float v) { return std::isfinite(v) && v > 0.0f; };
+			const auto notNegative = [](float v) { return std::isfinite(v) && v >= 0.0f; };
+			//smoothstep over the banks and the division by the half width in rivers.glsl
+			if (!positive(r.bankWidth) || !notNegative(r.bankSlope) || !notNegative(r.depthPerWidth)) {
+				throw std::runtime_error("Rivers: bankWidth must be greater than 0, bankSlope and depthPerWidth must not be negative");
+			}
+			if (r.cellSize < 1 || r.regionSize < minRiverCells * r.cellSize || r.regionSize > maxRiverCells * r.cellSize) {
+				throw std::runtime_error("Rivers: cellSize must be at least 1 and regionSize between " + std::to_string(minRiverCells) + " and "
+					+ std::to_string(maxRiverCells) + " cells");
+			}
+			//Divides the drained area
+			if (!positive(r.sourceArea)) {
+				throw std::runtime_error("Rivers: sourceArea must be greater than 0");
+			}
+			if (!positive(r.minHalfWidth) || !std::isfinite(r.maxHalfWidth) || r.maxHalfWidth < r.minHalfWidth) {
+				throw std::runtime_error("Rivers: half width must be a range [min, max] with 0 < min <= max");
+			}
+			if (!notNegative(r.meander) || r.smoothing < 0 || r.smoothing > maxRiverSmoothing) {
+				throw std::runtime_error("Rivers: meander must not be negative and smoothing between 0 and " + std::to_string(maxRiverSmoothing));
+			}
+			if (!notNegative(r.surfaceDrop) || !notNegative(r.minLakeDepth) || !positive(r.borderFade)) {
+				throw std::runtime_error("Rivers: surfaceDrop and minLakeDepth must not be negative, borderFade must be greater than 0");
+			}
+			if (!positive(r.noiseScale) || !positive(r.noiseHalfWidth) || !positive(r.maxElevation) || !notNegative(r.noiseWarp)) {
+				throw std::runtime_error("Rivers: noiseScale, noiseHalfWidth and maxElevation must be greater than 0, noiseWarp must not be negative");
+			}
+		}
+
 		void Check(const WorldConfig& c)
 		{
 			CheckSize(c.width, c.height);
@@ -720,6 +815,7 @@ namespace preset {
 			CheckNoise(c.biomes.temperature, "Temperature");
 			CheckNoise(c.biomes.humidity, "Humidity");
 			CheckBiomes(c.biomes);
+			CheckRivers(c.rivers);
 		}
 
 		void Check(const NoiseMapConfig& c)
@@ -748,6 +844,7 @@ namespace preset {
 			r.Read("height", c.height);
 			ReadTerrain(r, "terrain", c.terrain);
 			ReadBiomes(r, "biomes", c.biomes);
+			ReadRivers(r, "rivers", c.rivers);
 		}
 
 		void ReadFields(const Reader& r, NoiseMapConfig& c)
@@ -859,6 +956,7 @@ namespace preset {
 		}
 		biomes["table"] = std::move(table);
 		root["biomes"] = std::move(biomes);
+		root["rivers"] = RiversToJson(c.rivers);
 
 		return root.dump(2);
 	}
