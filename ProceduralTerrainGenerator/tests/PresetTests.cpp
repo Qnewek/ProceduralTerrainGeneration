@@ -115,7 +115,7 @@ static WorldConfig DistinctWorld()
 		biome::TerrainModifier{ 1.31f, -0.032f, 0.033f, 33.0f, false },
 		{ { { 1, 2.5f } } } };
 	c.biomes.table = { alpha, beta };
-	c.rivers = { rivers::Method::NOISE, 41.5f, 0.0031f, 0.0017f, 4096, 4, 123456.0f, 2.5f, 17.5f, 6.25f, 3, 0.0013f, 0.0055f, 300.0f,
+	c.rivers = { rivers::Method::NOISE, 41.5f, 0.0031f, 0.0017f, 0.35f, 77.5f, 5, 4096, 4, 123456.0f, 2.5f, 17.5f, 6.25f, 3, 0.0013f, 0.0055f, 300.0f,
 		1234.0f, 7.5f, 0.15f, 0.45f, 98765 };
 	return c;
 }
@@ -126,6 +126,9 @@ static void CheckSameRivers(const rivers::RiverConfig& a, const rivers::RiverCon
 	CHECK(a.bankWidth == b.bankWidth);
 	CHECK(a.bankSlope == b.bankSlope);
 	CHECK(a.depthPerWidth == b.depthPerWidth);
+	CHECK(a.humidity == b.humidity);
+	CHECK(a.humidityRange == b.humidityRange);
+	CHECK(a.bedMaterial == b.bedMaterial);
 	CHECK(a.regionSize == b.regionSize);
 	CHECK(a.cellSize == b.cellSize);
 	CHECK(a.sourceArea == b.sourceArea);
@@ -497,6 +500,8 @@ TEST_CASE("Invalid presets are rejected and the config stays unchanged")
 		{ "reversed river half width", Replaced(valid, "\"maxHalfWidth\": 17.5", "\"maxHalfWidth\": 1") },
 		{ "negative river smoothing", Replaced(valid, "\"smoothing\": 3", "\"smoothing\": -1") },
 		{ "zero river noise scale", Replaced(valid, "\"noiseScale\": 1234", "\"noiseScale\": 0") },
+		{ "river bed material out of range", Replaced(valid, "\"bedMaterial\": 5", "\"bedMaterial\": 16") },
+		{ "zero river humidity range", Replaced(valid, "\"humidityRange\": 77.5", "\"humidityRange\": 0") },
 	};
 
 	for (const Case& c : cases) {

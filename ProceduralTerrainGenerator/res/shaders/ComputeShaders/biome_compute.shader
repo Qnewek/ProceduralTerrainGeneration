@@ -50,6 +50,13 @@ void main()
 	}
 	float height = terrainHeight(values[0], values[1], values[2]);
 	applyClimate(values, height);
+	// Rivers make their banks more humid (as in height_compute.shader, so the biome modifiers agree)
+	Channel channel;
+	if (riverMethod != RIVERS_NONE) {
+		channel = channelAt(position);
+	}
+	float riverBase = height;
+	values[4] = clamp(values[4] + riverHumidity(channel, height), -1.0, 1.0);
 
 	float nearest;
 	int id = nearestBiome(values, nearest);
@@ -107,12 +114,20 @@ void main()
 			height = finishModifiedHeight(height, terrainTotal, amplitude, offset, details);
 		}
 		// As in height_compute.shader: rivers into the final terrain; biomes were chosen from the height before them
-		height = carveRivers(height, position);
+		height = carveRivers(height, channel);
 		imageStore(heightMap, texel, vec4(height));
 	}
 
 	if (writeSplat) {
 		finishMaterials(weights, position);
+		// The bed of a river takes over the mix (the result still sums to 1)
+		float bed = riverBedShare(channel, riverBase);
+		if (bed > 0.0) {
+			for (int m = 0; m < MAX_MATERIALS; m++) {
+				weights[m] *= 1.0 - bed;
+			}
+			weights[riverBedMaterial] += bed;
+		}
 		for (int l = 0; l < MAX_MATERIALS / 4; l++) {
 			imageStore(splatMap, ivec3(texel, l), vec4(weights[l * 4], weights[l * 4 + 1], weights[l * 4 + 2], weights[l * 4 + 3]));
 		}

@@ -11,6 +11,7 @@
 class Camera;
 class ChunkWorld;
 class LightSource;
+class RiverMap;
 class Shader;
 class TextureClass;
 struct TerrainRenderSettings;
@@ -31,11 +32,14 @@ public:
 
 	//Infinite world
 	//@param waterLevel - height of the surface in world units (TerrainConfig::WaterHeight() * heightScale)
-	void Draw(const ChunkWorld& chunks, Camera& camera, const LightSource& light, const TerrainRenderSettings& settings, float waterLevel);
+	//@param rivers - if given, also the water of its rivers and lakes (above the sea)
+	void Draw(const ChunkWorld& chunks, Camera& camera, const LightSource& light, const TerrainRenderSettings& settings, float waterLevel,
+		const RiverMap* rivers = nullptr);
 	//A finished map of size (width, height) world units centred on the origin (TerrainView), height map over all of it
 	//@param flatMin, flatMax - area framed by the 2D map (TerrainView::GetFlatViewMin/Max)
+	//@param rivers - as in Draw; only over the map
 	void DrawMap(const TextureClass& heightMap, glm::vec2 size, Camera& camera, const LightSource& light, const TerrainRenderSettings& settings,
-		float waterLevel, glm::vec2 flatMin, glm::vec2 flatMax);
+		float waterLevel, glm::vec2 flatMin, glm::vec2 flatMax, const RiverMap* rivers = nullptr);
 	//Section "Water" of the Display tab
 	void ImGuiDraw();
 	bool ReloadShader();
@@ -47,8 +51,17 @@ private:
 		glm::vec2 size = glm::vec2(0.0f);
 		glm::vec2 uvMin = glm::vec2(0.0f), uvMax = glm::vec2(1.0f);
 	};
+	//Water of rivers and lakes: the mesh of a RiverMap placed in the world
+	struct RiverWater {
+		const RiverMap* map = nullptr;
+		glm::vec2 mapOrigin = glm::vec2(0.0f);		//world XZ of map position (0, 0), before modelScale
+		glm::vec2 clipMin = glm::vec2(-1e30f), clipMax = glm::vec2(1e30f);
+	};
 	void DrawQuads(const std::vector<Quad>& list, Camera& camera, const LightSource& light, const TerrainRenderSettings& settings, float waterLevel,
-		glm::vec2 flatMin, glm::vec2 flatMax);
+		glm::vec2 flatMin, glm::vec2 flatMax, const RiverWater& rivers);
+	//Uniforms both water programs share; the program must be bound
+	void SetCommonUniforms(Shader& program, const FrameUniforms::Block& block, const glm::ivec4& viewport, const TerrainRenderSettings& settings,
+		float waterLevel);
 	//Copies the color and depth of the scene in the viewport to sceneColor / sceneDepth; false if there is no viewport
 	bool CopyScene(glm::ivec4& viewport);
 
@@ -60,7 +73,7 @@ private:
 	glm::vec3 shallowColor = glm::vec3(0.10f, 0.42f, 0.42f);
 	glm::vec3 deepColor = glm::vec3(0.02f, 0.09f, 0.16f);
 
-	std::unique_ptr<Shader> shader;
+	std::unique_ptr<Shader> shader, meshShader;
 	GLuint vao = 0;
 	GLuint sceneColor = 0, sceneDepth = 0;
 	glm::ivec2 sceneSize = glm::ivec2(0);

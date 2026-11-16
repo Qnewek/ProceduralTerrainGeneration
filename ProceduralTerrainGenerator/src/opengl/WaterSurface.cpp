@@ -8,6 +8,7 @@
 #include "Camera.h"
 #include "ChunkWorld.h"
 #include "LightSource.h"
+#include "RiverMap.h"
 #include "Shader.h"
 #include "TerrainView.h"
 #include "TextureClass.h"
@@ -35,10 +36,13 @@ WaterSurface::~WaterSurface()
 
 bool WaterSurface::ReloadShader()
 {
-	return !shader || shader->Reload();
+	const bool sea = !shader || shader->Reload();
+	const bool mesh = !meshShader || meshShader->Reload();
+	return sea && mesh;
 }
 
-void WaterSurface::Draw(const ChunkWorld& chunks, Camera& camera, const LightSource& light, const TerrainRenderSettings& settings, float waterLevel)
+void WaterSurface::Draw(const ChunkWorld& chunks, Camera& camera, const LightSource& light, const TerrainRenderSettings& settings, float waterLevel,
+	const RiverMap* rivers)
 {
 	if (!enabled || failed) {
 		return;
@@ -55,11 +59,11 @@ void WaterSurface::Draw(const ChunkWorld& chunks, Camera& camera, const LightSou
 		const float side = static_cast<float>(ChunkWorld::chunkSize * (1 << g.level)) * TerrainView::worldUnitsPerTexel;
 		quads.push_back({ g.height, mapOrigin + glm::vec2(g.coord) * side, glm::vec2(side), uvMin, uvMax });
 	}
-	DrawQuads(quads, camera, light, settings, waterLevel, chunks.FlatViewMin(), chunks.FlatViewMax());
+	DrawQuads(quads, camera, light, settings, waterLevel, chunks.FlatViewMin(), chunks.FlatViewMax(), RiverWater{ rivers, mapOrigin });
 }
 
 void WaterSurface::DrawMap(const TextureClass& heightMap, glm::vec2 size, Camera& camera, const LightSource& light, const TerrainRenderSettings& settings,
-	float waterLevel, glm::vec2 flatMin, glm::vec2 flatMax)
+	float waterLevel, glm::vec2 flatMin, glm::vec2 flatMax, const RiverMap* rivers)
 {
 	if (!enabled || failed) {
 		return;
@@ -67,7 +71,9 @@ void WaterSurface::DrawMap(const TextureClass& heightMap, glm::vec2 size, Camera
 	quads.clear();
 	//Texture coordinates run over the whole map as on the terrain mesh (TerrainView::BuildMesh)
 	quads.push_back({ &heightMap, -size * 0.5f, size, glm::vec2(0.0f), glm::vec2(1.0f) });
-	DrawQuads(quads, camera, light, settings, waterLevel, flatMin, flatMax);
+	//Map position p lies at the center of texel p (as ChunkWorld::AlignWithMap places it)
+	const glm::vec2 mapOrigin = -size * 0.5f + 0.5f * TerrainView::worldUnitsPerTexel;
+	DrawQuads(quads, camera, light, settings, waterLevel, flatMin, flatMax, RiverWater{ rivers, mapOrigin, -size * 0.5f, size * 0.5f });
 }
 
 bool WaterSurface::CopyScene(glm::ivec4& viewport)
@@ -99,22 +105,48 @@ bool WaterSurface::CopyScene(glm::ivec4& viewport)
 	return true;
 }
 
-void WaterSurface::DrawQuads(const std::vector<Quad>& list, Camera& camera, const LightSource& light, const TerrainRenderSettings& settings,
-	float waterLevel, glm::vec2 flatMin, glm::vec2 flatMax)
+void WaterSurface::SetCommonUniforms(Shader& program, const FrameUniforms::Block& block, const glm::ivec4& viewport, const TerrainRenderSettings& settings,
+	float waterLevel)
 {
-	if (list.empty()) {
+	program.SetModel(glm::scale(glm::mat4(1.0f), glm::vec3(settings.modelScale)));
+	program.SetUniform1i("flatView", settings.map2d);
+	program.SetUniform1i("heightMap", heightUnit);
+	program.SetUniform1i("sceneColor", sceneColorUnit);
+	program.SetUniform1i("sceneDepth", sceneDepthUnit);
+	program.SetUniformMat4f("inverseProjection", glm::inverse(block.projection));
+	program.SetUniform4f("viewportRect", static_cast<float>(viewport.x), static_cast<float>(viewport.y), static_cast<float>(viewport.z),
+		static_cast<float>(viewport.w));
+	program.SetUniform1f("heightScale", settings.heightScale);
+	program.SetUniform1f("waterLevel", waterLevel);
+	program.SetUniform1f("unitsPerMetre", vegetation::unitsPerMetre);
+	program.SetUniform1f("modelScale", settings.modelScale);
+	program.SetUniform1f("clarity", clarity);
+	program.SetUniform1f("waveStrength", waveStrength);
+	program.SetUniform1f("refraction", refraction);
+	program.SetUniform1i("reflections", reflections && !settings.map2d);
+	program.SetUniform3fv("shallowColor", shallowColor);
+	program.SetUniform3fv("deepColor", deepColor);
+}
+
+void WaterSurface::DrawQuads(const std::vector<Quad>& list, Camera& camera, const LightSource& light, const TerrainRenderSettings& settings,
+	float waterLevel, glm::vec2 flatMin, glm::vec2 flatMax, const RiverWater& rivers)
+{
+	const bool riverWater = rivers.map && rivers.map->WaterVertexCount() > 0;
+	if (list.empty() && !riverWater) {
 		return;
 	}
 	if (!shader) {
 		shader = std::make_unique<Shader>("res/shaders/WaterShaders/water_vertex.shader", "res/shaders/WaterShaders/water_fragment.shader");
-		if (!shader->IsValid()) {
-			std::cout << "[ERROR] WaterSurface: cannot build the water shader" << std::endl;
+		meshShader = std::make_unique<Shader>("res/shaders/WaterShaders/water_mesh_vertex.shader", "res/shaders/WaterShaders/water_fragment.shader");
+		if (!shader->IsValid() || !meshShader->IsValid()) {
+			std::cout << "[ERROR] WaterSurface: cannot build the water shaders" << std::endl;
 			failed = true;
 			return;
 		}
 		//The quad comes from the vertex index, but a draw needs a vertex array
 		glCreateVertexArrays(1, &vao);
 	}
+	//One copy for the sea and the rivers: the water never shows other water under it
 	glm::ivec4 viewport;
 	if (!CopyScene(viewport)) {
 		return;
@@ -122,26 +154,7 @@ void WaterSurface::DrawQuads(const std::vector<Quad>& list, Camera& camera, cons
 
 	//In the 2D map the same top-down camera as the terrain
 	const FrameUniforms::Block block = TerrainView::FrameBlock(camera, light, settings, flatMin, flatMax);
-	shader->Bind();
 	frameUniforms.Upload(block);
-	shader->SetModel(glm::scale(glm::mat4(1.0f), glm::vec3(settings.modelScale)));
-	shader->SetUniform1i("flatView", settings.map2d);
-	shader->SetUniform1i("heightMap", heightUnit);
-	shader->SetUniform1i("sceneColor", sceneColorUnit);
-	shader->SetUniform1i("sceneDepth", sceneDepthUnit);
-	shader->SetUniformMat4f("inverseProjection", glm::inverse(block.projection));
-	shader->SetUniform4f("viewportRect", static_cast<float>(viewport.x), static_cast<float>(viewport.y), static_cast<float>(viewport.z),
-		static_cast<float>(viewport.w));
-	shader->SetUniform1f("heightScale", settings.heightScale);
-	shader->SetUniform1f("waterLevel", waterLevel);
-	shader->SetUniform1f("unitsPerMetre", vegetation::unitsPerMetre);
-	shader->SetUniform1f("modelScale", settings.modelScale);
-	shader->SetUniform1f("clarity", clarity);
-	shader->SetUniform1f("waveStrength", waveStrength);
-	shader->SetUniform1f("refraction", refraction);
-	shader->SetUniform1i("reflections", reflections && !settings.map2d);
-	shader->SetUniform3fv("shallowColor", shallowColor);
-	shader->SetUniform3fv("deepColor", deepColor);
 	glBindTextureUnit(sceneColorUnit, sceneColor);
 	glBindTextureUnit(sceneDepthUnit, sceneDepth);
 
@@ -152,14 +165,31 @@ void WaterSurface::DrawQuads(const std::vector<Quad>& list, Camera& camera, cons
 	if (settings.wireFrame) {
 		glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
 	}
-	glBindVertexArray(vao);
-	for (const Quad& q : list) {
-		q.height->Bind(heightUnit);
-		shader->SetUniform2f("corner", q.corner.x, q.corner.y);
-		shader->SetUniform2f("size", q.size.x, q.size.y);
-		shader->SetUniform2f("uvMin", q.uvMin.x, q.uvMin.y);
-		shader->SetUniform2f("uvMax", q.uvMax.x, q.uvMax.y);
-		glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+	if (!list.empty()) {
+		shader->Bind();
+		SetCommonUniforms(*shader, block, viewport, settings, waterLevel);
+		shader->SetUniform1i("meshWater", 0);
+		glBindVertexArray(vao);
+		for (const Quad& q : list) {
+			q.height->Bind(heightUnit);
+			shader->SetUniform2f("corner", q.corner.x, q.corner.y);
+			shader->SetUniform2f("size", q.size.x, q.size.y);
+			shader->SetUniform2f("uvMin", q.uvMin.x, q.uvMin.y);
+			shader->SetUniform2f("uvMax", q.uvMax.x, q.uvMax.y);
+			glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+		}
+	}
+	//Rivers and lakes above the sea: the terrain drawn before cuts their shores (depth test)
+	if (riverWater) {
+		meshShader->Bind();
+		SetCommonUniforms(*meshShader, block, viewport, settings, waterLevel);
+		meshShader->SetUniform1i("meshWater", 1);
+		meshShader->SetUniformMat4f("inverseView", glm::inverse(block.view));
+		meshShader->SetUniform4f("clipRect", rivers.clipMin.x, rivers.clipMin.y, rivers.clipMax.x, rivers.clipMax.y);
+		meshShader->SetUniform2f("mapOrigin", rivers.mapOrigin.x, rivers.mapOrigin.y);
+		meshShader->SetUniform1f("texelSize", TerrainView::worldUnitsPerTexel);
+		glBindVertexArray(rivers.map->WaterVertexArray());
+		glDrawArrays(GL_TRIANGLES, 0, rivers.map->WaterVertexCount());
 	}
 	glBindVertexArray(0);
 	if (settings.wireFrame) {
