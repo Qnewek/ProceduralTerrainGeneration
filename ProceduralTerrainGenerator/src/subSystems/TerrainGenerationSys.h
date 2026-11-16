@@ -12,7 +12,10 @@
 #include "NoisePreview.h"
 #include "Grid.h"
 #include "GpuHeightGenerator.h"
+#include "GenerationJob.h"
+#include "Hydrology.h"
 #include "LandStats.h"
+#include "RiverMap.h"
 #include "WorldConfig.h"
 #include "Camera.h"
 #include "LightSource.h"
@@ -77,6 +80,25 @@ private:
 	std::optional<LandStats> landStats;
 	bool measureLand = false, landStatsOld = false;
 
+	//Rivers of the REGION method: the network of the region is computed in the background from a sample of the terrain (without
+	//rivers) and uploaded to riverMap; the terrain is generated with the last uploaded network until a new one arrives
+	struct RiverResult {
+		hydrology::Network network;
+		double ms = 0.0;
+	};
+	GenerationJob<RiverResult> riverJob;
+	RiverMap riverMap;
+	//The terrain, the biome modifiers, the map size or the river parameters changed since the last network was started
+	bool riversStale = true;
+	//Statistics of the uploaded network, for the Rivers tab
+	int riverCells = 0, lakeCells = 0, lakeCount = 0;
+	double riverMs = 0.0;
+	//Takes a finished network and starts a new one if needed
+	void UpdateRivers();
+	void RequestRivers() { riversStale = true; }
+	//What the generation carves (the network may not be ready yet)
+	RiverInput Rivers() const { return RiverInput{ world.rivers, &riverMap }; }
+
 	//Currently edited noise (terrain or biome component), nullptr if none
 	const noise::NoiseConfigParameters* EditedNoise() const;
 	//Generates the 2D picture of the edited noise if it was requested
@@ -104,6 +126,7 @@ private:
 	static constexpr const char* tabBiomes = "Biomes";
 	static constexpr const char* tabBiomeTable = "Biome table";
 	static constexpr const char* tabBiomeNoises = "Biome noises";
+	static constexpr const char* tabRivers = "Rivers";
 	PanelTabs generationTabs;
 
 	//Editor UI state: the component each editor shows
@@ -121,6 +144,7 @@ private:
 	void BiomesEditor();
 	void BiomeTableEditor();
 	void BiomeNoisesEditor();
+	void RiversEditor();
 	//Checkbox and 2D picture of the edited noise, shown only in the editor of that noise
 	void NoisePreviewImGui(const noise::NoiseConfigParameters& noise);
 	//Shows a note instead of a biome tab while biomes are off
