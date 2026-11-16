@@ -369,8 +369,13 @@ void TerrainGenApp::ImGuiRender()
         mapImportSys.ImGuiOutput();
     }
     bottomPanelHeight = ImGui::GetWindowHeight() <= windowHeight / 3 ? ImGui::GetWindowHeight() : windowHeight / 3;
-    
+
     ImGui::End();
+
+    //Names of the maps shown side by side, over the scene drawn this frame
+    if (currentMode == mode::NOISE_HEIGHTMAP) {
+        noiseGenSys.ImGuiMapLabels();
+    }
 
     ImGui::Render();
     metrics->BeginUi();
