@@ -7,6 +7,7 @@
 #include "glm/glm.hpp"
 
 #include "Biome.h"
+#include "Hydrology.h"
 
 //Where vegetation and rocks stand: a jittered grid in map texels, one grid per layer, each cell holding at most one model.
 //Every cell lies wholly in one chunk (the cell sizes divide the chunk size), so chunks never share a cell: no seams and no
@@ -60,6 +61,7 @@ namespace vegetation
 		float worldUnitsPerTexel = 4.0f;
 		float heightScale = 1.0f;				//world units of height 1, for slopes
 		float waterHeight = 0.0f;				//nothing stands at or below it
+		const hydrology::Network* rivers = nullptr;	//nothing stands under the water of its rivers and lakes; nullptr = none
 		float density = 1.0f;					//multiplies every probability
 		uint32_t seed = 0;
 		unsigned layerMask = (1u << layerCount) - 1u;	//bit l = layer l is placed

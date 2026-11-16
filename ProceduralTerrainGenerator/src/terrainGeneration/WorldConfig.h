@@ -252,6 +252,12 @@ namespace rivers {
 		float bankSlope = 0.002f;
 		float depthPerWidth = 0.001f;
 
+		//Near water (both methods): humidity added to the biomes at a channel, fading out humidityRange texels from its edge;
+		//surface material of the bed (id of terrain_materials.json, -1 = none; 8 = Scree, gravel)
+		float humidity = 0.25f;
+		float humidityRange = 96.0f;
+		int bedMaterial = 8;
+
 		//REGION: square of regionSize texels around the middle of the finite map, sampled every cellSize texels
 		int regionSize = 8192;
 		int cellSize = 8;

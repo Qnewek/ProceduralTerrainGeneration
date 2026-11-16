@@ -154,6 +154,9 @@ namespace vegetation
 					if (height <= settings.waterHeight) {
 						continue;
 					}
+					if (settings.rivers && hydrology::WaterLevelAt(*settings.rivers, texel) >= height) {
+						continue;
+					}
 					const float elevation = biome::Elevation(height, settings.waterHeight);
 					const glm::vec4 surface = maps.surface[index];
 					const float slope = std::atan(glm::length(glm::vec2(surface)) * settings.heightScale) * 180.0f / pi;

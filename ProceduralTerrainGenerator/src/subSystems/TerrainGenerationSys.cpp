@@ -57,6 +57,9 @@ void TerrainGenerationSys::Update(Camera& camera)
 		vegetationWorld.waterHeight = world.terrain.WaterHeight();
 		vegetationWorld.heightScale = renderSettings.heightScale;
 		vegetationWorld.seed = static_cast<uint32_t>(world.biomes.detailSeed);
+		if (RiverWater()) {
+			vegetationWorld.rivers = riverNetwork;
+		}
 		vegetationLayer.Update(chunks, vegetationModels, vegetationWorld);
 	}
 	else {
@@ -88,11 +91,12 @@ void TerrainGenerationSys::MeasureLand()
 void TerrainGenerationSys::UpdateRivers()
 {
 	if (std::optional<RiverResult> result = riverJob.TryTake()) {
-		riverMap.Upload(result->network);
+		riverMap.Upload(result->network, result->water);
 		riverCells = result->network.riverCells;
 		lakeCells = result->network.lakeCells;
 		lakeCount = result->network.lakes;
 		riverMs = result->ms;
+		riverNetwork = std::make_shared<const hydrology::Network>(std::move(result->network));
 		//Not RequestTerrain: that would start the network again
 		if (world.rivers.method == rivers::Method::REGION) {
 			pending.terrain = true;
@@ -114,10 +118,12 @@ void TerrainGenerationSys::UpdateRivers()
 		biomesGeneration ? &world.biomes : nullptr);
 	const glm::vec2 origin = center - glm::vec2(static_cast<float>(cells) * cellSize * 0.5f);
 	const float waterHeight = world.terrain.WaterHeight();
-	riverJob.Start([sample = std::move(sample), origin, cellSize, waterHeight, config]() {
+	const float texelsPerHeight = renderSettings.heightScale / TerrainView::worldUnitsPerTexel;
+	riverJob.Start([sample = std::move(sample), origin, cellSize, waterHeight, texelsPerHeight, config]() {
 		const auto start = std::chrono::steady_clock::now();
 		RiverResult result;
 		result.network = hydrology::Compute(sample, origin, cellSize, waterHeight, config);
+		result.water = hydrology::BuildWaterMesh(result.network, waterHeight, texelsPerHeight);
 		result.ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count();
 		return result;
 	});
@@ -184,7 +190,7 @@ void TerrainGenerationSys::GenerateFinite()
 		}
 		if (request.biomes) {
 			gpu.GenerateBiomes(world.biomes, world.terrain, MapArea{}, view.LayerTexture(TerrainView::Layer::BIOMES, width, height), *biomeIds,
-				&view.SplatTexture(width, height));
+				&view.SplatTexture(width, height), &rivers);
 		}
 	}
 	gpu.EndMeasure();
@@ -317,13 +323,13 @@ void TerrainGenerationSys::Draw(Renderer& renderer, Camera& camera, LightSource&
 		}
 		chunks.Draw(renderer, camera, light, renderSettings);
 		//Last: it reads a copy of everything drawn before
-		water.Draw(chunks, camera, light, renderSettings, world.terrain.WaterHeight() * renderSettings.heightScale);
+		water.Draw(chunks, camera, light, renderSettings, world.terrain.WaterHeight() * renderSettings.heightScale, RiverWater());
 		return;
 	}
 	view.Draw(renderer, camera, light, renderSettings, TerrainView::Layer::TERRAIN);
 	if (const TextureClass* height = view.GetLayerTexture(TerrainView::Layer::TERRAIN)) {
 		water.DrawMap(*height, glm::vec2(view.GetWorldWidth(), view.GetWorldHeight()), camera, light, renderSettings,
-			world.terrain.WaterHeight() * renderSettings.heightScale, view.GetFlatViewMin(), view.GetFlatViewMax());
+			world.terrain.WaterHeight() * renderSettings.heightScale, view.GetFlatViewMin(), view.GetFlatViewMax(), RiverWater());
 	}
 }
 void TerrainGenerationSys::ImGuiRightPanel()
@@ -671,6 +677,28 @@ void TerrainGenerationSys::RiversEditor()
 	changed |= ImGui::SliderFloat("Depth per width", &r.depthPerWidth, 0.0f, 0.005f, "%.4f", ImGuiSliderFlags_AlwaysClamp);
 	ImGui::SetItemTooltip("Depth of the bed below the water per texel of half width");
 
+	ImGui::SeparatorText("Near water");
+	changed |= ImGui::SliderFloat("Humidity", &r.humidity, -1.0f, 1.0f, "%.2f", ImGuiSliderFlags_AlwaysClamp);
+	ImGui::SetItemTooltip("Humidity added to the biomes at a river (seen with biomes generation on)");
+	changed |= ImGui::SliderFloat("Humidity range", &r.humidityRange, 1.0f, 512.0f, "%.0f texels", ImGuiSliderFlags_AlwaysClamp | ImGuiSliderFlags_Logarithmic);
+	ImGui::SetItemTooltip("Distance from the channel over which the added humidity fades out");
+	const std::string bedName = r.bedMaterial < 0 ? "None"
+		: r.bedMaterial < static_cast<int>(materialNames.size()) ? materialNames[r.bedMaterial] : "Material " + std::to_string(r.bedMaterial);
+	if (ImGui::BeginCombo("Bed material", bedName.c_str())) {
+		if (ImGui::Selectable("None", r.bedMaterial < 0)) {
+			r.bedMaterial = -1;
+			changed = true;
+		}
+		for (int m = 0; m < static_cast<int>(materialNames.size()) && m < biome::maxMaterials; m++) {
+			if (ImGui::Selectable(materialNames[m].c_str(), r.bedMaterial == m)) {
+				r.bedMaterial = m;
+				changed = true;
+			}
+		}
+		ImGui::EndCombo();
+	}
+	ImGui::SetItemTooltip("Surface material of the river bed (TEXTURED display mode, with biomes generation on)");
+
 	if (r.method == rivers::Method::REGION) {
 		ImGui::SeparatorText("Region");
 		const int cellSizes[] = { 4, 8, 16, 32 };
@@ -722,7 +750,6 @@ void TerrainGenerationSys::RiversEditor()
 			ImGui::Text("River cells: %d, lakes: %d (%d cells)", riverCells, lakeCount, lakeCells);
 			ImGui::Text("Computed in %.0f ms (%d x %d cells)", riverMs, riverMap.Size().x, riverMap.Size().y);
 		}
-		ImGui::TextDisabled("Lakes are found, but their water is not drawn yet");
 	}
 	else {
 		ImGui::SeparatorText("Noise");

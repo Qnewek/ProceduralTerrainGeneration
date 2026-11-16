@@ -47,12 +47,21 @@ namespace hydrology {
 	//@param waterHeight - cells below it are sea (outlets)
 	Drainage Drain(const HeightField& terrain, float waterHeight);
 
+	//Per cell, on the CPU only: downstream direction of the nearest course (unit vector along map x, y) and its slope (height per texel)
+	struct FlowTexel {
+		float x = 0.0f, y = 0.0f;
+		float slope = 0.0f;
+	};
+
 	struct Network {
 		//Cell (x, y) covers map position origin + (x, y) * cellSize (its center)
 		glm::vec2 origin = glm::vec2(0.0f);
 		float cellSize = 1.0f;
 		Grid<RiverTexel> rivers;
 		Grid<LevelTexel> levels;
+		Grid<FlowTexel> flow;
+		//The terrain the network was computed from (heights at the cell centers, without rivers)
+		HeightField ground;
 		//Statistics for the UI
 		int riverCells = 0, lakeCells = 0, lakes = 0;
 	};
@@ -62,4 +71,26 @@ namespace hydrology {
 	//@param cellSize - map texels between cells
 	//@param waterHeight - sea level (TerrainConfig::WaterHeight)
 	Network Compute(const HeightField& terrain, glm::vec2 origin, float cellSize, float waterHeight, const rivers::RiverConfig& config);
+
+	//Vertex of the water surface of rivers and lakes: map position (texels), surface height, flow velocity (metres per second along map x, y)
+	struct WaterVertex {
+		float x = 0.0f, y = 0.0f;
+		float level = 0.0f;
+		float flowX = 0.0f, flowY = 0.0f;
+	};
+
+	//Surface of the water of rivers (in their channel) and lakes at a map position, sampled as common/rivers.glsl samples the network;
+	//-infinity where there is none (also outside the region)
+	float WaterLevelAt(const Network& network, glm::vec2 position);
+
+	//Speed of the water (m/s) on a slope given as height per length (world units over world units)
+	float FlowSpeed(float slope);
+
+	//Triangles (3 vertices each) of the water surface of rivers and lakes above the sea, one quad between 4 neighbouring cell centres where
+	//any of them is wet: in a lake, or within the river half width + 1.5 cells of a course. Only lakes and channels (where the bed is carved
+	//under the water) keep their level everywhere; elsewhere (dry corners, the river banks) the surface sinks under the ground, so it never hangs
+	//above lower terrain (a lake outlet, a slope beside a river) and the terrain drawn before it (depth test) cuts the shore line per pixel
+	//@param waterHeight - sea level; water not above it is left to the sea surface
+	//@param texelsPerHeight - map texels as long as the height 1 is high (TerrainGen: 1024 world units / 4 per texel), for the flow speed
+	std::vector<WaterVertex> BuildWaterMesh(const Network& network, float waterHeight, float texelsPerHeight);
 }

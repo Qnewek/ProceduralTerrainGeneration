@@ -51,7 +51,7 @@ public:
 	//and takes its end value for a noise outside [-1, 1]
 	//@param target - GL_R32F
 	//@param biomes - if given and biomes->modifyTerrain, the height is changed by the biome modifiers (biome::ModifyHeight)
-	//@param rivers - if given, rivers are carved into the result
+	//@param rivers - if given, rivers are carved into the result (and with the biome modifiers their humidity changes the biomes)
 	void GenerateTerrain(const TerrainConfig& config, const MapArea& area, TextureClass& target, const BiomeConfig* biomes = nullptr,
 		const RiverInput* rivers = nullptr);
 	//Biome of every texel from its five noise values (biome_compute.shader): temperature and humidity changed by the terrain
@@ -61,12 +61,13 @@ public:
 	//@param ids - GL_R32I of the same size, id (index in the table) of the nearest biome of every texel
 	//@param splat - if given, GL_RGBA8 array of splatLayers layers of the same size: share of every surface material (biome::MixMaterials),
 	//	material m in layer m / 4, channel m % 4
+	//@param rivers - if given, more humidity near rivers and their bed material in the splat map (as GenerateWorld with the same rivers)
 	void GenerateBiomes(const BiomeConfig& biomes, const TerrainConfig& terrain, const MapArea& area, TextureClass& colors, TextureClass& ids,
-		TextureClass* splat = nullptr);
+		TextureClass* splat = nullptr, const RiverInput* rivers = nullptr);
 	//Terrain and biomes in one pass (biome_compute.shader): the same maps as GenerateTerrain(terrain, area, height, &biomes) followed by
 	//GenerateBiomes, bit for bit, but the noises and the biome table are evaluated once. Use it whenever both are needed
 	//@param height - GL_R32F of the size of colors; changed by the biome modifiers if biomes.modifyTerrain
-	//@param rivers - as in GenerateTerrain; biomes are chosen from the height before the rivers
+	//@param rivers - as in GenerateTerrain and GenerateBiomes; biomes are chosen from the height before the rivers
 	void GenerateWorld(const TerrainConfig& terrain, const BiomeConfig& biomes, const MapArea& area, TextureClass& height,
 		TextureClass& colors, TextureClass& ids, TextureClass* splat = nullptr, const RiverInput* rivers = nullptr);
 

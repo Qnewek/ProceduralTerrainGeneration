@@ -29,22 +29,27 @@ float evaluateHeight(vec2 position)
 	if (mode == MODE_NOISE) {
 		return evaluateNoise(0, position.x, position.y);
 	}
+	Channel channel;
+	if (riverMethod != RIVERS_NONE) {
+		channel = channelAt(position);
+	}
 	float height;
 	if (modifyTerrain == 0) {
 		height = terrainHeight(evaluateNoise(0, position.x, position.y), evaluateNoise(1, position.x, position.y), evaluateNoise(2, position.x, position.y));
 	}
 	else {
-		// As in biome_compute.shader: biomes chosen from the height before the modifiers
+		// As in biome_compute.shader: biomes chosen from the height before the modifiers, with the humidity of rivers
 		float values[PARAMETER_COUNT];
 		for (int i = 0; i < NOISE_COUNT; i++) {
 			values[i] = evaluateNoise(i, position.x, position.y);
 		}
 		height = terrainHeight(values[0], values[1], values[2]);
 		applyClimate(values, height);
+		values[4] = clamp(values[4] + riverHumidity(channel, height), -1.0, 1.0);
 		height = modifyHeight(values, height, position);
 	}
 	// Rivers last, into the final terrain (riverMethod = RIVERS_NONE leaves it)
-	return carveRivers(height, position);
+	return carveRivers(height, channel);
 }
 
 void main()

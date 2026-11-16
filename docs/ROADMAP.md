@@ -547,7 +547,11 @@ Kroki:
   szumu (odległość = |n| / |∇n|) do poziomu morza, tylko na nizinach (`maxElevation`); lokalne, więc działa w nieskończonym świecie. Profil koryta wspólny
   (`common/rivers.glsl`, po modyfikatorach biomów): dno U pod lustrem, brzegi `bankSlope`, wygaszanie na `bankWidth`; nigdy nie podnosi terenu.
   `--gpu-check` sekcja `rivers:` (zakres, jeden przebieg = dwa, chunki bit w bit). Ograniczenia etapu 1: wody rzek i jezior nad poziomem morza nie widać
-  (rzeki B leżą na poziomie morza, więc mają wodę), biomy wybierane z wysokości przed rzekami.
+  (rzeki B leżą na poziomie morza, więc mają wodę), biomy wybierane z wysokości przed rzekami. Po przeglądzie (właściciel): rzeki B nie żłobią dna morza, kończą się na wybrzeżu.
+  🟡 2026-11-16 etap 2: (4) woda rzek i jezior metody A — siatka z sieci (`BuildWaterMesh`: quad między środkami komórek, gdzie choć jeden jest mokry; suche narożniki na
+  najwyższym poziomie quadu), linia brzegu z testu głębi z terenem, głębokość z kopii głębi sceny, fale niesione przepływem (flow map, prędkość 0,4–4 m/s ze spadku).
+  (5) wilgotność biomów przy korycie (`humidity`, `humidityRange`), materiał dna w splat (`bedMaterial`, domyślnie Scree), roślinność nie stoi w wodzie rzek i jezior
+  (`WaterLevelAt`). Zostaje: jeziora bez progu powierzchni (dużo małych), woda rzek B bez przepływu (leży na poziomie morza), wodospady / progi przy stromym spadku.
 - **Zagnieżdżone splajny** (z „Teren 2.0”, pkt 3): punkty splajnu C są splajnami po M (i dalej po PV), wypiekane do tekstury LUT 2D/3D próbkowanej jednym odczytem.
   Daje klify tam, gdzie góry dochodzą do morza, płaskie plaże gdzie indziej, doliny wcięte poniżej podstawy. Najwięcej pracy: edytor UI (lista punktów C z wykresem po M, podgląd C×M jako mapa ciepła).
 - **Woda:** płaszczyzna oceanu z refleksją/refrakcją, głębia, piana przy brzegu.

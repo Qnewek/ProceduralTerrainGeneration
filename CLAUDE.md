@@ -72,7 +72,7 @@ ProceduralTerrainGenerator/
       TerrainView.*              siatka + shader + tekstury (TERRAIN/OVERLAY/BIOMES), wspólny dla obu trybów
       GpuHeightGenerator.*       jedyna generacja: szum, teren i biomy w compute shaderach (GenerateWorld = teren + biomy w jednym przebiegu); GpuHeightCheck.* = testy generacji (--gpu-check)
       NoisePreview.*             podgląd edytowanego szumu jako mapa 2D w panelu ImGui (≤ 512 tekseli na dłuższym boku, preview_compute.shader = skala szarości)
-      RiverMap.*                 sieć rzek z Hydrology na GPU (2 tekstury, jednostki 20–21), czytana przy generacji przez common/rivers.glsl
+      RiverMap.*                 sieć rzek z Hydrology na GPU (2 tekstury, jednostki 20–21), czytana przy generacji przez common/rivers.glsl, + siatka wody rzek i jezior
       GpuSurfacePass.*           mapa pochodnych (gradient + laplasjan) z mapy wysokości; uruchamia ją TerrainView i ChunkWorld
       GpuErosion.*               erozja w compute: kroplowa (erosion_droplet_compute.shader, algorytm dawnej wersji CPU) albo rury wirtualne + termiczna
                                  (erosion_pipe_compute.shader); metoda = ErosionConfig::method
@@ -299,7 +299,13 @@ Wartości szumów są w [-1, 1]. Konwencja indeksowania: `map[y * width + x]`.
   REGION: `TerrainGenerationSys::UpdateRivers` próbkuje teren (odczyt z GPU) i liczy `hydrology::Compute` w tle (`GenerationJob`), po przyjściu sieci ustawia
   `pending.terrain` bezpośrednio — nie `RequestTerrain`, które oznacza sieć jako nieaktualną (pętla). `RequestTerrain` i `RequestBiomes` (z modyfikatorami) unieważniają sieć.
   Koryto w teksturze to wektor do najbliższego punktu biegu (dokładny przy próbkowaniu dwuliniowym) plus odległość skalarna, bo wektor między dwiema rzekami
-  maleje do 0 — shader bierze `max(|wektor|, odległość − komórka)`. NOISE: tablica permutacji 6 (`WorldInput` ma 7 tablic). Nowy parametr rzek = `RiverConfig` + presety
+  maleje do 0 — shader bierze `max(|wektor|, odległość − komórka)`; ten sam odczyt na CPU = `hydrology::WaterLevelAt` (roślinność nie stoi w wodzie rzek i jezior). NOISE: tablica permutacji 6 (`WorldInput` ma 7 tablic),
+  nie żłobi dna morza (wygaszanie na głębokości koryta pod lustrem). `channelAt` raz na teksel, potem `carveRivers` / `riverHumidity` (wilgotność dla biomów, dodawana po `applyClimate`
+  w obu ścieżkach — zmienia biomy, więc i modyfikatory; dlatego test „rzeki tylko obniżają” idzie z wilgotnością 0) / `riverBedShare` (materiał dna w splat, po `finishMaterials`).
+  `GenerateBiomes` też dostaje `RiverInput` (wilgotność, dno), żeby zgadzał się z `GenerateWorld`. Woda rzek i jezior (REGION): `hydrology::BuildWaterMesh` (w zadaniu w tle) → siatka
+  w `RiverMap`, rysowana przez `WaterSurface` po morzu tą samą kopią sceny (`water_mesh_vertex.shader` + wspólny FS, `meshWater`: głębokość z kopii głębi, fale niesione przepływem);
+  brzeg przycina test głębi z terenem, na skończonej mapie `clipRect`. Poziom wody zostaje tylko w jeziorach i korytach (dno wyżłobione); suche narożniki
+  i brzegi rzek schodzą pod grunt próbki (`Network::ground`), inaczej tafla wisiała nad niższym terenem (odpływ jeziora, zbocze obok rzeki). Nowy parametr rzek = `RiverConfig` + presety
   (`RiversToJson`/`ReadRivers`/`CheckRivers`) + `PresetTests` + UI; zmiana shadera → `--gpu-check` (sekcja `rivers:`).
 - **Generacja jest tylko w GLSL** (`ComputeShaders/`, `common/noise.glsl`, `common/simplex.glsl`, `common/surface.glsl`). Nowe pole configu szumu trzeba
   dopisać do `NoiseParams` (`noise_params.glsl`), `GpuNoiseParams`/`SetNoise` (`GpuHeightGenerator.cpp`), presetów i UI, a potem uruchomić `--gpu-check`.
