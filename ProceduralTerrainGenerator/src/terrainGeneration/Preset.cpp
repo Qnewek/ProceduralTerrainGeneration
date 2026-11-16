@@ -64,6 +64,11 @@ namespace preset {
 			{ EvaluationMethod::LAYERED, "LAYERED" },
 		};
 
+		constexpr EnumName<erosion::Method> erosionMethodNames[] = {
+			{ erosion::Method::DROPLETS, "DROPLETS" },
+			{ erosion::Method::PIPES, "PIPES" },
+		};
+
 		template<typename E, size_t N>
 		const char* NameOf(const EnumName<E>(&names)[N], E value)
 		{
@@ -190,6 +195,22 @@ namespace preset {
 			j["initialWater"] = ReadableFloat(e.initialWater);
 			j["initialVelocity"] = ReadableFloat(e.initialVelocity);
 			j["initialCapacity"] = ReadableFloat(e.initialCapacity);
+			//method and pipes added 2026-11-16 without a new version: older presets read them as defaults (droplets)
+			j["method"] = NameOf(erosionMethodNames, e.method);
+			const erosion::PipeConfig& p = e.pipes;
+			json pipes;
+			pipes["iterations"] = p.iterations;
+			pipes["timeStep"] = ReadableFloat(p.timeStep);
+			pipes["heightScale"] = ReadableFloat(p.heightScale);
+			pipes["rainRate"] = ReadableFloat(p.rainRate);
+			pipes["evaporationRate"] = ReadableFloat(p.evaporationRate);
+			pipes["sedimentCapacity"] = ReadableFloat(p.sedimentCapacity);
+			pipes["minTilt"] = ReadableFloat(p.minTilt);
+			pipes["dissolvingRate"] = ReadableFloat(p.dissolvingRate);
+			pipes["depositionRate"] = ReadableFloat(p.depositionRate);
+			pipes["talusAngle"] = ReadableFloat(p.talusAngle);
+			pipes["thermalRate"] = ReadableFloat(p.thermalRate);
+			j["pipes"] = std::move(pipes);
 			return j;
 		}
 
@@ -404,6 +425,24 @@ namespace preset {
 			r.Read("initialWater", e.initialWater);
 			r.Read("initialVelocity", e.initialVelocity);
 			r.Read("initialCapacity", e.initialCapacity);
+			r.ReadEnum("method", erosionMethodNames, e.method);
+			const json* pipesField = r.Find("pipes");
+			if (!pipesField) {
+				return;
+			}
+			Reader pipes(*pipesField, r.PathOf("pipes"));
+			erosion::PipeConfig& p = e.pipes;
+			pipes.Read("iterations", p.iterations);
+			pipes.Read("timeStep", p.timeStep);
+			pipes.Read("heightScale", p.heightScale);
+			pipes.Read("rainRate", p.rainRate);
+			pipes.Read("evaporationRate", p.evaporationRate);
+			pipes.Read("sedimentCapacity", p.sedimentCapacity);
+			pipes.Read("minTilt", p.minTilt);
+			pipes.Read("dissolvingRate", p.dissolvingRate);
+			pipes.Read("depositionRate", p.depositionRate);
+			pipes.Read("talusAngle", p.talusAngle);
+			pipes.Read("thermalRate", p.thermalRate);
 		}
 
 		void ReadTerrain(const Reader& parent, const char* key, TerrainConfig& t)
@@ -689,6 +728,17 @@ namespace preset {
 			CheckNoise(c.noise, "Noise");
 			if (c.erosion.dropletCount < 0 || c.erosion.dropletLifetime < 0 || c.erosion.erosionRadius < 0) {
 				throw std::runtime_error("Erosion: droplet count, droplet lifetime and radius cannot be negative");
+			}
+			const erosion::PipeConfig& p = c.erosion.pipes;
+			if (p.iterations < 0 || p.timeStep <= 0.0f || p.heightScale <= 0.0f) {
+				throw std::runtime_error("Erosion pipes: iterations cannot be negative, time step and height scale must be positive");
+			}
+			if (p.rainRate < 0.0f || p.evaporationRate < 0.0f || p.sedimentCapacity < 0.0f || p.minTilt < 0.0f
+				|| p.dissolvingRate < 0.0f || p.depositionRate < 0.0f || p.thermalRate < 0.0f) {
+				throw std::runtime_error("Erosion pipes: rates, capacity and minimum tilt cannot be negative");
+			}
+			if (p.talusAngle <= 0.0f || p.talusAngle >= 90.0f) {
+				throw std::runtime_error("Erosion pipes: talus angle must be between 0 and 90 degrees");
 			}
 		}
 

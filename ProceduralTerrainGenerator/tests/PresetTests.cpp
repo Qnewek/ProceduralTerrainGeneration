@@ -222,6 +222,19 @@ TEST_CASE("A noise preset keeps every field")
 	e.initialWater = 0.18f;
 	e.initialVelocity = 0.19f;
 	e.initialCapacity = 0.21f;
+	e.method = erosion::Method::PIPES;
+	erosion::PipeConfig& p = e.pipes;
+	p.iterations = 11;
+	p.timeStep = 0.22f;
+	p.heightScale = 23.0f;
+	p.rainRate = 0.24f;
+	p.evaporationRate = 0.25f;
+	p.sedimentCapacity = 0.26f;
+	p.minTilt = 0.27f;
+	p.dissolvingRate = 0.28f;
+	p.depositionRate = 0.29f;
+	p.talusAngle = 31.0f;
+	p.thermalRate = 0.32f;
 
 	NoiseMapConfig loaded;
 	std::string error;
@@ -244,6 +257,37 @@ TEST_CASE("A noise preset keeps every field")
 	CHECK(l.initialWater == e.initialWater);
 	CHECK(l.initialVelocity == e.initialVelocity);
 	CHECK(l.initialCapacity == e.initialCapacity);
+	CHECK(l.method == e.method);
+	const erosion::PipeConfig& lp = l.pipes;
+	CHECK(lp.iterations == p.iterations);
+	CHECK(lp.timeStep == p.timeStep);
+	CHECK(lp.heightScale == p.heightScale);
+	CHECK(lp.rainRate == p.rainRate);
+	CHECK(lp.evaporationRate == p.evaporationRate);
+	CHECK(lp.sedimentCapacity == p.sedimentCapacity);
+	CHECK(lp.minTilt == p.minTilt);
+	CHECK(lp.dissolvingRate == p.dissolvingRate);
+	CHECK(lp.depositionRate == p.depositionRate);
+	CHECK(lp.talusAngle == p.talusAngle);
+	CHECK(lp.thermalRate == p.thermalRate);
+}
+
+TEST_CASE("A noise preset without the erosion method uses droplets")
+{
+	NoiseMapConfig original;
+	original.width = 64;
+	original.height = 32;
+	original.erosion.method = erosion::Method::DROPLETS;
+	std::string text = preset::ToJson(original);
+	const size_t method = text.find("\"method\": \"DROPLETS\",");
+	REQUIRE(method != std::string::npos);
+	text.erase(method, std::string("\"method\": \"DROPLETS\",").size());
+
+	NoiseMapConfig loaded;
+	loaded.erosion.method = erosion::Method::PIPES;
+	std::string error;
+	REQUIRE_MESSAGE(preset::FromJson(text, loaded, error), error);
+	CHECK(loaded.erosion.method == erosion::Method::DROPLETS);
 }
 
 TEST_CASE("Floats survive saving exactly and are written in a short form")

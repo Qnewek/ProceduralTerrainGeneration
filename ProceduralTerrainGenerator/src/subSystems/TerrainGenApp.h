@@ -10,7 +10,6 @@
 #include "Renderer.h"
 #include "Camera.h"
 #include "Noise.h"
-#include "Erosion.h"
 #include "LightSource.h"
 #include "Clouds.h"
 #include "Sky.h"
