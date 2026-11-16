@@ -1,6 +1,7 @@
 #pragma once
 
-#include <optional>
+//LEGACY - not compiled. The first, CPU version of the droplet erosion, kept only to show the algorithm (see README.md here).
+//The application erodes on the GPU: opengl/GpuErosion.*, res/shaders/ComputeShaders/erosion_droplet_compute.shader
 
 #include "Grid.h"
 #include "WorldConfig.h"
@@ -31,14 +32,13 @@ namespace erosion {
 		~Erosion();
 
 		//Simulation functions
-		void Erode(const ErosionConfig& config, std::optional<float*> Track);
+		void Erode(const ErosionConfig& config);
 		vec2 GetGradient(vec2 pos);
 		float GetElevationDifference(vec2 posOld, vec2 posNew);
 		float GetInterpolatedGridHeight(vec2 pos);
 		void DistributeSediment(vec2 pos, float sedimentDropped);
 		float ErodeRadius(const ErosionConfig& config, vec2 oldPos, vec2 newPos, float ammountEroded);
 		bool IsOnMap(vec2 pos);
-		void TrackDroplets(float* vertices, vec2 pos, int step);
 
 		//Configuration functions
 		void Resize(int width, int height);

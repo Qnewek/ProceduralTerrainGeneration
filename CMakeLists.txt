@@ -44,7 +44,6 @@ target_include_directories(ptg_vendor SYSTEM PUBLIC ${PTG_SRC}/vendor ${Stb_INCL
 # Generation itself runs only in compute shaders (res/shaders/ComputeShaders)
 add_library(ptg_core STATIC
 	${PTG_SRC}/terrainGeneration/Biome.cpp
-	${PTG_SRC}/terrainGeneration/Erosion.cpp
 	${PTG_SRC}/terrainGeneration/FileIO.cpp
 	${PTG_SRC}/terrainGeneration/HeightmapExport.cpp
 	${PTG_SRC}/terrainGeneration/HeightmapImport.cpp
@@ -63,6 +62,7 @@ ptg_set_warnings(ptg_core)
 add_executable(ProceduralTerrainGenerator
 	${PTG_SRC}/Application.cpp
 	${PTG_SRC}/opengl/ChunkWorld.cpp
+	${PTG_SRC}/opengl/GpuErosion.cpp
 	${PTG_SRC}/opengl/GpuHeightCheck.cpp
 	${PTG_SRC}/opengl/GpuHeightGenerator.cpp
 	${PTG_SRC}/opengl/GpuQuery.cpp
@@ -125,7 +125,6 @@ ptg_set_warnings(ProceduralTerrainGenerator)
 enable_testing()
 add_executable(ptg_tests
 	${PTG_DIR}/tests/BiomeTests.cpp
-	${PTG_DIR}/tests/ErosionTests.cpp
 	${PTG_DIR}/tests/FlightRecordTests.cpp
 	${PTG_DIR}/tests/FrustumTests.cpp
 	${PTG_DIR}/tests/GridTests.cpp

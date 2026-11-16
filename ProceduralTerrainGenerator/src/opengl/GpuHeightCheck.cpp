@@ -17,6 +17,7 @@
 #include <GLFW/glfw3.h>
 
 #include "Grid.h"
+#include "GpuErosion.h"
 #include "GpuHeightGenerator.h"
 #include "GpuSurfacePass.h"
 #include "LandStats.h"
@@ -800,6 +801,200 @@ namespace {
 		return ok;
 	}
 
+	//Map for erosion: h(x, y) given in texels
+	HeightField ErosionInput(int width, int height, const std::function<float(int, int)>& h)
+	{
+		HeightField map(width, height);
+		for (int y = 0; y < height; y++) {
+			for (int x = 0; x < width; x++) {
+				map.At(x, y) = h(x, y);
+			}
+		}
+		return map;
+	}
+
+	//Erodes input with config and returns the result
+	HeightField Erode(GpuErosion& erosion, const erosion::ErosionConfig& config, const HeightField& input, uint32_t seed)
+	{
+		TextureClass texture(input.GetWidth(), input.GetHeight(), GL_R32F);
+		texture.Upload(input.Data(), GL_RED, GL_FLOAT);
+		erosion.Erode(config, texture, texture, seed);
+		return ReadHeight(texture);
+	}
+
+	struct ErosionStats {
+		size_t nonFinite = 0, changed = 0;
+		float largestChange = 0.0f, low = INFINITY, high = -INFINITY;
+	};
+
+	ErosionStats CompareMaps(const HeightField& before, const HeightField& after)
+	{
+		ErosionStats s;
+		for (size_t i = 0; i < before.Size(); i++) {
+			const float a = after.Data()[i];
+			if (!std::isfinite(a)) {
+				s.nonFinite++;
+				continue;
+			}
+			const float change = std::abs(a - before.Data()[i]);
+			s.changed += change > 0.0f ? 1 : 0;
+			s.largestChange = std::max(s.largestChange, change);
+			s.low = std::min(s.low, a);
+			s.high = std::max(s.high, a);
+		}
+		return s;
+	}
+
+	bool CheckErosion(GpuHeightGenerator& gpu, GpuErosion& erosion)
+	{
+		std::cout << "\nerosion: droplets\n";
+		//Not square and smaller than the generation maps: the steep slope below has to stay within the fixed point range of the shader
+		constexpr int width = 300, height = 170;
+		bool ok = true;
+
+		//Without droplets only the conversion to fixed point (steps of 2^-24) and back touches the map: at most half a step
+		{
+			const HeightField input = ErosionInput(width, height, [](int x, int y) { return std::sin(0.05f * x) * std::cos(0.07f * y); });
+			erosion::ErosionConfig config;
+			config.dropletCount = 0;
+			const ErosionStats s = CompareMaps(input, Erode(erosion, config, input, 1));
+			const bool caseOk = s.nonFinite == 0 && s.largestChange <= 0.5f / 16777216.0f * 1.01f;
+			std::ostringstream details;
+			details << "largest change " << std::scientific << std::setprecision(1) << s.largestChange;
+			Report("erosion: no droplets keep the map", details.str(), caseOk);
+			ok = ok && caseOk;
+		}
+
+		//A steep slope high above 0 with slow droplets: a hole would come from a broken velocity or capacity (NaN), not from erosion
+		{
+			const HeightField input = ErosionInput(width, height, [](int x, int y) { return 5.0f + 0.1f * x + 0.05f * y; });
+			erosion::ErosionConfig config;
+			config.dropletCount = 5000;
+			config.dropletLifetime = 32;
+			config.initialVelocity = 0.1f;
+			const HeightField output = Erode(erosion, config, input, 2);
+			const ErosionStats s = CompareMaps(input, output);
+			const bool caseOk = s.nonFinite == 0 && s.low > 1.0f && s.changed > 0;
+			std::ostringstream details;
+			details << "lowest " << std::fixed << std::setprecision(3) << s.low << ", changed " << s.changed;
+			Report("erosion: steep slope without holes", details.str(), caseOk);
+			ok = ok && caseOk;
+		}
+
+		//Default parameters on a noise map: finite, changed, no large spikes; a second run on the result changes it again
+		{
+			TextureClass noiseMap(width, height, GL_R32F);
+			gpu.GenerateNoise(noise::NoiseConfigParameters{}, MapArea{}, noiseMap);
+			const HeightField input = ReadHeight(noiseMap);
+			const erosion::ErosionConfig config;
+			const HeightField once = Erode(erosion, config, input, 3);
+			const HeightField twice = Erode(erosion, config, once, 4);
+			const ErosionStats s = CompareMaps(input, once);
+			const ErosionStats again = CompareMaps(once, twice);
+			const bool caseOk = s.nonFinite == 0 && again.nonFinite == 0 && s.changed > input.Size() / 20 && again.changed > input.Size() / 20
+				&& s.low >= -1.5f && s.high <= 1.5f && s.largestChange < 0.5f;
+			std::ostringstream details;
+			details << "changed " << s.changed << " then " << again.changed << ", range " << std::fixed << std::setprecision(2) << s.low << ".." << s.high;
+			Report("erosion: noise map, twice", details.str(), caseOk);
+			ok = ok && caseOk;
+		}
+
+		std::cout << "\nerosion: water flow (pipes)\n";
+		erosion::ErosionConfig pipes;
+		pipes.method = erosion::Method::PIPES;
+		TextureClass noiseMap(width, height, GL_R32F);
+		gpu.GenerateNoise(noise::NoiseConfigParameters{}, MapArea{}, noiseMap);
+		const HeightField noiseInput = ReadHeight(noiseMap);
+
+		//No iterations: only scaling by heightScale (a power of two) and back
+		{
+			erosion::ErosionConfig config = pipes;
+			config.pipes.iterations = 0;
+			const ErosionStats s = CompareMaps(noiseInput, Erode(erosion, config, noiseInput, 0));
+			const bool caseOk = s.nonFinite == 0 && s.changed == 0;
+			Report("pipes: no iterations keep the map", "changed " + std::to_string(s.changed), caseOk);
+			ok = ok && caseOk;
+		}
+
+		//Every texel writes only its own texels, so two runs are equal bit for bit
+		{
+			const HeightField first = Erode(erosion, pipes, noiseInput, 0);
+			const HeightField second = Erode(erosion, pipes, noiseInput, 0);
+			const size_t different = CompareMaps(first, second).changed;
+			const bool caseOk = different == 0;
+			Report("pipes: deterministic", "different " + std::to_string(different), caseOk);
+			ok = ok && caseOk;
+		}
+
+		//Thermal erosion alone (no rain) on a step much steeper than the talus angle: moves material without losing it
+		//and leaves no slope much steeper than the talus angle
+		{
+			erosion::ErosionConfig config = pipes;
+			config.pipes.rainRate = 0.0f;
+			config.pipes.thermalRate = 5.0f;
+			config.pipes.timeStep = 0.2f;
+			config.pipes.iterations = 2000;
+			const HeightField input = ErosionInput(width, height, [](int x, int y) { return (x - 150) * (x - 150) + (y - 85) * (y - 85) < 900 ? 1.0f : 0.0f; });
+			const HeightField output = Erode(erosion, config, input, 0);
+			double before = 0.0, after = 0.0;
+			float steepest = 0.0f;
+			for (int y = 0; y < height; y++) {
+				for (int x = 0; x < width; x++) {
+					before += input.At(x, y);
+					after += output.At(x, y);
+					if (x + 1 < width) {
+						steepest = std::max(steepest, std::abs(output.At(x + 1, y) - output.At(x, y)));
+					}
+					if (y + 1 < height) {
+						steepest = std::max(steepest, std::abs(output.At(x, y + 1) - output.At(x, y)));
+					}
+				}
+			}
+			//In texels: the slope at the talus angle is tan(35 deg) = 0.70
+			const float steepestSlope = steepest * config.pipes.heightScale;
+			const double lost = std::abs(after - before) / before;
+			const bool caseOk = lost < 1e-4 && steepestSlope < 0.8f;
+			std::ostringstream details;
+			details << "steepest " << std::fixed << std::setprecision(2) << steepestSlope << " (talus 0.70), lost " << std::scientific << std::setprecision(1) << lost;
+			Report("pipes: thermal keeps material, talus", details.str(), caseOk);
+			ok = ok && caseOk;
+		}
+
+		//Default parameters on a noise map: finite, changed, no spikes, little material lost (some leaves with the water over the edges)
+		{
+			const HeightField output = Erode(erosion, pipes, noiseInput, 0);
+			const ErosionStats s = CompareMaps(noiseInput, output);
+			double before = 0.0, after = 0.0;
+			for (size_t i = 0; i < output.Size(); i++) {
+				before += noiseInput.Data()[i];
+				after += output.Data()[i];
+			}
+			const double lost = (before - after) / before;
+			const bool caseOk = s.nonFinite == 0 && s.changed > noiseInput.Size() / 2 && s.low >= -1.5f && s.high <= 1.5f && s.largestChange < 0.5f
+				&& std::abs(lost) < 0.05;
+			std::ostringstream details;
+			details << "changed " << s.changed << ", largest " << std::fixed << std::setprecision(3) << s.largestChange << ", lost " << std::setprecision(4) << lost;
+			Report("pipes: noise map", details.str(), caseOk);
+			ok = ok && caseOk;
+
+			//Spikes: texels above all four neighbours, in texels. Sediment dropped at once in thin streams made lines of them, up to 10 texels high;
+			//settling is limited to the highest neighbour + the talus height (0.70 at 35 degrees)
+			float highest = 0.0f;
+			for (int y = 1; y < height - 1; y++) {
+				for (int x = 1; x < width - 1; x++) {
+					const float neighbours = std::max({ output.At(x - 1, y), output.At(x + 1, y), output.At(x, y - 1), output.At(x, y + 1) });
+					highest = std::max(highest, (output.At(x, y) - neighbours) * pipes.pipes.heightScale);
+				}
+			}
+			const bool spikesOk = highest <= 0.8f;
+			std::ostringstream spikeDetails;
+			spikeDetails << "highest above neighbours " << std::fixed << std::setprecision(2) << highest << " texels";
+			Report("pipes: no spikes", spikeDetails.str(), spikesOk);
+			ok = ok && spikesOk;
+		}
+		return ok;
+	}
+
 	//@return median time of finishing the work given by fn, in ms. The first run is skipped: drivers finish compiling shaders then
 	template<typename F>
 	double MedianMs(F fn, int runs)
@@ -859,6 +1054,33 @@ namespace {
 				<< std::setw(13) << twoPassMs << std::setw(11) << onePassMs << std::setw(14) << surfaceMs << std::defaultfloat << "\n" << std::left;
 		}
 	}
+
+	void RunErosionTimings(GpuHeightGenerator& gpu, GpuErosion& erosion)
+	{
+		std::cout << "\nerosion [ms]    droplets 20k   200k   1M (lifetime 64)   pipes (300 iterations)\n";
+		for (int size : { 512, 1024, 2048 }) {
+			TextureClass base(size, size, GL_R32F), eroded(size, size, GL_R32F);
+			gpu.GenerateNoise(noise::NoiseConfigParameters{}, MapArea{}, base);
+			std::cout << std::left << std::setw(16) << (std::to_string(size) + "x" + std::to_string(size)) << std::right << std::fixed << std::setprecision(2);
+			uint32_t seed = 0;
+			for (int count : { 20000, 200000, 1000000 }) {
+				erosion::ErosionConfig config;
+				config.dropletCount = count;
+				const double ms = MedianMs([&] {
+					erosion.Erode(config, base, eroded, seed++);
+					glFinish();
+				}, 3);
+				std::cout << std::setw(count == 20000 ? 12 : 7) << ms;
+			}
+			erosion::ErosionConfig pipes;
+			pipes.method = erosion::Method::PIPES;
+			const double pipesMs = MedianMs([&] {
+				erosion.Erode(pipes, base, eroded, 0);
+				glFinish();
+			}, 3);
+			std::cout << std::setw(12) << pipesMs << std::defaultfloat << "\n" << std::left;
+		}
+	}
 }
 
 int RunGpuHeightCheck()
@@ -888,7 +1110,8 @@ int RunGpuHeightCheck()
 		//The GL objects must go before the context does
 		GpuHeightGenerator gpu;
 		GpuSurfacePass surfacePass;
-		if (gpu.Initialize() && surfacePass.Initialize()) {
+		GpuErosion erosion;
+		if (gpu.Initialize() && surfacePass.Initialize() && erosion.Initialize()) {
 			bool ok = CheckRanges(gpu);
 			ok = CheckDeterminism(gpu) && ok;
 			ok = CheckShapeOperations(gpu) && ok;
@@ -901,7 +1124,9 @@ int RunGpuHeightCheck()
 			ok = CheckLand(gpu) && ok;
 			ok = CheckChunks(gpu) && ok;
 			ok = CheckSurface(surfacePass) && ok;
+			ok = CheckErosion(gpu, erosion) && ok;
 			RunTimings(gpu, surfacePass);
+			RunErosionTimings(gpu, erosion);
 			std::cout << "\n" << (ok ? "All checks passed" : "[ERROR] Some checks failed") << std::endl;
 			result = ok ? 0 : 1;
 		}

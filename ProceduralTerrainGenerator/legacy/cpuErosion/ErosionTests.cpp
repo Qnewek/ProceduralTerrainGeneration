@@ -212,7 +212,7 @@ TEST_CASE("Erode does not dig holes on a steep slope")
 	config.dropletCount = 500;
 	config.dropletLifetime = 32;
 	config.initialVelocity = 0.1f;
-	erosion.Erode(config, std::nullopt);
+	erosion.Erode(config);
 
 	CHECK(CountCells(TEST_WIDTH, TEST_HEIGHT, [&](int x, int y) {
 		return !(erosion.GetField().At(x, y) > 1.0f);
@@ -227,7 +227,7 @@ TEST_CASE("Erode without droplets leaves the map untouched")
 
 	ErosionConfig config;
 	config.dropletCount = 0;
-	erosion.Erode(config, std::nullopt);
+	erosion.Erode(config);
 
 	CHECK(CountCells(TEST_WIDTH, TEST_HEIGHT, [&](int x, int y) {
 		return erosion.GetField().At(x, y) != map[static_cast<size_t>(y) * TEST_WIDTH + x];
@@ -244,7 +244,7 @@ TEST_CASE("Erode changes the map and keeps heights finite and non-negative")
 	ErosionConfig config;
 	config.dropletCount = 500;
 	config.dropletLifetime = 32;
-	erosion.Erode(config, std::nullopt);
+	erosion.Erode(config);
 
 	const HeightField& field = erosion.GetField();
 	CHECK(CountCells(TEST_WIDTH, TEST_HEIGHT, [&](int x, int y) {
