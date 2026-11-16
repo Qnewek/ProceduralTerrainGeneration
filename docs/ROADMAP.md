@@ -537,6 +537,17 @@ Kroki:
   test „pipes: no spikes” w `--gpu-check`. 300 iteracji (+ ok. 90 wysychania): 1024² 330 ms, 2048² 1,3 s — liczone w jednej klatce. Wybór metody w zakładce Erosion, w presetach `erosion.method` i `erosion.pipes`.
   Dalej: erozja rozłożona na klatki (podgląd na żywo, bez przycięcia przy dużych mapach), chunki / „bake” obszaru, erozja w trybie TerrainGen.
 - **Rzeki i jeziora:** flow accumulation / priority-flood na mapie niskiej rozdzielczości, rzeźbienie koryt, maska wilgotności dla biomów.
+  Decyzja właściciela 2026-11-16: obie metody do wyboru w UI, tylko w TerrainGen; etap 1 = hydrologia, mapa rzek na GPU, żłobienie koryt, UI + presety;
+  etap 2 = woda z wysokością na piksel i przepływem, biomy/roślinność przy wodzie.
+  🟡 2026-11-16 etap 1 (zakładka „Rivers”, preset `rivers`, domyślnie bez rzek): (A) **Region** — `Hydrology.*` (CPU, testy): próbka terenu bez rzek
+  (`SampleTerrain`, kwadrat `regionSize` wokół środka mapy co `cellSize`), priority-flood + ε (Barnes 2014), D8 po wypełnionej powierzchni, akumulacja,
+  rzeka od `sourceArea`, szerokość ~ √(powierzchnia zlewni), poziom wody nie rośnie w dół rzeki, meandry + wygładzanie biegu; koryta jako odcinki rasteryzowane do
+  `RiverMap` (wektor do najbliższego punktu biegu — dokładny przy próbkowaniu dwuliniowym — odległość, szerokość, poziom rzeki i jeziora). Liczone w tle, teren
+  regenerowany po przyjściu sieci; zanika przy granicy regionu. 512² komórek: 69 ms, 705 komórek rzek na domyślnym świecie. (B) **Noise** — kanały wzdłuż zerowych linii
+  szumu (odległość = |n| / |∇n|) do poziomu morza, tylko na nizinach (`maxElevation`); lokalne, więc działa w nieskończonym świecie. Profil koryta wspólny
+  (`common/rivers.glsl`, po modyfikatorach biomów): dno U pod lustrem, brzegi `bankSlope`, wygaszanie na `bankWidth`; nigdy nie podnosi terenu.
+  `--gpu-check` sekcja `rivers:` (zakres, jeden przebieg = dwa, chunki bit w bit). Ograniczenia etapu 1: wody rzek i jezior nad poziomem morza nie widać
+  (rzeki B leżą na poziomie morza, więc mają wodę), biomy wybierane z wysokości przed rzekami.
 - **Zagnieżdżone splajny** (z „Teren 2.0”, pkt 3): punkty splajnu C są splajnami po M (i dalej po PV), wypiekane do tekstury LUT 2D/3D próbkowanej jednym odczytem.
   Daje klify tam, gdzie góry dochodzą do morza, płaskie plaże gdzie indziej, doliny wcięte poniżej podstawy. Najwięcej pracy: edytor UI (lista punktów C z wykresem po M, podgląd C×M jako mapa ciepła).
 - **Woda:** płaszczyzna oceanu z refleksją/refrakcją, głębia, piana przy brzegu.
