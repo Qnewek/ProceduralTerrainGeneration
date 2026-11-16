@@ -22,23 +22,29 @@ uniform ivec2 islandSize;	// see noise.glsl
 #include "../common/noise.glsl"
 #include "../common/terrain.glsl"
 #include "../common/biomes.glsl"
+#include "../common/rivers.glsl"
 
 float evaluateHeight(vec2 position)
 {
 	if (mode == MODE_NOISE) {
 		return evaluateNoise(0, position.x, position.y);
 	}
+	float height;
 	if (modifyTerrain == 0) {
-		return terrainHeight(evaluateNoise(0, position.x, position.y), evaluateNoise(1, position.x, position.y), evaluateNoise(2, position.x, position.y));
+		height = terrainHeight(evaluateNoise(0, position.x, position.y), evaluateNoise(1, position.x, position.y), evaluateNoise(2, position.x, position.y));
 	}
-	// As in biome_compute.shader: biomes chosen from the height before the modifiers
-	float values[PARAMETER_COUNT];
-	for (int i = 0; i < NOISE_COUNT; i++) {
-		values[i] = evaluateNoise(i, position.x, position.y);
+	else {
+		// As in biome_compute.shader: biomes chosen from the height before the modifiers
+		float values[PARAMETER_COUNT];
+		for (int i = 0; i < NOISE_COUNT; i++) {
+			values[i] = evaluateNoise(i, position.x, position.y);
+		}
+		height = terrainHeight(values[0], values[1], values[2]);
+		applyClimate(values, height);
+		height = modifyHeight(values, height, position);
 	}
-	float height = terrainHeight(values[0], values[1], values[2]);
-	applyClimate(values, height);
-	return modifyHeight(values, height, position);
+	// Rivers last, into the final terrain (riverMethod = RIVERS_NONE leaves it)
+	return carveRivers(height, position);
 }
 
 void main()

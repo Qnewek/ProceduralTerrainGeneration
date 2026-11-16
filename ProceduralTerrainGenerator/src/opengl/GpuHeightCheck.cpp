@@ -20,7 +20,9 @@
 #include "GpuErosion.h"
 #include "GpuHeightGenerator.h"
 #include "GpuSurfacePass.h"
+#include "Hydrology.h"
 #include "LandStats.h"
+#include "RiverMap.h"
 
 namespace {
 	//Not square, so swapped axes are detected; larger than one part of a dispatch along X
@@ -738,6 +740,110 @@ namespace {
 		return allOk;
 	}
 
+	//Map position (integer) of lowland near the middle of the default world: a little above the water, where both river methods carve
+	glm::vec2 FindLowland(GpuHeightGenerator& gpu, const TerrainConfig& terrain)
+	{
+		constexpr int size = 256;
+		constexpr float step = 64.0f;
+		const HeightField s = gpu.SampleTerrain(terrain, glm::vec2(0.0f), size, step, glm::ivec2(mapWidth, mapHeight), nullptr);
+		const float water = terrain.WaterHeight();
+		glm::vec2 best(0.0f);
+		float bestDistance = 1e30f;
+		for (int y = 0; y < size; y++) {
+			for (int x = 0; x < size; x++) {
+				const float h = s.At(x, y);
+				const glm::vec2 offset = glm::vec2(x, y) - glm::vec2(size / 2);
+				if (h > water + 0.01f && h < water + 0.03f && glm::dot(offset, offset) < bestDistance) {
+					bestDistance = glm::dot(offset, offset);
+					best = offset * step;
+				}
+			}
+		}
+		return best;
+	}
+
+	//Rivers carved into the terrain: values in [0, 1], never above the terrain without them, something carved; one pass (GenerateWorld)
+	//equal to GenerateTerrain, and chunks equal to the whole map bit for bit, for both methods
+	bool CheckRivers(GpuHeightGenerator& gpu)
+	{
+		std::cout << "\nrivers: carved terrain of the default world (with biome modifiers), network of a region\n";
+		const TerrainConfig terrain = TerrainConfig::Default();
+		const BiomeConfig biomes = BiomeConfig::Default();
+		const glm::ivec2 island(mapWidth, mapHeight);
+		const glm::vec2 center = FindLowland(gpu, terrain);
+		const MapArea area{ center - glm::vec2(mapWidth / 2, mapHeight / 2), 1.0f, island };
+
+		rivers::RiverConfig region;
+		region.method = rivers::Method::REGION;
+		constexpr int cells = 512;
+		const float cellSize = static_cast<float>(region.cellSize);
+		const auto start = std::chrono::steady_clock::now();
+		const HeightField sample = gpu.SampleTerrain(terrain, center, cells, cellSize, island, &biomes);
+		const hydrology::Network network = hydrology::Compute(sample, center - glm::vec2(cells * cellSize * 0.5f), cellSize, terrain.WaterHeight(), region);
+		const double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count();
+		RiverMap map;
+		map.Upload(network);
+		std::ostringstream networkDetails;
+		networkDetails << network.riverCells << " river cells, " << network.lakes << " lakes, " << std::fixed << std::setprecision(0) << ms << " ms";
+		bool allOk = network.riverCells > 0;
+		Report("rivers: network of " + std::to_string(cells) + "^2 cells", networkDetails.str(), allOk);
+
+		rivers::RiverConfig noise;
+		noise.method = rivers::Method::NOISE;
+		const std::pair<std::string, const rivers::RiverConfig*> cases[] = { { "region", &region }, { "noise", &noise } };
+		for (const auto& [name, config] : cases) {
+			const RiverInput input{ *config, &map };
+			TextureClass plain(mapWidth, mapHeight, GL_R32F), carved(mapWidth, mapHeight, GL_R32F);
+			gpu.GenerateTerrain(terrain, area, plain, &biomes);
+			gpu.GenerateTerrain(terrain, area, carved, &biomes, &input);
+			const HeightField before = ReadHeight(plain), after = ReadHeight(carved);
+			int lowered = 0, wrong = 0;
+			float deepest = 0.0f;
+			for (size_t i = 0; i < after.Size(); i++) {
+				if (!std::isfinite(after[i]) || after[i] < 0.0f || after[i] > 1.0f || after[i] > before[i]) {
+					wrong++;
+				}
+				lowered += after[i] < before[i] ? 1 : 0;
+				deepest = std::max(deepest, before[i] - after[i]);
+			}
+			std::ostringstream details;
+			details << lowered << " lowered, deepest " << std::fixed << std::setprecision(4) << deepest << ", " << wrong << " wrong";
+			bool ok = wrong == 0 && lowered > 0;
+			Report("rivers: " + name + " carves", details.str(), ok);
+			allOk = allOk && ok;
+
+			TextureClass height(mapWidth, mapHeight, GL_R32F), colors(mapWidth, mapHeight, GL_RGBA32F), ids(mapWidth, mapHeight, GL_R32I);
+			gpu.GenerateWorld(terrain, biomes, area, height, colors, ids, nullptr, &input);
+			const HeightField single = ReadHeight(height);
+			int different = 0;
+			for (size_t i = 0; i < single.Size(); i++) {
+				different += std::memcmp(&single[i], &after[i], sizeof(float)) != 0 ? 1 : 0;
+			}
+			ok = different == 0;
+			Report("rivers: " + name + ", one pass", std::to_string(different) + " texels differ", ok);
+			allOk = allOk && ok;
+
+			constexpr int partWidth = 131, partHeight = 50;
+			const glm::ivec2 corner(300, 30);
+			for (int step : { 1, 2, 4 }) {
+				TextureClass part(partWidth, partHeight, GL_R32F);
+				gpu.GenerateTerrain(terrain, MapArea{ area.origin + glm::vec2(corner), static_cast<float>(step), island }, part, &biomes, &input);
+				const HeightField p = ReadHeight(part);
+				different = 0;
+				for (int y = 0; y < partHeight; y++) {
+					for (int x = 0; x < partWidth; x++) {
+						different += std::memcmp(&p.At(x, y), &after.At(corner.x + x * step, corner.y + y * step), sizeof(float)) != 0 ? 1 : 0;
+					}
+				}
+				ok = different == 0;
+				Report("rivers: " + name + ", chunk step " + std::to_string(step), std::to_string(different) + " of " + std::to_string(partWidth * partHeight)
+					+ " texels differ", ok);
+				allOk = allOk && ok;
+			}
+		}
+		return allOk;
+	}
+
 	//Gradient (dx, dy) and Laplacian of h per world unit, as surface_compute.shader writes them
 	struct Derivatives {
 		float dx, dy, laplacian, reserved;
@@ -1123,6 +1229,7 @@ int RunGpuHeightCheck()
 			ok = CheckWorld(gpu) && ok;
 			ok = CheckLand(gpu) && ok;
 			ok = CheckChunks(gpu) && ok;
+			ok = CheckRivers(gpu) && ok;
 			ok = CheckSurface(surfacePass) && ok;
 			ok = CheckErosion(gpu, erosion) && ok;
 			RunTimings(gpu, surfacePass);

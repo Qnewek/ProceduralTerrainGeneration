@@ -32,7 +32,7 @@ Plan napraw i rozwoju: `docs/ROADMAP.md` (ID zadań `B*`, `A*`, `F*` są tam zde
 - **Test generacji: `out\build\x64-release\ProceduralTerrainGenerator.exe --gpu-check`** (ukryte okno, potrzebny GPU z OpenGL 4.5; uruchamiaj po każdej
   zmianie shaderów generacji). Sprawdza: wartości skończone i w zakresie opcji (każda opcja, ridge, wyspy, metody terenu), determinizm i wpływ seeda,
   zgodność id i kolorów biomów, chunki i poziomy LOD bit w bit z pełną mapą, mapę pochodnych na mapach o znanych pochodnych, udział wody domyślnego świata
-  (55–65%, ≥ 80% lądu w kontynentach), erozję (krople i rury); potem czasy GPU generacji i erozji.
+  (55–65%, ≥ 80% lądu w kontynentach), rzeki (obie metody: zakres, jeden przebieg = dwa, chunki), erozję (krople i rury); potem czasy GPU generacji i erozji.
   Nowa opcja generacji = nowy przypadek w `CheckRanges` (`GpuHeightCheck.cpp`).
 - **Wielkość liter ścieżek = dokładnie taka jak w gicie** (`git ls-files`): `src/opengl`, `src/subSystems`,
   `src/terrainGeneration`, `src/utility`, `src/vendor`, `res/shaders`, `res/textures`.
@@ -67,10 +67,12 @@ ProceduralTerrainGenerator/
       HeightmapImport.*          odczyt mapy z PNG lub R16/RAW; format po rozszerzeniu, nowy = czytnik i rozszerzenie w tym pliku
       GenerationJob.h            jedno zadanie generacji w tle (std::async + TryTake)
       LandStats.*                udział wody i masy lądu (flood fill) z rzadkiej próbki świata (GpuHeightGenerator::SampleTerrain); „Land statistics” w zakładce Terrain i sekcja land: w --gpu-check
+      Hydrology.*                sieć rzek regionu (metoda REGION): priority-flood, spływ D8, akumulacja, jeziora, biegi rzek → siatki dla RiverMap
     opengl/                      cienkie wrappery: Shader, VertexArray/Buffer, IndexBuffer, TextureClass, Renderer, GpuQuery
       TerrainView.*              siatka + shader + tekstury (TERRAIN/OVERLAY/BIOMES), wspólny dla obu trybów
       GpuHeightGenerator.*       jedyna generacja: szum, teren i biomy w compute shaderach (GenerateWorld = teren + biomy w jednym przebiegu); GpuHeightCheck.* = testy generacji (--gpu-check)
       NoisePreview.*             podgląd edytowanego szumu jako mapa 2D w panelu ImGui (≤ 512 tekseli na dłuższym boku, preview_compute.shader = skala szarości)
+      RiverMap.*                 sieć rzek z Hydrology na GPU (2 tekstury, jednostki 20–21), czytana przy generacji przez common/rivers.glsl
       GpuSurfacePass.*           mapa pochodnych (gradient + laplasjan) z mapy wysokości; uruchamia ją TerrainView i ChunkWorld
       GpuErosion.*               erozja w compute: kroplowa (erosion_droplet_compute.shader, algorytm dawnej wersji CPU) albo rury wirtualne + termiczna
                                  (erosion_pipe_compute.shader); metoda = ErosionConfig::method
@@ -97,7 +99,7 @@ ProceduralTerrainGenerator/
   res/shaders/
     TerrainShaders/              VS → TCS → TES → FS, jedyny zestaw dla terenu (oba tryby)
     ComputeShaders/              height_compute.shader (szum, teren), biome_compute.shader, surface_compute.shader, erosion_droplet/pipe_compute.shader; wspólne: common/noise.glsl, noise_params.glsl, simplex.glsl, surface.glsl,
-                                 terrain.glsl (wysokość terenu z C/M/W), world_input.glsl (wspólny bufor wejściowy), biomes.glsl (reguły biomów, klimat, modyfikatory terenu, mieszanie materiałów)
+                                 terrain.glsl (wysokość terenu z C/M/W), rivers.glsl (żłobienie koryt), world_input.glsl (wspólny bufor wejściowy), biomes.glsl (reguły biomów, klimat, modyfikatory terenu, mieszanie materiałów)
     common/materials.glsl        próbkowanie materiałów w trybie TEXTURED (triplanar, anti-tiling), blok TerrainMaterialBlock = TerrainMaterials::Block
     sky_vertex/fragment.shader   niebo; kolory nieba i światła w common/sky.glsl (z LUT), mgła w common/fog.glsl; model atmosfery common/atmosphere_model.glsl, LUT-y w AtmosphereShaders/;
                                  chmury: CloudShaders/ + common/clouds.glsl (gęstość, mapa pogody, cień chmur w sunShadow)
@@ -291,6 +293,14 @@ Wartości szumów są w [-1, 1]. Konwencja indeksowania: `map[y * width + x]`.
 - Import map: plik nie przechowuje zakresu wartości, więc wybiera go użytkownik (`valueRanges` w `MapImportSys.cpp`). `lodepng` nie zamienia koloru na szary
   ani niższej głębi na 16 bitów (błąd 56), dlatego PNG dekodujemy do RGBA o głębi pliku. Mapa żyje w `MapImportSys::map`, stąd pójdą przyszłe operacje na niej
   (jak w innych trybach: w tle, na kopii).
+- Rzeki (tylko TerrainGen, zakładka „Rivers”, `WorldConfig::rivers`, domyślnie `NONE`): `carveRivers` (`common/rivers.glsl`) to ostatni krok wysokości w obu ścieżkach
+  (`height_compute` i `biome_compute` z `writeHeight`), po modyfikatorach; biomy wybiera wysokość sprzed rzek. Generacja dostaje `const RiverInput*` (config + `RiverMap`);
+  `SampleTerrain` zawsze bez rzek (z niej liczy się sieć — inaczej sprzężenie). Każdy dispatch ustawia `riverMethod` (program pamięta uniformy).
+  REGION: `TerrainGenerationSys::UpdateRivers` próbkuje teren (odczyt z GPU) i liczy `hydrology::Compute` w tle (`GenerationJob`), po przyjściu sieci ustawia
+  `pending.terrain` bezpośrednio — nie `RequestTerrain`, które oznacza sieć jako nieaktualną (pętla). `RequestTerrain` i `RequestBiomes` (z modyfikatorami) unieważniają sieć.
+  Koryto w teksturze to wektor do najbliższego punktu biegu (dokładny przy próbkowaniu dwuliniowym) plus odległość skalarna, bo wektor między dwiema rzekami
+  maleje do 0 — shader bierze `max(|wektor|, odległość − komórka)`. NOISE: tablica permutacji 6 (`WorldInput` ma 7 tablic). Nowy parametr rzek = `RiverConfig` + presety
+  (`RiversToJson`/`ReadRivers`/`CheckRivers`) + `PresetTests` + UI; zmiana shadera → `--gpu-check` (sekcja `rivers:`).
 - **Generacja jest tylko w GLSL** (`ComputeShaders/`, `common/noise.glsl`, `common/simplex.glsl`, `common/surface.glsl`). Nowe pole configu szumu trzeba
   dopisać do `NoiseParams` (`noise_params.glsl`), `GpuNoiseParams`/`SetNoise` (`GpuHeightGenerator.cpp`), presetów i UI, a potem uruchomić `--gpu-check`.
 - LOD chunków: poziom L bierze co 2^L-tą próbkę (`MapArea::step`, potęga dwójki, więc próbki poziomów się pokrywają). Siatka chunka jest jedna, skalowana w XZ uniformem

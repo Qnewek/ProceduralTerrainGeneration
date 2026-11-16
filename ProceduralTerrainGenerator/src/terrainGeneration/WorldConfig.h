@@ -231,11 +231,63 @@ struct BiomeConfig {
 	}
 };
 
+namespace rivers {
+	//How rivers are made (common/rivers.glsl carves them into the terrain, after the biome modifiers)
+	enum class Method {
+		NONE,
+		//River network of a region around the finite map, computed on the CPU from a coarse sample of the terrain (Hydrology.h):
+		//water flows downhill, depressions fill into lakes, rivers start where enough area drains and widen downstream
+		REGION,
+		//Zero lines of a noise carve channels down to the sea level, only in the lowlands; local, so the world stays infinite
+		NOISE
+	};
+
+	//Lengths in map texels, heights in terrain heights (1 = the whole height range; TerrainGen shows it as 1024 world units, 4 per texel)
+	struct RiverConfig {
+		Method method = Method::NONE;
+
+		//Shape of a channel (both methods): the bed lies up to depthPerWidth * half width below the water surface (U profile),
+		//the banks rise bankSlope per texel from the water and the carving fades out bankWidth texels from the channel
+		float bankWidth = 48.0f;
+		float bankSlope = 0.002f;
+		float depthPerWidth = 0.001f;
+
+		//REGION: square of regionSize texels around the middle of the finite map, sampled every cellSize texels
+		int regionSize = 8192;
+		int cellSize = 8;
+		//Area (texels^2) that has to drain through a cell for a river to start there
+		//(100000: about 1.3 km of rivers per km^2 of land of the default world, cellSize 8)
+		float sourceArea = 100000.0f;
+		//Half width at the source, growing with the square root of the drained area up to maxHalfWidth
+		float minHalfWidth = 3.0f;
+		float maxHalfWidth = 24.0f;
+		//Amplitude (texels) of the bends added to the course, and passes smoothing the staircase of the grid
+		float meander = 8.0f;
+		int smoothing = 4;
+		//How far below the terrain of its course the water surface of a river lies
+		float surfaceDrop = 0.002f;
+		//A filled depression deeper than this is a lake (rivers have no channel in it)
+		//(0.01: the detail noise of the biome modifiers leaves many shallower pits)
+		float minLakeDepth = 0.01f;
+		//Rivers fade out over this distance (texels) inside the border of the region
+		float borderFade = 512.0f;
+
+		//NOISE: wavelength (texels) of the noise, half width of the channels, height above the water where rivers end,
+		//strength of the domain warp bending the channels, seed of the noise
+		float noiseScale = 1500.0f;
+		float noiseHalfWidth = 6.0f;
+		float maxElevation = 0.1f;
+		float noiseWarp = 0.6f;
+		int noiseSeed = 4321;
+	};
+}
+
 //Everything the "TerrainGen" mode generates from
 struct WorldConfig {
 	int width = 0, height = 0;
 	TerrainConfig terrain = TerrainConfig::Default();
 	BiomeConfig biomes = BiomeConfig::Default();
+	rivers::RiverConfig rivers;
 };
 
 //Everything the "Noise heightmap" mode generates from

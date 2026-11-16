@@ -6,6 +6,7 @@
 #include "Biome.h"
 #include "Grid.h"
 #include "GpuQuery.h"
+#include "RiverMap.h"
 #include "Shader.h"
 #include "TextureClass.h"
 #include "WorldConfig.h"
@@ -18,6 +19,13 @@ struct MapArea {
 	float step = 1.0f;
 	//Size of the map an island fills, starting at map position (0, 0); (0, 0) = the size of the target, as on the CPU
 	glm::ivec2 islandSize = glm::ivec2(0);
+};
+
+//Rivers carved into the terrain (common/rivers.glsl), after the biome modifiers
+struct RiverInput {
+	const rivers::RiverConfig& config;
+	//rivers::Method::REGION: the network of the region; nullptr or not Ready() = no rivers yet
+	const RiverMap* map = nullptr;
 };
 
 //Generates all maps of the application in compute shaders (the only implementation of the generation; --gpu-check tests it).
@@ -43,7 +51,9 @@ public:
 	//and takes its end value for a noise outside [-1, 1]
 	//@param target - GL_R32F
 	//@param biomes - if given and biomes->modifyTerrain, the height is changed by the biome modifiers (biome::ModifyHeight)
-	void GenerateTerrain(const TerrainConfig& config, const MapArea& area, TextureClass& target, const BiomeConfig* biomes = nullptr);
+	//@param rivers - if given, rivers are carved into the result
+	void GenerateTerrain(const TerrainConfig& config, const MapArea& area, TextureClass& target, const BiomeConfig* biomes = nullptr,
+		const RiverInput* rivers = nullptr);
 	//Biome of every texel from its five noise values (biome_compute.shader): temperature and humidity changed by the terrain
 	//height (biome::ApplyClimate, the height computed as GenerateTerrain does), then the nearest biome of biomes.table (biome::Nearest),
 	//and colors of all biomes mixed with biome::BlendWeight. Depends on the whole terrain config, so a terrain change needs new biomes
@@ -56,10 +66,12 @@ public:
 	//Terrain and biomes in one pass (biome_compute.shader): the same maps as GenerateTerrain(terrain, area, height, &biomes) followed by
 	//GenerateBiomes, bit for bit, but the noises and the biome table are evaluated once. Use it whenever both are needed
 	//@param height - GL_R32F of the size of colors; changed by the biome modifiers if biomes.modifyTerrain
+	//@param rivers - as in GenerateTerrain; biomes are chosen from the height before the rivers
 	void GenerateWorld(const TerrainConfig& terrain, const BiomeConfig& biomes, const MapArea& area, TextureClass& height,
-		TextureClass& colors, TextureClass& ids, TextureClass* splat = nullptr);
+		TextureClass& colors, TextureClass& ids, TextureClass* splat = nullptr, const RiverInput* rivers = nullptr);
 
-	//Coarse sample of the terrain over a large area, read back to the CPU (waits for the GPU), for statistics of the world
+	//Coarse sample of the terrain (without rivers) over a large area, read back to the CPU (waits for the GPU), for statistics of the world
+	//and the river network of a region (sample i lies at map position center - size * step / 2 + i * step)
 	//@param center - map position in the middle of the sampled area
 	//@param size - samples along each side
 	//@param step - map texels between samples
@@ -79,10 +91,10 @@ public:
 private:
 	void UploadBiomeTable(const BiomeConfig& biomes);
 	//Runs height_compute.shader with the world input bound (and the biome table if modify)
-	void RunHeightShader(int mode, bool modify, const MapArea& area, TextureClass& target);
+	void RunHeightShader(int mode, bool modify, const MapArea& area, TextureClass& target, const RiverInput* rivers = nullptr, float waterHeight = 0.0f);
 	//Runs biome_compute.shader; splat and height are written only if given
 	void RunBiomeShader(const BiomeConfig& biomes, const TerrainConfig& terrain, const MapArea& area, TextureClass& colors, TextureClass& ids,
-		TextureClass* splat, TextureClass* height);
+		TextureClass* splat, TextureClass* height, const RiverInput* rivers);
 
 	std::unique_ptr<Shader> heightShader, biomeShader;
 	unsigned int worldInput = 0, biomeTable = 0;

@@ -28,11 +28,12 @@ namespace {
 	static_assert(sizeof(GpuNoiseParams) == 92);
 
 	//Layout of the WorldInput block of both shaders (common/world_input.glsl, std430): noises in the order of biome::Parameter,
-	//permutation table 5 for the detail noise of the biome modifiers, the three terrain splines
+	//permutation table 5 for the detail noise of the biome modifiers, 6 for the river noise, the three terrain splines
 	constexpr int detailTable = 5;
+	constexpr int riverTable = 6;
 	struct GpuWorldInput {
 		GpuNoiseParams noises[5];
-		uint32_t permutations[6 * 256];
+		uint32_t permutations[7 * 256];
 		float splines[3 * splineSamples];
 	};
 
@@ -112,7 +113,7 @@ namespace {
 
 	//Fills the noises, permutation tables and splines of the terrain and, if given, of the biomes
 	//@return the mode of terrain.glsl for the terrain method
-	int FillWorldInput(GpuWorldInput& input, const TerrainConfig& terrain, const BiomeConfig* biomes)
+	int FillWorldInput(GpuWorldInput& input, const TerrainConfig& terrain, const BiomeConfig* biomes, const RiverInput* rivers)
 	{
 		SetNoise(input.noises, input.permutations, 0, terrain.continentalness);
 		SetNoise(input.noises, input.permutations, 1, terrain.mountainousness);
@@ -122,7 +123,42 @@ namespace {
 			SetNoise(input.noises, input.permutations, 4, biomes->humidity);
 			SetPermutation(input.permutations, detailTable, biomes->detailSeed);
 		}
+		if (rivers && rivers->config.method == rivers::Method::NOISE) {
+			SetPermutation(input.permutations, riverTable, rivers->config.noiseSeed);
+		}
 		return SetTerrainSplines(input.splines, terrain);
+	}
+
+	//Values of RIVERS_* in common/rivers.glsl
+	enum RiverMethod { RIVERS_NONE = 0, RIVERS_REGION = 1, RIVERS_NOISE = 2 };
+
+	//Sets the uniforms of common/rivers.glsl and binds the river maps; the shader must be bound. Always called, since the program
+	//keeps uniforms between dispatches
+	//@param rivers - nullptr = no rivers
+	void SetRiverUniforms(Shader& shader, const RiverInput* rivers, float waterHeight)
+	{
+		int method = RIVERS_NONE;
+		if (rivers && rivers->config.method == rivers::Method::NOISE) {
+			method = RIVERS_NOISE;
+		}
+		else if (rivers && rivers->config.method == rivers::Method::REGION && rivers->map && rivers->map->Ready()) {
+			method = RIVERS_REGION;
+		}
+		shader.SetUniform1i("riverMethod", method);
+		if (method == RIVERS_NONE) {
+			return;
+		}
+		const rivers::RiverConfig& c = rivers->config;
+		shader.SetUniform1f("waterHeight", waterHeight);
+		shader.SetUniform3fv("riverShape", glm::vec3(c.bankWidth, c.bankSlope, c.depthPerWidth));
+		if (method == RIVERS_REGION) {
+			const RiverMap& map = *rivers->map;
+			shader.SetUniform4f("riverRegion", map.Origin().x, map.Origin().y, map.CellSize(), c.borderFade);
+			map.Bind();
+		}
+		else {
+			shader.SetUniform4f("riverNoise", c.noiseScale, c.noiseHalfWidth, c.maxElevation, c.noiseWarp);
+		}
 	}
 
 	//Sets the uniforms of the terrain method and of common/biomes.glsl; the shader must be bound
@@ -167,12 +203,13 @@ void GpuHeightGenerator::UploadBiomeTable(const BiomeConfig& biomes)
 	glNamedBufferData(biomeTable, entries.size() * sizeof(GpuBiomeEntry), entries.data(), GL_DYNAMIC_DRAW);
 }
 
-void GpuHeightGenerator::RunHeightShader(int mode, bool modify, const MapArea& area, TextureClass& target)
+void GpuHeightGenerator::RunHeightShader(int mode, bool modify, const MapArea& area, TextureClass& target, const RiverInput* rivers, float waterHeight)
 {
 	Shader& shader = *heightShader;
 	shader.Bind();
 	shader.SetUniform1i("mode", mode);
 	shader.SetUniform1i("modifyTerrain", modify ? 1 : 0);
+	SetRiverUniforms(shader, mode == MODE_NOISE ? nullptr : rivers, waterHeight);
 	SetMapUniforms(shader, area, target);
 	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, worldInput);
 	if (modify) {
@@ -227,11 +264,12 @@ void GpuHeightGenerator::GenerateNoise(const noise::NoiseConfigParameters& confi
 	RunHeightShader(MODE_NOISE, false, area, target);
 }
 
-void GpuHeightGenerator::GenerateTerrain(const TerrainConfig& config, const MapArea& area, TextureClass& target, const BiomeConfig* biomes)
+void GpuHeightGenerator::GenerateTerrain(const TerrainConfig& config, const MapArea& area, TextureClass& target, const BiomeConfig* biomes,
+	const RiverInput* rivers)
 {
 	auto input = std::make_unique_for_overwrite<GpuWorldInput>();
 	const bool modify = biomes && biomes->modifyTerrain;
-	const int mode = FillWorldInput(*input, config, modify ? biomes : nullptr);
+	const int mode = FillWorldInput(*input, config, modify ? biomes : nullptr, rivers);
 	glNamedBufferSubData(worldInput, 0, sizeof(GpuWorldInput), input.get());
 	heightShader->Bind();
 	heightShader->SetUniform3fv("layered", glm::vec3(config.seaLevel, config.coastWidth, config.mountainShare));
@@ -241,7 +279,7 @@ void GpuHeightGenerator::GenerateTerrain(const TerrainConfig& config, const MapA
 		//Only the height shader uses it
 		heightShader->SetUniform1f("terrainBlendWidth", biomes->terrainBlendWidth);
 	}
-	RunHeightShader(mode, modify, area, target);
+	RunHeightShader(mode, modify, area, target, rivers, config.WaterHeight());
 }
 
 HeightField GpuHeightGenerator::SampleTerrain(const TerrainConfig& config, glm::vec2 center, int size, float step, glm::ivec2 islandSize,
@@ -258,26 +296,31 @@ HeightField GpuHeightGenerator::SampleTerrain(const TerrainConfig& config, glm::
 void GpuHeightGenerator::GenerateBiomes(const BiomeConfig& biomes, const TerrainConfig& terrain, const MapArea& area, TextureClass& colors, TextureClass& ids,
 	TextureClass* splat)
 {
-	RunBiomeShader(biomes, terrain, area, colors, ids, splat, nullptr);
+	RunBiomeShader(biomes, terrain, area, colors, ids, splat, nullptr, nullptr);
 }
 
 void GpuHeightGenerator::GenerateWorld(const TerrainConfig& terrain, const BiomeConfig& biomes, const MapArea& area, TextureClass& height,
-	TextureClass& colors, TextureClass& ids, TextureClass* splat)
+	TextureClass& colors, TextureClass& ids, TextureClass* splat, const RiverInput* rivers)
 {
-	RunBiomeShader(biomes, terrain, area, colors, ids, splat, &height);
+	RunBiomeShader(biomes, terrain, area, colors, ids, splat, &height, rivers);
 }
 
 void GpuHeightGenerator::RunBiomeShader(const BiomeConfig& biomes, const TerrainConfig& terrain, const MapArea& area, TextureClass& colors, TextureClass& ids,
-	TextureClass* splat, TextureClass* height)
+	TextureClass* splat, TextureClass* height, const RiverInput* rivers)
 {
+	//Rivers change only the height
+	if (!height) {
+		rivers = nullptr;
+	}
 	auto input = std::make_unique_for_overwrite<GpuWorldInput>();
-	const int mode = FillWorldInput(*input, terrain, &biomes);
+	const int mode = FillWorldInput(*input, terrain, &biomes, rivers);
 	glNamedBufferSubData(worldInput, 0, sizeof(GpuWorldInput), input.get());
 	UploadBiomeTable(biomes);
 
 	Shader& shader = *biomeShader;
 	shader.Bind();
 	SetWorldUniforms(shader, mode, terrain, biomes);
+	SetRiverUniforms(shader, rivers, terrain.WaterHeight());
 	shader.SetUniform1f("blendWidth", biomes.blendWidth);
 	SetMapUniforms(shader, area, colors);
 	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, worldInput);

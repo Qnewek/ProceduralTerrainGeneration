@@ -34,6 +34,7 @@ uniform vec3 layered;			// MODE_LAYERED: seaLevel, coastWidth, mountainShare (Te
 #include "../common/noise.glsl"
 #include "../common/terrain.glsl"
 #include "../common/biomes.glsl"
+#include "../common/rivers.glsl"
 
 void main()
 {
@@ -105,6 +106,8 @@ void main()
 		if (modify) {
 			height = finishModifiedHeight(height, terrainTotal, amplitude, offset, details);
 		}
+		// As in height_compute.shader: rivers into the final terrain; biomes were chosen from the height before them
+		height = carveRivers(height, position);
 		imageStore(heightMap, texel, vec4(height));
 	}
 
