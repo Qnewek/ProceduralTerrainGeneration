@@ -233,6 +233,9 @@ namespace preset {
 			j["bankWidth"] = ReadableFloat(r.bankWidth);
 			j["bankSlope"] = ReadableFloat(r.bankSlope);
 			j["depthPerWidth"] = ReadableFloat(r.depthPerWidth);
+			j["humidity"] = ReadableFloat(r.humidity);
+			j["humidityRange"] = ReadableFloat(r.humidityRange);
+			j["bedMaterial"] = r.bedMaterial;
 			j["regionSize"] = r.regionSize;
 			j["cellSize"] = r.cellSize;
 			j["sourceArea"] = ReadableFloat(r.sourceArea);
@@ -493,6 +496,9 @@ namespace preset {
 			r.Read("bankWidth", c.bankWidth);
 			r.Read("bankSlope", c.bankSlope);
 			r.Read("depthPerWidth", c.depthPerWidth);
+			r.Read("humidity", c.humidity);
+			r.Read("humidityRange", c.humidityRange);
+			r.Read("bedMaterial", c.bedMaterial);
 			r.Read("regionSize", c.regionSize);
 			r.Read("cellSize", c.cellSize);
 			r.Read("sourceArea", c.sourceArea);
@@ -769,6 +775,11 @@ namespace preset {
 			//smoothstep over the banks and the division by the half width in rivers.glsl
 			if (!positive(r.bankWidth) || !notNegative(r.bankSlope) || !notNegative(r.depthPerWidth)) {
 				throw std::runtime_error("Rivers: bankWidth must be greater than 0, bankSlope and depthPerWidth must not be negative");
+			}
+			//smoothstep over humidityRange; the bed material indexes the splat weights
+			if (!std::isfinite(r.humidity) || !positive(r.humidityRange) || r.bedMaterial < -1 || r.bedMaterial >= biome::maxMaterials) {
+				throw std::runtime_error("Rivers: humidity must be a number, humidityRange greater than 0 and bedMaterial between -1 and "
+					+ std::to_string(biome::maxMaterials - 1));
 			}
 			if (r.cellSize < 1 || r.regionSize < minRiverCells * r.cellSize || r.regionSize > maxRiverCells * r.cellSize) {
 				throw std::runtime_error("Rivers: cellSize must be at least 1 and regionSize between " + std::to_string(minRiverCells) + " and "

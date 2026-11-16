@@ -131,3 +131,100 @@ TEST_CASE("Rivers: nothing far from the courses, under the sea or in a flat lake
 		CHECK(net.levels.At(30, 21).lake == doctest::Approx(net.levels.At(31, 21).lake));
 	}
 }
+
+TEST_CASE("Water level: in the channel and in lakes, none beside them or outside the region")
+{
+	rivers::RiverConfig config;
+	//Cells of 16 texels^2: the valley drains hundreds of cells, a side cell at most 29
+	config.sourceArea = 2000.0f;
+	config.meander = 0.0f;
+	config.smoothing = 0;
+	config.minHalfWidth = 2.0f;
+	config.maxHalfWidth = 2.0f;
+	//Region shifted and scaled: cell (x, y) lies at map position (100, 50) + 4 (x, y)
+	const glm::vec2 origin(100.0f, 50.0f);
+	const hydrology::Network net = hydrology::Compute(MakeMap(Valley), origin, 4.0f, 0.0f, config);
+	const glm::vec2 channel = origin + glm::vec2(30.0f, 20.0f) * 4.0f;
+	CHECK(hydrology::WaterLevelAt(net, channel) == doctest::Approx(net.levels.At(30, 20).river));
+	//Half width 2 texels: 6 texels aside is the bank
+	CHECK(std::isinf(hydrology::WaterLevelAt(net, channel + glm::vec2(6.0f, 0.0f))));
+	CHECK(std::isinf(hydrology::WaterLevelAt(net, origin - glm::vec2(1.0f))));
+
+	const HeightField bowl = MakeMap([](int x, int y) {
+		return 0.2f + 0.0004f * static_cast<float>((x - 30) * (x - 30) + (y - 21) * (y - 21)) + (x == 0 || y == 0 || x == width - 1 || y == height - 1 ? 1.0f : 0.0f);
+	});
+	const hydrology::Network lake = hydrology::Compute(bowl, glm::vec2(0.0f), 1.0f, 0.0f, config);
+	CHECK(hydrology::WaterLevelAt(lake, glm::vec2(30.4f, 21.2f)) == doctest::Approx(lake.levels.At(30, 21).lake));
+}
+
+TEST_CASE("Water mesh: rivers flow downstream, lakes stand still, nothing at the sea")
+{
+	rivers::RiverConfig config;
+	config.sourceArea = 50.0f;
+	config.meander = 0.0f;
+	config.smoothing = 0;
+	SUBCASE("river")
+	{
+		const hydrology::Network net = hydrology::Compute(MakeMap(Valley), glm::vec2(0.0f), 1.0f, 0.0f, config);
+		const std::vector<hydrology::WaterVertex> mesh = hydrology::BuildWaterMesh(net, 0.0f, 256.0f);
+		REQUIRE(!mesh.empty());
+		CHECK(mesh.size() % 3 == 0);
+		int flowing = 0;
+		for (const hydrology::WaterVertex& v : mesh) {
+			CHECK(v.level > 0.0f);
+			//The valley falls towards y = 0
+			CHECK(v.flowY <= 0.0f);
+			flowing += v.flowY < 0.0f ? 1 : 0;
+			CHECK(std::abs(v.x - 30.0f) <= config.maxHalfWidth + 3.0f);
+		}
+		CHECK(flowing > 0);
+	}
+	SUBCASE("lake")
+	{
+		const HeightField bowl = MakeMap([](int x, int y) {
+			return 0.2f + 0.0004f * static_cast<float>((x - 30) * (x - 30) + (y - 21) * (y - 21)) + (x == 0 || y == 0 || x == width - 1 || y == height - 1 ? 1.0f : 0.0f);
+		});
+		const hydrology::Network net = hydrology::Compute(bowl, glm::vec2(0.0f), 1.0f, 0.0f, config);
+		const std::vector<hydrology::WaterVertex> mesh = hydrology::BuildWaterMesh(net, 0.0f, 256.0f);
+		REQUIRE(!mesh.empty());
+		for (const hydrology::WaterVertex& v : mesh) {
+			const int x = static_cast<int>(v.x), y = static_cast<int>(v.y);
+			//At the rim the surface sinks under the ground
+			if (net.levels.At(x, y).lake != hydrology::noLake) {
+				CHECK(v.level == doctest::Approx(net.levels.At(30, 21).lake));
+			}
+			else {
+				CHECK(v.level < bowl.At(x, y));
+			}
+			CHECK(v.flowX == 0.0f);
+			CHECK(v.flowY == 0.0f);
+		}
+	}
+	SUBCASE("never above the ground outside lakes and channels")
+	{
+		//A river across a slope falling to the side, and a lake whose outlet is lower than its surface
+		config.meander = 6.0f;
+		const HeightField slope = MakeMap([](int x, int y) {
+			const float pit = 0.05f * std::exp(-0.02f * static_cast<float>((x - 40) * (x - 40) + (y - 30) * (y - 30)));
+			return 0.1f + 0.004f * static_cast<float>(y) + 0.002f * static_cast<float>(x) + 0.0002f * static_cast<float>((x - 20) * (x - 20)) - pit;
+		});
+		const hydrology::Network net = hydrology::Compute(slope, glm::vec2(0.0f), 1.0f, 0.0f, config);
+		const std::vector<hydrology::WaterVertex> mesh = hydrology::BuildWaterMesh(net, 0.0f, 256.0f);
+		REQUIRE(!mesh.empty());
+		int sunk = 0;
+		for (const hydrology::WaterVertex& v : mesh) {
+			const int x = static_cast<int>(v.x), y = static_cast<int>(v.y);
+			const hydrology::RiverTexel& r = net.rivers.At(x, y);
+			if (net.levels.At(x, y).lake == hydrology::noLake && r.distance >= r.halfWidth) {
+				CHECK(v.level < slope.At(x, y));
+				sunk++;
+			}
+		}
+		CHECK(sunk > 0);
+	}
+	SUBCASE("sea")
+	{
+		const hydrology::Network net = hydrology::Compute(MakeMap(Valley), glm::vec2(0.0f), 1.0f, 0.9f, config);
+		CHECK(hydrology::BuildWaterMesh(net, 0.9f, 256.0f).empty());
+	}
+}

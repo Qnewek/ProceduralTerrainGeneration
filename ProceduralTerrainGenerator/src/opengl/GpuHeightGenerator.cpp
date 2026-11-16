@@ -151,6 +151,8 @@ namespace {
 		const rivers::RiverConfig& c = rivers->config;
 		shader.SetUniform1f("waterHeight", waterHeight);
 		shader.SetUniform3fv("riverShape", glm::vec3(c.bankWidth, c.bankSlope, c.depthPerWidth));
+		shader.SetUniform2f("riverClimate", c.humidity, c.humidityRange);
+		shader.SetUniform1i("riverBedMaterial", std::clamp(c.bedMaterial, -1, biome::maxMaterials - 1));
 		if (method == RIVERS_REGION) {
 			const RiverMap& map = *rivers->map;
 			shader.SetUniform4f("riverRegion", map.Origin().x, map.Origin().y, map.CellSize(), c.borderFade);
@@ -294,9 +296,9 @@ HeightField GpuHeightGenerator::SampleTerrain(const TerrainConfig& config, glm::
 }
 
 void GpuHeightGenerator::GenerateBiomes(const BiomeConfig& biomes, const TerrainConfig& terrain, const MapArea& area, TextureClass& colors, TextureClass& ids,
-	TextureClass* splat)
+	TextureClass* splat, const RiverInput* rivers)
 {
-	RunBiomeShader(biomes, terrain, area, colors, ids, splat, nullptr, nullptr);
+	RunBiomeShader(biomes, terrain, area, colors, ids, splat, nullptr, rivers);
 }
 
 void GpuHeightGenerator::GenerateWorld(const TerrainConfig& terrain, const BiomeConfig& biomes, const MapArea& area, TextureClass& height,
@@ -308,10 +310,6 @@ void GpuHeightGenerator::GenerateWorld(const TerrainConfig& terrain, const Biome
 void GpuHeightGenerator::RunBiomeShader(const BiomeConfig& biomes, const TerrainConfig& terrain, const MapArea& area, TextureClass& colors, TextureClass& ids,
 	TextureClass* splat, TextureClass* height, const RiverInput* rivers)
 {
-	//Rivers change only the height
-	if (!height) {
-		rivers = nullptr;
-	}
 	auto input = std::make_unique_for_overwrite<GpuWorldInput>();
 	const int mode = FillWorldInput(*input, terrain, &biomes, rivers);
 	glNamedBufferSubData(worldInput, 0, sizeof(GpuWorldInput), input.get());

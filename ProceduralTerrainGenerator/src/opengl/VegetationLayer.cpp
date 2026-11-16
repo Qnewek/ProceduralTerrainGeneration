@@ -100,7 +100,7 @@ void VegetationLayer::Update(const ChunkWorld& chunks, const VegetationModels* m
 	}
 	//Anything placement depends on changed: place every chunk again, nearest first, showing the old instances meanwhile
 	if (ready != placedReadyModels || !SamePlants(world.biomes, placedPlants) || world.waterHeight != placedWater || world.seed != placedSeed
-		|| density != placedDensity) {
+		|| density != placedDensity || world.rivers != placedRivers) {
 		for (auto& [key, chunk] : placed) {
 			chunk.stale = true;
 		}
@@ -114,6 +114,7 @@ void VegetationLayer::Update(const ChunkWorld& chunks, const VegetationModels* m
 		}
 		placedWater = world.waterHeight;
 		placedSeed = world.seed;
+		placedRivers = world.rivers;
 		placedDensity = density;
 	}
 
@@ -222,8 +223,10 @@ void VegetationLayer::StartPlacement(const ChunkWorld& chunks, const ChunkWorld:
 
 	//The worker owns copies of everything it reads
 	p.job->Start([height = std::move(height), surface = std::move(surface), ids = std::move(ids), plants = placedPlants, infos = modelInfos,
-		settings, step, firstTexel = g.coord * ChunkWorld::chunkSize * step - step, blocksPerSide]() {
+		settings, step, firstTexel = g.coord * ChunkWorld::chunkSize * step - step, blocksPerSide, rivers = placedRivers]() mutable {
 		const auto start = std::chrono::steady_clock::now();
+		//The worker holds the network, so it outlives a newer one arriving meanwhile
+		settings.rivers = rivers.get();
 		vegetation::ChunkMaps maps;
 		maps.size = ChunkWorld::textureSize;
 		maps.firstTexel = firstTexel;
