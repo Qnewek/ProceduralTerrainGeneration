@@ -420,6 +420,64 @@ TEST_CASE("Unknown fields are ignored")
 	CHECK_MESSAGE(preset::FromJson(R"({"kind": "world", "version": 2, "width": 64, "height": 32, "fromTheFuture": [1]})", loaded, error), error);
 }
 
+TEST_CASE("A preset keeps the map offset when given one, and has none otherwise")
+{
+	std::string error;
+	SUBCASE("World")
+	{
+		WorldConfig loaded;
+		std::optional<glm::ivec2> offset = glm::ivec2(5, 5);
+		REQUIRE_MESSAGE(preset::FromJson(preset::ToJson(DistinctWorld(), glm::ivec2(-1536, 2047)), loaded, offset, error), error);
+		REQUIRE(offset.has_value());
+		CHECK(*offset == glm::ivec2(-1536, 2047));
+		CHECK(loaded.width == DistinctWorld().width);
+
+		REQUIRE_MESSAGE(preset::FromJson(preset::ToJson(DistinctWorld()), loaded, offset, error), error);
+		CHECK_FALSE(offset.has_value());
+	}
+	SUBCASE("Noise")
+	{
+		NoiseMapConfig config;
+		config.width = 64;
+		config.height = 32;
+		NoiseMapConfig loaded;
+		std::optional<glm::ivec2> offset;
+		REQUIRE_MESSAGE(preset::FromJson(preset::ToJson(config, glm::ivec2(preset::maxMapOffset, -preset::maxMapOffset)), loaded, offset, error), error);
+		REQUIRE(offset.has_value());
+		CHECK(*offset == glm::ivec2(preset::maxMapOffset, -preset::maxMapOffset));
+	}
+	SUBCASE("Reading without asking for the offset ignores it")
+	{
+		WorldConfig loaded;
+		CHECK_MESSAGE(preset::FromJson(preset::ToJson(DistinctWorld(), glm::ivec2(3, 4)), loaded, error), error);
+	}
+}
+
+TEST_CASE("An invalid map offset rejects the preset and leaves the offset unchanged")
+{
+	const std::string valid = preset::ToJson(DistinctWorld(), glm::ivec2(3, 4));
+	const std::string written = "\"mapOffset\": [\n    3,\n    4\n  ]";
+	REQUIRE(valid.find(written) != std::string::npos);
+	const char* invalid[] = {
+		"\"mapOffset\": [3]",
+		"\"mapOffset\": [3, 4, 5]",
+		"\"mapOffset\": [3.5, 4]",
+		"\"mapOffset\": \"3, 4\"",
+		"\"mapOffset\": [16777217, 0]",
+		"\"mapOffset\": [0, -16777217]",
+	};
+	for (const std::string field : invalid) {
+		CAPTURE(field);
+		WorldConfig loaded;
+		std::optional<glm::ivec2> offset = glm::ivec2(9, 9);
+		std::string error;
+		CHECK_FALSE(preset::FromJson(Replaced(valid, written, field), loaded, offset, error));
+		CHECK(error.find("mapOffset") != std::string::npos);
+		REQUIRE(offset.has_value());
+		CHECK(*offset == glm::ivec2(9, 9));
+	}
+}
+
 TEST_CASE("Invalid presets are rejected and the config stays unchanged")
 {
 	const std::string valid = preset::ToJson(DistinctWorld());
@@ -572,6 +630,18 @@ TEST_CASE("Presets are saved to and loaded from files")
 		REQUIRE(files.size() == 2);
 		CHECK(files[0].filename() == "another.json");
 		CHECK(files[1].filename() == "world.json");
+	}
+	SUBCASE("The map offset is saved and loaded; an offset out of range is not saved")
+	{
+		REQUIRE_MESSAGE(preset::Save(path, original, glm::ivec2(-7, 11), error), error);
+		std::optional<glm::ivec2> offset;
+		REQUIRE_MESSAGE(preset::Load(path, loaded, offset, error), error);
+		REQUIRE(offset.has_value());
+		CHECK(*offset == glm::ivec2(-7, 11));
+
+		CHECK_FALSE(preset::Save(path, original, glm::ivec2(preset::maxMapOffset + 1, 0), error));
+		REQUIRE_MESSAGE(preset::Load(path, loaded, offset, error), error);
+		CHECK(*offset == glm::ivec2(-7, 11));
 	}
 	SUBCASE("Loading a missing file fails")
 	{
