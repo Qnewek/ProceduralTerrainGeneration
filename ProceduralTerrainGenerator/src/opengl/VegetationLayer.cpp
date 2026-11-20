@@ -100,7 +100,7 @@ void VegetationLayer::Update(const ChunkWorld& chunks, const VegetationModels* m
 	}
 	//Anything placement depends on changed: place every chunk again, nearest first, showing the old instances meanwhile
 	if (ready != placedReadyModels || !SamePlants(world.biomes, placedPlants) || world.waterHeight != placedWater || world.seed != placedSeed
-		|| density != placedDensity || world.rivers != placedRivers) {
+		|| density != placedDensity || world.rivers != placedRivers || chunks.GetBounds() != placedBounds) {
 		for (auto& [key, chunk] : placed) {
 			chunk.stale = true;
 		}
@@ -116,6 +116,7 @@ void VegetationLayer::Update(const ChunkWorld& chunks, const VegetationModels* m
 		placedSeed = world.seed;
 		placedRivers = world.rivers;
 		placedDensity = density;
+		placedBounds = chunks.GetBounds();
 	}
 
 	float maxRange = 0.0f;
@@ -223,7 +224,7 @@ void VegetationLayer::StartPlacement(const ChunkWorld& chunks, const ChunkWorld:
 
 	//The worker owns copies of everything it reads
 	p.job->Start([height = std::move(height), surface = std::move(surface), ids = std::move(ids), plants = placedPlants, infos = modelInfos,
-		settings, step, firstTexel = g.coord * ChunkWorld::chunkSize * step - step, blocksPerSide, rivers = placedRivers]() mutable {
+		settings, step, firstTexel = g.coord * ChunkWorld::chunkSize * step - step, blocksPerSide, rivers = placedRivers, bounds = placedBounds]() mutable {
 		const auto start = std::chrono::steady_clock::now();
 		//The worker holds the network, so it outlives a newer one arriving meanwhile
 		settings.rivers = rivers.get();
@@ -236,6 +237,14 @@ void VegetationLayer::StartPlacement(const ChunkWorld& chunks, const ChunkWorld:
 		maps.ids = ids.data();
 		PlacementResult r;
 		vegetation::PlaceChunk(maps, plants, infos, settings, r.instances);
+		//A partial map: only plants over its texels (between the centres of its edge texels, as vegexport::PlaceMap)
+		if (bounds) {
+			const glm::vec2 low(bounds->min), high(bounds->max - 1);
+			std::erase_if(r.instances, [&](const vegetation::Instance& in) {
+				const glm::vec2 texel = (glm::vec2(in.position.x, in.position.z) - settings.mapOrigin) / settings.worldUnitsPerTexel;
+				return texel.x < low.x || texel.y < low.y || texel.x > high.x || texel.y > high.y;
+			});
+		}
 		r.blockStarts = vegetation::SortByBlock(r.instances, settings.mapOrigin, settings.worldUnitsPerTexel, settings.chunkTexel,
 			ChunkWorld::chunkSize, blocksPerSide);
 		r.ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count();

@@ -27,7 +27,7 @@ public:
 	GrassLayer(const GrassLayer&) = delete;
 	GrassLayer& operator=(const GrassLayer&) = delete;
 
-	//Places and draws the blades of this frame; nothing in the 2D map
+	//Places and draws the blades of this frame, within the bounds of the chunks if they have them; nothing in the 2D map
 	void Draw(const ChunkWorld& chunks, Camera& camera, const LightSource& light, const TerrainRenderSettings& settings,
 		const TerrainMaterials& materials);
 	//Settings and statistics, in the Vegetation tab

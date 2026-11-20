@@ -29,7 +29,7 @@ TEST_CASE("GLB is a valid glTF 2.0 file holding the meshes as they are")
 	materials[1].name = "water";
 	materials[1].color = glm::vec4(0.1f, 0.3f, 0.5f, 0.7f);
 	materials[1].blend = true;
-	const std::vector<meshfile::Node> nodes = { { "terrain_0_0_LOD0", &grid, 0 }, { "empty", &empty, 0 }, { "sea", &quad, 1 } };
+	const std::vector<meshfile::Node> nodes = { { "terrain_0_0_LOD0", { { &grid, 0 } } }, { "empty", { { &empty, 0 } } }, { "sea", { { &quad, 1 } } } };
 
 	const std::vector<unsigned char> glb = meshfile::EncodeGlb(nodes, materials, "test");
 	REQUIRE(glb.size() % 4 == 0);
@@ -114,7 +114,7 @@ TEST_CASE("OBJ has an object per node with 1-based indices running over the file
 {
 	const terrainmesh::Mesh a = terrainmesh::Quad({ 0.0f, 0.0f }, { 1.0f, 1.0f }, 0.0f);
 	const terrainmesh::Mesh b = terrainmesh::Quad({ 2.0f, 0.0f }, { 3.0f, 1.0f }, 1.0f);
-	const std::string obj = meshfile::EncodeObj({ { "first", &a, -1 }, { "second", &b, -1 } }, "test");
+	const std::string obj = meshfile::EncodeObj({ { "first", { { &a, -1 } } }, { "second", { { &b, -1 } } } }, "test");
 
 	std::istringstream lines(obj);
 	std::string line;

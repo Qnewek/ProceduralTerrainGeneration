@@ -737,6 +737,39 @@ namespace {
 			allOk = allOk && ok;
 			Report("chunk: material splat, step " + std::to_string(step), std::to_string(different) + " of " + std::to_string(partWidth * partHeight) + " texels differ", ok);
 		}
+
+		//A partial map moved over the world (TerrainGenerationSys::MoveMap): the whole map size at a negative origin, in one pass as the
+		//partial map is generated, equals the map of the world origin where they overlap
+		{
+			const glm::ivec2 moved(-517, 61);
+			const MapArea area{ glm::vec2(moved), 1.0f, glm::ivec2(mapWidth, mapHeight) };
+			TextureClass h0(mapWidth, mapHeight, GL_R32F), c0(mapWidth, mapHeight, GL_RGBA32F), i0(mapWidth, mapHeight, GL_R32I);
+			TextureClass h1(mapWidth, mapHeight, GL_R32F), c1(mapWidth, mapHeight, GL_RGBA32F), i1(mapWidth, mapHeight, GL_R32I);
+			gpu.GenerateWorld(layered, biomes, MapArea{}, h0, c0, i0);
+			gpu.GenerateWorld(layered, biomes, area, h1, c1, i1);
+			const size_t texels = static_cast<size_t>(mapWidth) * mapHeight;
+			std::vector<float> height0(texels), height1(texels);
+			std::vector<int> ids0(texels), ids1(texels);
+			h0.Read(GL_RED, GL_FLOAT, static_cast<int>(texels * sizeof(float)), height0.data());
+			h1.Read(GL_RED, GL_FLOAT, static_cast<int>(texels * sizeof(float)), height1.data());
+			i0.Read(GL_RED_INTEGER, GL_INT, static_cast<int>(texels * sizeof(int)), ids0.data());
+			i1.Read(GL_RED_INTEGER, GL_INT, static_cast<int>(texels * sizeof(int)), ids1.data());
+			int different = 0, compared = 0;
+			for (int y = 0; y < mapHeight; y++) {
+				for (int x = 0; x < mapWidth; x++) {
+					const glm::ivec2 world = moved + glm::ivec2(x, y);
+					if (world.x < 0 || world.y < 0 || world.x >= mapWidth || world.y >= mapHeight) {
+						continue;
+					}
+					const size_t a = static_cast<size_t>(world.y) * mapWidth + world.x, b = static_cast<size_t>(y) * mapWidth + x;
+					compared++;
+					different += std::memcmp(&height0[a], &height1[b], sizeof(float)) != 0 || ids0[a] != ids1[b] ? 1 : 0;
+				}
+			}
+			const bool ok = different == 0 && compared > 0;
+			allOk = allOk && ok;
+			Report("chunk: moved map, height + ids",std::to_string(different) + " of " + std::to_string(compared) + " texels differ", ok);
+		}
 		return allOk;
 	}
 

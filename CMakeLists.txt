@@ -58,6 +58,7 @@ add_library(ptg_core STATIC
 	${PTG_SRC}/terrainGeneration/TerrainMesh.cpp
 	${PTG_SRC}/terrainGeneration/VegetationMesh.cpp
 	${PTG_SRC}/terrainGeneration/VegetationPlacement.cpp
+	${PTG_SRC}/terrainGeneration/VegetationExport.cpp
 )
 target_include_directories(ptg_core PUBLIC ${PTG_SRC}/terrainGeneration)
 target_include_directories(ptg_core SYSTEM PRIVATE ${CGLTF_INCLUDE_DIRS})
@@ -151,6 +152,7 @@ add_executable(ptg_tests
 	${PTG_DIR}/tests/TerrainMeshTests.cpp
 	${PTG_DIR}/tests/RollingStatsTests.cpp
 	${PTG_DIR}/tests/VegetationMeshTests.cpp
+	${PTG_DIR}/tests/VegetationExportTests.cpp
 	${PTG_DIR}/tests/VegetationPlacementTests.cpp
 	${PTG_DIR}/tests/TestMain.cpp
 )

@@ -97,40 +97,6 @@ namespace {
 		return result;
 	}
 
-	//64-bit FNV-1a
-	void HashBytes(uint64_t& hash, const void* data, size_t size)
-	{
-		const unsigned char* bytes = static_cast<const unsigned char*>(data);
-		for (size_t i = 0; i < size; i++) {
-			hash = (hash ^ bytes[i]) * 1099511628211ull;
-		}
-	}
-
-	//Identifies the files of a model and the targets of its levels: any change rebuilds its cache
-	uint64_t CacheKey(const std::filesystem::path& folder, const std::vector<uint32_t>& targets)
-	{
-		uint64_t hash = 14695981039346656037ull;
-		std::vector<std::filesystem::path> files;
-		std::error_code error;
-		for (const auto& entry : std::filesystem::directory_iterator(folder, error)) {
-			const std::string extension = entry.path().extension().string();
-			if (entry.is_regular_file() && (extension == ".gltf" || extension == ".bin")) {
-				files.push_back(entry.path());
-			}
-		}
-		std::sort(files.begin(), files.end());
-		for (const std::filesystem::path& file : files) {
-			const std::string name = file.filename().string();
-			const uint64_t size = std::filesystem::file_size(file, error);
-			const auto time = std::filesystem::last_write_time(file, error).time_since_epoch().count();
-			HashBytes(hash, name.data(), name.size());
-			HashBytes(hash, &size, sizeof(size));
-			HashBytes(hash, &time, sizeof(time));
-		}
-		HashBytes(hash, targets.data(), targets.size() * sizeof(uint32_t));
-		return hash;
-	}
-
 	GLuint CreateTexture(int width, int height, const unsigned char* rgba, bool mipmaps)
 	{
 		GLuint id = 0;
@@ -305,20 +271,30 @@ bool VegetationModels::Initialize(const std::string& _resourceDir)
 	return true;
 }
 
+std::filesystem::path VegetationModels::SourceFile(const Model& model) const
+{
+	return std::filesystem::path(resourceDir) / "models" / model.asset / (model.asset + ".gltf");
+}
+
+std::filesystem::path VegetationModels::CacheFile(const Model& model) const
+{
+	return std::filesystem::path(resourceDir) / "cache" / (model.asset + ".mesh");
+}
+
 VegetationModels::Loaded VegetationModels::Load(size_t index) const
 {
 	const auto start = std::chrono::steady_clock::now();
 	const Model& model = models[index];
 	Loaded loaded;
-	const std::filesystem::path folder = std::filesystem::path(resourceDir) / "models" / model.asset;
-	const std::filesystem::path gltf = folder / (model.asset + ".gltf");
+	const std::filesystem::path gltf = SourceFile(model);
+	const std::filesystem::path folder = gltf.parent_path();
 	if (!std::filesystem::exists(gltf)) {
 		loaded.state = State::MISSING;
 		loaded.error = "run python tools/fetch_models.py";
 		return loaded;
 	}
-	const uint64_t key = CacheKey(folder, model.lodTargets);
-	const std::filesystem::path cache = std::filesystem::path(resourceDir) / "cache" / (model.asset + ".mesh");
+	const uint64_t key = vegetation::CacheKey(folder, model.lodTargets);
+	const std::filesystem::path cache = CacheFile(model);
 	if (vegetation::LoadCache(cache, loaded.mesh, key)) {
 		loaded.fromCache = true;
 	}

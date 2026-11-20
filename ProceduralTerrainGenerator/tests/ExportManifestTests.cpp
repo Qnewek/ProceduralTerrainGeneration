@@ -35,6 +35,16 @@ TEST_CASE("Manifest gives the size and heights in metres")
 	CHECK(j["height"]["mapMinMetres"].get<float>() == doctest::Approx(32.0f));
 	CHECK(j["height"]["mapMaxMetres"].get<float>() == doctest::Approx(192.0f));
 	CHECK(j["seaLevel"]["metres"].get<float>() == doctest::Approx(16.0f));
+	CHECK(j["grid"]["worldOrigin"] == Json::array({ 0, 0 }));
+}
+
+TEST_CASE("Manifest gives where a moved partial map lies in the world")
+{
+	exportpack::Manifest m = SampleManifest();
+	m.worldOrigin = glm::ivec2(-1536, 2048);
+	const Json j = Json::parse(exportpack::ToJson(m));
+	CHECK(j["grid"]["worldOrigin"][0] == -1536);
+	CHECK(j["grid"]["worldOrigin"][1] == 2048);
 }
 
 TEST_CASE("Manifest describes the encoding of every file")

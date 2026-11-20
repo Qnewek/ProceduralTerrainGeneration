@@ -58,7 +58,7 @@ namespace meshexport {
 			std::vector<meshfile::Node> nodes;
 			nodes.reserve(tiles.size());
 			for (const terrainmesh::Tile& tile : tiles) {
-				nodes.push_back({ "terrain_" + std::to_string(tile.x) + "_" + std::to_string(tile.z) + "_LOD" + std::to_string(lod), &tile.mesh, 0 });
+				nodes.push_back({ "terrain_" + std::to_string(tile.x) + "_" + std::to_string(tile.z) + "_LOD" + std::to_string(lod), { { &tile.mesh, 0 } } });
 				level.vertices += tile.mesh.positions.size();
 			}
 			level.triangles = indices.size() / 3;
@@ -78,12 +78,12 @@ namespace meshexport {
 			std::vector<meshfile::Node> nodes;
 			if (settings.seaLevel) {
 				sea = terrainmesh::Quad(glm::vec2(0.0f), mapMax, *settings.seaLevel * settings.metresPerUnit);
-				nodes.push_back({ "sea", &sea, 0 });
+				nodes.push_back({ "sea", { { &sea, 0 } } });
 			}
 			if (!settings.riverWater.empty()) {
 				rivers = terrainmesh::FromTriangles(settings.riverWater, glm::vec2(0.0f), mapMax);
 				if (!rivers.indices.empty()) {
-					nodes.push_back({ "rivers_lakes", &rivers, 0 });
+					nodes.push_back({ "rivers_lakes", { { &rivers, 0 } } });
 				}
 			}
 			if (!nodes.empty()) {

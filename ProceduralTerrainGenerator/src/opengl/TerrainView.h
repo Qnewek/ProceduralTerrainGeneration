@@ -61,6 +61,15 @@ public:
 	float GetWorldWidth() const { return width * worldUnitsPerTexel; }
 	float GetWorldHeight() const { return height * worldUnitsPerTexel; }
 
+	//Moves the map over the world by whole texels: its texel (0, 0) is world map position offset (ChunkWorld texels), so a partial map of
+	//another part of the world lies where the infinite world has that part. Resets the 2D view bounds
+	void SetMapOffset(glm::ivec2 offset);
+	glm::ivec2 GetMapOffset() const { return mapOffset; }
+	//World XZ (before modelScale) of the middle of the map; (0, 0) without an offset
+	glm::vec2 GetWorldCenter() const { return glm::vec2(mapOffset) * worldUnitsPerTexel; }
+	//World XZ (before modelScale) of the corner of the map at texel (0, 0) (the edge of the patch grid, not the texel centre)
+	glm::vec2 GetWorldCorner() const { return GetWorldCenter() - glm::vec2(GetWorldWidth(), GetWorldHeight()) * 0.5f; }
+
 	//Area (XZ, world units before modelScale) framed by the 2D map view; defaults to the map itself.
 	//Set it when drawing several maps side by side so all of them fit.
 	void SetFlatViewBounds(glm::vec2 min, glm::vec2 max) { flatMin = min; flatMax = max; }
@@ -79,6 +88,9 @@ public:
 	TextureClass& LayerTexture(Layer layer, int _width, int _height);
 	//Copies a height layer to the CPU, waiting for the GPU; the layer must exist
 	HeightField ReadLayer(Layer layer) const;
+	//Copies the surface map of a height layer to the CPU (xy = gradient per world unit, z = Laplacian), recomputing it first if
+	//the layer changed; waits for the GPU. The layer must exist
+	std::vector<glm::vec4> ReadSurface(Layer layer);
 	bool HasLayer(Layer layer) const { return textures[static_cast<int>(layer)] != nullptr; }
 	//Texture of a layer, nullptr if it has none (drawing over the map, e.g. water)
 	const TextureClass* GetLayerTexture(Layer layer) const { return textures[static_cast<int>(layer)].get(); }
@@ -126,6 +138,7 @@ private:
 	glm::vec2 flatMin = glm::vec2(0.0f), flatMax = glm::vec2(0.0f);
 
 	int width = 0, height = 0;
+	glm::ivec2 mapOffset = glm::ivec2(0);
 	int mapResolution = 50;
 	unsigned int stride = 5;
 	std::vector<float> vertices;
