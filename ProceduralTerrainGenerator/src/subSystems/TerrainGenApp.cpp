@@ -376,6 +376,9 @@ void TerrainGenApp::ImGuiRender()
     if (currentMode == mode::NOISE_HEIGHTMAP) {
         noiseGenSys.ImGuiMapLabels();
     }
+    else if (currentMode == mode::TERRAIN_GEN) {
+        terrainGenSys.ImGuiMapLabels();
+    }
 
     ImGui::Render();
     metrics->BeginUi();

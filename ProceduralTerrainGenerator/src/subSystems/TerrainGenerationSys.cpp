@@ -7,6 +7,7 @@
 #include "imgui.h"
 #include "implot.h"
 
+#include "ErosionPanel.h"
 #include "Preset.h"
 #include "SplineSampling.h"
 #include "VegetationModels.h"
@@ -22,9 +23,11 @@ bool TerrainGenerationSys::Initialize(int _width, int _height, float _heightScal
 	world.height = _height;
 	renderSettings.heightScale = _heightScale;
 
-	if (!view.Initialize(world.width, world.height) || !chunks.Initialize() || !gpu.Initialize() || !noisePreview.Initialize()) {
+	if (!view.Initialize(world.width, world.height) || !chunks.Initialize() || !gpu.Initialize() || !noisePreview.Initialize() || !gpuErosion.Initialize()) {
 		return false;
 	}
+	//OVERLAY holds the eroded copy of the terrain, drawn with the materials of the terrain
+	view.SetOverlaySplat(true);
 
 	//The first frame needs a map
 	RequestTerrain();
@@ -50,7 +53,8 @@ void TerrainGenerationSys::Update(Camera& camera)
 			RequestBiomes();
 		}
 	}
-	else if (!infiniteGeneration && (centerOnCamera || followCamera)) {
+	//Following waits while an eroded copy is shown: flying over the copy (beyond the +X edge) would move the map and drop the copy
+	else if (!infiniteGeneration && (centerOnCamera || (followCamera && !eroded.shown))) {
 		const glm::ivec2 under = OffsetUnder(camera);
 		const glm::ivec2 shift = glm::abs(under - mapOffset);
 		if (centerOnCamera || shift.x > world.width / 4 || shift.y > world.height / 4) {
@@ -62,6 +66,10 @@ void TerrainGenerationSys::Update(Camera& camera)
 	MeasureLand();
 	UpdateRivers(camera);
 	if (infiniteGeneration) {
+		//No erosion in the infinite world
+		if (eroded.shown || vegetationLayer.HasExtraInstances()) {
+			ResetErosion();
+		}
 		chunks.SetBounds(std::nullopt);
 		UpdateChunks(camera);
 		UpdateVegetation();
@@ -72,10 +80,15 @@ void TerrainGenerationSys::Update(Camera& camera)
 			chunks.Invalidate();
 		}
 		GenerateFinite();
+		UpdateErosion();
 		if (partialDetails) {
 			chunks.SetBounds(MapRect());
 			UpdateChunks(camera);
 			UpdateVegetation();
+		}
+		else if (vegetationLayer.HasExtraInstances()) {
+			//The plants of the eroded copy are drawn alone
+			vegetationLayer.ForgetChunks();
 		}
 	}
 	//After generating: the map size may have changed meanwhile
@@ -241,6 +254,13 @@ void TerrainGenerationSys::GenerateFinite()
 		std::cout << "[ERROR] Map size must be between 2 and 8192, keeping the previous maps\n";
 		return;
 	}
+	//The eroded copy belongs to the terrain it was eroded from; new biomes only change what grows on it
+	if (request.terrain) {
+		ResetErosion();
+	}
+	else if (request.biomes && eroded.shown) {
+		eroded.plantsWanted = true;
+	}
 	view.Resize(width, height);
 	//Every layer is regenerated at a move (MoveMap requests all of them), so they all lie where the offset says
 	view.SetMapOffset(mapOffset);
@@ -274,6 +294,141 @@ void TerrainGenerationSys::GenerateFinite()
 	if (request.biomes) {
 		biomeMap.Resize(width, height);
 		biomeIds->Read(GL_RED_INTEGER, GL_INT, static_cast<int>(biomeMap.Size() * sizeof(int)), biomeMap.Data());
+	}
+}
+
+void TerrainGenerationSys::ResetErosion()
+{
+	eroded.shown = false;
+	eroded.plantsWanted = false;
+	eroded.version++;
+	vegetationLayer.ClearExtraInstances();
+}
+
+void TerrainGenerationSys::UpdateErosion()
+{
+	if (eroded.requested) {
+		eroded.requested = false;
+		if (const TextureClass* base = view.GetLayerTexture(TerrainView::Layer::TERRAIN)) {
+			//The copy keeps the size of the terrain: a new size regenerates the terrain, which resets erosion
+			TextureClass& copy = view.LayerTexture(TerrainView::Layer::OVERLAY, base->GetWidth(), base->GetHeight());
+			gpuErosion.Erode(world.erosion, eroded.shown ? copy : *base, copy, eroded.runs++);
+			eroded.shown = true;
+			eroded.method = world.erosion.method;
+			eroded.version++;
+			eroded.plantsWanted = true;
+		}
+	}
+	gpuErosion.PollMeasure(eroded.method, eroded.ms);
+	//Biomes turned off without a terrain change (modifyTerrain off): no plants without biomes, as on the map; turning them on requests biomes,
+	//which places the plants of the copy again
+	if (!biomesGeneration && vegetationLayer.HasExtraInstances()) {
+		vegetationLayer.ClearExtraInstances();
+	}
+
+	if (std::optional<ErodedPlants> result = erodedPlantsJob.TryTake()) {
+		//Plants of an older copy (eroded again or reset meanwhile) are dropped
+		if (eroded.shown && biomesGeneration && result->version == eroded.version) {
+			vegetationLayer.SetExtraInstances(result->instances);
+			eroded.plantsMs = result->ms;
+		}
+	}
+	//One placement at a time: a newer copy waits for the running one
+	if (eroded.plantsWanted && !erodedPlantsJob.IsRunning()) {
+		eroded.plantsWanted = false;
+		StartErodedPlants();
+	}
+}
+
+void TerrainGenerationSys::StartErodedPlants()
+{
+	const int width = view.GetMapWidth(), height = view.GetMapHeight();
+	if (!eroded.shown || !biomesGeneration || !AnyVegetationModel() || biomeMap.GetWidth() != width || biomeMap.GetHeight() != height) {
+		vegetationLayer.ClearExtraInstances();
+		return;
+	}
+	vegexport::Input input = VegetationExportInput();
+	eroded.treesOnly = static_cast<int64_t>(width) * height > allPlantsMaxTexels;
+	if (eroded.treesOnly) {
+		input.layerMask = 1u << static_cast<int>(vegetation::Layer::TREES);
+	}
+	HeightField copy = view.ReadLayer(TerrainView::Layer::OVERLAY);
+	std::vector<glm::vec4> surface = view.ReadSurface(TerrainView::Layer::OVERLAY);
+	//Where the centre of texel (0, 0) of the copy is drawn: that of the map, shifted along X
+	const glm::vec2 texelZero = view.GetWorldCorner() + glm::vec2(ErodedShift(), 0.0f) + 0.5f * TerrainView::worldUnitsPerTexel;
+	const float metresPerUnit = input.metresPerUnit;
+	const uint64_t version = eroded.version;
+	erodedPlantsJob.Start([copy = std::move(copy), surface = std::move(surface), ids = biomeMap, input = std::move(input), texelZero, metresPerUnit, version]() {
+		const auto start = std::chrono::steady_clock::now();
+		ErodedPlants result;
+		result.instances = vegexport::ToAppInstances(vegexport::PlaceMap(copy, surface, ids, input), texelZero, metresPerUnit);
+		result.version = version;
+		result.ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count();
+		return result;
+	});
+}
+
+bool TerrainGenerationSys::AnyVegetationModel() const
+{
+	return vegetationModels && std::any_of(vegetationModels->GetModels().begin(), vegetationModels->GetModels().end(),
+		[](const VegetationModels::Model& m) { return m.state == VegetationModels::State::READY && !m.variants.empty(); });
+}
+
+vegexport::Input TerrainGenerationSys::VegetationExportInput() const
+{
+	vegexport::Input input;
+	for (const biome::Biome& b : world.biomes.table) {
+		input.plants.push_back(b.plants);
+	}
+	for (const VegetationModels::Model& m : vegetationModels->GetModels()) {
+		const bool ready = m.state == VegetationModels::State::READY && !m.variants.empty();
+		input.models.push_back({ m.name, m.kind, m.asset, ready ? static_cast<int>(m.variants.size()) : 0, vegetationModels->SourceFile(m), m.lodTargets,
+			vegetationModels->CacheFile(m) });
+	}
+	input.settings.heightScale = renderSettings.heightScale;
+	input.settings.waterHeight = world.terrain.WaterHeight();
+	input.settings.density = vegetationLayer.GetDensity();
+	input.settings.seed = static_cast<uint32_t>(world.biomes.detailSeed);
+	if (RiverWater()) {
+		input.rivers = riverNetwork;
+	}
+	input.mapTexel = view.GetMapOffset();
+	input.metresPerUnit = renderSettings.heightScale / TerrainView::worldUnitsPerTexel;
+	return input;
+}
+
+void TerrainGenerationSys::ErosionEditor()
+{
+	if (infiniteGeneration) {
+		ImGui::TextWrapped("Erosion works on the partial map: switch to Partial generation in the Display tab.");
+		return;
+	}
+	ImGui::TextWrapped("Erodes a copy of the map, shown next to it with its water and plants. Any change of the terrain drops the copy.");
+	ErosionParametersImGui(world.erosion);
+
+	ImGui::Separator();
+	if (ImGui::Button("Erode map")) {
+		eroded.requested = true;
+	}
+	ImGui::SetItemTooltip("Again = erodes the copy further");
+	ImGui::SameLine();
+	if (ImGui::Button("Reset")) {
+		//Drops a not yet started erosion too
+		eroded.requested = false;
+		ResetErosion();
+	}
+	if (!eroded.shown) {
+		return;
+	}
+	ImGui::Text("Last erosion: %s, %.1f ms", ErosionMethodName(eroded.method), eroded.ms);
+	if (eroded.plantsWanted || erodedPlantsJob.IsRunning()) {
+		ImGui::TextUnformatted("Placing the plants of the copy...");
+	}
+	else if (vegetationLayer.HasExtraInstances()) {
+		ImGui::Text("Plants of the copy: %zu (%.0f ms)%s", vegetationLayer.ExtraCount(), eroded.plantsMs, eroded.treesOnly ? ", trees only (large map)" : "");
+	}
+	else if (!biomesGeneration) {
+		ImGui::TextWrapped("Plants grow only with biomes: turn on biome generation.");
 	}
 }
 
@@ -446,6 +601,7 @@ void TerrainGenerationSys::ApplyWorld(const WorldConfig& loaded)
 
 void TerrainGenerationSys::Draw(Renderer& renderer, Camera& camera, LightSource& light) {
 	renderSettings.shadows = nullptr;
+	mapLabels.Clear();
 	if (chunksShown) {
 		//Shadow maps first: they need the plants culled for the sun before the camera culling reuses the buffers
 		if (shadows.Render(renderer, camera, light, renderSettings, chunks, vegetationLayer, vegetationModels)) {
@@ -462,7 +618,18 @@ void TerrainGenerationSys::Draw(Renderer& renderer, Camera& camera, LightSource&
 		water.Draw(chunks, camera, light, renderSettings, world.terrain.WaterHeight() * renderSettings.heightScale, RiverWater());
 		return;
 	}
-	//The partial map: the same plants, grass and shadows as the infinite world, from its chunks limited to the map
+	//The eroded copy next to the map along X, separated by a 5% gap; the 2D view frames both
+	const TextureClass* erodedHeight = eroded.shown ? view.GetLayerTexture(TerrainView::Layer::OVERLAY) : nullptr;
+	const float shift = ErodedShift();
+	if (erodedHeight) {
+		const glm::vec2 half(view.GetWorldWidth() / 2.0f, view.GetWorldHeight() / 2.0f);
+		view.SetFlatViewBounds(view.GetWorldCenter() - half, view.GetWorldCenter() + glm::vec2(shift + half.x, half.y));
+	}
+	else {
+		view.ResetFlatViewBounds();
+	}
+
+	//The partial map: the same plants, grass and shadows as the infinite world, from its chunks limited to the map (and the plants of the copy)
 	if (partialDetails && chunks.GetBounds()) {
 		if (shadows.Render(renderer, camera, light, renderSettings, chunks, vegetationLayer, vegetationModels)) {
 			renderSettings.shadows = &shadows;
@@ -472,14 +639,40 @@ void TerrainGenerationSys::Draw(Renderer& renderer, Camera& camera, LightSource&
 			grass.Draw(chunks, camera, light, renderSettings, *terrainMaterials);
 		}
 	}
+	else if (vegetationLayer.HasExtraInstances()) {
+		vegetationLayer.Draw(camera, light, renderSettings, vegetationModels);
+	}
 	view.Draw(renderer, camera, light, renderSettings, TerrainView::Layer::TERRAIN);
+	const glm::vec3 copyOffset(shift, 0.0f, 0.0f);
+	if (erodedHeight) {
+		view.Draw(renderer, camera, light, renderSettings, TerrainView::Layer::OVERLAY, copyOffset);
+	}
+	//Water last: it reads a copy of everything drawn before
 	if (const TextureClass* height = view.GetLayerTexture(TerrainView::Layer::TERRAIN)) {
 		const glm::vec2 size(view.GetWorldWidth(), view.GetWorldHeight());
 		//World XZ of map position (0, 0), where the river network lies: the centre of texel (0, 0) of the map without an offset
 		const glm::vec2 worldTexelOrigin = (-glm::vec2(view.GetMapWidth(), view.GetMapHeight()) * 0.5f + 0.5f) * TerrainView::worldUnitsPerTexel;
-		water.DrawMap(*height, view.GetWorldCorner(), size, worldTexelOrigin, camera, light, renderSettings,
-			world.terrain.WaterHeight() * renderSettings.heightScale, view.GetFlatViewMin(), view.GetFlatViewMax(), RiverWater());
+		const float waterLevel = world.terrain.WaterHeight() * renderSettings.heightScale;
+		water.DrawMap(*height, view.GetWorldCorner(), size, worldTexelOrigin, camera, light, renderSettings, waterLevel, view.GetFlatViewMin(),
+			view.GetFlatViewMax(), RiverWater());
+		//The sea follows the eroded heights; rivers and lakes keep the levels of the network, shifted with the copy
+		if (erodedHeight) {
+			const glm::vec2 copyShift(shift, 0.0f);
+			water.DrawMap(*erodedHeight, view.GetWorldCorner() + copyShift, size, worldTexelOrigin + copyShift, camera, light, renderSettings, waterLevel,
+				view.GetFlatViewMin(), view.GetFlatViewMax(), RiverWater());
+		}
 	}
+	if (!erodedHeight) {
+		return;
+	}
+	const glm::mat4 viewProjection = renderSettings.map2d
+		? [&] { const FrameUniforms::Block block = TerrainView::FrameBlock(camera, light, renderSettings, view.GetFlatViewMin(), view.GetFlatViewMax());
+			return block.projection * block.view; }()
+		: camera.GetViewProjection();
+	const std::vector<std::pair<float, std::string>> names = { { 0.0f, "Terrain" }, { shift, std::string("Eroded: ") + ErosionMethodName(eroded.method) } };
+	//Above the highest terrain (heights stay within +-1.5), so that a mountain does not hide the label in 3D; the 2D view ignores the height
+	mapLabels.Place(viewProjection, names, view.GetWorldCenter(), view.GetWorldHeight() / 2.0f, 1.5f * std::abs(renderSettings.heightScale),
+		renderSettings.modelScale);
 }
 void TerrainGenerationSys::ImGuiRightPanel()
 {
@@ -491,6 +684,7 @@ void TerrainGenerationSys::ImGuiRightPanel()
 		{ tabBiomeTable, [this] { BiomeTableEditor(); } },
 		{ tabBiomeNoises, [this] { BiomeNoisesEditor(); } },
 		{ tabRivers, [this] { RiversEditor(); } },
+		{ tabErosion, [this] { ErosionEditor(); } },
 	};
 	generationTabs.Draw("generation", tabs);
 	//The 2D picture shows the noise of the open tab
@@ -628,7 +822,7 @@ void TerrainGenerationSys::MapPositionImGui()
 	}
 	ImGui::Checkbox("Follow camera", &followCamera);
 	ImGui::SetItemTooltip("Centres the map again when the camera gets farther than a quarter of the map from its middle\n"
-		"(the map, and the rivers of the Region method, are generated again)");
+		"(the map, and the rivers of the Region method, are generated again); paused while an eroded copy is shown");
 	ImGui::Checkbox("Plants, grass and shadows", &partialDetails);
 	ImGui::SetItemTooltip("The vegetation, grass and sun shadows of the infinite world on the map, from chunks of the world limited to it\n"
 		"(generated as the infinite world generates them, near the camera). Off = only the map, faster while editing");
@@ -650,6 +844,10 @@ void TerrainGenerationSys::ImGuiSaving()
 	}
 	pack.generation = [this] { return preset::ToJson(world); };
 	pack.heightmaps = { { view.GetMapWidth(), view.GetMapHeight(), "", [this] { return view.ReadLayer(TerrainView::Layer::TERRAIN); } } };
+	if (eroded.shown && view.GetLayerTexture(TerrainView::Layer::OVERLAY)) {
+		pack.heightmaps.push_back({ view.GetMapWidth(), view.GetMapHeight(), eroded.method == erosion::Method::PIPES ? "_eroded_pipes" : "_eroded_droplets",
+			[this] { return view.ReadLayer(TerrainView::Layer::OVERLAY); } });
+	}
 
 	//Material and biome maps exist only with biomes, made with the same size as the height map
 	const TextureClass* splat = view.GetSplatTexture();
@@ -692,30 +890,9 @@ void TerrainGenerationSys::ImGuiSaving()
 	}
 
 	//Vegetation: the plants the infinite world places on these texels, with the same settings (seed, density, water, rivers)
-	const bool anyModel = vegetationModels && std::any_of(vegetationModels->GetModels().begin(), vegetationModels->GetModels().end(),
-		[](const VegetationModels::Model& m) { return m.state == VegetationModels::State::READY && !m.variants.empty(); });
-	if (biomesGeneration && sameSize && anyModel) {
+	if (biomesGeneration && sameSize && AnyVegetationModel()) {
 		ExportPanel::VegetationSource vegetation;
-		vegetation.input = [this] {
-			vegexport::Input input;
-			for (const biome::Biome& b : world.biomes.table) {
-				input.plants.push_back(b.plants);
-			}
-			for (const VegetationModels::Model& m : vegetationModels->GetModels()) {
-				const bool ready = m.state == VegetationModels::State::READY && !m.variants.empty();
-				input.models.push_back({ m.name, m.kind, m.asset, ready ? static_cast<int>(m.variants.size()) : 0, vegetationModels->SourceFile(m), m.lodTargets,
-					vegetationModels->CacheFile(m) });
-			}
-			input.settings.heightScale = renderSettings.heightScale;
-			input.settings.waterHeight = world.terrain.WaterHeight();
-			input.settings.density = vegetationLayer.GetDensity();
-			input.settings.seed = static_cast<uint32_t>(world.biomes.detailSeed);
-			if (RiverWater()) {
-				input.rivers = riverNetwork;
-			}
-			input.mapTexel = view.GetMapOffset();
-			return input;
-		};
+		vegetation.input = [this] { return VegetationExportInput(); };
 		vegetation.readSurface = [this] { return view.ReadSurface(TerrainView::Layer::TERRAIN); };
 		vegetation.readIds = [this] { return biomeMap; };
 		pack.vegetation = std::move(vegetation);

@@ -72,7 +72,7 @@ namespace vegexport {
 				settings.mapOrigin = glm::vec2(0.0f);
 				settings.worldUnitsPerTexel = 1.0f;
 				settings.rivers = input.rivers.get();
-				settings.layerMask = (1u << vegetation::layerCount) - 1u;
+				settings.layerMask = input.layerMask;
 				instances.clear();
 				vegetation::PlaceChunk(maps, input.plants, infos, settings, instances);
 				for (const vegetation::Instance& in : instances) {
@@ -93,6 +93,25 @@ namespace vegexport {
 			}
 		}
 		return placed;
+	}
+
+	std::vector<vegetation::Instance> ToAppInstances(const std::vector<Placed>& placed, glm::vec2 texelZeroWorld, float metresPerUnit)
+	{
+		std::vector<vegetation::Instance> instances;
+		instances.reserve(placed.size());
+		//1 texel = 1 m = vegetation::unitsPerMetre world units
+		const float unitsPerMetre = vegetation::unitsPerMetre / exportpack::metresPerTexel;
+		for (const Placed& p : placed) {
+			vegetation::Instance in;
+			in.position = glm::vec3(texelZeroWorld.x + p.position.x * unitsPerMetre, p.position.y / metresPerUnit, texelZeroWorld.y + p.position.z * unitsPerMetre);
+			in.scale = p.scale * vegetation::unitsPerMetre;
+			in.yaw = p.yaw;
+			in.model = p.model;
+			in.variant = p.variant;
+			in.layer = p.layer;
+			instances.push_back(in);
+		}
+		return instances;
 	}
 
 	namespace {
