@@ -228,3 +228,56 @@ TEST_CASE("Water mesh: rivers flow downstream, lakes stand still, nothing at the
 		CHECK(hydrology::BuildWaterMesh(net, 0.9f, 256.0f).empty());
 	}
 }
+
+TEST_CASE("Region centre: a grid of a quarter region in whole cells")
+{
+	CHECK(hydrology::RegionStep(8192, 8) == 2048.0f);
+	CHECK(hydrology::RegionStep(1000, 32) == 224.0f);	//250 down to a multiple of 32
+	CHECK(hydrology::RegionStep(16, 8) == 8.0f);		//never below one cell
+	CHECK(hydrology::SnapRegionCenter({ 5000.0f, -3100.0f }, 8192, 8) == glm::vec2(4096.0f, -4096.0f));
+	CHECK(hydrology::SnapRegionCenter({ -1023.0f, 1025.0f }, 8192, 8) == glm::vec2(0.0f, 2048.0f));
+}
+
+TEST_CASE("Region centre: moves only when the camera leaves a quarter region, and comes back the same")
+{
+	const hydrology::RegionPlace origin{ { 0.0f, 0.0f }, hydrology::RegionStep(8192, 8) };
+	CHECK_FALSE(hydrology::LeftRegion(origin, { 2048.0f, -2048.0f }));	//on the threshold
+	CHECK(hydrology::LeftRegion(origin, { 2049.0f, 0.0f }));
+	CHECK(hydrology::LeftRegion(origin, { 0.0f, -2049.0f }));
+	//A centre set by the partial map, off the grid
+	CHECK_FALSE(hydrology::LeftRegion({ { 517.5f, 300.0f }, 2048.0f }, { 2500.0f, 300.0f }));
+	//After a jump the camera is at most half a step from the new centre: no jumping back
+	const glm::vec2 camera(5000.0f, -3100.0f);
+	const hydrology::RegionPlace jumped = hydrology::PlaceRegion(true, true, origin, camera, glm::vec2(0.0f), 8192, 8);
+	CHECK(jumped.center == glm::vec2(4096.0f, -4096.0f));
+	CHECK_FALSE(hydrology::LeftRegion(jumped, camera));
+	//The same place gives the same centre whichever region the camera came from
+	CHECK(hydrology::SnapRegionCenter(camera, 8192, 8) == hydrology::SnapRegionCenter(camera + glm::vec2(0.4f, -0.4f), 8192, 8));
+}
+
+TEST_CASE("Region centre: the step of the computed region counts, not the size being edited")
+{
+	//Region size dragged from 8192 down to 128 texels (step 32) while the network of 8192 is shown: no jump yet
+	const hydrology::RegionPlace shown{ { 0.0f, 0.0f }, hydrology::RegionStep(8192, 8) };
+	CHECK_FALSE(hydrology::LeftRegion(shown, { 100.0f, -100.0f }));
+	//The next region keeps the step it was computed with
+	const hydrology::RegionPlace next = hydrology::PlaceRegion(true, true, shown, { 3000.0f, 0.0f }, glm::vec2(0.0f), 128, 8);
+	CHECK(next.step == 32.0f);
+	CHECK(next.center == glm::vec2(3008.0f, 0.0f));
+}
+
+TEST_CASE("Region centre: partial map, infinite world following the camera, and staying put")
+{
+	const glm::vec2 camera(5000.0f, -3100.0f), mapCenter(517.5f, 300.0f);
+	const hydrology::RegionPlace current{ { -2048.0f, 6144.0f }, 2048.0f };
+	//The partial map: around its middle, whatever the camera does
+	CHECK(hydrology::PlaceRegion(false, true, current, camera, mapCenter, 8192, 8).center == mapCenter);
+	CHECK(hydrology::PlaceRegion(false, false, current, camera, mapCenter, 8192, 8).center == mapCenter);
+	//Infinite world, following: the grid point under the camera
+	CHECK(hydrology::PlaceRegion(true, true, current, camera, mapCenter, 8192, 8).center == glm::vec2(4096.0f, -4096.0f));
+	//Infinite world, not following: where the region is (an edit computes the network again in the same place)
+	CHECK(hydrology::PlaceRegion(true, false, current, camera, mapCenter, 8192, 8).center == current.center);
+	//No region yet: around the middle of the map
+	CHECK(hydrology::PlaceRegion(true, false, std::nullopt, camera, mapCenter, 8192, 8).center == mapCenter);
+	CHECK(hydrology::PlaceRegion(true, false, current, camera, mapCenter, 8192, 8).step == hydrology::RegionStep(8192, 8));
+}
