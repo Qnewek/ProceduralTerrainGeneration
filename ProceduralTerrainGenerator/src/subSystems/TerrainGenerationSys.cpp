@@ -463,6 +463,46 @@ void TerrainGenerationSys::ImGuiSaving()
 	}
 	pack.generation = [this] { return preset::ToJson(world); };
 	pack.heightmaps = { { view.GetMapWidth(), view.GetMapHeight(), "", [this] { return view.ReadLayer(TerrainView::Layer::TERRAIN); } } };
+
+	//Material and biome maps exist only with biomes, made with the same size as the height map
+	const TextureClass* splat = view.GetSplatTexture();
+	const TextureClass* colors = view.GetLayerTexture(TerrainView::Layer::BIOMES);
+	const bool sameSize = splat && colors && !biomeMap.Empty() && splat->GetWidth() == view.GetMapWidth() && splat->GetHeight() == view.GetMapHeight()
+		&& biomeMap.GetWidth() == view.GetMapWidth() && biomeMap.GetHeight() == view.GetMapHeight();
+	if (biomesGeneration && sameSize) {
+		ExportPanel::MaterialSource materials;
+		materials.names = materialNames;
+		materials.read = [this, splat] {
+			const int width = splat->GetWidth(), height = splat->GetHeight(), layers = splat->GetLayers();
+			std::vector<uint8_t> bytes(static_cast<size_t>(width) * height * layers * 4);
+			splat->Read(GL_RGBA, GL_UNSIGNED_BYTE, static_cast<int>(bytes.size()), bytes.data());
+			const int count = std::min(static_cast<int>(materialNames.size()), 4 * layers);
+			return splatmap::FromLayers(bytes.data(), width, height, layers, count);
+		};
+		pack.materials = std::move(materials);
+
+		ExportPanel::BiomeSource biomes;
+		for (size_t b = 0; b < world.biomes.table.size(); b++) {
+			const biome::Biome& entry = world.biomes.table[b];
+			exportpack::Biome out;
+			out.id = static_cast<int>(b);
+			out.name = entry.name;
+			out.color[0] = entry.color.r;
+			out.color[1] = entry.color.g;
+			out.color[2] = entry.color.b;
+			biomes.table.push_back(out);
+		}
+		biomes.readIds = [this] { return biomeMap; };
+		biomes.readColors = [colors] {
+			std::vector<float> rgba(static_cast<size_t>(colors->GetWidth()) * colors->GetHeight() * 4);
+			colors->Read(GL_RGBA, GL_FLOAT, static_cast<int>(rgba.size() * sizeof(float)), rgba.data());
+			return rgba;
+		};
+		pack.biomes = std::move(biomes);
+	}
+	else {
+		pack.layersMissing = "Material and biome maps: turn on biome generation.";
+	}
 	exporter.ImGuiDraw(pack);
 }
 void TerrainGenerationSys::ImGuiOutput(glm::vec3 pos) {

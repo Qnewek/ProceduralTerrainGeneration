@@ -87,6 +87,8 @@ public:
 	TextureClass& SplatTexture(int _width, int _height);
 	//Drops the splat map, e.g. when biomes are turned off
 	void ReleaseSplat() { splat.reset(); }
+	//The splat map, nullptr if there is none (export)
+	const TextureClass* GetSplatTexture() const { return splat.get(); }
 
 	//Draws the patch grid displaced by the selected height layer
 	//@param heightLayer - TERRAIN or OVERLAY, the layer used as the height map

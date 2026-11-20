@@ -576,6 +576,10 @@ Kroki:
   jeden kanał „Y”) + `<nazwa>.json` (`ExportManifest.*`): siatka (teksele, 1 m na teksel, rozmiar w metrach, osie, kolejność wierszy), wysokości w metrach
   (metry na jednostkę z „Height scale”, min/max mapy), kodowanie każdego pliku, poziom morza (TerrainGen, LAYERED), wskazówki importu (Unreal: skala Z
   i położenie, Unity: rozmiar terenu, wymóg 2^n + 1), parametry generacji (preset). Usunięty przycisk-zaślepka „Save heightMap as an 3d object”.
+  🟡 2026-11-20 krok 2 (`MaterialExport.*`, checkboxy „Material maps” / „Biome maps”, tylko TerrainGen z biomami): splat z GPU → `_splat_N.png` (RGBA, 4 materiały,
+  alphamapy Unity) i `_weight_ID_nazwa.png` (szare, po jednej na materiał obecny na mapie — warstwy Unreal, Godot), udziały znormalizowane do sumy 255
+  na teksel (największe reszty; GPU gubi do kilku jednostek przy zaokrągleniu do 8 bitów); `_biome_ids.png` (8 bit) i `_biome_colors.png` (RGB).
+  W JSON lista materiałów (id, nazwa, plik splat + kanał, plik wag, pokrycie) i biomów (id, nazwa, kolor, udział).
 - **Tryb „Imported map”:** ✅ 2026-11-03 podgląd mapy z pliku (PNG 1/2/4/8/16-bit, kolorowy zamieniany na szary, oraz R16/RAW): `HeightmapImport.*` +
   `subSystems/MapImportSys.*`, wczytywanie w tle. Dalszy ciąg w Fazie 6.
 - **Edytor ręczny:** pędzle (podnieś/obniż/wygładź/spłaszcz) jako warstwa delta nad proceduralną bazą.

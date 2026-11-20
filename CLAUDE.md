@@ -64,7 +64,9 @@ ProceduralTerrainGenerator/
       Frustum.h                  płaszczyzny frustum z macierzy i test AABB (culling chunków)
       Preset.*                   zapis/odczyt WorldConfig i NoiseMapConfig jako JSON + walidacja
       HeightmapExport.*          zapis mapy jako PNG 16-bit, RAW R16 lub EXR float32 w metrach (własny zapis, bez kompresji); FileIO.* = zapis przez plik tymczasowy
-      ExportManifest.*           <nazwa>.json paczki eksportu: rozmiar i wysokości w metrach, kodowanie każdego pliku, poziom morza, wskazówki importu, parametry generacji
+      ExportManifest.*           <nazwa>.json paczki eksportu: rozmiar i wysokości w metrach, kodowanie każdego pliku, poziom morza, wskazówki importu, parametry generacji,
+                                 lista materiałów (plik splat + kanał, mapa wag) i biomów (id, nazwa, kolor, udział)
+      MaterialExport.*           mapy materiałów i biomów paczki (8-bit PNG): splat RGBA po 4 materiały, mapa wag na materiał, id i kolory biomów; Normalize = suma 255 na teksel
       HeightmapImport.*          odczyt mapy z PNG lub R16/RAW; format po rozszerzeniu, nowy = czytnik i rozszerzenie w tym pliku
       GenerationJob.h            jedno zadanie generacji w tle (std::async + TryTake)
       LandStats.*                udział wody i masy lądu (flood fill) z rzadkiej próbki świata (GpuHeightGenerator::SampleTerrain); „Land statistics” w zakładce Terrain i sekcja land: w --gpu-check
@@ -293,7 +295,11 @@ Wartości szumów są w [-1, 1]. Konwencja indeksowania: `map[y * width + x]`.
   tych stałych, inaczej wartości zostaną przycięte. Eksport czyta mapę z tekstury w chwili zapisu, w wątku głównym.
   Paczka (`exports/<nazwa>/`): pliki `<nazwa>_height*.{png,r16,exr}` + `<nazwa>.json` (`exportpack::ToJson`). Metry: 1 teksel = 1 m (`exportpack::metresPerTexel`),
   wysokość 1 = `heightScale / worldUnitsPerTexel` m z bieżącego „Height scale” (TerrainGen domyślnie 256 m). EXR trzyma metry, 16-bit — wartości z zakresu.
-  Kolejne części eksportu (mapy materiałów, siatki, roślinność) dopisują swoje pliki do `Manifest::files`; zmiana nazw pól JSON = podbicie `manifestVersion`.
+  Kolejne części eksportu (siatki, roślinność) dopisują swoje pliki do `Manifest::files`; zmiana nazw pól JSON = podbicie `manifestVersion`.
+  Mapy materiałów i biomów (tylko TerrainGen z biomami): splat czytany z GPU (`TextureClass::Read` tablicy = warstwa po warstwie, materiał m = warstwa m/4,
+  kanał m%4, jak `imageStore` w `biome_compute.shader`), `splatmap::Normalize` (największe reszty) daje sumę 255 na teksel, której oczekują Unity i Unreal.
+  `_splat_N.png` = materiały 4N..4N+3 (id z `terrain_materials.json`), `_weight_ID_nazwa.png` tylko dla materiałów obecnych na mapie, `_biome_ids.png` = id
+  z `BiomeConfig::table` (≤ 64, 8 bit), `_biome_colors.png` = warstwa BIOMES.
 - Import map: plik nie przechowuje zakresu wartości, więc wybiera go użytkownik (`valueRanges` w `MapImportSys.cpp`). `lodepng` nie zamienia koloru na szary
   ani niższej głębi na 16 bitów (błąd 56), dlatego PNG dekodujemy do RGBA o głębi pliku. Mapa żyje w `MapImportSys::map`, stąd pójdą przyszłe operacje na niej
   (jak w innych trybach: w tle, na kopii).

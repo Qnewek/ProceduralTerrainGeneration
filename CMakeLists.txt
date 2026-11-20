@@ -50,6 +50,7 @@ add_library(ptg_core STATIC
 	${PTG_SRC}/terrainGeneration/HeightmapImport.cpp
 	${PTG_SRC}/terrainGeneration/Hydrology.cpp
 	${PTG_SRC}/terrainGeneration/LandStats.cpp
+	${PTG_SRC}/terrainGeneration/MaterialExport.cpp
 	${PTG_SRC}/terrainGeneration/Preset.cpp
 	${PTG_SRC}/terrainGeneration/SplineSampling.cpp
 	${PTG_SRC}/terrainGeneration/VegetationMesh.cpp
@@ -137,6 +138,7 @@ add_executable(ptg_tests
 	${PTG_DIR}/tests/HydrologyTests.cpp
 	${PTG_DIR}/tests/ImpostorTests.cpp
 	${PTG_DIR}/tests/LandStatsTests.cpp
+	${PTG_DIR}/tests/MaterialExportTests.cpp
 	${PTG_DIR}/tests/PermutationTests.cpp
 	${PTG_DIR}/tests/PresetTests.cpp
 	${PTG_DIR}/tests/RangeAllocatorTests.cpp
