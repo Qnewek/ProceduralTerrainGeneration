@@ -270,8 +270,8 @@ void TerrainView::Draw(Renderer& renderer, Camera& camera, LightSource& light, c
 		}
 	}
 	surfaces[static_cast<int>(heightLayer)]->Bind(surfaceUnit);
-	//The splat map belongs to the terrain, not to a noise preview drawn from OVERLAY
-	if (splat && heightLayer == Layer::TERRAIN) {
+	//The splat map belongs to the terrain (and its eroded copy), not to a noise preview drawn from OVERLAY
+	if (splat && (heightLayer == Layer::TERRAIN || (overlaySplat && heightLayer == Layer::OVERLAY))) {
 		splat->Bind(splatUnit);
 		shader->SetUniform1i("useSplat", 1);
 	}

@@ -47,6 +47,7 @@ namespace vegexport {
 		std::shared_ptr<const hydrology::Network> rivers;	//nothing stands in their water; nullptr = none
 		float metresPerUnit = 1.0f;		//metres of height value 1
 		glm::ivec2 mapTexel = glm::ivec2(0);	//world map position of map texel (0, 0) (a partial map moved over the world)
+		uint32_t layerMask = (1u << vegetation::layerCount) - 1u;	//bit i = vegetation::Layer i is placed
 	};
 
 	//Places the plants of a finite map in the chunks of chunkTexels of the world grid it lies on; plants beyond its edge texels are left
@@ -54,6 +55,10 @@ namespace vegexport {
 	//@param surface - surface map of the height map (GpuSurfacePass: xy = gradient per world unit), as the chunks have it
 	//@param ids - biome ids
 	std::vector<Placed> PlaceMap(const HeightField& height, const std::vector<glm::vec4>& surface, const BiomeMap& ids, const Input& input);
+	//The plants of PlaceMap as the app draws them (VegetationLayer): XZ in world units before modelScale, Y = height value, scale in world units per metre
+	//@param texelZeroWorld - world XZ where the centre of map texel (0, 0) is drawn
+	//@param metresPerUnit - as Input::metresPerUnit
+	std::vector<vegetation::Instance> ToAppInstances(const std::vector<Placed>& placed, glm::vec2 texelZeroWorld, float metresPerUnit);
 
 	//The variants of a model as written to its file
 	struct ModelFile {

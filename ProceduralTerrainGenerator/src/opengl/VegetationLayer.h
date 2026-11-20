@@ -55,6 +55,14 @@ public:
 	//Then DrawShadow into that cascade. Before Draw, which culls for the camera into the same buffers
 	bool CullShadows(Camera& camera, const glm::mat4& sunViewProjection, const TerrainRenderSettings& settings, VegetationModels* models);
 	void DrawShadow(const FrameUniforms::Block& block, Camera& camera, const TerrainRenderSettings& settings, VegetationModels& models);
+	//A set of plants besides the chunks (the eroded copy of the partial map), XZ in world units before modelScale: replaces the previous set.
+	//Culled, drawn and shadowed with the plants of the chunks; kept by Update and ForgetChunks
+	void SetExtraInstances(const std::vector<vegetation::Instance>& instances);
+	void ClearExtraInstances();
+	bool HasExtraInstances() const { return extraCount > 0; }
+	size_t ExtraCount() const { return extraCount; }
+	//Drops the plants of the chunks (not the extra set): the partial map shown without its details
+	void ForgetChunks();
 	//Settings and statistics, in the Vegetation tab
 	void ImGuiDraw();
 	bool ReloadShader();
@@ -140,6 +148,8 @@ private:
 	uint32_t Allocate(uint32_t count);
 	//Tables of the culling (groups, commands, bounds) for the models ready now
 	void BuildTables(const VegetationModels& models);
+	//BuildTables when the count of ready models changed (the extra set is drawn also when Update does not run)
+	void EnsureTables(const VegetationModels& models);
 	//Instances to draw: every ground chunk's own, or the part of a placed coarser chunk over it, or its placed finer chunks
 	void CollectRanges(const ChunkWorld& chunks);
 
@@ -149,6 +159,9 @@ private:
 	uint64_t settingsVersion = 0;
 	std::vector<ChunkWorld::GroundChunk> ground;
 	std::vector<DrawRange> drawRanges;
+	//The extra set: one range of the placed buffer, sorted into squares of a chunk of level 0, one DrawRange per square that has plants
+	uint32_t extraOffset = 0, extraCount = 0;
+	std::vector<DrawRange> extraRanges;
 	//Settings the placed instances were made with; a change places everything again
 	std::vector<std::vector<biome::Plant>> placedPlants;
 	float placedWater = 0.0f, placedDensity = 0.0f;

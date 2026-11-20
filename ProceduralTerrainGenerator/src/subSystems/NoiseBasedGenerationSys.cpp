@@ -5,6 +5,7 @@
 
 #include "imgui.h"
 
+#include "ErosionPanel.h"
 #include "Preset.h"
 
 NoiseBasedGenerationSys::NoiseBasedGenerationSys()
@@ -124,11 +125,6 @@ std::vector<erosion::Method> NoiseBasedGenerationSys::ShownMethods() const
 		}
 	}
 	return methods;
-}
-
-const char* NoiseBasedGenerationSys::MethodName(erosion::Method method)
-{
-	return method == erosion::Method::PIPES ? "Water flow (pipes)" : "Droplets";
 }
 
 namespace {
@@ -312,7 +308,7 @@ void NoiseBasedGenerationSys::ApplyConfig(const NoiseMapConfig& loaded)
 
 void NoiseBasedGenerationSys::Draw(Renderer& renderer, Camera& camera, LightSource& light)
 {
-	labels.clear();
+	labels.Clear();
 	if (chunksShown) {
 		chunks.Draw(renderer, camera, light, renderSettings);
 		return;
@@ -338,7 +334,7 @@ void NoiseBasedGenerationSys::Draw(Renderer& renderer, Camera& camera, LightSour
 		else {
 			view.Draw(renderer, camera, light, renderSettings, TerrainView::Layer::OVERLAY, offset);
 		}
-		mapNames.push_back({ offset.x, std::string("Eroded: ") + MethodName(methods[i]) });
+		mapNames.push_back({ offset.x, std::string("Eroded: ") + ErosionMethodName(methods[i]) });
 	}
 	//A single map needs no name
 	if (methods.empty()) {
@@ -347,61 +343,13 @@ void NoiseBasedGenerationSys::Draw(Renderer& renderer, Camera& camera, LightSour
 	const glm::mat4 viewProjection = renderSettings.map2d
 		? [&] { const FrameUniforms::Block block = TerrainView::FrameBlock(camera, light, renderSettings, flatMin, flatMax); return block.projection * block.view; }()
 		: camera.GetViewProjection();
-	PlaceLabels(viewProjection, mapNames);
-}
-
-void NoiseBasedGenerationSys::PlaceLabels(const glm::mat4& viewProjection, const std::vector<std::pair<float, std::string>>& maps)
-{
-	//Viewport of this frame in framebuffer pixels, origin at the bottom left; ImGui counts window points from the top left
-	GLint viewport[4];
-	glGetIntegerv(GL_VIEWPORT, viewport);
-	const ImGuiIO& io = ImGui::GetIO();
-	const float framebufferHeight = io.DisplaySize.y * io.DisplayFramebufferScale.y;
-
-	const float halfDepth = view.GetWorldHeight() / 2.0f;
 	//Above the highest possible terrain, so that the label is not inside a mountain in 3D; the 2D view ignores the height
-	const float top = std::abs(renderSettings.heightScale);
-	const glm::vec2 center = view.GetWorldCenter();
-	for (const auto& [offsetX, text] : maps) {
-		const glm::vec3 world = renderSettings.modelScale * glm::vec3(center.x + offsetX, top, center.y - halfDepth);
-		const glm::vec4 clip = viewProjection * glm::vec4(world, 1.0f);
-		//Behind the camera
-		if (clip.w <= 1e-4f) {
-			continue;
-		}
-		const glm::vec3 ndc = glm::vec3(clip) / clip.w;
-		if (ndc.z < -1.0f || ndc.z > 1.0f) {
-			continue;
-		}
-		const float x = viewport[0] + (ndc.x * 0.5f + 0.5f) * viewport[2];
-		const float y = framebufferHeight - (viewport[1] + (ndc.y * 0.5f + 0.5f) * viewport[3]);
-		labels.push_back({ ImVec2(x / io.DisplayFramebufferScale.x, y / io.DisplayFramebufferScale.y), text });
-	}
-	//Kept for ImGuiMapLabels: the viewport rectangle in ImGui coordinates, labels outside of it are clipped
-	labelClipMin = ImVec2(viewport[0] / io.DisplayFramebufferScale.x, (framebufferHeight - viewport[1] - viewport[3]) / io.DisplayFramebufferScale.y);
-	labelClipMax = ImVec2((viewport[0] + viewport[2]) / io.DisplayFramebufferScale.x, (framebufferHeight - viewport[1]) / io.DisplayFramebufferScale.y);
+	labels.Place(viewProjection, mapNames, center, half.y, std::abs(renderSettings.heightScale), renderSettings.modelScale);
 }
 
 void NoiseBasedGenerationSys::ImGuiMapLabels()
 {
-	if (labels.empty()) {
-		return;
-	}
-	//The background list draws over the 3D scene and under the panels
-	ImDrawList* drawList = ImGui::GetBackgroundDrawList();
-	ImFont* font = ImGui::GetFont();
-	const float size = ImGui::GetFontSize() * 1.3f;
-	const ImVec2 padding(6.0f, 3.0f);
-	drawList->PushClipRect(labelClipMin, labelClipMax, true);
-	for (const MapLabel& label : labels) {
-		const ImVec2 textSize = font->CalcTextSizeA(size, FLT_MAX, 0.0f, label.text.c_str());
-		//Centered over the top edge of the map, just above it
-		const ImVec2 textPos(label.position.x - textSize.x * 0.5f, label.position.y - textSize.y - padding.y * 2.0f - 4.0f);
-		drawList->AddRectFilled(ImVec2(textPos.x - padding.x, textPos.y - padding.y), ImVec2(textPos.x + textSize.x + padding.x, textPos.y + textSize.y + padding.y),
-			IM_COL32(0, 0, 0, 170), 4.0f);
-		drawList->AddText(font, size, textPos, IM_COL32(255, 255, 255, 255), label.text.c_str());
-	}
-	drawList->PopClipRect();
+	labels.ImGuiDraw();
 }
 
 void NoiseBasedGenerationSys::ImGuiRightPanel()
@@ -498,52 +446,7 @@ void NoiseBasedGenerationSys::ErosionImGui()
 	if (compareMethods) {
 		ImGui::TextUnformatted("Parameters of:");
 	}
-	int method = static_cast<int>(e.method);
-	ImGui::RadioButton("Droplets", &method, static_cast<int>(erosion::Method::DROPLETS));
-	ImGui::SameLine();
-	ImGui::RadioButton("Water flow (pipes)", &method, static_cast<int>(erosion::Method::PIPES));
-	e.method = static_cast<erosion::Method>(method);
-
-	if (e.method == erosion::Method::DROPLETS) {
-		ImGui::TextWrapped("Particles running down the slopes, eroding and depositing on the way.");
-		ImGui::InputInt("Droplet count", &e.dropletCount, 1000, 10000);
-		ImGui::InputInt("Droplet lifetime", &e.dropletLifetime);
-		ImGui::InputFloat("Inertia", &e.inertia);
-		ImGui::InputFloat("Droplet init velocity", &e.initialVelocity, 0.0f, 1.0f);
-		ImGui::InputFloat("Droplet init water", &e.initialWater, 0.0f, 1.0f);
-		ImGui::InputFloat("Erosion rate", &e.erosionRate, 0.0f, 1.0f);
-		ImGui::InputFloat("Deposition rate", &e.depositionRate, 0.0f, 1.0f);
-		ImGui::InputFloat("Evaporation rate", &e.evaporationRate, 0.0f, 1.0f);
-		ImGui::InputFloat("Gravity", &e.gravity, 0.0f, 10.0f);
-		ImGui::InputFloat("Min slope", &e.minSlope, 0.0f, 1.0f);
-		ImGui::InputInt("Erosion radius", &e.erosionRadius);
-		ImGui::InputFloat("Blur", &e.blur, 0.0f, 1.0f);
-		e.dropletCount = std::max(e.dropletCount, 0);
-		e.dropletLifetime = std::max(e.dropletLifetime, 0);
-		e.erosionRadius = std::max(e.erosionRadius, 0);
-	}
-	else {
-		erosion::PipeConfig& p = e.pipes;
-		ImGui::TextWrapped("Rain flowing over the whole map: water carves channels and leaves sediment where it slows down; steep slopes crumble (thermal erosion).");
-		ImGui::SliderInt("Iterations", &p.iterations, 1, 2000);
-		ImGui::SliderFloat("Time step", &p.timeStep, 0.005f, 0.2f, "%.3f");
-		ImGui::SliderFloat("Height scale", &p.heightScale, 1.0f, 256.0f, "%.0f texels");
-		ImGui::SetItemTooltip("Height of the map value 1 in texels: higher = steeper slopes, faster water");
-		ImGui::SliderFloat("Rain", &p.rainRate, 0.0f, 0.2f, "%.3f");
-		ImGui::SliderFloat("Evaporation", &p.evaporationRate, 0.0f, 0.5f, "%.3f");
-		ImGui::SliderFloat("Sediment capacity", &p.sedimentCapacity, 0.0f, 5.0f);
-		ImGui::SliderFloat("Min tilt", &p.minTilt, 0.0f, 0.5f, "%.3f");
-		ImGui::SetItemTooltip("Water on flatter ground carries sediment as if the slope had this sine");
-		ImGui::SliderFloat("Dissolving rate", &p.dissolvingRate, 0.0f, 5.0f);
-		ImGui::SliderFloat("Deposition rate", &p.depositionRate, 0.0f, 5.0f);
-		ImGui::SeparatorText("Thermal erosion");
-		ImGui::SliderFloat("Talus angle", &p.talusAngle, 1.0f, 89.0f, "%.0f deg");
-		ImGui::SliderFloat("Thermal rate", &p.thermalRate, 0.0f, 5.0f);
-		ImGui::SetItemTooltip("0 = no thermal erosion");
-		p.iterations = std::max(p.iterations, 0);
-		p.timeStep = std::max(p.timeStep, 0.001f);
-		p.heightScale = std::max(p.heightScale, 0.01f);
-	}
+	ErosionParametersImGui(e);
 
 	ImGui::Separator();
 	if (ImGui::Button(compareMethods ? "Erode map (both methods)" : "Erode map")) {
