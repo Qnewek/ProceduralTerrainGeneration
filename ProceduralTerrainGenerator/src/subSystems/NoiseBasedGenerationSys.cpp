@@ -358,18 +358,23 @@ void NoiseBasedGenerationSys::ImGuiSaving()
 		ImGui::TextWrapped("Saving works on the finite map: switch to Partial generation in the Display tab.");
 		return;
 	}
+	ExportPanel::Pack pack;
+	pack.mode = "Noise heightmap";
+	pack.range = heightmap::noiseRange;
+	pack.metresPerUnit = renderSettings.heightScale / TerrainView::worldUnitsPerTexel;
+	pack.generation = [this] { return preset::ToJson(config); };
 	//The base map, plus every eroded map shown, each in its own file
-	std::vector<ExportPanel::Target> exportTargets = { { view.GetMapWidth(), view.GetMapHeight(), "", [this] { return view.ReadLayer(TerrainView::Layer::TERRAIN); } } };
+	pack.heightmaps = { { view.GetMapWidth(), view.GetMapHeight(), "", [this] { return view.ReadLayer(TerrainView::Layer::TERRAIN); } } };
 	for (erosion::Method method : ShownMethods()) {
 		const TextureClass& texture = *ErodedTexture(method);
 		if (method == erosion::Method::PIPES) {
-			exportTargets.push_back({ texture.GetWidth(), texture.GetHeight(), "_eroded_pipes", [this] { return pipesView.ReadLayer(TerrainView::Layer::TERRAIN); } });
+			pack.heightmaps.push_back({ texture.GetWidth(), texture.GetHeight(), "_eroded_pipes", [this] { return pipesView.ReadLayer(TerrainView::Layer::TERRAIN); } });
 		}
 		else {
-			exportTargets.push_back({ texture.GetWidth(), texture.GetHeight(), "_eroded_droplets", [this] { return view.ReadLayer(TerrainView::Layer::OVERLAY); } });
+			pack.heightmaps.push_back({ texture.GetWidth(), texture.GetHeight(), "_eroded_droplets", [this] { return view.ReadLayer(TerrainView::Layer::OVERLAY); } });
 		}
 	}
-	exporter.ImGuiDraw(exportTargets, heightmap::noiseRange);
+	exporter.ImGuiDraw(pack);
 }
 
 void NoiseBasedGenerationSys::ErosionImGui()

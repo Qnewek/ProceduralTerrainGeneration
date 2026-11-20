@@ -570,6 +570,12 @@ Kroki:
   PCF 3×3 na terenie, 1 próbka sprzętowa na roślinach. Koszt w dżungli (bench 1, oko 2 m): 3,3 ms przy wysokim słońcu, 5,5 ms przy 12°; teren 0,5 ms, reszta rośliny.
   Dalej możliwe: tańsze rośliny w dalekich kaskadach (same impostory / co druga klatka), mieszanie granic kaskad, kontaktowe cienie trawy.
 - **Eksport:** heightmap 16-bit/EXR, splat mapy, mesh OBJ/glTF (z LOD), lista instancji roślinności (JSON) → import do Unity/Unreal/Godot.
+  Kolejność (2026-11-20, właściciel zostawił ją do zaproponowania): (1) paczka + metadane + EXR, (2) mapy materiałów i biomów, (3) siatka glTF/OBJ z LOD
+  + woda, (4) instancje roślinności, (5) opcjonalnie skrypty importu Unity/Godot.
+  🟡 2026-11-20 krok 1: eksport to paczka `exports/<nazwa>/` — mapy wysokości (PNG 16-bit, R16, nowy EXR float32 w metrach: własny zapis bez kompresji,
+  jeden kanał „Y”) + `<nazwa>.json` (`ExportManifest.*`): siatka (teksele, 1 m na teksel, rozmiar w metrach, osie, kolejność wierszy), wysokości w metrach
+  (metry na jednostkę z „Height scale”, min/max mapy), kodowanie każdego pliku, poziom morza (TerrainGen, LAYERED), wskazówki importu (Unreal: skala Z
+  i położenie, Unity: rozmiar terenu, wymóg 2^n + 1), parametry generacji (preset). Usunięty przycisk-zaślepka „Save heightMap as an 3d object”.
 - **Tryb „Imported map”:** ✅ 2026-11-03 podgląd mapy z pliku (PNG 1/2/4/8/16-bit, kolorowy zamieniany na szary, oraz R16/RAW): `HeightmapImport.*` +
   `subSystems/MapImportSys.*`, wczytywanie w tle. Dalszy ciąg w Fazie 6.
 - **Edytor ręczny:** pędzle (podnieś/obniż/wygładź/spłaszcz) jako warstwa delta nad proceduralną bazą.

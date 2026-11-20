@@ -454,7 +454,16 @@ void TerrainGenerationSys::ImGuiSaving()
 		ImGui::TextWrapped("Saving works on the finite map: switch to Partial generation in the Display tab.");
 		return;
 	}
-	exporter.ImGuiDraw({ { view.GetMapWidth(), view.GetMapHeight(), "", [this] { return view.ReadLayer(TerrainView::Layer::TERRAIN); } } }, heightmap::terrainRange);
+	ExportPanel::Pack pack;
+	pack.mode = "TerrainGen";
+	pack.range = heightmap::terrainRange;
+	pack.metresPerUnit = renderSettings.heightScale / TerrainView::worldUnitsPerTexel;
+	if (world.terrain.method == EvaluationMethod::LAYERED) {
+		pack.seaLevel = world.terrain.WaterHeight();
+	}
+	pack.generation = [this] { return preset::ToJson(world); };
+	pack.heightmaps = { { view.GetMapWidth(), view.GetMapHeight(), "", [this] { return view.ReadLayer(TerrainView::Layer::TERRAIN); } } };
+	exporter.ImGuiDraw(pack);
 }
 void TerrainGenerationSys::ImGuiOutput(glm::vec3 pos) {
 	//Camera in world units before modelScale, like the maps
