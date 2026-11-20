@@ -155,6 +155,40 @@ TEST_CASE("PlaceMap of a map moved over the world gives the plants of the world 
 	CHECK(fromA == fromB);
 }
 
+TEST_CASE("PlaceMap with only trees in the layer mask places nothing else")
+{
+	TestWorld world(300, 170);
+	const std::vector<vegexport::Placed> all = vegexport::PlaceMap(world.height, world.surface, world.ids, world.input);
+	const bool othersByDefault = std::any_of(all.begin(), all.end(), [](const vegexport::Placed& p) { return p.layer != vegetation::Layer::TREES; });
+	REQUIRE(othersByDefault);
+
+	world.input.layerMask = 1u << static_cast<int>(vegetation::Layer::TREES);
+	const std::vector<vegexport::Placed> trees = vegexport::PlaceMap(world.height, world.surface, world.ids, world.input);
+	REQUIRE(!trees.empty());
+	CHECK(std::all_of(trees.begin(), trees.end(), [](const vegexport::Placed& p) { return p.layer == vegetation::Layer::TREES; }));
+}
+
+TEST_CASE("App instances stand where the pack places them")
+{
+	vegexport::Placed p;
+	p.position = glm::vec3(10.0f, 64.0f, 20.0f);
+	p.yaw = 0.5f;
+	p.scale = 2.0f;
+	p.model = 3;
+	p.variant = 1;
+	p.layer = vegetation::Layer::SHRUBS;
+	const std::vector<vegetation::Instance> app = vegexport::ToAppInstances({ p }, glm::vec2(-100.0f, 40.0f), 256.0f);
+	REQUIRE(app.size() == 1);
+	CHECK(app[0].position.x == doctest::Approx(-60.0f));
+	CHECK(app[0].position.y == doctest::Approx(0.25f));
+	CHECK(app[0].position.z == doctest::Approx(120.0f));
+	CHECK(app[0].scale == doctest::Approx(8.0f));
+	CHECK(app[0].yaw == 0.5f);
+	CHECK(app[0].model == 3);
+	CHECK(app[0].variant == 1);
+	CHECK(app[0].layer == vegetation::Layer::SHRUBS);
+}
+
 TEST_CASE("PlaceMap leaves out water and maps that do not match")
 {
 	TestWorld world(140, 140);

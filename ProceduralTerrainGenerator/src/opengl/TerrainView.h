@@ -102,6 +102,8 @@ public:
 	TextureClass& SplatTexture(int _width, int _height);
 	//Drops the splat map, e.g. when biomes are turned off
 	void ReleaseSplat() { splat.reset(); }
+	//true = OVERLAY is a copy of the terrain (the eroded map of TerrainGen) and is drawn with its splat map; false = a noise preview, without
+	void SetOverlaySplat(bool on) { overlaySplat = on; }
 	//The splat map, nullptr if there is none (export)
 	const TextureClass* GetSplatTexture() const { return splat.get(); }
 
@@ -152,6 +154,7 @@ private:
 	std::unique_ptr<Shader> shader;
 	std::unique_ptr<TextureClass> textures[3];
 	std::unique_ptr<TextureClass> splat;
+	bool overlaySplat = false;
 
 	GpuSurfacePass surfacePass;
 	FrameUniforms frameUniforms;

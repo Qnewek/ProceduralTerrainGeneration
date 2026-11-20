@@ -294,6 +294,15 @@ struct WorldConfig {
 	TerrainConfig terrain = TerrainConfig::Default();
 	BiomeConfig biomes = BiomeConfig::Default();
 	rivers::RiverConfig rivers;
+	//Erosion of the partial map (not of the infinite world); the pipes height scale matches TerrainGen: height 1 = 1024 world units = 256 texels
+	erosion::ErosionConfig erosion = DefaultWorldErosion();
+
+	static erosion::ErosionConfig DefaultWorldErosion()
+	{
+		erosion::ErosionConfig e;
+		e.pipes.heightScale = 256.0f;
+		return e;
+	}
 };
 
 //Everything the "Noise heightmap" mode generates from

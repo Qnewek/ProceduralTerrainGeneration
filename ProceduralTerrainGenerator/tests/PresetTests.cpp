@@ -76,6 +76,70 @@ static void CheckSameSpline(const SplinePoints& a, const SplinePoints& b)
 	CHECK(a.cubic == b.cubic);
 }
 
+//Every erosion field unlike the defaults
+static erosion::ErosionConfig DistinctErosion()
+{
+	erosion::ErosionConfig e;
+	e.erosionRate = 0.11f;
+	e.depositionRate = 0.12f;
+	e.evaporationRate = 0.13f;
+	e.gravity = 0.14f;
+	e.inertia = 0.15f;
+	e.minSlope = 0.16f;
+	e.erosionRadius = 7;
+	e.blur = 0.17f;
+	e.dropletLifetime = 8;
+	e.dropletCount = 9;
+	e.initialWater = 0.18f;
+	e.initialVelocity = 0.19f;
+	e.initialCapacity = 0.21f;
+	e.method = erosion::Method::PIPES;
+	erosion::PipeConfig& p = e.pipes;
+	p.iterations = 11;
+	p.timeStep = 0.22f;
+	p.heightScale = 23.0f;
+	p.rainRate = 0.24f;
+	p.evaporationRate = 0.25f;
+	p.sedimentCapacity = 0.26f;
+	p.minTilt = 0.27f;
+	p.dissolvingRate = 0.28f;
+	p.depositionRate = 0.29f;
+	p.talusAngle = 31.0f;
+	p.thermalRate = 0.32f;
+	return e;
+}
+
+static void CheckSameErosion(const erosion::ErosionConfig& l, const erosion::ErosionConfig& e)
+{
+	CHECK(l.erosionRate == e.erosionRate);
+	CHECK(l.depositionRate == e.depositionRate);
+	CHECK(l.evaporationRate == e.evaporationRate);
+	CHECK(l.gravity == e.gravity);
+	CHECK(l.inertia == e.inertia);
+	CHECK(l.minSlope == e.minSlope);
+	CHECK(l.erosionRadius == e.erosionRadius);
+	CHECK(l.blur == e.blur);
+	CHECK(l.dropletLifetime == e.dropletLifetime);
+	CHECK(l.dropletCount == e.dropletCount);
+	CHECK(l.initialWater == e.initialWater);
+	CHECK(l.initialVelocity == e.initialVelocity);
+	CHECK(l.initialCapacity == e.initialCapacity);
+	CHECK(l.method == e.method);
+	const erosion::PipeConfig& lp = l.pipes;
+	const erosion::PipeConfig& p = e.pipes;
+	CHECK(lp.iterations == p.iterations);
+	CHECK(lp.timeStep == p.timeStep);
+	CHECK(lp.heightScale == p.heightScale);
+	CHECK(lp.rainRate == p.rainRate);
+	CHECK(lp.evaporationRate == p.evaporationRate);
+	CHECK(lp.sedimentCapacity == p.sedimentCapacity);
+	CHECK(lp.minTilt == p.minTilt);
+	CHECK(lp.dissolvingRate == p.dissolvingRate);
+	CHECK(lp.depositionRate == p.depositionRate);
+	CHECK(lp.talusAngle == p.talusAngle);
+	CHECK(lp.thermalRate == p.thermalRate);
+}
+
 static WorldConfig DistinctWorld()
 {
 	WorldConfig c;
@@ -117,6 +181,7 @@ static WorldConfig DistinctWorld()
 	c.biomes.table = { alpha, beta };
 	c.rivers = { rivers::Method::NOISE, 41.5f, 0.0031f, 0.0017f, 0.35f, 77.5f, 5, 4096, 4, 123456.0f, 2.5f, 17.5f, 6.25f, 3, 0.0013f, 0.0055f, 300.0f,
 		1234.0f, 7.5f, 0.15f, 0.45f, 98765 };
+	c.erosion = DistinctErosion();
 	return c;
 }
 
@@ -217,6 +282,18 @@ TEST_CASE("A world preset keeps every field")
 	CHECK(loaded.biomes.materialPatchSize == original.biomes.materialPatchSize);
 	CheckSameBiomes(loaded.biomes.table, original.biomes.table);
 	CheckSameRivers(loaded.rivers, original.rivers);
+	CheckSameErosion(loaded.erosion, original.erosion);
+}
+
+TEST_CASE("A world preset without erosion gets the TerrainGen defaults")
+{
+	WorldConfig loaded;
+	loaded.erosion = DistinctErosion();
+	std::string error;
+	REQUIRE_MESSAGE(preset::FromJson(R"({"kind": "world", "version": 2, "width": 64, "height": 32})", loaded, error), error);
+	CHECK(loaded.erosion.pipes.heightScale == 256.0f);
+	CHECK(loaded.erosion.method == erosion::Method::DROPLETS);
+	CHECK(loaded.erosion.dropletCount == erosion::ErosionConfig().dropletCount);
 }
 
 TEST_CASE("Every river method survives saving, and a preset without rivers has none")
@@ -253,33 +330,7 @@ TEST_CASE("A noise preset keeps every field")
 	original.width = 123;
 	original.height = 45;
 	original.noise = DistinctNoise(1);
-	erosion::ErosionConfig& e = original.erosion;
-	e.erosionRate = 0.11f;
-	e.depositionRate = 0.12f;
-	e.evaporationRate = 0.13f;
-	e.gravity = 0.14f;
-	e.inertia = 0.15f;
-	e.minSlope = 0.16f;
-	e.erosionRadius = 7;
-	e.blur = 0.17f;
-	e.dropletLifetime = 8;
-	e.dropletCount = 9;
-	e.initialWater = 0.18f;
-	e.initialVelocity = 0.19f;
-	e.initialCapacity = 0.21f;
-	e.method = erosion::Method::PIPES;
-	erosion::PipeConfig& p = e.pipes;
-	p.iterations = 11;
-	p.timeStep = 0.22f;
-	p.heightScale = 23.0f;
-	p.rainRate = 0.24f;
-	p.evaporationRate = 0.25f;
-	p.sedimentCapacity = 0.26f;
-	p.minTilt = 0.27f;
-	p.dissolvingRate = 0.28f;
-	p.depositionRate = 0.29f;
-	p.talusAngle = 31.0f;
-	p.thermalRate = 0.32f;
+	original.erosion = DistinctErosion();
 
 	NoiseMapConfig loaded;
 	std::string error;
@@ -288,33 +339,7 @@ TEST_CASE("A noise preset keeps every field")
 	CHECK(loaded.width == original.width);
 	CHECK(loaded.height == original.height);
 	CheckSameNoise(loaded.noise, original.noise);
-	const erosion::ErosionConfig& l = loaded.erosion;
-	CHECK(l.erosionRate == e.erosionRate);
-	CHECK(l.depositionRate == e.depositionRate);
-	CHECK(l.evaporationRate == e.evaporationRate);
-	CHECK(l.gravity == e.gravity);
-	CHECK(l.inertia == e.inertia);
-	CHECK(l.minSlope == e.minSlope);
-	CHECK(l.erosionRadius == e.erosionRadius);
-	CHECK(l.blur == e.blur);
-	CHECK(l.dropletLifetime == e.dropletLifetime);
-	CHECK(l.dropletCount == e.dropletCount);
-	CHECK(l.initialWater == e.initialWater);
-	CHECK(l.initialVelocity == e.initialVelocity);
-	CHECK(l.initialCapacity == e.initialCapacity);
-	CHECK(l.method == e.method);
-	const erosion::PipeConfig& lp = l.pipes;
-	CHECK(lp.iterations == p.iterations);
-	CHECK(lp.timeStep == p.timeStep);
-	CHECK(lp.heightScale == p.heightScale);
-	CHECK(lp.rainRate == p.rainRate);
-	CHECK(lp.evaporationRate == p.evaporationRate);
-	CHECK(lp.sedimentCapacity == p.sedimentCapacity);
-	CHECK(lp.minTilt == p.minTilt);
-	CHECK(lp.dissolvingRate == p.dissolvingRate);
-	CHECK(lp.depositionRate == p.depositionRate);
-	CHECK(lp.talusAngle == p.talusAngle);
-	CHECK(lp.thermalRate == p.thermalRate);
+	CheckSameErosion(loaded.erosion, original.erosion);
 }
 
 TEST_CASE("A noise preset without the erosion method uses droplets")

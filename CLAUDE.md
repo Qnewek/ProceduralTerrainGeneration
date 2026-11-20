@@ -97,6 +97,8 @@ ProceduralTerrainGenerator/
       PresetPanel.*              sekcja „Presets” w ImGui (lista plików, nazwa); zapis i odczyt wykonuje subsystem
       PlacesPanel.*              sekcja „Places” zakładki Presets: lista miejsc i jej plik; subsystem podaje bieżący widok i przenosi kamerę + mapę
       PackPicker.*               sekcja „Export packs” zakładki Presets: lista paczek z exports/, „Load from pack” (subsystem stosuje `generation` + `worldOrigin`)
+      ErosionPanel.*             parametry erozji (wybór metody + jej pola, bez przycisków), wspólne dla zakładek Erosion obu trybów; nazwa metody
+      MapLabels.*                podpisy map rysowanych obok siebie (mapa + kopie po erozji): rzut w Draw, rysowanie w ramce ImGui
       ExportPanel.*              sekcja „Saving” w ImGui: paczka w exports/<nazwa>/; subsystem podaje `ExportPanel::Pack` (mapy, zakres, metry na jednostkę, morze, preset)
       BiomeEditor.*              edytor tabeli biomów (lista, zakresy, diagram Whittakera T × H); edytuje tabelę w miejscu, subsystem przelicza biomy
       PanelTabs.*                zakładki panelu: rzędy przycisków na górze (zawijane, gdy się nie mieszczą) + przewijana treść pod nimi; wybór trzymany po nazwie
@@ -173,8 +175,16 @@ Wartości szumów są w [-1, 1]. Konwencja indeksowania: `map[y * width + x]`.
 - Erozja (`GpuErosion`, tryb Noise heightmap, tylko skończona mapa): każda metoda ma własną mapę wynikową — krople w warstwie OVERLAY `view`, rury w warstwie TERRAIN
   drugiego widoku `pipesView` (TerrainView ma tylko jedną wolną warstwę wysokości; jednostki tekstur 0–2 są zajęte). Kolejne „Erode map” kumulują się na mapie metody
   (`ErodedMap::fromBase`), nowy szum lub „Reset” zaczyna obie od TERRAIN. „Compare both methods” eroduje obiema naraz i rysuje 3 mapy obok siebie (oba widoki dostają
-  te same `SetFlatViewBounds`). Podpisy map (`PlaceLabels` w `Draw` rzutuje środek górnej krawędzi każdej mapy macierzą kamery albo kamery 2D z `TerrainView::FrameBlock`,
-  `ImGuiMapLabels` rysuje je na `GetBackgroundDrawList` — nad sceną, pod panelami) pojawiają się, gdy obok szumu jest choć jedna mapa po erozji. Krople: mapa w buforze stałoprzecinkowym (2^-24, |h| ≤ 127) zmienianym `atomicAdd` (GL 4.5 nie ma
+  te same `SetFlatViewBounds`). Podpisy map (`MapLabels::Place` w `Draw` rzutuje środek górnej krawędzi każdej mapy macierzą kamery albo kamery 2D z `TerrainView::FrameBlock`,
+  `MapLabels::ImGuiDraw` rysuje je na `GetBackgroundDrawList` — nad sceną, pod panelami) pojawiają się, gdy obok szumu jest choć jedna mapa po erozji.
+- Erozja w TerrainGen (od 2026-11-20): tylko mapa częściowa (w świecie nieskończonym odrzucona — symulacja, nie deterministyczna generacja). Kopia po erozji
+  w warstwie OVERLAY `view` (`SetOverlaySplat(true)`: rysowana z mapą materiałów terenu; biomy i splat są te z mapy, nie przeliczane), obok mapy w X
+  (`ErodedShift`), z drugim `WaterSurface::DrawMap` (morze z wysokości kopii, rzeki i jeziora z poziomów sieci) i podpisami. Parametry w `WorldConfig::erosion`
+  (preset świata; `pipes.heightScale` = 256 pod skalę 1024). Każde `request.terrain` w `GenerateFinite` i wyjście do świata nieskończonego wołają `ResetErosion`.
+  Rośliny kopii: `vegexport::PlaceMap` na odczytanej kopii (wątek roboczy, `ErodedTerrain::version` odrzuca wynik starszej kopii) → `ToAppInstances` →
+  `VegetationLayer::SetExtraInstances` (osobny zakres bufora, kwadraty chunku poziomu 0 do cullingu; zostaje przy `Update`/`ForgetChunks`); powyżej 2048² tylko drzewa.
+  Trawa i cień terenu na kopii — nie ma (biorą się z chunków). „Follow camera” czeka, gdy kopia jest pokazana (lot nad kopię przesunąłby mapę i ją skasował);
+  wyłączenie biomów czyści rośliny kopii, włączenie (`RequestBiomes`) rozmieszcza je znowu. Krople: mapa w buforze stałoprzecinkowym (2^-24, |h| ≤ 127) zmienianym `atomicAdd` (GL 4.5 nie ma
   atomików float), krok `i` wszystkich kropel przed krokiem `i + 1` jak w wersji CPU (dispatch na krok, paczki po `dropletBatch`); kolejność zapisów nie jest stała,
   więc wynik nie jest bit w bit powtarzalny (statystycznie zgodny z CPU — sprawdzone na legacy). Rury: deterministyczne, osad płynie rurami razem z wodą
   (zachowanie masy poza tym, co woda wynosi za krawędź), wymywanie nie schodzi poniżej najniższego sąsiada (bez dołów), a odkładanie i końcowy zrzut osadu

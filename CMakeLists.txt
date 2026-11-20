@@ -102,8 +102,10 @@ add_executable(ProceduralTerrainGenerator
 	${PTG_SRC}/utility/ExportPanel.cpp
 	${PTG_SRC}/utility/BiomeEditor.cpp
 	${PTG_SRC}/utility/FileDialog.cpp
+	${PTG_SRC}/utility/ErosionPanel.cpp
 	${PTG_SRC}/utility/FrameMetrics.cpp
 	${PTG_SRC}/utility/LightSource.cpp
+	${PTG_SRC}/utility/MapLabels.cpp
 	${PTG_SRC}/utility/PackPicker.cpp
 	${PTG_SRC}/utility/PlacesPanel.cpp
 	${PTG_SRC}/utility/PresetPanel.cpp

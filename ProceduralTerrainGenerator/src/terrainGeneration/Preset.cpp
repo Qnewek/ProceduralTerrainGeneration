@@ -823,6 +823,24 @@ namespace preset {
 			}
 		}
 
+		void CheckErosion(const erosion::ErosionConfig& e)
+		{
+			if (e.dropletCount < 0 || e.dropletLifetime < 0 || e.erosionRadius < 0) {
+				throw std::runtime_error("Erosion: droplet count, droplet lifetime and radius cannot be negative");
+			}
+			const erosion::PipeConfig& p = e.pipes;
+			if (p.iterations < 0 || p.timeStep <= 0.0f || p.heightScale <= 0.0f) {
+				throw std::runtime_error("Erosion pipes: iterations cannot be negative, time step and height scale must be positive");
+			}
+			if (p.rainRate < 0.0f || p.evaporationRate < 0.0f || p.sedimentCapacity < 0.0f || p.minTilt < 0.0f
+				|| p.dissolvingRate < 0.0f || p.depositionRate < 0.0f || p.thermalRate < 0.0f) {
+				throw std::runtime_error("Erosion pipes: rates, capacity and minimum tilt cannot be negative");
+			}
+			if (p.talusAngle <= 0.0f || p.talusAngle >= 90.0f) {
+				throw std::runtime_error("Erosion pipes: talus angle must be between 0 and 90 degrees");
+			}
+		}
+
 		void Check(const WorldConfig& c)
 		{
 			CheckSize(c.width, c.height);
@@ -847,26 +865,14 @@ namespace preset {
 			CheckNoise(c.biomes.humidity, "Humidity");
 			CheckBiomes(c.biomes);
 			CheckRivers(c.rivers);
+			CheckErosion(c.erosion);
 		}
 
 		void Check(const NoiseMapConfig& c)
 		{
 			CheckSize(c.width, c.height);
 			CheckNoise(c.noise, "Noise");
-			if (c.erosion.dropletCount < 0 || c.erosion.dropletLifetime < 0 || c.erosion.erosionRadius < 0) {
-				throw std::runtime_error("Erosion: droplet count, droplet lifetime and radius cannot be negative");
-			}
-			const erosion::PipeConfig& p = c.erosion.pipes;
-			if (p.iterations < 0 || p.timeStep <= 0.0f || p.heightScale <= 0.0f) {
-				throw std::runtime_error("Erosion pipes: iterations cannot be negative, time step and height scale must be positive");
-			}
-			if (p.rainRate < 0.0f || p.evaporationRate < 0.0f || p.sedimentCapacity < 0.0f || p.minTilt < 0.0f
-				|| p.dissolvingRate < 0.0f || p.depositionRate < 0.0f || p.thermalRate < 0.0f) {
-				throw std::runtime_error("Erosion pipes: rates, capacity and minimum tilt cannot be negative");
-			}
-			if (p.talusAngle <= 0.0f || p.talusAngle >= 90.0f) {
-				throw std::runtime_error("Erosion pipes: talus angle must be between 0 and 90 degrees");
-			}
+			CheckErosion(c.erosion);
 		}
 
 		void ReadFields(const Reader& r, WorldConfig& c)
@@ -876,6 +882,8 @@ namespace preset {
 			ReadTerrain(r, "terrain", c.terrain);
 			ReadBiomes(r, "biomes", c.biomes);
 			ReadRivers(r, "rivers", c.rivers);
+			//Added 2026-11-20 without a new version: older presets get WorldConfig::DefaultWorldErosion
+			ReadErosion(r, "erosion", c.erosion);
 		}
 
 		void ReadFields(const Reader& r, NoiseMapConfig& c)
@@ -1012,6 +1020,7 @@ namespace preset {
 		biomes["table"] = std::move(table);
 		root["biomes"] = std::move(biomes);
 		root["rivers"] = RiversToJson(c.rivers);
+		root["erosion"] = ErosionToJson(c.erosion);
 
 		return root.dump(2);
 	}
