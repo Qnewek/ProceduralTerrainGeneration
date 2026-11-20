@@ -731,7 +731,8 @@ namespace vegetation
 					const double budget = foliage ? foliageBudget : surfaceBudget;
 					const double kindTriangles = static_cast<double>(foliage ? foliageTriangles : surfaceTriangles);
 					const size_t share = static_cast<size_t>(std::llround(budget * static_cast<double>(part.indices.size() / 3) / kindTriangles));
-					const size_t partTarget = std::clamp<size_t>(share, 4, previous[p]);
+					//At least 4 triangles, but never more than the previous level (a part may have fewer than 4)
+					const size_t partTarget = std::min(std::max<size_t>(share, 4), previous[p]);
 					std::vector<Vertex> vertices;
 					std::vector<uint32_t> indices;
 					if (foliage) {
