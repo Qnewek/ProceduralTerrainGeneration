@@ -24,7 +24,7 @@ bool NoisePreview::Initialize()
 	return true;
 }
 
-void NoisePreview::Generate(GpuHeightGenerator& gpu, const noise::NoiseConfigParameters& config, int mapWidth, int mapHeight)
+void NoisePreview::Generate(GpuHeightGenerator& gpu, const noise::NoiseConfigParameters& config, int mapWidth, int mapHeight, glm::ivec2 origin)
 {
 	//Larger maps are sampled more sparsely, so the picture covers the whole map in at most maxSize texels
 	const float step = std::max(1.0f, static_cast<float>(std::max(mapWidth, mapHeight)) / maxSize);
@@ -36,6 +36,7 @@ void NoisePreview::Generate(GpuHeightGenerator& gpu, const noise::NoiseConfigPar
 	}
 
 	MapArea area;
+	area.origin = glm::vec2(origin);
 	area.step = step;
 	area.islandSize = glm::ivec2(mapWidth, mapHeight);
 	gpu.GenerateNoise(config, area, *values);

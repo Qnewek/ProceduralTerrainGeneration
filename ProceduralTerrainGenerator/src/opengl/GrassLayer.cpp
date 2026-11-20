@@ -112,8 +112,13 @@ void GrassLayer::Draw(const ChunkWorld& chunks, Camera& camera, const LightSourc
 	constexpr float wupt = TerrainView::worldUnitsPerTexel;
 	const glm::vec2 eyeTexel = (glm::vec2(eye.x, eye.z) - mapOrigin) / wupt;
 	const float radiusTexels = rangeUnits / wupt;
-	const glm::ivec2 lookMin = glm::ivec2(glm::floor(eyeTexel - radiusTexels));
-	const glm::ivec2 lookMax = glm::ivec2(glm::ceil(eyeTexel + radiusTexels)) + 1;
+	glm::ivec2 lookMin = glm::ivec2(glm::floor(eyeTexel - radiusTexels));
+	glm::ivec2 lookMax = glm::ivec2(glm::ceil(eyeTexel + radiusTexels)) + 1;
+	//On a partial map only over its texels: [min, max - 1] spans the terrain drawn between the centres of its edge texels
+	if (const auto& bounds = chunks.GetBounds()) {
+		lookMin = glm::max(lookMin, bounds->min);
+		lookMax = glm::min(lookMax, bounds->max - 1);
+	}
 	const int slots = std::max(1, static_cast<int>(std::ceil(density)));
 
 	glNamedBufferSubData(commandBuffer, 0, sizeof(emptyCommand), emptyCommand);

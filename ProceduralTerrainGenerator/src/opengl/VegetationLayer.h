@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -20,7 +21,8 @@ class Shader;
 class VegetationModels;
 struct TerrainRenderSettings;
 
-//Vegetation and rocks standing on the infinite world. Every ground chunk (leaf of the chunk quadtree in range) gets its instances
+//Vegetation and rocks standing on the infinite world, or on the partial map when the chunks have bounds (ChunkWorld::SetBounds:
+//plants outside them are dropped). Every ground chunk (leaf of the chunk quadtree in range) gets its instances
 //once: maps read back from the GPU, vegetation::PlaceChunk; chunks of full detail get all layers, coarser ones (far away) only trees,
 //which are impostors there. The instances of a chunk stay on the GPU in one buffer, sorted by blocks of 128 m in Morton order, so a part
 //of a coarser chunk can stand in for finer chunks not placed yet. Every frame a compute shader (cull_compute.shader) culls the instances
@@ -59,6 +61,7 @@ public:
 
 	//Multiplies the density of every plant (the Density slider); a change places everything again
 	void SetDensity(float value) { density = value; }
+	float GetDensity() const { return density; }
 	//Distance in metres up to which trees are placed and drawn (the Range of trees)
 	void SetTreeRange(float metres) { ranges[static_cast<int>(vegetation::Layer::TREES)].max = metres; }
 	//Off = LOD 2 instead of impostors, for comparing them
@@ -151,6 +154,7 @@ private:
 	float placedWater = 0.0f, placedDensity = 0.0f;
 	uint32_t placedSeed = 0;
 	std::shared_ptr<const hydrology::Network> placedRivers;
+	std::optional<ChunkWorld::TexelRect> placedBounds;		//of the chunks (partial map)
 	int placedReadyModels = -1;
 
 	bool enabled = true;

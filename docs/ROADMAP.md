@@ -570,6 +570,58 @@ Kroki:
   PCF 3×3 na terenie, 1 próbka sprzętowa na roślinach. Koszt w dżungli (bench 1, oko 2 m): 3,3 ms przy wysokim słońcu, 5,5 ms przy 12°; teren 0,5 ms, reszta rośliny.
   Dalej możliwe: tańsze rośliny w dalekich kaskadach (same impostory / co druga klatka), mieszanie granic kaskad, kontaktowe cienie trawy.
 - **Eksport:** heightmap 16-bit/EXR, splat mapy, mesh OBJ/glTF (z LOD), lista instancji roślinności (JSON) → import do Unity/Unreal/Godot.
+  Kolejność (2026-11-20, właściciel zostawił ją do zaproponowania): (1) paczka + metadane + EXR, (2) mapy materiałów i biomów, (3) siatka glTF/OBJ z LOD
+  + woda, (4) instancje roślinności, (5) opcjonalnie skrypty importu Unity/Godot.
+  🟡 2026-11-20 krok 1: eksport to paczka `exports/<nazwa>/` — mapy wysokości (PNG 16-bit, R16, nowy EXR float32 w metrach: własny zapis bez kompresji,
+  jeden kanał „Y”) + `<nazwa>.json` (`ExportManifest.*`): siatka (teksele, 1 m na teksel, rozmiar w metrach, osie, kolejność wierszy), wysokości w metrach
+  (metry na jednostkę z „Height scale”, min/max mapy), kodowanie każdego pliku, poziom morza (TerrainGen, LAYERED), wskazówki importu (Unreal: skala Z
+  i położenie, Unity: rozmiar terenu, wymóg 2^n + 1), parametry generacji (preset). Usunięty przycisk-zaślepka „Save heightMap as an 3d object”.
+  🟡 2026-11-20 krok 2 (`MaterialExport.*`, checkboxy „Material maps” / „Biome maps”, tylko TerrainGen z biomami): splat z GPU → `_splat_N.png` (RGBA, 4 materiały,
+  alphamapy Unity) i `_weight_ID_nazwa.png` (szare, po jednej na materiał obecny na mapie — warstwy Unreal, Godot), udziały znormalizowane do sumy 255
+  na teksel (największe reszty; GPU gubi do kilku jednostek przy zaokrągleniu do 8 bitów); `_biome_ids.png` (8 bit) i `_biome_colors.png` (RGB).
+  W JSON lista materiałów (id, nazwa, plik splat + kanał, plik wag, pokrycie) i biomów (id, nazwa, kolor, udział).
+  🟡 2026-11-20 krok 3 (`TerrainMesh.*`, `MeshFile.*`, `MeshExport.*`, „Terrain mesh” / „Levels of detail” / „Tile size” / „Water” w Saving): siatka terenu
+  w metrach (Y w górę, osie glTF), GLB (własny zapis, walidowany w testach przez cgltf) albo OBJ; plik na LOD, kafle jako węzły; LOD 0 = każdy teksel,
+  kolejne przez `meshopt_simplify` (¼ trójkątów, z poprzedniego poziomu), bez fałd dzięki upraszczaniu kopii ze ściśniętą wysokością; normalne z pełnej
+  rozdzielczości; UV = mapy paczki (w glTF tekstura kolorów biomów). Woda: quad morza + siatka rzek i jezior (REGION). Budowa w tle. Mapa 1024² (fBm,
+  góry ~150 m): siatka 2,1 mln trójkątów; LOD1 523 tys. / 1,1 s / błąd 1,1 m, LOD2 131 tys. / 0,5 s / 1,9 m, LOD3 33 tys. / 0,2 s / 5,9 m (maks. różnica
+  pionowa). Pierwsza wersja (bez ściśnięcia) zostawiała odwrócone trójkąty na stromych zboczach (9 z ok. 370 na małej mapie testowej; przy ściśnięciu
+  do nachylenia 0,5 jeszcze 39 na mapie 1024² ze zboczami ~17, przy 4× mocniejszym 0) — testy „no folds”.
+  🟡 2026-11-20 krok 4 (`VegetationExport.*`, „Vegetation” / „Vegetation models” w Saving, tylko TerrainGen z biomami i wczytanymi modelami): roślinność
+  skończonej mapy rozmieszczana tym samym `vegetation::PlaceChunk` co świat nieskończony (chunki 128 tekseli z marginesem wyciętym z pełnej mapy, ten sam
+  seed `detailSeed`, gęstość z suwaka, poziom wody, rzeki), więc te same drzewa co w aplikacji — test porównuje chunk paczki z chunkiem aplikacji (inny
+  `mapOrigin`, 4 jednostki na teksel). `_vegetation.json`: lista modeli (nazwa, rodzaj, warstwa, liczba wariantów i instancji, plik i węzły) + wiersze
+  `[x, y, z, yaw, scale, model, variant]` w metrach (pozycja = podstawa modelu na terenie, yaw w radianach wokół +Y jak w shaderze). Modele: `vegetation/<asset>.glb`,
+  węzeł `<nazwa>_<wariant>_LOD<n>` = LOD-y aplikacji (z cache `res/vegetation/cache`, `vegetation::CacheKey` przeniesiony do `ptg_core`; bez cache budowane
+  od nowa), materiały PBR (albedo, normal, ORM; alpha-test = `MASK`, liście dwustronne), tekstury kopiowane do `vegetation/textures/`, osobna mapa alfa
+  łączona z albedo w RGBA PNG. `MeshFile`: węzeł ma teraz kilka prymitywów (po jednym na materiał). Pierwsza wersja zapisywała siatkę źródłową — jodła
+  363 MB; z LOD-ami aplikacji 29 MB (LOD0 150 tys. trójkątów). Wszystkie 14 modeli: test „downloaded models” (`--no-skip`), z cache jodła 0,6 s
+  (bez cache 13 s), krzewy ~0,3 s (kodowanie PNG z alfą). Mapa pochodnych skończonej mapy różni się od chunków tylko na samej krawędzi mapy (nachylenie
+  z obciętej różnicy), więc tam pojedyncze rośliny mogą się różnić.
+- **Mapa częściowa jako wycinek świata:** 🟡 2026-11-20. Stan przed: woda (morze, rzeki, jeziora) była na mapie częściowej, roślinności, trawy i cieni
+  nie było (tylko na chunkach), a mapa zawsze leżała w początku świata (teksele 0..W). Teraz: `mapOffset` (oba tryby z „Infinite generation”) — wyjście
+  ze świata nieskończonego centruje mapę pod kamerą, Display → „Partial map”: offset ręcznie, „Centre on camera”, „World origin”, „Follow camera”
+  (TerrainGen: nowy środek, gdy kamera odejdzie o ćwierć mapy). Generacja z `MapArea::origin`, wyspa nadal w początku świata, region rzek i statystyki
+  lądu wokół mapy; `--gpu-check` „chunk: moved map” = bit w bit. TerrainGen: roślinność, trawa i cienie na mapie częściowej z chunków ograniczonych do
+  jej prostokąta (`ChunkWorld::SetBounds`), więc te same rośliny co w świecie nieskończonym (checkbox „Plants, grass and shadows”). Eksport:
+  `grid.worldOrigin` w manifeście, roślinność i woda rzek względem teksela (0, 0) mapy (test „moved over the world”). Do sprawdzenia w aplikacji:
+  koszt chunków przy edycji na mapie częściowej; cień terenu tuż za krawędzią mapy (chunk na krawędzi rzuca go w całości).
+  **Do zrobienia (2026-11-20, kolejność zalecana; właściciel jeszcze nie wybrał — zapytać przed startem):**
+  1. **Położenie mapy w presecie / zakładki / „Load from pack”** (mały nakład). Dziś offset to tylko stan widoku: po restarcie lub wczytaniu presetu
+     trzeba ręcznie przepisać `worldOrigin` z manifestu do „Offset”. (a) opcjonalne pole offsetu w presecie TerrainGen (stare presety dalej się czytają);
+     (b) zakładki: nazwane miejsca (pozycja kamery + offset) w osobnym pliku, klik = przeniesienie kamery i mapy; (c) „Load from pack”: wybór
+     `<nazwa>.json` paczki → parametry z `generation` + położenie z `grid.worldOrigin`.
+  2. **Eksport kafli N × M** (średni). Saving: „Tiles”, mapa przesuwana kolejno, każda paczka osobno + plik zbiorczy z listą kafli i `worldOrigin`.
+     Krok = `W − 1` (sąsiednie kafle dzielą rząd tekseli na krawędzi, inaczej szczelina/schodek w silniku; Unity tego wymaga). Generacja tylko w `Update`
+     (GL w wątku głównym) → maszyna stanów na wiele klatek z postępem. Region rzek REGION musi objąć wszystkie kafle naraz, inaczej rzeki urywają się na granicach.
+  3. **Region rzek podążający za kamerą w świecie nieskończonym** (średni–duży). Dziś region (`regionSize`, domyślnie 8192 teksele) stoi wokół ostatniej
+     mapy częściowej; dalej rzek REGION nie ma. Nowa sieć zmienia żłobienie → wszystkie chunki i roślinność od nowa (przeskok widoku), a hydrologia zależy
+     od całego regionu, więc i w części wspólnej rzeki mogą wyjść inne. Pomysły: przesuwanie skokowe o pół regionu, sieć w tle, stopniowa podmiana chunków
+     od najdalszych; albo kafle sieci z zakładką i przejściem.
+  4. **Erozja poza mapą Noise heightmap** (duży). Etap pośredni: erozja na mapie częściowej TerrainGen (ta sama `GpuErosion`). Docelowo w świecie
+     nieskończonym: erozja nie jest lokalna (krople wędrują, rury propagują przez iteracje), krople nie są bit w bit powtarzalne (atomiki) — potrzebny
+     chunk z szerokim marginesem (64–128 tekseli, zostaje środek), ziarno kropli z pozycji komórki świata, rury bez zależności od kolejności; szwy małe,
+     nie zerowe, koszt GPU na chunk wyraźnie wyższy.
 - **Tryb „Imported map”:** ✅ 2026-11-03 podgląd mapy z pliku (PNG 1/2/4/8/16-bit, kolorowy zamieniany na szary, oraz R16/RAW): `HeightmapImport.*` +
   `subSystems/MapImportSys.*`, wczytywanie w tle. Dalszy ciąg w Fazie 6.
 - **Edytor ręczny:** pędzle (podnieś/obniż/wygładź/spłaszcz) jako warstwa delta nad proceduralną bazą.

@@ -35,11 +35,13 @@ public:
 	//@param rivers - if given, also the water of its rivers and lakes (above the sea)
 	void Draw(const ChunkWorld& chunks, Camera& camera, const LightSource& light, const TerrainRenderSettings& settings, float waterLevel,
 		const RiverMap* rivers = nullptr);
-	//A finished map of size (width, height) world units centred on the origin (TerrainView), height map over all of it
+	//A finished map (TerrainView), height map over all of it
+	//@param corner, size - world XZ of its corner and its size, world units before modelScale (TerrainView::GetWorldCorner)
+	//@param mapOrigin - world XZ of map position (0, 0), where the river network lies (ChunkWorld::GetMapOrigin)
 	//@param flatMin, flatMax - area framed by the 2D map (TerrainView::GetFlatViewMin/Max)
 	//@param rivers - as in Draw; only over the map
-	void DrawMap(const TextureClass& heightMap, glm::vec2 size, Camera& camera, const LightSource& light, const TerrainRenderSettings& settings,
-		float waterLevel, glm::vec2 flatMin, glm::vec2 flatMax, const RiverMap* rivers = nullptr);
+	void DrawMap(const TextureClass& heightMap, glm::vec2 corner, glm::vec2 size, glm::vec2 mapOrigin, Camera& camera, const LightSource& light,
+		const TerrainRenderSettings& settings, float waterLevel, glm::vec2 flatMin, glm::vec2 flatMax, const RiverMap* rivers = nullptr);
 	//Section "Water" of the Display tab
 	void ImGuiDraw();
 	bool ReloadShader();

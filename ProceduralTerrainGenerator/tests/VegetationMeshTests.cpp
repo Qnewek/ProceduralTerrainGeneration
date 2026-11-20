@@ -272,6 +272,25 @@ TEST_CASE("BuildLods: fewer triangles per level, foliage share, ranges inside th
 	CHECK_FALSE(LoadCache(file, loaded, 1234));
 }
 
+TEST_CASE("BuildLods keeps parts of fewer than 4 triangles whole")
+{
+	//The floor of 4 triangles per part must not exceed what a part has (std::clamp with lo > hi)
+	std::vector<Material> materials{ Material{ "bark" }, Material{ "leaves" } };
+	materials[1].foliage = true;
+	SourceModel model;
+	model.parts.push_back(Cards(1));	//2 triangles
+	SourcePart leaves = Cards(1);
+	leaves.material = 1;
+	model.parts.push_back(leaves);
+
+	const ModelMesh mesh = BuildLods(materials, { model }, { 4, 2, 1 });
+	REQUIRE(mesh.variants.size() == 1);
+	REQUIRE(mesh.variants[0].lods.size() == 3);
+	for (const Lod& lod : mesh.variants[0].lods) {
+		CHECK(lod.triangles == 4);
+	}
+}
+
 namespace {
 	//glTF with one triangle in the XZ plane used by the given nodes (JSON of the node list)
 	std::string TriangleGltf(const std::string& nodes, const std::string& sceneNodes)

@@ -49,7 +49,8 @@ private:
 	NoisePreview noisePreview;
 	double lastGenerationMs = 0.0;
 
-	//Rendering; the finite map lives in the layers of the view, the infinite world in chunks
+	//Rendering; the finite map lives in the layers of the view, the infinite world in chunks. With the partial map the chunks are
+	//limited to it and not drawn: they feed its plants, grass and shadows
 	TerrainView view;
 	ChunkWorld chunks;
 	//Vegetation on the chunks; the models belong to the application
@@ -57,14 +58,36 @@ private:
 	VegetationModels* vegetationModels = nullptr;
 	//Grass near the camera; grows on the materials of the application
 	GrassLayer grass;
-	//Sea surface of the infinite world
+	//Sea, rivers and lakes
 	WaterSurface water;
-	//Sun shadows of the infinite world
+	//Sun shadows
 	ShadowMap shadows;
 	const TerrainMaterials* terrainMaterials = nullptr;
 	TerrainRenderSettings renderSettings;
 	//infiniteGeneration as of the last Update
 	bool chunksShown = false;
+
+	//The partial map is a part of the infinite world: world map position of its texel (0, 0). Leaving the infinite world puts it under
+	//the camera; the generated map gets it with its next generation (TerrainView::GetMapOffset is the offset of the maps shown)
+	glm::ivec2 mapOffset = glm::ivec2(0);
+	//Partial map: centred again whenever the camera gets farther than a quarter of the map from its middle
+	bool followCamera = false;
+	//The Display tab asked to centre the map on the camera (it has no camera)
+	bool centerOnCamera = false;
+	//Partial map: plants, grass and sun shadows from chunks of the world limited to the map (ChunkWorld::SetBounds), as in the infinite world
+	bool partialDetails = true;
+	//Moves the partial map so its texel (0, 0) is world map position offset; regenerates it if that changes
+	void MoveMap(glm::ivec2 offset);
+	//Offset putting the middle of the map under the camera
+	glm::ivec2 OffsetUnder(const Camera& camera) const;
+	//Texels of the generated partial map in world map positions
+	ChunkWorld::TexelRect MapRect() const;
+	//Middle of the partial map being generated, in world map positions (the river region and land statistics are measured around it)
+	glm::vec2 MapCenter() const { return glm::vec2(mapOffset) + glm::vec2(world.width, world.height) * 0.5f; }
+	//Places plants on the ground chunks
+	void UpdateVegetation();
+	//Position of the partial map, in the Display tab
+	void MapPositionImGui();
 
 	//World parameters (map size, terrain, biomes) edited by the UI; generators only read them
 	WorldConfig world;

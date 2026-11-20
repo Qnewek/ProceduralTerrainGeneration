@@ -75,6 +75,10 @@ public:
 	//@param resourceDir - res/vegetation (with vegetation_models.json, models/ and cache/)
 	//@return false if the list cannot be read
 	bool Initialize(const std::string& resourceDir);
+	//glTF file of a model (it may be missing)
+	std::filesystem::path SourceFile(const Model& model) const;
+	//Cache of its levels of detail (vegetation::SaveCache with vegetation::CacheKey)
+	std::filesystem::path CacheFile(const Model& model) const;
 	//Installs models whose loading finished; call every frame on the GL thread
 	void Update();
 	bool ReloadShader()

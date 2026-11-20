@@ -70,20 +70,29 @@ void TerrainView::BuildMesh()
 void TerrainView::ResetFlatViewBounds()
 {
 	glm::vec2 half(GetWorldWidth() / 2.0f, GetWorldHeight() / 2.0f);
-	SetFlatViewBounds(-half, half);
+	SetFlatViewBounds(GetWorldCenter() - half, GetWorldCenter() + half);
+}
+
+void TerrainView::SetMapOffset(glm::ivec2 offset)
+{
+	if (offset != mapOffset) {
+		mapOffset = offset;
+		ResetFlatViewBounds();
+	}
 }
 
 void TerrainView::BringCameraToMap(Camera& camera, const TerrainRenderSettings& settings) const
 {
 	const glm::vec2 half = glm::vec2(GetWorldWidth(), GetWorldHeight()) * 0.5f * settings.modelScale;
+	const glm::vec2 center = GetWorldCenter() * settings.modelScale;
 	const glm::vec3 position = camera.GetPosition();
-	if (std::abs(position.x) <= half.x && std::abs(position.z) <= half.y) {
+	if (std::abs(position.x - center.x) <= half.x && std::abs(position.z - center.y) <= half.y) {
 		return;
 	}
 	//Looks down at 35 degrees from 1.5 map radii away, or less if the far plane would cut the near half of the map off
 	const float distance = std::min(std::max(half.x, half.y) * 1.5f, camera.GetRenderDistance() * 0.6f);
 	const float elevation = glm::radians(35.0f);
-	const glm::vec3 target(0.0f, 0.25f * settings.heightScale * settings.modelScale, 0.0f);
+	const glm::vec3 target(center.x, 0.25f * settings.heightScale * settings.modelScale, center.y);
 	camera.LookAt(target + glm::vec3(0.0f, std::sin(elevation), std::cos(elevation)) * distance, target);
 }
 
@@ -220,6 +229,15 @@ HeightField TerrainView::ReadLayer(Layer layer) const
 	return map;
 }
 
+std::vector<glm::vec4> TerrainView::ReadSurface(Layer layer)
+{
+	UpdateSurface(layer);
+	const TextureClass& surface = *surfaces[static_cast<int>(layer)];
+	std::vector<glm::vec4> data(static_cast<size_t>(surface.GetWidth()) * surface.GetHeight());
+	surface.Read(GL_RGBA, GL_FLOAT, static_cast<int>(data.size() * sizeof(glm::vec4)), data.data());
+	return data;
+}
+
 void TerrainView::Draw(Renderer& renderer, Camera& camera, LightSource& light, const TerrainRenderSettings& settings,
 	Layer heightLayer, glm::vec3 offset)
 {
@@ -231,7 +249,7 @@ void TerrainView::Draw(Renderer& renderer, Camera& camera, LightSource& light, c
 
 	glm::mat4 model = glm::mat4(1.0f);
 	model = glm::scale(model, glm::vec3(settings.modelScale));
-	model = glm::translate(model, offset);
+	model = glm::translate(model, offset + glm::vec3(GetWorldCenter().x, 0.0f, GetWorldCenter().y));
 
 	SetFrameUniforms(*shader, frameUniforms, camera, light, settings, model, static_cast<int>(heightLayer), flatMin, flatMax);
 

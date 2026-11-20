@@ -57,6 +57,16 @@ public:
 	//a change invalidates the chunks
 	void AlignWithMap(int width, int height);
 
+	//Map texels [min, max) of a rectangle
+	struct TexelRect {
+		glm::ivec2 min = glm::ivec2(0), max = glm::ivec2(0);
+		bool operator==(const TexelRect& other) const { return min == other.min && max == other.max; }
+	};
+	//Limits the world to a rectangle (the partial map, whose plants, grass and shadows come from these chunks): chunks wholly outside
+	//it are neither generated nor ground chunks. Users of the ground chunks clip to it themselves. none = the infinite world
+	void SetBounds(std::optional<TexelRect> rect) { bounds = rect; }
+	const std::optional<TexelRect>& GetBounds() const { return bounds; }
+
 	//Where the world is seen from; all in world units before modelScale
 	struct View {
 		glm::vec2 center = glm::vec2(0.0f);	//camera XZ
@@ -145,6 +155,8 @@ private:
 	void Select(int level, glm::ivec2 coord, glm::vec2 local, const View& view);
 	//Whether the chunk can be seen; the box spans all heights a map can have
 	bool InView(int level, glm::ivec2 coord, const View& view) const;
+	//Whether the chunk has texels inside the bounds (always without bounds)
+	bool InBounds(int level, glm::ivec2 coord) const;
 	//Draws chunks with the terrain shader after its frame uniforms are set
 	void DrawChunks(Renderer& renderer, const std::vector<Chunk*>& list, const TerrainRenderSettings& settings);
 	//Existing chunk, or a new one with textures of a freed chunk if there is one
@@ -181,6 +193,7 @@ private:
 	bool biomes = false;
 	glm::ivec2 alignedSize = glm::ivec2(0);
 	glm::vec2 mapOrigin = glm::vec2(0.0f);
+	std::optional<TexelRect> bounds;
 	glm::vec2 lastCenter = glm::vec2(0.0f);
 	float lastRadius = 0.0f;
 	//Distance up to which the last Plan visited chunks, a little past the view distance
