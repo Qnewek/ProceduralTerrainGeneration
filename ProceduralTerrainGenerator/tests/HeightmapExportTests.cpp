@@ -1,9 +1,11 @@
 #include "doctest/doctest.h"
 
+#include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <iterator>
 #include <limits>
+#include <map>
 #include <string>
 #include <vector>
 
@@ -63,10 +65,113 @@ TEST_CASE("Quantize clips values outside the range and NaN")
 	CHECK(values[3] == 32768);
 }
 
-TEST_CASE("R16 keeps the size in the file name, PNG does not need it")
+TEST_CASE("R16 keeps the size in the file name, PNG and EXR do not need it")
 {
 	CHECK(heightmap::FileName("alps", heightmap::Format::R16, 1025, 513) == "alps_1025x513.r16");
 	CHECK(heightmap::FileName("alps_eroded", heightmap::Format::PNG16, 1025, 513) == "alps_eroded.png");
+	CHECK(heightmap::FileName("alps", heightmap::Format::EXR32, 1025, 513) == "alps.exr");
+}
+
+TEST_CASE("MinMax skips non-finite values")
+{
+	HeightField map(4, 1);
+	map[0] = 0.25f;
+	map[1] = std::numeric_limits<float>::quiet_NaN();
+	map[2] = -0.5f;
+	map[3] = std::numeric_limits<float>::infinity();
+	const heightmap::ValueRange range = heightmap::MinMax(map);
+	CHECK(range.min == -0.5f);
+	CHECK(range.max == 0.25f);
+
+	HeightField invalid(1, 1);
+	invalid[0] = std::numeric_limits<float>::quiet_NaN();
+	CHECK(heightmap::MinMax(invalid).min == 0.0f);
+	CHECK(heightmap::MinMax(invalid).max == 0.0f);
+}
+
+//Reads what an OpenEXR reader needs from a single-part scanline file: the attributes and the scanline blocks
+namespace {
+	struct ExrReader {
+		const std::vector<unsigned char>& bytes;
+		size_t pos = 0;
+
+		uint32_t U32() { uint32_t v = 0; for (int i = 0; i < 4; i++) v |= static_cast<uint32_t>(bytes.at(pos++)) << (8 * i); return v; }
+		int32_t I32() { return static_cast<int32_t>(U32()); }
+		uint64_t U64() { uint64_t v = 0; for (int i = 0; i < 8; i++) v |= static_cast<uint64_t>(bytes.at(pos++)) << (8 * i); return v; }
+		float F32() { const uint32_t bits = U32(); float f; std::memcpy(&f, &bits, 4); return f; }
+		std::string String() { std::string s; while (bytes.at(pos) != 0) s += static_cast<char>(bytes[pos++]); pos++; return s; }
+	};
+
+	struct ExrAttribute {
+		std::string type;
+		size_t offset = 0;	//of the value
+		int32_t size = 0;
+	};
+}
+
+TEST_CASE("EXR is a valid uncompressed float file with the scaled values, top row first")
+{
+	const int width = 5, height = 3;
+	HeightField map = PositionMap(width, height);
+	map.At(1, 2) = std::numeric_limits<float>::quiet_NaN();
+	const float scale = 256.0f;
+
+	size_t invalid = 0;
+	const std::vector<unsigned char> bytes = heightmap::EncodeExr(map, scale, heightmap::terrainRange, invalid);
+	CHECK(invalid == 1);
+
+	ExrReader r{ bytes };
+	REQUIRE(r.U32() == 20000630u);
+	CHECK(r.U32() == 2u);
+
+	std::map<std::string, ExrAttribute> attributes;
+	for (std::string name = r.String(); !name.empty(); name = r.String()) {
+		ExrAttribute a;
+		a.type = r.String();
+		a.size = r.I32();
+		a.offset = r.pos;
+		attributes[name] = a;
+		r.pos += static_cast<size_t>(a.size);
+	}
+	for (const char* required : { "channels", "compression", "dataWindow", "displayWindow", "lineOrder", "pixelAspectRatio", "screenWindowCenter", "screenWindowWidth" }) {
+		CHECK_MESSAGE(attributes.count(required) == 1, required);
+	}
+	const size_t tableStart = r.pos;
+
+	//One FLOAT channel "Y", sampling 1 x 1
+	r.pos = attributes["channels"].offset;
+	CHECK(attributes["channels"].type == "chlist");
+	CHECK(r.String() == "Y");
+	CHECK(r.I32() == 2);
+	r.pos += 4;
+	CHECK(r.I32() == 1);
+	CHECK(r.I32() == 1);
+	CHECK(r.String().empty());
+
+	CHECK(bytes.at(attributes["compression"].offset) == 0);
+	r.pos = attributes["dataWindow"].offset;
+	CHECK(r.I32() == 0);
+	CHECK(r.I32() == 0);
+	CHECK(r.I32() == width - 1);
+	CHECK(r.I32() == height - 1);
+
+	r.pos = tableStart;
+	std::vector<uint64_t> offsets;
+	for (int y = 0; y < height; y++) {
+		offsets.push_back(r.U64());
+	}
+	int wrong = 0;
+	for (int y = 0; y < height; y++) {
+		r.pos = static_cast<size_t>(offsets[y]);
+		CHECK(r.I32() == y);
+		CHECK(r.I32() == width * 4);
+		for (int x = 0; x < width; x++) {
+			const float expected = (x == 1 && y == 2) ? heightmap::terrainRange.min * scale : map.At(x, y) * scale;
+			wrong += r.F32() != expected;
+		}
+	}
+	CHECK(wrong == 0);
+	CHECK(r.pos == bytes.size());
 }
 
 TEST_CASE("Exported files")
@@ -122,6 +227,16 @@ TEST_CASE("Exported files")
 		REQUIRE(lodepng::decode(decoded, decodedWidth, decodedHeight, state, ReadBytes(path)) == 0);
 		CHECK(state.info_png.color.colortype == LCT_GREY);
 		CHECK(state.info_png.color.bitdepth == 16);
+	}
+	SUBCASE("EXR is written as encoded, values outside the 16-bit range are kept")
+	{
+		HeightField outside = map;
+		outside[0] = 2.0f;
+		const std::filesystem::path path = folder / "map.exr";
+		REQUIRE_MESSAGE(heightmap::Export(path, outside, heightmap::Format::EXR32, heightmap::terrainRange, clipped, error, 64.0f), error);
+		CHECK(clipped == 0);
+		size_t invalid = 0;
+		CHECK(ReadBytes(path) == heightmap::EncodeExr(outside, 64.0f, heightmap::terrainRange, invalid));
 	}
 	SUBCASE("Clipped cells are reported")
 	{

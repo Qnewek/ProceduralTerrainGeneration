@@ -44,6 +44,7 @@ target_include_directories(ptg_vendor SYSTEM PUBLIC ${PTG_SRC}/vendor ${Stb_INCL
 # Generation itself runs only in compute shaders (res/shaders/ComputeShaders)
 add_library(ptg_core STATIC
 	${PTG_SRC}/terrainGeneration/Biome.cpp
+	${PTG_SRC}/terrainGeneration/ExportManifest.cpp
 	${PTG_SRC}/terrainGeneration/FileIO.cpp
 	${PTG_SRC}/terrainGeneration/HeightmapExport.cpp
 	${PTG_SRC}/terrainGeneration/HeightmapImport.cpp
@@ -127,6 +128,7 @@ ptg_set_warnings(ProceduralTerrainGenerator)
 enable_testing()
 add_executable(ptg_tests
 	${PTG_DIR}/tests/BiomeTests.cpp
+	${PTG_DIR}/tests/ExportManifestTests.cpp
 	${PTG_DIR}/tests/FlightRecordTests.cpp
 	${PTG_DIR}/tests/FrustumTests.cpp
 	${PTG_DIR}/tests/GridTests.cpp
@@ -145,6 +147,6 @@ add_executable(ptg_tests
 	${PTG_DIR}/tests/TestMain.cpp
 )
 target_include_directories(ptg_tests PRIVATE ${PTG_SRC}/utility)
-target_link_libraries(ptg_tests PRIVATE ptg_core doctest::doctest lodepng)
+target_link_libraries(ptg_tests PRIVATE ptg_core doctest::doctest lodepng nlohmann_json::nlohmann_json)
 ptg_set_warnings(ptg_tests)
 add_test(NAME ptg_tests COMMAND ptg_tests)
