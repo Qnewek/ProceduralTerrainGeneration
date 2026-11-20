@@ -57,6 +57,8 @@ public:
 	void SetPosition(glm::vec3 value) { position = value; }
 	//Moves the camera to _position and turns it towards target (pitch limited to +-89 degrees)
 	void LookAt(glm::vec3 _position, glm::vec3 target);
+	//Moves the camera to _position and turns it to the given angles in degrees (pitch limited to +-89 degrees)
+	void SetView(glm::vec3 _position, float _yaw, float _pitch);
 	void SetSpeed(float value) { speed = value; initSpeed = value; }
 	void SetSensitivity(float value) { sensitivity = value; }
 	void SetFov(float value) { fov = value; }

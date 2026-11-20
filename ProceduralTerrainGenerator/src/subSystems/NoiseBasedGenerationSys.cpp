@@ -48,12 +48,9 @@ void NoiseBasedGenerationSys::Update(Camera& camera)
 		RequestNoise();
 		finiteOutdated = false;
 	}
-	//The finite map shows the part of the world under the camera (its middle at camera / worldUnitsPerTexel, see
-	//TerrainGenerationSys::OffsetUnder); a new part is new noise, which resets erosion
+	//The finite map shows the part of the world under the camera; a new part is new noise, which resets erosion
 	if (leftInfinite || (centerOnCamera && !infiniteGeneration)) {
-		const glm::vec3 position = camera.GetPosition() / renderSettings.modelScale;
-		const glm::ivec2 under(glm::round(glm::vec2(position.x, position.z) / TerrainView::worldUnitsPerTexel));
-		MoveMap(under);
+		MoveMap(OffsetUnder(camera));
 	}
 	centerOnCamera = false;
 	if (infiniteGeneration) {
@@ -200,27 +197,74 @@ void NoiseBasedGenerationSys::MoveMap(glm::ivec2 offset)
 	}
 }
 
+glm::ivec2 NoiseBasedGenerationSys::OffsetUnder(const Camera& camera) const
+{
+	//The middle of the map lies at its offset * worldUnitsPerTexel (see TerrainGenerationSys::OffsetUnder)
+	const glm::vec3 position = camera.GetPosition() / renderSettings.modelScale;
+	return glm::ivec2(glm::round(glm::vec2(position.x, position.z) / TerrainView::worldUnitsPerTexel));
+}
+
+void NoiseBasedGenerationSys::GoToMap(glm::ivec2 offset, Camera& camera)
+{
+	//The chunks do not depend on the offset, and leaving the infinite world puts the map under the camera anyway
+	if (!infiniteGeneration) {
+		MoveMap(offset);
+	}
+	TerrainView::LookDownAtMap(camera, renderSettings, offset, glm::ivec2(config.width, config.height));
+}
+
+void NoiseBasedGenerationSys::LoadPack(const exportpack::PackSource& source, Camera& camera)
+{
+	if (source.mode != packMode) {
+		packs.ReportError("The pack was made in the " + source.mode + " mode");
+		return;
+	}
+	if (source.generation.empty()) {
+		packs.ReportError("The pack has no generation parameters");
+		return;
+	}
+	if (!preset::ValidMapOffset(source.worldOrigin)) {
+		packs.ReportError("The world position of the pack is out of range");
+		return;
+	}
+	NoiseMapConfig loaded;
+	std::string error;
+	if (!preset::FromJson(source.generation, loaded, error)) {
+		packs.ReportError("Generation parameters: " + error);
+		return;
+	}
+	ApplyConfig(loaded);
+	GoToMap(source.worldOrigin, camera);
+	packs.ReportLoaded();
+}
+
 void NoiseBasedGenerationSys::RequestErosion()
 {
 	pending.erode = true;
 }
 
-void NoiseBasedGenerationSys::ImGuiPresets()
+void NoiseBasedGenerationSys::ImGuiPresets(Camera& camera)
 {
 	std::string error;
 	switch (presets.ImGuiDraw()) {
-	case PresetPanel::Action::SAVE:
-		if (preset::Save(presets.SavePath(), config, error)) {
+	case PresetPanel::Action::SAVE: {
+		const std::optional<glm::ivec2> offset = presetPosition ? std::optional<glm::ivec2>(PlaceOffset(camera)) : std::nullopt;
+		if (preset::Save(presets.SavePath(), config, offset, error)) {
 			presets.ReportSaved();
 		}
 		else {
 			presets.ReportError(error);
 		}
 		break;
+	}
 	case PresetPanel::Action::LOAD: {
 		NoiseMapConfig loaded;
-		if (preset::Load(presets.LoadPath(), loaded, error)) {
+		std::optional<glm::ivec2> offset;
+		if (preset::Load(presets.LoadPath(), loaded, offset, error)) {
 			ApplyConfig(loaded);
+			if (presetPosition && offset) {
+				GoToMap(*offset, camera);
+			}
 			presets.ReportLoaded();
 		}
 		else {
@@ -230,6 +274,32 @@ void NoiseBasedGenerationSys::ImGuiPresets()
 	}
 	case PresetPanel::Action::NONE:
 		break;
+	}
+	ImGui::Checkbox("Map position", &presetPosition);
+	ImGui::SetItemTooltip("Saving: the preset also keeps where the map lies (in the infinite world: the map under the camera).\n"
+		"Loading: a preset with a position moves the map there and the camera above it. Off = only the parameters");
+
+	ImGui::SeparatorText("Places");
+	const auto here = [&](const std::string& name) {
+		places::Place place;
+		place.name = name;
+		place.camera = camera.GetPosition() / renderSettings.modelScale;
+		place.yaw = camera.GetYaw();
+		place.pitch = camera.GetPitch();
+		place.mapOffset = PlaceOffset(camera);
+		return place;
+	};
+	if (const std::optional<places::Place> place = places.ImGuiDraw(here)) {
+		//As in GoToMap: the infinite world needs only the camera
+		if (!infiniteGeneration) {
+			MoveMap(place->mapOffset);
+		}
+		camera.SetView(place->camera * renderSettings.modelScale, place->yaw, place->pitch);
+	}
+
+	ImGui::SeparatorText("Export packs");
+	if (const std::optional<exportpack::PackSource> source = packs.ImGuiDraw()) {
+		LoadPack(*source, camera);
 	}
 }
 
@@ -397,7 +467,7 @@ void NoiseBasedGenerationSys::ImGuiSaving()
 		return;
 	}
 	ExportPanel::Pack pack;
-	pack.mode = "Noise heightmap";
+	pack.mode = packMode;
 	pack.range = heightmap::noiseRange;
 	pack.metresPerUnit = renderSettings.heightScale / TerrainView::worldUnitsPerTexel;
 	pack.worldOrigin = view.GetMapOffset();

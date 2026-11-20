@@ -53,6 +53,7 @@ add_library(ptg_core STATIC
 	${PTG_SRC}/terrainGeneration/MaterialExport.cpp
 	${PTG_SRC}/terrainGeneration/MeshExport.cpp
 	${PTG_SRC}/terrainGeneration/MeshFile.cpp
+	${PTG_SRC}/terrainGeneration/Places.cpp
 	${PTG_SRC}/terrainGeneration/Preset.cpp
 	${PTG_SRC}/terrainGeneration/SplineSampling.cpp
 	${PTG_SRC}/terrainGeneration/TerrainMesh.cpp
@@ -103,6 +104,8 @@ add_executable(ProceduralTerrainGenerator
 	${PTG_SRC}/utility/FileDialog.cpp
 	${PTG_SRC}/utility/FrameMetrics.cpp
 	${PTG_SRC}/utility/LightSource.cpp
+	${PTG_SRC}/utility/PackPicker.cpp
+	${PTG_SRC}/utility/PlacesPanel.cpp
 	${PTG_SRC}/utility/PresetPanel.cpp
 	${PTG_SRC}/utility/Sky.cpp
 	${PTG_SRC}/utility/utilities.cpp
@@ -146,6 +149,7 @@ add_executable(ptg_tests
 	${PTG_DIR}/tests/MeshExportTests.cpp
 	${PTG_DIR}/tests/MeshFileTests.cpp
 	${PTG_DIR}/tests/PermutationTests.cpp
+	${PTG_DIR}/tests/PlacesTests.cpp
 	${PTG_DIR}/tests/PresetTests.cpp
 	${PTG_DIR}/tests/RangeAllocatorTests.cpp
 	${PTG_DIR}/tests/SplineTests.cpp

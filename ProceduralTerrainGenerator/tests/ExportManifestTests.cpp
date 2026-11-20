@@ -1,5 +1,9 @@
 #include "doctest/doctest.h"
 
+#include <filesystem>
+#include <fstream>
+#include <string>
+
 #include <nlohmann/json.hpp>
 
 #include "ExportManifest.h"
@@ -127,6 +131,76 @@ TEST_CASE("Manifest embeds the generation parameters as JSON, or as text if they
 
 	m.generation = "not json";
 	CHECK(Json::parse(exportpack::ToJson(m))["generation"] == "not json");
+}
+
+TEST_CASE("A pack gives back its mode, generation parameters and world position")
+{
+	exportpack::Manifest m = SampleManifest();
+	m.worldOrigin = glm::ivec2(-1536, 2048);
+	m.generation = R"({"kind": "world", "version": 2, "width": 64})";
+	exportpack::PackSource source;
+	std::string error;
+	REQUIRE_MESSAGE(exportpack::ReadSource(exportpack::ToJson(m), source, error), error);
+	CHECK(source.mode == "TerrainGen");
+	CHECK(source.worldOrigin == glm::ivec2(-1536, 2048));
+	const Json generation = Json::parse(source.generation);
+	CHECK(generation["kind"] == "world");
+	CHECK(generation["width"] == 64);
+
+	SUBCASE("Parameters stored as text come back as that text")
+	{
+		m.generation = "not json";
+		REQUIRE_MESSAGE(exportpack::ReadSource(exportpack::ToJson(m), source, error), error);
+		CHECK(source.generation == "not json");
+	}
+	SUBCASE("A pack without parameters or world position (older packs) lies at the world origin")
+	{
+		Json j = Json::parse(exportpack::ToJson(SampleManifest()));
+		j["grid"].erase("worldOrigin");
+		REQUIRE_MESSAGE(exportpack::ReadSource(j.dump(), source, error), error);
+		CHECK(source.generation.empty());
+		CHECK(source.worldOrigin == glm::ivec2(0));
+	}
+}
+
+TEST_CASE("Text that is not a manifest of this generator is not read as a pack")
+{
+	exportpack::PackSource source;
+	source.mode = "kept";
+	std::string error;
+	CHECK_FALSE(exportpack::ReadSource("{ not json", source, error));
+	CHECK_FALSE(exportpack::ReadSource(R"({"kind": "world", "version": 2})", source, error));
+	Json j = Json::parse(exportpack::ToJson(SampleManifest()));
+	j["grid"]["worldOrigin"] = Json::array({ 1.5, 2 });
+	CHECK_FALSE(exportpack::ReadSource(j.dump(), source, error));
+	CHECK(source.mode == "kept");
+}
+
+TEST_CASE("Packs are listed by the manifest named after their folder")
+{
+	const std::filesystem::path folder = std::filesystem::temp_directory_path() / "ptg_pack_list_tests";
+	std::filesystem::remove_all(folder);
+	CHECK(exportpack::ListPacks(folder).empty());
+
+	std::filesystem::create_directories(folder / "beta");
+	std::filesystem::create_directories(folder / "alpha");
+	std::filesystem::create_directories(folder / "no manifest");
+	std::ofstream(folder / "beta" / "beta.json") << exportpack::ToJson(SampleManifest());
+	std::ofstream(folder / "alpha" / "alpha.json") << exportpack::ToJson(SampleManifest());
+	std::ofstream(folder / "no manifest" / "other.json") << "{}";
+	std::ofstream(folder / "loose.json") << "{}";
+
+	const auto packs = exportpack::ListPacks(folder);
+	REQUIRE(packs.size() == 2);
+	CHECK(packs[0].filename() == "alpha.json");
+	CHECK(packs[1].filename() == "beta.json");
+
+	exportpack::PackSource source;
+	std::string error;
+	CHECK_MESSAGE(exportpack::LoadSource(packs[0], source, error), error);
+	CHECK_FALSE(exportpack::LoadSource(folder / "missing" / "missing.json", source, error));
+
+	std::filesystem::remove_all(folder);
 }
 
 TEST_CASE("Unreal import: Z scale 100 spans 512 m around the actor")

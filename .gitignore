@@ -46,6 +46,7 @@ out/
 
 # Presets and height maps saved from the app
 ProceduralTerrainGenerator/presets/
+ProceduralTerrainGenerator/places/
 ProceduralTerrainGenerator/exports/
 # Terrain textures, downloaded by tools/fetch_textures.py
 ProceduralTerrainGenerator/res/textures/terrain/

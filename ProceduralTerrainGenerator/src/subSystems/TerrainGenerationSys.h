@@ -22,6 +22,8 @@
 #include "TerrainView.h"
 #include "PresetPanel.h"
 #include "ExportPanel.h"
+#include "PlacesPanel.h"
+#include "PackPicker.h"
 #include "BiomeEditor.h"
 #include "PanelTabs.h"
 #include "GrassLayer.h"
@@ -145,6 +147,17 @@ private:
 	void ApplyWorld(const WorldConfig& loaded);
 	PresetPanel presets{ "presets/world" };
 	ExportPanel exporter{ "exports" };
+	PlacesPanel places{ "places/world.json" };
+	PackPicker packs{ "exports" };
+	//Mode name in export packs
+	static constexpr const char* packMode = "TerrainGen";
+	//Presets are saved with the map position and loading one with a position moves the map there
+	bool presetPosition = true;
+	//Map offset of the current view: under the camera in the infinite world (where leaving it puts the map), else of the partial map
+	glm::ivec2 PlaceOffset(const Camera& camera) const { return infiniteGeneration ? OffsetUnder(camera) : mapOffset; }
+	//Moves the map to offset and the camera above it (a place without a camera: preset, pack)
+	void GoToMap(glm::ivec2 offset, Camera& camera);
+	void LoadPack(const exportpack::PackSource& source, Camera& camera);
 	BiomeEditor biomeEditor;
 
 	//Tabs of the right panel (generation); the open tab is the edited part, e.g. its noise gets the 2D picture
@@ -208,7 +221,8 @@ public:
 	void ImGuiRightPanel();
 	//Content of the Display, Presets and Saving tabs of the left panel
 	void ImGuiDisplay();
-	void ImGuiPresets();
+	//@param camera - saved with a place, moved by loading one
+	void ImGuiPresets(Camera& camera);
 	void ImGuiSaving();
 	void ImGuiOutput(glm::vec3 pos);
 };
