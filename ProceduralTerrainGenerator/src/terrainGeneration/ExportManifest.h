@@ -16,8 +16,30 @@ namespace exportpack {
 	//One file of the pack
 	struct File {
 		std::string path;		//relative to the manifest
-		std::string content;	//what it holds, e.g. "height", "height_eroded_pipes"
-		heightmap::Format format = heightmap::Format::PNG16;
+		std::string content;	//what it holds, e.g. "height", "height_eroded_pipes", "splat", "weight"
+		std::string format;		//e.g. "png16", "exr32", "png8 rgba"
+		std::optional<heightmap::Format> height;	//set for height maps: the manifest tells how their values become metres
+	};
+	File HeightFile(std::string path, std::string content, heightmap::Format format);
+	//An 8-bit PNG with 1 (grey), 3 (RGB) or 4 (RGBA) channels
+	File Png8File(std::string path, std::string content, int channels);
+
+	//A surface material in the material maps (splat)
+	struct Material {
+		int id = 0;					//index in terrain_materials.json
+		std::string name;
+		std::string splatFile;		//RGBA file holding it
+		int splatChannel = 0;		//0 - 3 = R, G, B, A
+		std::string weightFile;		//its own greyscale map; empty = it covers nothing, no file
+		float coverage = 0.0f;		//mean share over the map
+	};
+
+	//An entry of the biome table in the biome id map
+	struct Biome {
+		int id = 0;					//value in the id map
+		std::string name;
+		float color[3] = { 0.0f, 0.0f, 0.0f };
+		float coverage = 0.0f;		//share of the map
 	};
 
 	struct Manifest {
@@ -30,6 +52,8 @@ namespace exportpack {
 		std::optional<float> seaLevel;		//height value of the sea surface; none = the mode has no sea
 		std::string generation;				//generation parameters as preset JSON; empty = none, invalid JSON is stored as text
 		std::vector<File> files;
+		std::vector<Material> materials;	//empty = no material maps exported
+		std::vector<Biome> biomes;			//empty = no biome maps exported
 	};
 
 	//Unreal Engine landscape import of a 16-bit file of the pack: Z scale 100 spans 512 m around the actor's Z

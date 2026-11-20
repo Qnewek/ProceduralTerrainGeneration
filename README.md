@@ -41,7 +41,9 @@ algorithms can be changed in the UI (**Dear ImGui** + **ImPlot**) and the terrai
 - **Export**
   The finite map is exported as a pack in `exports/<name>/`: the heightmap as 16-bit PNG, headerless 16-bit RAW (R16,
   little-endian) or 32-bit float EXR in metres, plus `<name>.json` with the map size and heights in metres, the value
-  encoding of every file, the sea level, import hints for Unreal and Unity, and the generation parameters. 16-bit values
+  encoding of every file, the sea level, import hints for Unreal and Unity, and the generation parameters. With biomes,
+  the pack also gets material maps (8-bit RGBA splat maps with 4 materials each for Unity, one greyscale weight map per
+  material for Unreal or Godot, shares summing to 255) and biome maps (ids with names in the JSON, colors). 16-bit values
   are mapped from a fixed range: [0, 1] in TerrainGen, [-1, 1] in Noise heightmap. Each eroded map that is shown goes to
   its own `_eroded_*` file.
 

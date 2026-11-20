@@ -6,7 +6,7 @@ namespace exportpack {
 	using Json = nlohmann::ordered_json;
 
 	namespace {
-		const char* FormatName(heightmap::Format format)
+		std::string FormatName(heightmap::Format format)
 		{
 			switch (format) {
 			case heightmap::Format::PNG16: return "png16";
@@ -38,6 +38,17 @@ namespace exportpack {
 			e["formula"] = "metres = metresMin + v / 65535 * (metresMax - metresMin)";
 			return e;
 		}
+	}
+
+	File HeightFile(std::string path, std::string content, heightmap::Format format)
+	{
+		return File{ std::move(path), std::move(content), FormatName(format), format };
+	}
+
+	File Png8File(std::string path, std::string content, int channels)
+	{
+		const char* layout = channels == 1 ? "grey" : channels == 3 ? "rgb" : "rgba";
+		return File{ std::move(path), std::move(content), std::string("png8 ") + layout, std::nullopt };
 	}
 
 	UnrealImport Unreal(const Manifest& manifest)
@@ -83,11 +94,41 @@ namespace exportpack {
 			Json file;
 			file["path"] = f.path;
 			file["content"] = f.content;
-			file["format"] = FormatName(f.format);
-			file["encoding"] = Encoding(f.format, m);
+			file["format"] = f.format;
+			if (f.height) {
+				file["encoding"] = Encoding(*f.height, m);
+			}
 			files.push_back(file);
 		}
 		j["files"] = files;
+
+		if (!m.materials.empty()) {
+			Json materials;
+			materials["encoding"] = "share of the material per texel, 0 - 255; the shares of a texel sum to 255";
+			Json list = Json::array();
+			for (const Material& mat : m.materials) {
+				Json entry;
+				entry["id"] = mat.id;
+				entry["name"] = mat.name;
+				entry["splat"] = { { "file", mat.splatFile }, { "channel", std::string(1, "RGBA"[mat.splatChannel & 3]) } };
+				entry["weightFile"] = mat.weightFile.empty() ? Json(nullptr) : Json(mat.weightFile);
+				entry["coverage"] = mat.coverage;
+				list.push_back(entry);
+			}
+			materials["list"] = list;
+			j["materials"] = materials;
+		}
+
+		if (!m.biomes.empty()) {
+			Json biomes;
+			biomes["encoding"] = "biome id per texel; colors are the blended biome colors of the app";
+			Json list = Json::array();
+			for (const Biome& b : m.biomes) {
+				list.push_back({ { "id", b.id }, { "name", b.name }, { "color", { b.color[0], b.color[1], b.color[2] } }, { "coverage", b.coverage } });
+			}
+			biomes["list"] = list;
+			j["biomes"] = biomes;
+		}
 
 		const UnrealImport unreal = Unreal(m);
 		Json import;
@@ -103,6 +144,10 @@ namespace exportpack {
 			{ "positionY", m.range.min * m.metresPerUnit },
 			{ "note", "Unity needs a square heightmap of 2^n + 1 texels" }
 		};
+		if (!m.materials.empty()) {
+			import["unreal"]["layers"] = "weight files: one 8-bit weightmap per landscape layer (weight-blended)";
+			import["unity"]["layers"] = "splat files: alphamaps, 4 terrain layers per RGBA file in material order";
+		}
 		j["import"] = import;
 
 		if (!m.generation.empty()) {

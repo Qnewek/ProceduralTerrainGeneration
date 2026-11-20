@@ -17,7 +17,8 @@ static exportpack::Manifest SampleManifest()
 	m.range = heightmap::terrainRange;
 	m.mapValues = { 0.125f, 0.75f };
 	m.seaLevel = 0.0625f;
-	m.files = { { "alps_height.png", "height", heightmap::Format::PNG16 }, { "alps_height.exr", "height", heightmap::Format::EXR32 } };
+	m.files = { exportpack::HeightFile("alps_height.png", "height", heightmap::Format::PNG16),
+		exportpack::HeightFile("alps_height.exr", "height", heightmap::Format::EXR32) };
 	return m;
 }
 
@@ -51,13 +52,61 @@ TEST_CASE("Manifest describes the encoding of every file")
 	CHECK(exr["encoding"]["type"] == "float32");
 }
 
-TEST_CASE("Manifest without a sea or generation parameters leaves them out")
+TEST_CASE("Manifest without a sea, generation parameters, materials or biomes leaves them out")
 {
 	exportpack::Manifest m = SampleManifest();
 	m.seaLevel.reset();
 	const Json j = Json::parse(exportpack::ToJson(m));
 	CHECK_FALSE(j.contains("seaLevel"));
 	CHECK_FALSE(j.contains("generation"));
+	CHECK_FALSE(j.contains("materials"));
+	CHECK_FALSE(j.contains("biomes"));
+	CHECK_FALSE(j["import"]["unity"].contains("layers"));
+}
+
+TEST_CASE("Manifest lists the materials with their splat channel and weight map, and the biomes")
+{
+	exportpack::Manifest m = SampleManifest();
+	m.files.push_back(exportpack::Png8File("alps_splat_0.png", "splat", 4));
+	m.files.push_back(exportpack::Png8File("alps_weight_05_rock.png", "weight", 1));
+	exportpack::Material rock;
+	rock.id = 5;
+	rock.name = "Rock";
+	rock.splatFile = "alps_splat_1.png";
+	rock.splatChannel = 1;
+	rock.weightFile = "alps_weight_05_rock.png";
+	rock.coverage = 0.25f;
+	exportpack::Material snow;
+	snow.id = 6;
+	snow.name = "Snow";
+	snow.splatFile = "alps_splat_1.png";
+	snow.splatChannel = 2;
+	m.materials = { rock, snow };
+	exportpack::Biome forest;
+	forest.id = 3;
+	forest.name = "Forest";
+	forest.color[1] = 0.5f;
+	forest.coverage = 0.4f;
+	m.biomes = { forest };
+
+	const Json j = Json::parse(exportpack::ToJson(m));
+	CHECK(j["files"][2]["format"] == "png8 rgba");
+	CHECK(j["files"][3]["format"] == "png8 grey");
+	CHECK_FALSE(j["files"][2].contains("encoding"));
+	const Json& materials = j["materials"]["list"];
+	REQUIRE(materials.size() == 2);
+	CHECK(materials[0]["id"] == 5);
+	CHECK(materials[0]["splat"]["file"] == "alps_splat_1.png");
+	CHECK(materials[0]["splat"]["channel"] == "G");
+	CHECK(materials[0]["weightFile"] == "alps_weight_05_rock.png");
+	CHECK(materials[1]["splat"]["channel"] == "B");
+	CHECK(materials[1]["weightFile"].is_null());
+	const Json& biomes = j["biomes"]["list"];
+	REQUIRE(biomes.size() == 1);
+	CHECK(biomes[0]["name"] == "Forest");
+	CHECK(biomes[0]["color"][1].get<float>() == doctest::Approx(0.5f));
+	CHECK(biomes[0]["coverage"].get<float>() == doctest::Approx(0.4f));
+	CHECK(j["import"]["unity"].contains("layers"));
 }
 
 TEST_CASE("Manifest embeds the generation parameters as JSON, or as text if they are not JSON")
