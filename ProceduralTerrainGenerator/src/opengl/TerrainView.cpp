@@ -96,6 +96,17 @@ void TerrainView::BringCameraToMap(Camera& camera, const TerrainRenderSettings& 
 	camera.LookAt(target + glm::vec3(0.0f, std::sin(elevation), std::cos(elevation)) * distance, target);
 }
 
+void TerrainView::LookDownAtMap(Camera& camera, const TerrainRenderSettings& settings, glm::ivec2 offset, glm::ivec2 size)
+{
+	//The middle of a map lies at offset * worldUnitsPerTexel (see GetWorldCenter)
+	const glm::vec2 center = glm::vec2(offset) * worldUnitsPerTexel * settings.modelScale;
+	const glm::vec2 half = glm::vec2(glm::max(size - 1, glm::ivec2(1))) * 0.5f * worldUnitsPerTexel * settings.modelScale;
+	const glm::vec3 target(center.x, 0.25f * settings.heightScale * settings.modelScale, center.y);
+	//Two map radii up (the far plane permitting), moved towards +Z by 0.3 of the half size: well within the quarter map "Follow camera" allows
+	const float height = std::min(std::max(half.x, half.y) * 2.0f, camera.GetRenderDistance() * 0.6f);
+	camera.LookAt(target + glm::vec3(0.0f, height, 0.3f * half.y), target);
+}
+
 std::unique_ptr<Shader> TerrainView::CreateTerrainShader()
 {
 	return std::make_unique<Shader>("res/shaders/TerrainShaders/Terrain_vertex.shader", "res/shaders/TerrainShaders/Terrain_fragment.shader",

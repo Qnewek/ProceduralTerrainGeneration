@@ -62,10 +62,11 @@ ProceduralTerrainGenerator/
       Grid.h                     mapy Grid<T>
       SplineSampling.*           próbkowanie splajnu do tablicy (dla GPU i wykresu w edytorze)
       Frustum.h                  płaszczyzny frustum z macierzy i test AABB (culling chunków)
-      Preset.*                   zapis/odczyt WorldConfig i NoiseMapConfig jako JSON + walidacja
+      Preset.*                   zapis/odczyt WorldConfig i NoiseMapConfig jako JSON + walidacja; opcjonalne `mapOffset` (położenie mapy częściowej)
+      Places.*                   nazwane miejsca trybu (kamera przed Model scale, yaw/pitch, `mapOffset`) w jednym pliku JSON: places/world.json, places/noise.json
       HeightmapExport.*          zapis mapy jako PNG 16-bit, RAW R16 lub EXR float32 w metrach (własny zapis, bez kompresji); FileIO.* = zapis przez plik tymczasowy
       ExportManifest.*           <nazwa>.json paczki eksportu: rozmiar i wysokości w metrach, kodowanie każdego pliku, poziom morza, wskazówki importu, parametry generacji,
-                                 lista materiałów (plik splat + kanał, mapa wag) i biomów (id, nazwa, kolor, udział)
+                                 lista materiałów (plik splat + kanał, mapa wag) i biomów (id, nazwa, kolor, udział); `ReadSource`/`ListPacks` = odczyt paczki dla „Load from pack”
       MaterialExport.*           mapy materiałów i biomów paczki (8-bit PNG): splat RGBA po 4 materiały, mapa wag na materiał, id i kolory biomów; Normalize = suma 255 na teksel
       TerrainMesh.*              siatki eksportu (metry, Y w górę): pełna siatka mapy, LOD-y (meshopt_simplify bez fałd), błąd wysokości, kafle, woda (quad, zupa trójkątów → siatka)
       MeshFile.*                 zapis GLB (glTF 2.0, ręcznie: JSON + bufor; węzeł = prymityw na materiał) i OBJ; MeshExport.* = pliki siatek paczki (LOD-y z kaflami + woda), bez GL — w tle
@@ -94,6 +95,8 @@ ProceduralTerrainGenerator/
       FrameMetrics.*             pomiary w panelu Output (czas klatki/CPU/GPU, trójkąty); RollingStats.h = średnia i maks. z ostatnich próbek;
                                  FlightRecord.h = „Record flight” (prędkość, klatki > 20 ms, klatki z dziurą), pomiar kryterium Fazy 2
       PresetPanel.*              sekcja „Presets” w ImGui (lista plików, nazwa); zapis i odczyt wykonuje subsystem
+      PlacesPanel.*              sekcja „Places” zakładki Presets: lista miejsc i jej plik; subsystem podaje bieżący widok i przenosi kamerę + mapę
+      PackPicker.*               sekcja „Export packs” zakładki Presets: lista paczek z exports/, „Load from pack” (subsystem stosuje `generation` + `worldOrigin`)
       ExportPanel.*              sekcja „Saving” w ImGui: paczka w exports/<nazwa>/; subsystem podaje `ExportPanel::Pack` (mapy, zakres, metry na jednostkę, morze, preset)
       BiomeEditor.*              edytor tabeli biomów (lista, zakresy, diagram Whittakera T × H); edytuje tabelę w miejscu, subsystem przelicza biomy
       PanelTabs.*                zakładki panelu: rzędy przycisków na górze (zawijane, gdy się nie mieszczą) + przewijana treść pod nimi; wybór trzymany po nazwie
@@ -303,6 +306,11 @@ Wartości szumów są w [-1, 1]. Konwencja indeksowania: `map[y * width + x]`.
   Wersja 2 (2026-11-08, tabela biomów zamiast poziomów); wersja 1 nie jest już czytana (`minVersion`).
   Nowe wymaganie generacji wobec wartości configu = nowy warunek w `Check*`, bo plik można edytować ręcznie. Nie zmieniaj nazw pól
   ani enumów w JSON bez podbicia `currentVersion`. Pliki trafiają do `presets/` względem katalogu roboczego (poza gitem).
+  Położenie mapy (`mapOffset`, od 2026-11-20) nie jest częścią configu: osobny parametr `ToJson/FromJson/Save/Load`, zapisywane przy checkboxie
+  „Map position” (w świecie nieskończonym = `OffsetUnder(camera)`, bo tam trafi mapa po wyjściu z niego). Wczytanie presetu z położeniem / paczki
+  (`grid.worldOrigin`) = `MoveMap` + `TerrainView::LookDownAtMap` (kamera wysoko nad środkiem, blisko pionu — „Follow camera” nie przesuwa mapy z powrotem).
+  W TerrainGen `MoveMap` także w świecie nieskończonym (region rzek idzie za miejscem); w Noise heightmap tylko na mapie skończonej (chunki nie zależą od offsetu).
+  Miejsca (`places/`, poza gitem) nie trzymają parametrów generacji.
 - Eksport map: zakres wartości plików 16-bit jest stały (`heightmap::terrainRange`, `noiseRange`), nie min–max mapy. Zmiana zakresu generacji wymaga zmiany
   tych stałych, inaczej wartości zostaną przycięte. Eksport czyta mapę z tekstury w chwili zapisu, w wątku głównym.
   Paczka (`exports/<nazwa>/`): pliki `<nazwa>_height*.{png,r16,exr}` + `<nazwa>.json` (`exportpack::ToJson`). Metry: 1 teksel = 1 m (`exportpack::metresPerTexel`),

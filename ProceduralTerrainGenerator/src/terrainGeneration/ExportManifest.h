@@ -1,5 +1,6 @@
 #pragma once
 
+#include <filesystem>
 #include <optional>
 #include <string>
 #include <vector>
@@ -87,4 +88,19 @@ namespace exportpack {
 	inline std::string ManifestName(const std::string& name) { return name + ".json"; }
 
 	std::string ToJson(const Manifest& manifest);
+
+	//What a pack tells about making its map again: read back by "Load from pack"
+	struct PackSource {
+		std::string mode;						//Manifest::mode
+		std::string generation;					//the generation parameters as preset JSON text; empty = the pack has none
+		glm::ivec2 worldOrigin = glm::ivec2(0);	//packs saved before it existed lay at the world origin
+	};
+	//@param out - replaced only on success
+	//@param error - description of the problem on failure
+	//@return true if the text is a manifest of this generator
+	bool ReadSource(const std::string& manifestText, PackSource& out, std::string& error);
+	//Reads the manifest file of a pack
+	bool LoadSource(const std::filesystem::path& manifestPath, PackSource& out, std::string& error);
+	//Manifests of the packs in folder (<folder>/<name>/<name>.json), sorted by path; empty if the folder does not exist
+	std::vector<std::filesystem::path> ListPacks(const std::filesystem::path& folder);
 }

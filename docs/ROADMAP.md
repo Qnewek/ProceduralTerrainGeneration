@@ -606,11 +606,14 @@ Kroki:
   jej prostokąta (`ChunkWorld::SetBounds`), więc te same rośliny co w świecie nieskończonym (checkbox „Plants, grass and shadows”). Eksport:
   `grid.worldOrigin` w manifeście, roślinność i woda rzek względem teksela (0, 0) mapy (test „moved over the world”). Do sprawdzenia w aplikacji:
   koszt chunków przy edycji na mapie częściowej; cień terenu tuż za krawędzią mapy (chunk na krawędzi rzuca go w całości).
-  **Do zrobienia (2026-11-20, kolejność zalecana; właściciel jeszcze nie wybrał — zapytać przed startem):**
-  1. **Położenie mapy w presecie / zakładki / „Load from pack”** (mały nakład). Dziś offset to tylko stan widoku: po restarcie lub wczytaniu presetu
-     trzeba ręcznie przepisać `worldOrigin` z manifestu do „Offset”. (a) opcjonalne pole offsetu w presecie TerrainGen (stare presety dalej się czytają);
-     (b) zakładki: nazwane miejsca (pozycja kamery + offset) w osobnym pliku, klik = przeniesienie kamery i mapy; (c) „Load from pack”: wybór
-     `<nazwa>.json` paczki → parametry z `generation` + położenie z `grid.worldOrigin`.
+  **Do zrobienia (2026-11-20, kolejność zalecana; właściciel wybrał punkt 1, kolejny — zapytać przed startem):**
+  1. **Położenie mapy w presecie / zakładki / „Load from pack”** 🟡 2026-11-20, oba tryby, zakładka Presets; testy przechodzą, w aplikacji jeszcze nie sprawdzone.
+     (a) preset: opcjonalne `"mapOffset": [x, y]` (stare presety bez niego czytają się jak dotąd), checkbox „Map position” (zapis i stosowanie przy
+     wczytaniu; w świecie nieskończonym zapisuje mapę pod kamerą); (b) „Places”: nazwane miejsca (kamera przed Model scale + yaw/pitch + offset)
+     w `places/world.json` / `places/noise.json`, „Go” / dwuklik = kamera i mapa na miejsce, ta sama nazwa = zastąpienie bieżącym widokiem;
+     (c) „Export packs” → „Load from pack”: paczki z `exports/<nazwa>/<nazwa>.json`, parametry z `generation` (sprawdzany tryb paczki), położenie
+     z `grid.worldOrigin` (paczki sprzed niego = początek świata). Preset i paczka bez kamery: kamera wysoko nad środkiem mapy (`LookDownAtMap`).
+     Do sprawdzenia w aplikacji: czy kadr po wczytaniu jest wygodny; miejsce zapisane z „Follow camera” wyłączonym, a wczytane z włączonym, przesuwa mapę pod kamerę.
   2. **Eksport kafli N × M** (średni). Saving: „Tiles”, mapa przesuwana kolejno, każda paczka osobno + plik zbiorczy z listą kafli i `worldOrigin`.
      Krok = `W − 1` (sąsiednie kafle dzielą rząd tekseli na krawędzi, inaczej szczelina/schodek w silniku; Unity tego wymaga). Generacja tylko w `Update`
      (GL w wątku głównym) → maszyna stanów na wiele klatek z postępem. Region rzek REGION musi objąć wszystkie kafle naraz, inaczej rzeki urywają się na granicach.

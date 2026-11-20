@@ -80,6 +80,9 @@ public:
 	//If the camera is not above the map, moves it to a raised point beyond the +Z edge looking at the map center,
 	//no farther than allows the view distance (e.g. after leaving the infinite world far from the map)
 	void BringCameraToMap(Camera& camera, const TerrainRenderSettings& settings) const;
+	//Puts the camera high above the middle of a map of size texels with the map offset offset, looking steeply down at it, and so close
+	//to above the middle that "Follow camera" keeps the map where it is (a place loaded from a preset or a pack)
+	static void LookDownAtMap(Camera& camera, const TerrainRenderSettings& settings, glm::ivec2 offset, glm::ivec2 size);
 
 	//Layer textures are allocated once per map size; same-size updates only upload the new data
 	void SetLayer(Layer layer, const HeightField& map);
