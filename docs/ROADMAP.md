@@ -618,10 +618,15 @@ Kroki:
      domyślnie też 8192), jedna paczka bez szwów. Gdyby wrócił: region rzek zamrożony na środku całej siatki (dziś liczony od nowa przy każdym przesunięciu
      mapy → różne rzeki w sąsiednich kaflach), krok `W − 1`, maszyna stanów na wiele klatek (generacja w `Update`, siatki i roślinność w tle), a siatki LOD 1+
      potrzebują `meshopt_SimplifyLockBorder` (dziś krawędzie sąsiednich paczek upraszczają się różnie → szczeliny).
-  3. **Region rzek podążający za kamerą w świecie nieskończonym** (średni–duży). Dziś region (`regionSize`, domyślnie 8192 teksele) stoi wokół ostatniej
-     mapy częściowej; dalej rzek REGION nie ma. Nowa sieć zmienia żłobienie → wszystkie chunki i roślinność od nowa (przeskok widoku), a hydrologia zależy
-     od całego regionu, więc i w części wspólnej rzeki mogą wyjść inne. Pomysły: przesuwanie skokowe o pół regionu, sieć w tle, stopniowa podmiana chunków
-     od najdalszych; albo kafle sieci z zakładką i przejściem.
+  3. **Region rzek podążający za kamerą w świecie nieskończonym** 🟡 2026-11-20 (branch `feat/rivers-follow-camera`, wariant A z trzech: skokowe
+     przesuwanie / kafle sieci z zakładką / przenikanie dwóch sieci — odrzucone, bo daje podwójne płytkie koryta). Region (`regionSize`, domyślnie 8192 teksele)
+     w świecie nieskończonym przeskakuje, gdy kamera odejdzie od jego środka dalej niż krok siatki w X lub Z; nowy środek = pozycja mapy pod kamerą
+     przyciągnięta do stałej siatki (krok = ¼ regionu w dół do całych komórek, `hydrology::RegionStep` / `SnapRegionCenter` / `LeftRegion`, testy
+     „Region centre”), więc to samo miejsce daje tę samą sieć, a po przeskoku kamera jest ≤ pół kroku od środka (bez skakania tam i z powrotem).
+     Sieć liczy się w tle, po przyjściu chunki i roślinność odświeżają się istniejącym mechanizmem (od najbliższych, stare rysowane do podmiany).
+     Mapa częściowa bez zmian (region wokół jej środka). Rivers → Region: „Follow camera (infinite world)” (domyślnie wł., nie w presecie), „Region centre”.
+     Do sprawdzenia w aplikacji: czas przeskoku (Rivers: czas sieci + Output: czas do odświeżenia chunków po zmianie) i czy różnice rzek w części
+     wspólnej regionów są akceptowalne; na granicy chunków starych i nowych rzeka może się chwilę urywać.
   4. **Erozja poza mapą Noise heightmap** (duży). Etap pośredni: erozja na mapie częściowej TerrainGen (ta sama `GpuErosion`). Docelowo w świecie
      nieskończonym: erozja nie jest lokalna (krople wędrują, rury propagują przez iteracje), krople nie są bit w bit powtarzalne (atomiki) — potrzebny
      chunk z szerokim marginesem (64–128 tekseli, zostaje środek), ziarno kropli z pozycji komórki świata, rury bez zależności od kolejności; szwy małe,

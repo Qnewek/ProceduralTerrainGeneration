@@ -1,5 +1,6 @@
 #pragma once
 
+#include <optional>
 #include <vector>
 
 #include "glm/glm.hpp"
@@ -93,4 +94,24 @@ namespace hydrology {
 	//@param waterHeight - sea level; water not above it is left to the sea surface
 	//@param texelsPerHeight - map texels as long as the height 1 is high (TerrainGen: 1024 world units / 4 per texel), for the flow speed
 	std::vector<WaterVertex> BuildWaterMesh(const Network& network, float waterHeight, float texelsPerHeight);
+
+	//The region following the camera in the infinite world jumps over a fixed grid, so a place gets the same network whichever region the camera
+	//came from, and the cells of every region lie on the same map positions (the same terrain samples)
+	//@return grid step in map texels: a quarter of regionSize down to whole cells, at least one cell
+	float RegionStep(int regionSize, int cellSize);
+	//@param position - map position (texels) to centre the region on, e.g. under the camera
+	//@return the nearest grid point
+	glm::vec2 SnapRegionCenter(glm::vec2 position, int regionSize, int cellSize);
+	//Where a network was computed: its middle (also off the grid, e.g. set by the partial map) and the grid step of its size, kept with it
+	//so that editing the region size does not move the region before the edit is applied
+	struct RegionPlace {
+		glm::vec2 center = glm::vec2(0.0f);
+		float step = 1.0f;
+	};
+	//@return true if position is farther than the step of the region from its middle along x or y: time to compute the region around it
+	bool LeftRegion(const RegionPlace& region, glm::vec2 position);
+	//Region of a new network: around mapCenter on the partial map; in the infinite world around the grid point under the camera when following it,
+	//else where the current region is (mapCenter if none yet)
+	RegionPlace PlaceRegion(bool infiniteWorld, bool followCamera, const std::optional<RegionPlace>& current, glm::vec2 cameraPosition, glm::vec2 mapCenter,
+		int regionSize, int cellSize);
 }

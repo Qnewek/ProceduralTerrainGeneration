@@ -60,7 +60,7 @@ void TerrainGenerationSys::Update(Camera& camera)
 	centerOnCamera = false;
 	GeneratePreview();
 	MeasureLand();
-	UpdateRivers();
+	UpdateRivers(camera);
 	if (infiniteGeneration) {
 		chunks.SetBounds(std::nullopt);
 		UpdateChunks(camera);
@@ -142,7 +142,14 @@ void TerrainGenerationSys::MeasureLand()
 	landStatsOld = false;
 }
 
-void TerrainGenerationSys::UpdateRivers()
+glm::vec2 TerrainGenerationSys::MapPositionUnder(const Camera& camera) const
+{
+	//World XZ = (map position - (size - 1) / 2) * worldUnitsPerTexel (see OffsetUnder)
+	const glm::vec3 position = camera.GetPosition() / renderSettings.modelScale;
+	return glm::vec2(position.x, position.z) / TerrainView::worldUnitsPerTexel + (glm::vec2(world.width, world.height) - 1.0f) * 0.5f;
+}
+
+void TerrainGenerationSys::UpdateRivers(const Camera& camera)
 {
 	if (std::optional<RiverResult> result = riverJob.TryTake()) {
 		riverMap.Upload(result->network, result->water);
@@ -157,6 +164,12 @@ void TerrainGenerationSys::UpdateRivers()
 		}
 	}
 	const rivers::RiverConfig& config = world.rivers;
+	//The terrain did not change, so not RequestRivers / RequestTerrain: the arriving network replaces the chunks.
+	//The step of the region shown, not of the edited size: dragging "Region size" applies on release
+	if (config.method == rivers::Method::REGION && infiniteGeneration && riversFollowCamera && !riverJob.IsRunning() && riverRegion
+		&& hydrology::LeftRegion(*riverRegion, MapPositionUnder(camera))) {
+		riversStale = true;
+	}
 	if (config.method != rivers::Method::REGION || !riversStale || riverJob.IsRunning()) {
 		return;
 	}
@@ -164,10 +177,13 @@ void TerrainGenerationSys::UpdateRivers()
 		return;
 	}
 	riversStale = false;
-	//Around the middle of the finite map, with the island and biome modifiers of the terrain shown (the sample reads the GPU back)
+	//Around the middle of the finite map, or in the infinite world around the grid point under the camera (or where the region is, when it does
+	//not follow the camera), with the island and biome modifiers of the terrain shown (the sample reads the GPU back)
 	const float cellSize = static_cast<float>(config.cellSize);
 	const int cells = std::clamp(config.regionSize / config.cellSize, 16, 2048);
-	const glm::vec2 center = MapCenter();
+	riverRegion = hydrology::PlaceRegion(infiniteGeneration, riversFollowCamera, riverRegion, MapPositionUnder(camera), MapCenter(),
+		config.regionSize, config.cellSize);
+	const glm::vec2 center = riverRegion->center;
 	HeightField sample = gpu.SampleTerrain(world.terrain, center, cells, cellSize, glm::ivec2(world.width, world.height),
 		biomesGeneration ? &world.biomes : nullptr);
 	const glm::vec2 origin = center - glm::vec2(static_cast<float>(cells) * cellSize * 0.5f);
@@ -990,9 +1006,17 @@ void TerrainGenerationSys::RiversEditor()
 		}
 		changed |= ImGui::IsItemDeactivatedAfterEdit();
 		r.regionSize = std::clamp(r.regionSize, 16 * r.cellSize, 2048 * r.cellSize);
-		ImGui::SetItemTooltip("Side of the square around the middle of the finite map that gets rivers; they fade out at its border.\n"
-			"Applied on release: the network is computed again");
+		ImGui::SetItemTooltip("Side of the square that gets rivers: around the middle of the partial map, or following the camera in the infinite world;\n"
+			"they fade out at its border. Applied on release: the network is computed again");
 		changed |= ImGui::SliderFloat("Border fade", &r.borderFade, 16.0f, 2048.0f, "%.0f texels", ImGuiSliderFlags_AlwaysClamp | ImGuiSliderFlags_Logarithmic);
+		//View state, not generation: toggling it does not compute the network again
+		ImGui::Checkbox("Follow camera (infinite world)", &riversFollowCamera);
+		ImGui::SetItemTooltip("The region jumps by a quarter of its side once the camera gets farther than a quarter from its middle\n"
+			"(onto a fixed grid, so a place always gets the same network). The new network is computed in the background and the chunks\n"
+			"are replaced from the nearest; rivers in the part the regions share may change. Off = the region stays where it is");
+		if (riverRegion) {
+			ImGui::Text("Region centre: %.0f, %.0f (map texels)", riverRegion->center.x, riverRegion->center.y);
+		}
 
 		ImGui::SeparatorText("Rivers");
 		changed |= ImGui::SliderFloat("Source area", &r.sourceArea, 1.0e4f, 1.0e7f, "%.3g texels^2", ImGuiSliderFlags_AlwaysClamp | ImGuiSliderFlags_Logarithmic);
