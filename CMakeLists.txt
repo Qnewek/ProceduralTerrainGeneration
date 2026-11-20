@@ -17,6 +17,7 @@ find_package(nlohmann_json CONFIG REQUIRED)
 find_package(lodepng CONFIG REQUIRED)
 find_package(Stb REQUIRED)
 find_package(doctest CONFIG REQUIRED)
+find_package(TIFF REQUIRED)
 find_package(meshoptimizer CONFIG REQUIRED)
 # cgltf is a single header (the implementation is compiled in VegetationMesh.cpp)
 find_path(CGLTF_INCLUDE_DIRS "cgltf.h" REQUIRED)
@@ -44,6 +45,7 @@ target_include_directories(ptg_vendor SYSTEM PUBLIC ${PTG_SRC}/vendor ${Stb_INCL
 # Generation itself runs only in compute shaders (res/shaders/ComputeShaders)
 add_library(ptg_core STATIC
 	${PTG_SRC}/terrainGeneration/Biome.cpp
+	${PTG_SRC}/terrainGeneration/DemTools.cpp
 	${PTG_SRC}/terrainGeneration/ExportManifest.cpp
 	${PTG_SRC}/terrainGeneration/FileIO.cpp
 	${PTG_SRC}/terrainGeneration/HeightmapExport.cpp
@@ -64,7 +66,7 @@ add_library(ptg_core STATIC
 target_include_directories(ptg_core PUBLIC ${PTG_SRC}/terrainGeneration)
 target_include_directories(ptg_core SYSTEM PRIVATE ${CGLTF_INCLUDE_DIRS})
 target_link_libraries(ptg_core PUBLIC ptg_vendor glm::glm)
-target_link_libraries(ptg_core PRIVATE nlohmann_json::nlohmann_json lodepng meshoptimizer::meshoptimizer)
+target_link_libraries(ptg_core PRIVATE nlohmann_json::nlohmann_json lodepng meshoptimizer::meshoptimizer TIFF::TIFF)
 ptg_set_warnings(ptg_core)
 
 add_executable(ProceduralTerrainGenerator
@@ -138,6 +140,7 @@ ptg_set_warnings(ProceduralTerrainGenerator)
 enable_testing()
 add_executable(ptg_tests
 	${PTG_DIR}/tests/BiomeTests.cpp
+	${PTG_DIR}/tests/DemToolsTests.cpp
 	${PTG_DIR}/tests/ExportManifestTests.cpp
 	${PTG_DIR}/tests/FlightRecordTests.cpp
 	${PTG_DIR}/tests/FrustumTests.cpp
@@ -165,6 +168,6 @@ add_executable(ptg_tests
 target_include_directories(ptg_tests PRIVATE ${PTG_SRC}/utility)
 # cgltf reads the exported .glb files back (its implementation is in ptg_core)
 target_include_directories(ptg_tests SYSTEM PRIVATE ${CGLTF_INCLUDE_DIRS})
-target_link_libraries(ptg_tests PRIVATE ptg_core doctest::doctest lodepng nlohmann_json::nlohmann_json)
+target_link_libraries(ptg_tests PRIVATE ptg_core doctest::doctest lodepng nlohmann_json::nlohmann_json TIFF::TIFF)
 ptg_set_warnings(ptg_tests)
 add_test(NAME ptg_tests COMMAND ptg_tests)
