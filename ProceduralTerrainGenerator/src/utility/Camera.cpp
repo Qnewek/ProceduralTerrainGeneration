@@ -45,6 +45,14 @@ void Camera::LookAt(glm::vec3 _position, glm::vec3 target)
 	UpdateCameraVectors(CameraMovement::ROTATE);
 }
 
+void Camera::SetView(glm::vec3 _position, float _yaw, float _pitch)
+{
+	position = _position;
+	yaw = _yaw;
+	pitch = glm::clamp(_pitch, -89.0f, 89.0f);
+	UpdateCameraVectors(CameraMovement::ROTATE);
+}
+
 void Camera::SetScreenSize(unsigned int width, unsigned int height)
 {
 	if (width != screenWidth) {

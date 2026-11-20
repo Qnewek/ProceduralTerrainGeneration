@@ -15,6 +15,8 @@
 #include "TerrainView.h"
 #include "PresetPanel.h"
 #include "ExportPanel.h"
+#include "PlacesPanel.h"
+#include "PackPicker.h"
 #include "PanelTabs.h"
 
 //What has to be done at the next Update, all on the GPU: the noise map (with infinite generation: the chunks), then erosion of the finite map
@@ -51,6 +53,12 @@ class NoiseBasedGenerationSys
 		bool centerOnCamera = false;
 		//Moves the finite map so its texel (0, 0) is world map position offset; new noise if that changes
 		void MoveMap(glm::ivec2 offset);
+		//Offset putting the middle of the map under the camera
+		glm::ivec2 OffsetUnder(const Camera& camera) const;
+		//Map offset of the current view: under the camera in the infinite world (where leaving it puts the map), else of the finite map
+		glm::ivec2 PlaceOffset(const Camera& camera) const { return infiniteGeneration ? OffsetUnder(camera) : mapOffset; }
+		//Moves the map to offset and the camera above it (a place without a camera: preset, pack)
+		void GoToMap(glm::ivec2 offset, Camera& camera);
 
 		//Every erosion method keeps its own eroded map, so both can be shown next to the noise map at once:
 		//droplets in the OVERLAY layer of view, pipes in the TERRAIN layer of pipesView (a second view, as TerrainView has one free height layer)
@@ -100,6 +108,13 @@ class NoiseBasedGenerationSys
 		void ApplyConfig(const NoiseMapConfig& loaded);
 		PresetPanel presets{ "presets/noise" };
 		ExportPanel exporter{ "exports" };
+		PlacesPanel places{ "places/noise.json" };
+		PackPicker packs{ "exports" };
+		//Mode name in export packs
+		static constexpr const char* packMode = "Noise heightmap";
+		//Presets are saved with the map position and loading one with a position moves the map there
+		bool presetPosition = true;
+		void LoadPack(const exportpack::PackSource& source, Camera& camera);
 
 		//Tabs of the right panel and their content
 		PanelTabs generationTabs;
@@ -126,7 +141,8 @@ class NoiseBasedGenerationSys
 		void ImGuiRightPanel();
 		//Content of the Display, Presets and Saving tabs of the left panel
 		void ImGuiDisplay();
-		void ImGuiPresets();
+		//@param camera - saved with a place, moved by loading one
+		void ImGuiPresets(Camera& camera);
 		void ImGuiSaving();
 		void ImGuiOutput();
 };

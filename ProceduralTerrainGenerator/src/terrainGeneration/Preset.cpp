@@ -4,6 +4,7 @@
 #include <charconv>
 #include <climits>
 #include <cmath>
+#include <cstdlib>
 #include <fstream>
 #include <limits>
 #include <sstream>
@@ -361,6 +362,25 @@ namespace preset {
 					}
 					values.push_back(element.get<double>());
 				}
+			}
+
+			//An array of 2 integers within maxMapOffset
+			//@return true if the field exists
+			bool ReadMapOffset(const char* key, glm::ivec2& value) const
+			{
+				const json* field = Find(key);
+				if (!field) {
+					return false;
+				}
+				const auto validCoordinate = [](const json& element) {
+					return element.is_number_integer() && std::abs(element.get<double>()) <= maxMapOffset;
+				};
+				if (!field->is_array() || field->size() != 2 || !validCoordinate((*field)[0]) || !validCoordinate((*field)[1])) {
+					throw std::runtime_error(PathOf(key) + " must be an array of 2 integers between -" + std::to_string(maxMapOffset)
+						+ " and " + std::to_string(maxMapOffset));
+				}
+				value = glm::ivec2(static_cast<int>((*field)[0].get<long long>()), static_cast<int>((*field)[1].get<long long>()));
+				return true;
 			}
 
 			template<typename E, size_t N>
@@ -867,7 +887,7 @@ namespace preset {
 		}
 
 		template<typename Config>
-		bool Parse(const std::string& text, const char* kind, Config& out, std::string& error)
+		bool Parse(const std::string& text, const char* kind, Config& out, std::optional<glm::ivec2>* mapOffset, std::string& error)
 		{
 			try {
 				json root = json::parse(text);
@@ -886,7 +906,13 @@ namespace preset {
 				Config config;
 				ReadFields(reader, config);
 				Check(config);
+				//Added 2026-11-20 without a new version: older presets have no map position
+				glm::ivec2 offset(0);
+				const bool hasOffset = reader.ReadMapOffset("mapOffset", offset);
 				out = std::move(config);
+				if (mapOffset) {
+					*mapOffset = hasOffset ? std::optional<glm::ivec2>(offset) : std::nullopt;
+				}
 				return true;
 			}
 			catch (const std::exception& e) {
@@ -896,21 +922,24 @@ namespace preset {
 		}
 
 		template<typename Config>
-		bool SaveConfig(const std::filesystem::path& path, const Config& config, std::string& error)
+		bool SaveConfig(const std::filesystem::path& path, const Config& config, std::optional<glm::ivec2> mapOffset, std::string& error)
 		{
 			try {
 				Check(config);
+				if (mapOffset && !ValidMapOffset(*mapOffset)) {
+					throw std::runtime_error("Map offset is outside the range a preset can hold");
+				}
 			}
 			catch (const std::exception& e) {
 				error = e.what();
 				return false;
 			}
-			const std::string text = ToJson(config) + "\n";
+			const std::string text = ToJson(config, mapOffset) + "\n";
 			return WriteFileAtomic(path, text.data(), text.size(), error);
 		}
 
 		template<typename Config>
-		bool LoadConfig(const std::filesystem::path& path, Config& out, std::string& error)
+		bool LoadConfig(const std::filesystem::path& path, Config& out, std::optional<glm::ivec2>& mapOffset, std::string& error)
 		{
 			std::ifstream file(path, std::ios::binary);
 			if (!file) {
@@ -919,17 +948,32 @@ namespace preset {
 			}
 			std::ostringstream text;
 			text << file.rdbuf();
-			return FromJson(text.str(), out, error);
+			return FromJson(text.str(), out, mapOffset, error);
+		}
+
+		//Fields every preset starts with
+		json Header(const char* kind, int width, int height, std::optional<glm::ivec2> mapOffset)
+		{
+			json root;
+			root["kind"] = kind;
+			root["version"] = currentVersion;
+			root["width"] = width;
+			root["height"] = height;
+			if (mapOffset) {
+				root["mapOffset"] = { mapOffset->x, mapOffset->y };
+			}
+			return root;
 		}
 	}
 
-	std::string ToJson(const WorldConfig& c)
+	bool ValidMapOffset(glm::ivec2 offset)
 	{
-		json root;
-		root["kind"] = worldKind;
-		root["version"] = currentVersion;
-		root["width"] = c.width;
-		root["height"] = c.height;
+		return std::abs(offset.x) <= maxMapOffset && std::abs(offset.y) <= maxMapOffset;
+	}
+
+	std::string ToJson(const WorldConfig& c, std::optional<glm::ivec2> mapOffset)
+	{
+		json root = Header(worldKind, c.width, c.height, mapOffset);
 
 		json terrain;
 		terrain["method"] = NameOf(methodNames, c.terrain.method);
@@ -972,26 +1016,54 @@ namespace preset {
 		return root.dump(2);
 	}
 
-	std::string ToJson(const NoiseMapConfig& c)
+	std::string ToJson(const NoiseMapConfig& c, std::optional<glm::ivec2> mapOffset)
 	{
-		json root;
-		root["kind"] = noiseKind;
-		root["version"] = currentVersion;
-		root["width"] = c.width;
-		root["height"] = c.height;
+		json root = Header(noiseKind, c.width, c.height, mapOffset);
 		root["noise"] = NoiseToJson(c.noise);
 		root["erosion"] = ErosionToJson(c.erosion);
 		return root.dump(2);
 	}
 
-	bool FromJson(const std::string& text, WorldConfig& out, std::string& error) { return Parse(text, worldKind, out, error); }
-	bool FromJson(const std::string& text, NoiseMapConfig& out, std::string& error) { return Parse(text, noiseKind, out, error); }
+	bool FromJson(const std::string& text, WorldConfig& out, std::string& error) { return Parse(text, worldKind, out, nullptr, error); }
+	bool FromJson(const std::string& text, NoiseMapConfig& out, std::string& error) { return Parse(text, noiseKind, out, nullptr, error); }
+	bool FromJson(const std::string& text, WorldConfig& out, std::optional<glm::ivec2>& mapOffset, std::string& error)
+	{
+		return Parse(text, worldKind, out, &mapOffset, error);
+	}
+	bool FromJson(const std::string& text, NoiseMapConfig& out, std::optional<glm::ivec2>& mapOffset, std::string& error)
+	{
+		return Parse(text, noiseKind, out, &mapOffset, error);
+	}
 
-	bool Save(const std::filesystem::path& path, const WorldConfig& config, std::string& error) { return SaveConfig(path, config, error); }
-	bool Save(const std::filesystem::path& path, const NoiseMapConfig& config, std::string& error) { return SaveConfig(path, config, error); }
+	bool Save(const std::filesystem::path& path, const WorldConfig& config, std::string& error) { return SaveConfig(path, config, std::nullopt, error); }
+	bool Save(const std::filesystem::path& path, const NoiseMapConfig& config, std::string& error) { return SaveConfig(path, config, std::nullopt, error); }
+	bool Save(const std::filesystem::path& path, const WorldConfig& config, std::optional<glm::ivec2> mapOffset, std::string& error)
+	{
+		return SaveConfig(path, config, mapOffset, error);
+	}
+	bool Save(const std::filesystem::path& path, const NoiseMapConfig& config, std::optional<glm::ivec2> mapOffset, std::string& error)
+	{
+		return SaveConfig(path, config, mapOffset, error);
+	}
 
-	bool Load(const std::filesystem::path& path, WorldConfig& out, std::string& error) { return LoadConfig(path, out, error); }
-	bool Load(const std::filesystem::path& path, NoiseMapConfig& out, std::string& error) { return LoadConfig(path, out, error); }
+	bool Load(const std::filesystem::path& path, WorldConfig& out, std::string& error)
+	{
+		std::optional<glm::ivec2> ignored;
+		return LoadConfig(path, out, ignored, error);
+	}
+	bool Load(const std::filesystem::path& path, NoiseMapConfig& out, std::string& error)
+	{
+		std::optional<glm::ivec2> ignored;
+		return LoadConfig(path, out, ignored, error);
+	}
+	bool Load(const std::filesystem::path& path, WorldConfig& out, std::optional<glm::ivec2>& mapOffset, std::string& error)
+	{
+		return LoadConfig(path, out, mapOffset, error);
+	}
+	bool Load(const std::filesystem::path& path, NoiseMapConfig& out, std::optional<glm::ivec2>& mapOffset, std::string& error)
+	{
+		return LoadConfig(path, out, mapOffset, error);
+	}
 
 	bool IsValidName(const std::string& name)
 	{

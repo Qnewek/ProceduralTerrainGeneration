@@ -288,11 +288,11 @@ void TerrainGenApp::ImGuiRender()
         } },
     };
     if (currentMode == mode::NOISE_HEIGHTMAP) {
-        viewTabs.push_back({ "Presets", [this] { noiseGenSys.ImGuiPresets(); } });
+        viewTabs.push_back({ "Presets", [this] { noiseGenSys.ImGuiPresets(camera); } });
         viewTabs.push_back({ "Saving", [this] { noiseGenSys.ImGuiSaving(); } });
     }
     else if (currentMode == mode::TERRAIN_GEN) {
-        viewTabs.push_back({ "Presets", [this] { terrainGenSys.ImGuiPresets(); } });
+        viewTabs.push_back({ "Presets", [this] { terrainGenSys.ImGuiPresets(camera); } });
         viewTabs.push_back({ "Saving", [this] { terrainGenSys.ImGuiSaving(); } });
     }
     viewTabs.push_back({ "About", [] {

@@ -1,5 +1,11 @@
 #include "ExportManifest.h"
 
+#include <algorithm>
+#include <climits>
+#include <fstream>
+#include <sstream>
+#include <system_error>
+
 #include <nlohmann/json.hpp>
 
 namespace exportpack {
@@ -183,5 +189,75 @@ namespace exportpack {
 			j["generation"] = generation.is_discarded() ? Json(m.generation) : generation;
 		}
 		return j.dump(2);
+	}
+
+	bool ReadSource(const std::string& manifestText, PackSource& out, std::string& error)
+	{
+		const Json j = Json::parse(manifestText, nullptr, false);
+		if (j.is_discarded() || !j.is_object()) {
+			error = "The file is not valid JSON";
+			return false;
+		}
+		auto generator = j.find("generator");
+		auto mode = j.find("mode");
+		if (generator == j.end() || *generator != "Procedural Terrain Generator" || mode == j.end() || !mode->is_string()) {
+			error = "Not a manifest of an export pack of this generator";
+			return false;
+		}
+		PackSource source;
+		source.mode = mode->get<std::string>();
+		auto generation = j.find("generation");
+		//Invalid parameters were stored as text; preset parsing rejects them later with its own message
+		if (generation != j.end()) {
+			source.generation = generation->is_string() ? generation->get<std::string>() : generation->dump();
+		}
+		auto grid = j.find("grid");
+		if (grid != j.end() && grid->is_object()) {
+			auto origin = grid->find("worldOrigin");
+			if (origin != grid->end()) {
+				const auto validCoordinate = [](const Json& element) {
+					return element.is_number_integer() && element.get<double>() >= INT_MIN && element.get<double>() <= INT_MAX;
+				};
+				if (!origin->is_array() || origin->size() != 2 || !validCoordinate((*origin)[0]) || !validCoordinate((*origin)[1])) {
+					error = "grid.worldOrigin must be an array of 2 integers";
+					return false;
+				}
+				source.worldOrigin = glm::ivec2(static_cast<int>((*origin)[0].get<long long>()), static_cast<int>((*origin)[1].get<long long>()));
+			}
+		}
+		out = std::move(source);
+		return true;
+	}
+
+	bool LoadSource(const std::filesystem::path& manifestPath, PackSource& out, std::string& error)
+	{
+		std::ifstream file(manifestPath, std::ios::binary);
+		if (!file) {
+			error = "Cannot open the file";
+			return false;
+		}
+		std::ostringstream text;
+		text << file.rdbuf();
+		return ReadSource(text.str(), out, error);
+	}
+
+	std::vector<std::filesystem::path> ListPacks(const std::filesystem::path& folder)
+	{
+		std::vector<std::filesystem::path> packs;
+		std::error_code ec;
+		for (std::filesystem::directory_iterator it(folder, ec), end; !ec && it != end; it.increment(ec)) {
+			std::error_code fileError;
+			if (!it->is_directory(fileError)) {
+				continue;
+			}
+			//The manifest is named after the folder
+			std::filesystem::path manifest = it->path() / it->path().filename();
+			manifest += ".json";
+			if (std::filesystem::is_regular_file(manifest, fileError)) {
+				packs.push_back(manifest);
+			}
+		}
+		std::sort(packs.begin(), packs.end());
+		return packs;
 	}
 }

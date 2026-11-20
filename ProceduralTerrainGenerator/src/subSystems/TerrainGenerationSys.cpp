@@ -324,22 +324,28 @@ void TerrainGenerationSys::RequestBiomes()
 	}
 }
 
-void TerrainGenerationSys::ImGuiPresets()
+void TerrainGenerationSys::ImGuiPresets(Camera& camera)
 {
 	std::string error;
 	switch (presets.ImGuiDraw()) {
-	case PresetPanel::Action::SAVE:
-		if (preset::Save(presets.SavePath(), world, error)) {
+	case PresetPanel::Action::SAVE: {
+		const std::optional<glm::ivec2> offset = presetPosition ? std::optional<glm::ivec2>(PlaceOffset(camera)) : std::nullopt;
+		if (preset::Save(presets.SavePath(), world, offset, error)) {
 			presets.ReportSaved();
 		}
 		else {
 			presets.ReportError(error);
 		}
 		break;
+	}
 	case PresetPanel::Action::LOAD: {
 		WorldConfig loaded;
-		if (preset::Load(presets.LoadPath(), loaded, error)) {
+		std::optional<glm::ivec2> offset;
+		if (preset::Load(presets.LoadPath(), loaded, offset, error)) {
 			ApplyWorld(loaded);
+			if (presetPosition && offset) {
+				GoToMap(*offset, camera);
+			}
 			presets.ReportLoaded();
 		}
 		else {
@@ -350,6 +356,60 @@ void TerrainGenerationSys::ImGuiPresets()
 	case PresetPanel::Action::NONE:
 		break;
 	}
+	ImGui::Checkbox("Map position", &presetPosition);
+	ImGui::SetItemTooltip("Saving: the preset also keeps where the partial map lies (in the infinite world: the map under the camera).\n"
+		"Loading: a preset with a position moves the map there and the camera above it. Off = only the parameters");
+
+	ImGui::SeparatorText("Places");
+	const auto here = [&](const std::string& name) {
+		places::Place place;
+		place.name = name;
+		place.camera = camera.GetPosition() / renderSettings.modelScale;
+		place.yaw = camera.GetYaw();
+		place.pitch = camera.GetPitch();
+		place.mapOffset = PlaceOffset(camera);
+		return place;
+	};
+	if (const std::optional<places::Place> place = places.ImGuiDraw(here)) {
+		MoveMap(place->mapOffset);
+		camera.SetView(place->camera * renderSettings.modelScale, place->yaw, place->pitch);
+	}
+
+	ImGui::SeparatorText("Export packs");
+	if (const std::optional<exportpack::PackSource> source = packs.ImGuiDraw()) {
+		LoadPack(*source, camera);
+	}
+}
+
+void TerrainGenerationSys::GoToMap(glm::ivec2 offset, Camera& camera)
+{
+	MoveMap(offset);
+	TerrainView::LookDownAtMap(camera, renderSettings, offset, glm::ivec2(world.width, world.height));
+}
+
+void TerrainGenerationSys::LoadPack(const exportpack::PackSource& source, Camera& camera)
+{
+	if (source.mode != packMode) {
+		packs.ReportError("The pack was made in the " + source.mode + " mode");
+		return;
+	}
+	if (source.generation.empty()) {
+		packs.ReportError("The pack has no generation parameters");
+		return;
+	}
+	if (!preset::ValidMapOffset(source.worldOrigin)) {
+		packs.ReportError("The world position of the pack is out of range");
+		return;
+	}
+	WorldConfig loaded;
+	std::string error;
+	if (!preset::FromJson(source.generation, loaded, error)) {
+		packs.ReportError("Generation parameters: " + error);
+		return;
+	}
+	ApplyWorld(loaded);
+	GoToMap(source.worldOrigin, camera);
+	packs.ReportLoaded();
 }
 
 void TerrainGenerationSys::ApplyWorld(const WorldConfig& loaded)
@@ -565,7 +625,7 @@ void TerrainGenerationSys::ImGuiSaving()
 		return;
 	}
 	ExportPanel::Pack pack;
-	pack.mode = "TerrainGen";
+	pack.mode = packMode;
 	pack.range = heightmap::terrainRange;
 	pack.metresPerUnit = renderSettings.heightScale / TerrainView::worldUnitsPerTexel;
 	pack.worldOrigin = view.GetMapOffset();
