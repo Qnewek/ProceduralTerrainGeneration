@@ -343,6 +343,10 @@ Wartości szumów są w [-1, 1]. Konwencja indeksowania: `map[y * width + x]`.
   `SampleTerrain` zawsze bez rzek (z niej liczy się sieć — inaczej sprzężenie). Każdy dispatch ustawia `riverMethod` (program pamięta uniformy).
   REGION: `TerrainGenerationSys::UpdateRivers` próbkuje teren (odczyt z GPU) i liczy `hydrology::Compute` w tle (`GenerationJob`), po przyjściu sieci ustawia
   `pending.terrain` bezpośrednio — nie `RequestTerrain`, które oznacza sieć jako nieaktualną (pętla). `RequestTerrain` i `RequestBiomes` (z modyfikatorami) unieważniają sieć.
+  Region leży wokół środka mapy częściowej; w świecie nieskończonym (checkbox „Follow camera”, `riversFollowCamera`) przeskakuje za kamerą na stałej siatce
+  (krok ¼ regionu w całych komórkach, `hydrology::PlaceRegion` / `LeftRegion`): `UpdateRivers(camera)` ustawia wtedy `riversStale` bezpośrednio (teren się nie
+  zmienił), środek i krok ostatniej sieci = `riverRegion` (krok zapamiętany z siecią, więc przeciąganie „Region size” nie przesuwa regionu przed puszczeniem),
+  bez śledzenia region w świecie nieskończonym zostaje w miejscu (edycja liczy sieć tam), pozycja mapy pod kamerą = `MapPositionUnder`.
   Koryto w teksturze to wektor do najbliższego punktu biegu (dokładny przy próbkowaniu dwuliniowym) plus odległość skalarna, bo wektor między dwiema rzekami
   maleje do 0 — shader bierze `max(|wektor|, odległość − komórka)`; ten sam odczyt na CPU = `hydrology::WaterLevelAt` (roślinność nie stoi w wodzie rzek i jezior). NOISE: tablica permutacji 6 (`WorldInput` ma 7 tablic),
   nie żłobi dna morza (wygaszanie na głębokości koryta pod lustrem). `channelAt` raz na teksel, potem `carveRivers` / `riverHumidity` (wilgotność dla biomów, dodawana po `applyClimate`
