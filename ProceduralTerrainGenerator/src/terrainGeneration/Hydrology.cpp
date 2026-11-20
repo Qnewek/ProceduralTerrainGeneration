@@ -393,4 +393,39 @@ namespace hydrology {
 		}
 		return vertices;
 	}
+
+	float RegionStep(int regionSize, int cellSize)
+	{
+		const int cell = std::max(cellSize, 1);
+		return static_cast<float>(std::max(regionSize / 4 / cell, 1) * cell);
+	}
+
+	glm::vec2 SnapRegionCenter(glm::vec2 position, int regionSize, int cellSize)
+	{
+		const float step = RegionStep(regionSize, cellSize);
+		return glm::vec2(std::round(position.x / step), std::round(position.y / step)) * step;
+	}
+
+	bool LeftRegion(const RegionPlace& region, glm::vec2 position)
+	{
+		const glm::vec2 distance = glm::abs(position - region.center);
+		return distance.x > region.step || distance.y > region.step;
+	}
+
+	RegionPlace PlaceRegion(bool infiniteWorld, bool followCamera, const std::optional<RegionPlace>& current, glm::vec2 cameraPosition, glm::vec2 mapCenter,
+		int regionSize, int cellSize)
+	{
+		RegionPlace place;
+		place.step = RegionStep(regionSize, cellSize);
+		if (!infiniteWorld) {
+			place.center = mapCenter;
+		}
+		else if (followCamera) {
+			place.center = SnapRegionCenter(cameraPosition, regionSize, cellSize);
+		}
+		else {
+			place.center = current ? current->center : mapCenter;
+		}
+		return place;
+	}
 }

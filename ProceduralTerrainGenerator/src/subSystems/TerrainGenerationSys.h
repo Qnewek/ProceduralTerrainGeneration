@@ -123,8 +123,15 @@ private:
 	//Statistics of the uploaded network, for the Rivers tab
 	int riverCells = 0, lakeCells = 0, lakeCount = 0;
 	double riverMs = 0.0;
-	//Takes a finished network and starts a new one if needed
-	void UpdateRivers();
+	//Infinite world: the region jumps after the camera over a grid of a quarter region (hydrology::SnapRegionCenter), not saved in presets
+	bool riversFollowCamera = true;
+	//Middle and grid step of the last network started (map texels); none = no network yet
+	std::optional<hydrology::RegionPlace> riverRegion;
+	//Map position (texels of the world) under the camera: inverse of the placement in OffsetUnder
+	glm::vec2 MapPositionUnder(const Camera& camera) const;
+	//Takes a finished network and starts a new one if needed: around the partial map, or in the infinite world around the camera
+	//once it leaves the region (riversFollowCamera)
+	void UpdateRivers(const Camera& camera);
 	void RequestRivers() { riversStale = true; }
 	//What the generation carves (the network may not be ready yet)
 	RiverInput Rivers() const { return RiverInput{ world.rivers, &riverMap }; }
