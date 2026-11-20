@@ -606,10 +606,22 @@ Kroki:
   jej prostokąta (`ChunkWorld::SetBounds`), więc te same rośliny co w świecie nieskończonym (checkbox „Plants, grass and shadows”). Eksport:
   `grid.worldOrigin` w manifeście, roślinność i woda rzek względem teksela (0, 0) mapy (test „moved over the world”). Do sprawdzenia w aplikacji:
   koszt chunków przy edycji na mapie częściowej; cień terenu tuż za krawędzią mapy (chunk na krawędzi rzuca go w całości).
-  Propozycje dalej: (1) region rzek REGION podążający za kamerą w świecie nieskończonym (dziś stoi wokół ostatniej mapy częściowej; przeliczenie sieci
-  zmienia teren, więc trzeba by podmieniać chunki stopniowo); (2) eksport kafli: kilka sąsiednich paczek jednym przyciskiem (offset co rozmiar mapy,
-  `worldOrigin` pozwala złożyć je w silniku); (3) zapisywanie offsetu w presecie / „zakładki” miejsc świata; (4) erozja jako warstwa świata nieskończonego
-  (dziś tylko na mapie) — wymagałaby erozji per chunk z marginesem.
+  **Do zrobienia (2026-11-20, kolejność zalecana; właściciel jeszcze nie wybrał — zapytać przed startem):**
+  1. **Położenie mapy w presecie / zakładki / „Load from pack”** (mały nakład). Dziś offset to tylko stan widoku: po restarcie lub wczytaniu presetu
+     trzeba ręcznie przepisać `worldOrigin` z manifestu do „Offset”. (a) opcjonalne pole offsetu w presecie TerrainGen (stare presety dalej się czytają);
+     (b) zakładki: nazwane miejsca (pozycja kamery + offset) w osobnym pliku, klik = przeniesienie kamery i mapy; (c) „Load from pack”: wybór
+     `<nazwa>.json` paczki → parametry z `generation` + położenie z `grid.worldOrigin`.
+  2. **Eksport kafli N × M** (średni). Saving: „Tiles”, mapa przesuwana kolejno, każda paczka osobno + plik zbiorczy z listą kafli i `worldOrigin`.
+     Krok = `W − 1` (sąsiednie kafle dzielą rząd tekseli na krawędzi, inaczej szczelina/schodek w silniku; Unity tego wymaga). Generacja tylko w `Update`
+     (GL w wątku głównym) → maszyna stanów na wiele klatek z postępem. Region rzek REGION musi objąć wszystkie kafle naraz, inaczej rzeki urywają się na granicach.
+  3. **Region rzek podążający za kamerą w świecie nieskończonym** (średni–duży). Dziś region (`regionSize`, domyślnie 8192 teksele) stoi wokół ostatniej
+     mapy częściowej; dalej rzek REGION nie ma. Nowa sieć zmienia żłobienie → wszystkie chunki i roślinność od nowa (przeskok widoku), a hydrologia zależy
+     od całego regionu, więc i w części wspólnej rzeki mogą wyjść inne. Pomysły: przesuwanie skokowe o pół regionu, sieć w tle, stopniowa podmiana chunków
+     od najdalszych; albo kafle sieci z zakładką i przejściem.
+  4. **Erozja poza mapą Noise heightmap** (duży). Etap pośredni: erozja na mapie częściowej TerrainGen (ta sama `GpuErosion`). Docelowo w świecie
+     nieskończonym: erozja nie jest lokalna (krople wędrują, rury propagują przez iteracje), krople nie są bit w bit powtarzalne (atomiki) — potrzebny
+     chunk z szerokim marginesem (64–128 tekseli, zostaje środek), ziarno kropli z pozycji komórki świata, rury bez zależności od kolejności; szwy małe,
+     nie zerowe, koszt GPU na chunk wyraźnie wyższy.
 - **Tryb „Imported map”:** ✅ 2026-11-03 podgląd mapy z pliku (PNG 1/2/4/8/16-bit, kolorowy zamieniany na szary, oraz R16/RAW): `HeightmapImport.*` +
   `subSystems/MapImportSys.*`, wczytywanie w tle. Dalszy ciąg w Fazie 6.
 - **Edytor ręczny:** pędzle (podnieś/obniż/wygładź/spłaszcz) jako warstwa delta nad proceduralną bazą.
