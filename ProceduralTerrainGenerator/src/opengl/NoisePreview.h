@@ -22,7 +22,8 @@ public:
 	void ReloadShader() { shader->Reload(); }
 
 	//Generates the picture of the noise as it lies on a map of the given size (islands fill that map)
-	void Generate(GpuHeightGenerator& gpu, const noise::NoiseConfigParameters& config, int mapWidth, int mapHeight);
+	//@param origin - map position of its first texel (a partial map moved over the world)
+	void Generate(GpuHeightGenerator& gpu, const noise::NoiseConfigParameters& config, int mapWidth, int mapHeight, glm::ivec2 origin = glm::ivec2(0));
 
 	//Draws the picture with ImGui, as wide as the available space, row y = 0 at the top like the 2D map; nothing before Generate
 	void ImGuiDraw() const;

@@ -63,7 +63,13 @@ ProceduralTerrainGenerator/
       SplineSampling.*           próbkowanie splajnu do tablicy (dla GPU i wykresu w edytorze)
       Frustum.h                  płaszczyzny frustum z macierzy i test AABB (culling chunków)
       Preset.*                   zapis/odczyt WorldConfig i NoiseMapConfig jako JSON + walidacja
-      HeightmapExport.*          zapis mapy jako PNG 16-bit lub RAW R16; FileIO.* = zapis przez plik tymczasowy
+      HeightmapExport.*          zapis mapy jako PNG 16-bit, RAW R16 lub EXR float32 w metrach (własny zapis, bez kompresji); FileIO.* = zapis przez plik tymczasowy
+      ExportManifest.*           <nazwa>.json paczki eksportu: rozmiar i wysokości w metrach, kodowanie każdego pliku, poziom morza, wskazówki importu, parametry generacji,
+                                 lista materiałów (plik splat + kanał, mapa wag) i biomów (id, nazwa, kolor, udział)
+      MaterialExport.*           mapy materiałów i biomów paczki (8-bit PNG): splat RGBA po 4 materiały, mapa wag na materiał, id i kolory biomów; Normalize = suma 255 na teksel
+      TerrainMesh.*              siatki eksportu (metry, Y w górę): pełna siatka mapy, LOD-y (meshopt_simplify bez fałd), błąd wysokości, kafle, woda (quad, zupa trójkątów → siatka)
+      MeshFile.*                 zapis GLB (glTF 2.0, ręcznie: JSON + bufor; węzeł = prymityw na materiał) i OBJ; MeshExport.* = pliki siatek paczki (LOD-y z kaflami + woda), bez GL — w tle
+      VegetationExport.*         roślinność paczki: PlaceChunk na chunkach skończonej mapy (jak świat nieskończony) → _vegetation.json, modele z LOD-ami aplikacji → vegetation/*.glb
       HeightmapImport.*          odczyt mapy z PNG lub R16/RAW; format po rozszerzeniu, nowy = czytnik i rozszerzenie w tym pliku
       GenerationJob.h            jedno zadanie generacji w tle (std::async + TryTake)
       LandStats.*                udział wody i masy lądu (flood fill) z rzadkiej próbki świata (GpuHeightGenerator::SampleTerrain); „Land statistics” w zakładce Terrain i sekcja land: w --gpu-check
@@ -88,7 +94,7 @@ ProceduralTerrainGenerator/
       FrameMetrics.*             pomiary w panelu Output (czas klatki/CPU/GPU, trójkąty); RollingStats.h = średnia i maks. z ostatnich próbek;
                                  FlightRecord.h = „Record flight” (prędkość, klatki > 20 ms, klatki z dziurą), pomiar kryterium Fazy 2
       PresetPanel.*              sekcja „Presets” w ImGui (lista plików, nazwa); zapis i odczyt wykonuje subsystem
-      ExportPanel.*              sekcja „Saving” w ImGui; subsystem podaje mapy do zapisu i ich zakres wartości
+      ExportPanel.*              sekcja „Saving” w ImGui: paczka w exports/<nazwa>/; subsystem podaje `ExportPanel::Pack` (mapy, zakres, metry na jednostkę, morze, preset)
       BiomeEditor.*              edytor tabeli biomów (lista, zakresy, diagram Whittakera T × H); edytuje tabelę w miejscu, subsystem przelicza biomy
       PanelTabs.*                zakładki panelu: rzędy przycisków na górze (zawijane, gdy się nie mieszczą) + przewijana treść pod nimi; wybór trzymany po nazwie
       FileDialog.*               systemowe okno wyboru pliku (tylko Windows, comdlg32); przy porcie na Linuksa do zastąpienia
@@ -129,6 +135,13 @@ CMakeLists.txt, CMakePresets.json, vcpkg.json   build; GLFW, GLEW, glm, ImGui, I
    i `GenerateNext` z własną funkcją generującą (`GpuHeightGenerator` z originem chunka i `islandSize` = rozmiar mapy), a `Draw` rysuje chunki zamiast `TerrainView`.
    Każde żądanie (`Request*`) w tym trybie unieważnia wszystkie chunki; skończona mapa jest odświeżana po powrocie do „Partial generation”. Eksport i erozja działają tylko na skończonej mapie.
    Pozycja mapy p (teksele) leży w świecie w `mapOrigin + p * worldUnitsPerTexel`; `mapOrigin` ustawia świat tak, że pokrywa skończoną mapę (`AlignWithMap`).
+   Mapa częściowa to wycinek świata: `mapOffset` (subsystem) = pozycja mapy jej teksela (0, 0), generacja z `MapArea::origin = mapOffset` i `islandSize` = rozmiar
+   mapy (wyspa zostaje w początku świata), `TerrainView::SetMapOffset` przesuwa siatkę, więc środek mapy leży w `mapOffset * worldUnitsPerTexel`. Wyjście
+   z „Infinite generation” ustawia `mapOffset` pod kamerą (`OffsetUnder`), Display → „Partial map” pozwala ją przesunąć / śledzić kamerę. Region rzek (REGION)
+   i „Land statistics” liczone wokół środka mapy z offsetem. W TerrainGen chunki działają też w trybie częściowym, ograniczone do prostokąta mapy
+   (`ChunkWorld::SetBounds`, nierysowane): z nich roślinność (`VegetationLayer` odrzuca rośliny poza prostokątem), trawa (obszar przycięty) i cienie
+   (rzuca teren chunków — chunk na krawędzi rzuca też cień terenu tuż za mapą); checkbox „Plants, grass and shadows”. `--gpu-check` (`chunk: moved map`)
+   sprawdza, że mapa z offsetem równa się bit w bit tym samym tekselom mapy z początku świata.
 
 Wartości szumów są w [-1, 1]. Konwencja indeksowania: `map[y * width + x]`.
 
@@ -191,7 +204,9 @@ Wartości szumów są w [-1, 1]. Konwencja indeksowania: `map[y * width + x]`.
   blend `GL_ONE, GL_SRC_ALPHA`). Mapa pogody stale na jednostce 16 (`Clouds::weatherUnit`, `layout(binding = 16)` w `clouds.glsl`): `sunShadow` = cień kaskad × `cloudShadow`
   (pokrycie tam, gdzie promień ku słońcu przecina środek warstwy), więc cienie chmur padają na wszystko; w 2D wyłączone. Woda odbija niebo z chmurami z kopii sceny,
   gdy kierunek odbicia jest na ekranie. Koszt ok. 1 ms (1080p, pokrycie 0,45). Benchmark ma linię „clouds GPU” (tylko `RenderSky`).
-- Po wyłączeniu „Infinite generation” subsystem woła `TerrainView::BringCameraToMap` (kamera przenoszona tylko, gdy nie jest nad mapą), dlatego `Update` dostaje `Camera&`.
+- Po wyłączeniu „Infinite generation” subsystem przesuwa mapę pod kamerę i woła `TerrainView::BringCameraToMap` (kamera przenoszona tylko, gdy nie jest nad mapą
+  z offsetem), dlatego `Update` dostaje `Camera&`. Kod liczący pozycję w świecie z teksela mapy musi uwzględnić `TerrainView::GetWorldCenter` / `GetMapOffset`
+  (biom pod kamerą, woda `DrawMap`, podpisy map w Noise heightmap, eksport: `worldOrigin` w manifeście, rośliny i rzeki względem teksela (0, 0) mapy).
 - Chunki: tekstura ma margines 1 teksela (`textureSize = chunkSize + 3`, origin = `coord * chunkSize - 1`), a sąsiednie chunki dzielą teksele krawędzi.
   Brak szwów wymaga, żeby generacja była funkcją samej pozycji mapy: `float(texel) + origin` musi być dokładne (liczby całkowite), a nic nie może zależeć od
   rozmiaru tekstury — wyspa używa `islandSize`, nie `mapSize`. `--gpu-check` (sekcja `chunk:`) porównuje chunk z fragmentem pełnej mapy bit w bit.
@@ -288,8 +303,30 @@ Wartości szumów są w [-1, 1]. Konwencja indeksowania: `map[y * width + x]`.
   Wersja 2 (2026-11-08, tabela biomów zamiast poziomów); wersja 1 nie jest już czytana (`minVersion`).
   Nowe wymaganie generacji wobec wartości configu = nowy warunek w `Check*`, bo plik można edytować ręcznie. Nie zmieniaj nazw pól
   ani enumów w JSON bez podbicia `currentVersion`. Pliki trafiają do `presets/` względem katalogu roboczego (poza gitem).
-- Eksport map: zakres wartości jest stały (`heightmap::terrainRange`, `noiseRange`), nie min–max mapy. Zmiana zakresu generacji wymaga zmiany
+- Eksport map: zakres wartości plików 16-bit jest stały (`heightmap::terrainRange`, `noiseRange`), nie min–max mapy. Zmiana zakresu generacji wymaga zmiany
   tych stałych, inaczej wartości zostaną przycięte. Eksport czyta mapę z tekstury w chwili zapisu, w wątku głównym.
+  Paczka (`exports/<nazwa>/`): pliki `<nazwa>_height*.{png,r16,exr}` + `<nazwa>.json` (`exportpack::ToJson`). Metry: 1 teksel = 1 m (`exportpack::metresPerTexel`),
+  wysokość 1 = `heightScale / worldUnitsPerTexel` m z bieżącego „Height scale” (TerrainGen domyślnie 256 m). EXR trzyma metry, 16-bit — wartości z zakresu.
+  Kolejne części eksportu (siatki, roślinność) dopisują swoje pliki do `Manifest::files`; zmiana nazw pól JSON = podbicie `manifestVersion`.
+  Mapy materiałów i biomów (tylko TerrainGen z biomami): splat czytany z GPU (`TextureClass::Read` tablicy = warstwa po warstwie, materiał m = warstwa m/4,
+  kanał m%4, jak `imageStore` w `biome_compute.shader`), `splatmap::Normalize` (największe reszty) daje sumę 255 na teksel, której oczekują Unity i Unreal.
+  `_splat_N.png` = materiały 4N..4N+3 (id z `terrain_materials.json`), `_weight_ID_nazwa.png` tylko dla materiałów obecnych na mapie, `_biome_ids.png` = id
+  z `BiomeConfig::table` (≤ 64, 8 bit), `_biome_colors.png` = warstwa BIOMES.
+  Siatki (`meshexport::Write`, w tle przez `GenerationJob`; mapy i manifest w wątku głównym, manifest dopiero po siatkach — `ExportPanel::Update` co klatkę
+  w `Update` subsystemu, bo zakładka Saving może być zamknięta): `_terrain_lod<n>.glb|obj`, kafle jako węzły `terrain_<x>_<z>_LOD<n>` (podział po środku
+  trójkąta, po upraszczaniu — bez szczelin), LOD n+1 z LOD n (¼ trójkątów). `meshopt_simplify` odrzuca tylko obrót normalnej > 90°, więc na stromym zboczu
+  robił fałdy (trójkąt odwrócony w rzucie z góry): upraszczana jest kopia ze ściśniętą wysokością (najbardziej strome nachylenie 0,25), przy fałdzie ponownie
+  4× mocniej (`terrainmesh::Folds`; trójkąty pionowe są dozwolone). Błąd w JSON = `MaxHeightError` (maks. różnica pionowa względem pełnej siatki), nie metryka
+  meshoptimizer (ta jest prostopadła do powierzchni, na stromiznach wielokrotnie mniejsza). Pomiar: test „Mesh export timing” (`--no-skip`).
+  Woda `_water.*`: węzeł `sea` (quad na poziomie morza) i `rivers_lakes` (`hydrology::BuildWaterMesh` z `riverNetwork`, tylko REGION, przycięte do mapy).
+  Tekstura terenu w glTF = `_biome_colors.png`, jeśli eksportowany (zewnętrzny plik obok).
+  Roślinność (`vegexport::Write`, w tym samym zadaniu w tle co siatki; mapa pochodnych `TerrainView::ReadSurface` i id biomów czytane w wątku głównym):
+  roślinność rośnie tylko w świecie nieskończonym, więc eksport sam woła `vegetation::PlaceChunk` na chunkach 128 tekseli skończonej mapy (margines
+  1 teksela wycięty z pełnej mapy z przycięciem do krawędzi), z `mapOrigin = 0` i 1 jednostką na teksel — hash komórki zależy tylko od pozycji mapy,
+  więc rośliny są te same co w aplikacji (test w `VegetationExportTests.cpp`). Zmiana ustawień rozmieszczenia w `VegetationLayer::World` /
+  `PlacementSettings` wymaga tej samej zmiany w `vegexport::Input` budowanym w `TerrainGenerationSys::ImGuiSaving`. Modele: LOD-y z cache aplikacji
+  (`vegetation::CacheKey` w `VegetationMesh`, wspólny z `VegetationModels`), węzły `<nazwa>_<wariant>_LOD<n>`; id wariantu w JSON = kolejność wariantów
+  `LoadGltf`, więc liczba wariantów pliku musi zgadzać się z aplikacją (`Result::modelErrors`, jeśli nie).
 - Import map: plik nie przechowuje zakresu wartości, więc wybiera go użytkownik (`valueRanges` w `MapImportSys.cpp`). `lodepng` nie zamienia koloru na szary
   ani niższej głębi na 16 bitów (błąd 56), dlatego PNG dekodujemy do RGBA o głębi pliku. Mapa żyje w `MapImportSys::map`, stąd pójdą przyszłe operacje na niej
   (jak w innych trybach: w tle, na kopii).

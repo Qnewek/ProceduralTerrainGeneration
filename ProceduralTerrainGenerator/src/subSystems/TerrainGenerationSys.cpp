@@ -38,37 +38,91 @@ bool TerrainGenerationSys::Initialize(int _width, int _height, float _heightScal
 void TerrainGenerationSys::Update(Camera& camera)
 {
 	gpu.PollMeasure(lastGenerationMs);
+	exporter.Update();
 	const bool leftInfinite = chunksShown && !infiniteGeneration;
 	chunksShown = infiniteGeneration;
 	if (leftInfinite) {
+		//The partial map shows the part of the world under the camera
+		MoveMap(OffsetUnder(camera));
 		//Changes made meanwhile went only to the chunks
 		RequestTerrain();
 		if (biomesGeneration) {
 			RequestBiomes();
 		}
 	}
+	else if (!infiniteGeneration && (centerOnCamera || followCamera)) {
+		const glm::ivec2 under = OffsetUnder(camera);
+		const glm::ivec2 shift = glm::abs(under - mapOffset);
+		if (centerOnCamera || shift.x > world.width / 4 || shift.y > world.height / 4) {
+			MoveMap(under);
+		}
+	}
+	centerOnCamera = false;
 	GeneratePreview();
 	MeasureLand();
 	UpdateRivers();
 	if (infiniteGeneration) {
+		chunks.SetBounds(std::nullopt);
 		UpdateChunks(camera);
-		VegetationLayer::World vegetationWorld;
-		vegetationWorld.biomes = biomesGeneration ? &world.biomes.table : nullptr;
-		vegetationWorld.waterHeight = world.terrain.WaterHeight();
-		vegetationWorld.heightScale = renderSettings.heightScale;
-		vegetationWorld.seed = static_cast<uint32_t>(world.biomes.detailSeed);
-		if (RiverWater()) {
-			vegetationWorld.rivers = riverNetwork;
-		}
-		vegetationLayer.Update(chunks, vegetationModels, vegetationWorld);
+		UpdateVegetation();
 	}
 	else {
+		//The chunks of the partial map follow every change of it
+		if (pending.Any()) {
+			chunks.Invalidate();
+		}
 		GenerateFinite();
+		if (partialDetails) {
+			chunks.SetBounds(MapRect());
+			UpdateChunks(camera);
+			UpdateVegetation();
+		}
 	}
 	//After generating: the map size may have changed meanwhile
 	if (leftInfinite) {
 		view.BringCameraToMap(camera, renderSettings);
 	}
+}
+
+void TerrainGenerationSys::UpdateVegetation()
+{
+	VegetationLayer::World vegetationWorld;
+	vegetationWorld.biomes = biomesGeneration ? &world.biomes.table : nullptr;
+	vegetationWorld.waterHeight = world.terrain.WaterHeight();
+	vegetationWorld.heightScale = renderSettings.heightScale;
+	vegetationWorld.seed = static_cast<uint32_t>(world.biomes.detailSeed);
+	if (RiverWater()) {
+		vegetationWorld.rivers = riverNetwork;
+	}
+	vegetationLayer.Update(chunks, vegetationModels, vegetationWorld);
+}
+
+glm::ivec2 TerrainGenerationSys::OffsetUnder(const Camera& camera) const
+{
+	//Map texel t of a map with offset o lies at world XZ (o + t - (size - 1) / 2) * worldUnitsPerTexel (ChunkWorld::AlignWithMap
+	//with TerrainView centred on the offset), so the middle of the map is under the camera for o = camera / worldUnitsPerTexel
+	const glm::vec3 position = camera.GetPosition() / renderSettings.modelScale;
+	return glm::ivec2(glm::round(glm::vec2(position.x, position.z) / TerrainView::worldUnitsPerTexel));
+}
+
+void TerrainGenerationSys::MoveMap(glm::ivec2 offset)
+{
+	if (offset == mapOffset) {
+		return;
+	}
+	mapOffset = offset;
+	//The river region and the noise picture lie around the map too
+	RequestTerrain();
+	RequestPreview();
+	if (biomesGeneration) {
+		RequestBiomes();
+	}
+}
+
+ChunkWorld::TexelRect TerrainGenerationSys::MapRect() const
+{
+	const glm::ivec2 offset = view.GetMapOffset();
+	return { offset, offset + glm::ivec2(view.GetMapWidth(), view.GetMapHeight()) };
 }
 
 void TerrainGenerationSys::MeasureLand()
@@ -82,7 +136,7 @@ void TerrainGenerationSys::MeasureLand()
 	}
 	measureLand = false;
 	//Around the middle of the finite map, with the island and biome modifiers as the terrain shown
-	const HeightField sample = gpu.SampleTerrain(world.terrain, glm::vec2(world.width, world.height) * 0.5f, land::sampleSize, land::sampleStep,
+	const HeightField sample = gpu.SampleTerrain(world.terrain, MapCenter(), land::sampleSize, land::sampleStep,
 		glm::ivec2(world.width, world.height), biomesGeneration ? &world.biomes : nullptr);
 	landStats = land::Measure(sample, world.terrain.WaterHeight());
 	landStatsOld = false;
@@ -113,7 +167,7 @@ void TerrainGenerationSys::UpdateRivers()
 	//Around the middle of the finite map, with the island and biome modifiers of the terrain shown (the sample reads the GPU back)
 	const float cellSize = static_cast<float>(config.cellSize);
 	const int cells = std::clamp(config.regionSize / config.cellSize, 16, 2048);
-	const glm::vec2 center = glm::vec2(world.width, world.height) * 0.5f;
+	const glm::vec2 center = MapCenter();
 	HeightField sample = gpu.SampleTerrain(world.terrain, center, cells, cellSize, glm::ivec2(world.width, world.height),
 		biomesGeneration ? &world.biomes : nullptr);
 	const glm::vec2 origin = center - glm::vec2(static_cast<float>(cells) * cellSize * 0.5f);
@@ -172,6 +226,12 @@ void TerrainGenerationSys::GenerateFinite()
 		return;
 	}
 	view.Resize(width, height);
+	//Every layer is regenerated at a move (MoveMap requests all of them), so they all lie where the offset says
+	view.SetMapOffset(mapOffset);
+	//The part of the world at the offset; islands fill the map at the world origin, as in the infinite world
+	MapArea area;
+	area.origin = glm::vec2(mapOffset);
+	area.islandSize = glm::ivec2(width, height);
 
 	if (request.biomes && (!biomeIds || biomeIds->GetWidth() != width || biomeIds->GetHeight() != height)) {
 		biomeIds = std::make_unique<TextureClass>(width, height, GL_R32I);
@@ -180,16 +240,16 @@ void TerrainGenerationSys::GenerateFinite()
 	const RiverInput rivers = Rivers();
 	if (request.terrain && request.biomes && biomesGeneration) {
 		//Both in one pass: the noises and the biome table are evaluated once
-		gpu.GenerateWorld(world.terrain, world.biomes, MapArea{}, view.LayerTexture(TerrainView::Layer::TERRAIN, width, height),
+		gpu.GenerateWorld(world.terrain, world.biomes, area, view.LayerTexture(TerrainView::Layer::TERRAIN, width, height),
 			view.LayerTexture(TerrainView::Layer::BIOMES, width, height), *biomeIds, &view.SplatTexture(width, height), &rivers);
 	}
 	else {
 		if (request.terrain) {
-			gpu.GenerateTerrain(world.terrain, MapArea{}, view.LayerTexture(TerrainView::Layer::TERRAIN, width, height), biomesGeneration ? &world.biomes : nullptr,
+			gpu.GenerateTerrain(world.terrain, area, view.LayerTexture(TerrainView::Layer::TERRAIN, width, height), biomesGeneration ? &world.biomes : nullptr,
 				&rivers);
 		}
 		if (request.biomes) {
-			gpu.GenerateBiomes(world.biomes, world.terrain, MapArea{}, view.LayerTexture(TerrainView::Layer::BIOMES, width, height), *biomeIds,
+			gpu.GenerateBiomes(world.biomes, world.terrain, area, view.LayerTexture(TerrainView::Layer::BIOMES, width, height), *biomeIds,
 				&view.SplatTexture(width, height), &rivers);
 		}
 	}
@@ -222,7 +282,7 @@ void TerrainGenerationSys::GeneratePreview()
 	const noise::NoiseConfigParameters* edited = EditedNoise();
 	//An invalid size waiting in the UI keeps the previous picture
 	if (edited && showNoisePreview && world.width >= 2 && world.height >= 2 && world.width <= 8192 && world.height <= 8192) {
-		noisePreview.Generate(gpu, *edited, world.width, world.height);
+		noisePreview.Generate(gpu, *edited, world.width, world.height, mapOffset);
 	}
 }
 
@@ -326,9 +386,22 @@ void TerrainGenerationSys::Draw(Renderer& renderer, Camera& camera, LightSource&
 		water.Draw(chunks, camera, light, renderSettings, world.terrain.WaterHeight() * renderSettings.heightScale, RiverWater());
 		return;
 	}
+	//The partial map: the same plants, grass and shadows as the infinite world, from its chunks limited to the map
+	if (partialDetails && chunks.GetBounds()) {
+		if (shadows.Render(renderer, camera, light, renderSettings, chunks, vegetationLayer, vegetationModels)) {
+			renderSettings.shadows = &shadows;
+		}
+		vegetationLayer.Draw(camera, light, renderSettings, vegetationModels);
+		if (terrainMaterials) {
+			grass.Draw(chunks, camera, light, renderSettings, *terrainMaterials);
+		}
+	}
 	view.Draw(renderer, camera, light, renderSettings, TerrainView::Layer::TERRAIN);
 	if (const TextureClass* height = view.GetLayerTexture(TerrainView::Layer::TERRAIN)) {
-		water.DrawMap(*height, glm::vec2(view.GetWorldWidth(), view.GetWorldHeight()), camera, light, renderSettings,
+		const glm::vec2 size(view.GetWorldWidth(), view.GetWorldHeight());
+		//World XZ of map position (0, 0), where the river network lies: the centre of texel (0, 0) of the map without an offset
+		const glm::vec2 worldTexelOrigin = (-glm::vec2(view.GetMapWidth(), view.GetMapHeight()) * 0.5f + 0.5f) * TerrainView::worldUnitsPerTexel;
+		water.DrawMap(*height, view.GetWorldCorner(), size, worldTexelOrigin, camera, light, renderSettings,
 			world.terrain.WaterHeight() * renderSettings.heightScale, view.GetFlatViewMin(), view.GetFlatViewMax(), RiverWater());
 	}
 }
@@ -443,9 +516,46 @@ void TerrainGenerationSys::ImGuiDisplay()
 	if (infiniteGeneration) {
 		ImGui::SeparatorText("Infinite generation");
 		chunks.ImGuiDraw();
-		water.ImGuiDraw();
+	}
+	else {
+		MapPositionImGui();
+	}
+	water.ImGuiDraw();
+	if (infiniteGeneration || partialDetails) {
 		shadows.ImGuiDraw();
 	}
+}
+
+void TerrainGenerationSys::MapPositionImGui()
+{
+	ImGui::SeparatorText("Partial map");
+	const glm::ivec2 shown = view.GetMapOffset();
+	const glm::vec2 center = view.GetWorldCenter() * renderSettings.modelScale;
+	ImGui::Text("Texels %d .. %d x %d .. %d of the world", shown.x, shown.x + view.GetMapWidth() - 1, shown.y, shown.y + view.GetMapHeight() - 1);
+	ImGui::Text("Middle at camera position (%.0f, %.0f)", center.x, center.y);
+	ImGui::SetItemTooltip("World coordinates as the camera has them: leaving Infinite generation centres the map on the camera");
+
+	int offset[2] = { mapOffset.x, mapOffset.y };
+	ImGui::InputInt2("Offset (texels)", offset);
+	//Applied when the field is left, so typing a number does not regenerate the map at every digit
+	if (ImGui::IsItemDeactivatedAfterEdit()) {
+		MoveMap(glm::ivec2(offset[0], offset[1]));
+	}
+	ImGui::SetItemTooltip("Moves the map over the world by whole texels (1 texel = 1 m = 4 world units):\n"
+		"its middle lies at camera position 4 x offset (before Model scale); 0, 0 = the map of the world origin");
+	if (ImGui::Button("Centre on camera")) {
+		centerOnCamera = true;
+	}
+	ImGui::SameLine();
+	if (ImGui::Button("World origin")) {
+		MoveMap(glm::ivec2(0));
+	}
+	ImGui::Checkbox("Follow camera", &followCamera);
+	ImGui::SetItemTooltip("Centres the map again when the camera gets farther than a quarter of the map from its middle\n"
+		"(the map, and the rivers of the Region method, are generated again)");
+	ImGui::Checkbox("Plants, grass and shadows", &partialDetails);
+	ImGui::SetItemTooltip("The vegetation, grass and sun shadows of the infinite world on the map, from chunks of the world limited to it\n"
+		"(generated as the infinite world generates them, near the camera). Off = only the map, faster while editing");
 }
 
 void TerrainGenerationSys::ImGuiSaving()
@@ -454,7 +564,108 @@ void TerrainGenerationSys::ImGuiSaving()
 		ImGui::TextWrapped("Saving works on the finite map: switch to Partial generation in the Display tab.");
 		return;
 	}
-	exporter.ImGuiDraw({ { view.GetMapWidth(), view.GetMapHeight(), "", [this] { return view.ReadLayer(TerrainView::Layer::TERRAIN); } } }, heightmap::terrainRange);
+	ExportPanel::Pack pack;
+	pack.mode = "TerrainGen";
+	pack.range = heightmap::terrainRange;
+	pack.metresPerUnit = renderSettings.heightScale / TerrainView::worldUnitsPerTexel;
+	pack.worldOrigin = view.GetMapOffset();
+	if (world.terrain.method == EvaluationMethod::LAYERED) {
+		pack.seaLevel = world.terrain.WaterHeight();
+	}
+	pack.generation = [this] { return preset::ToJson(world); };
+	pack.heightmaps = { { view.GetMapWidth(), view.GetMapHeight(), "", [this] { return view.ReadLayer(TerrainView::Layer::TERRAIN); } } };
+
+	//Material and biome maps exist only with biomes, made with the same size as the height map
+	const TextureClass* splat = view.GetSplatTexture();
+	const TextureClass* colors = view.GetLayerTexture(TerrainView::Layer::BIOMES);
+	const bool sameSize = splat && colors && !biomeMap.Empty() && splat->GetWidth() == view.GetMapWidth() && splat->GetHeight() == view.GetMapHeight()
+		&& biomeMap.GetWidth() == view.GetMapWidth() && biomeMap.GetHeight() == view.GetMapHeight();
+	if (biomesGeneration && sameSize) {
+		ExportPanel::MaterialSource materials;
+		materials.names = materialNames;
+		materials.read = [this, splat] {
+			const int width = splat->GetWidth(), height = splat->GetHeight(), layers = splat->GetLayers();
+			std::vector<uint8_t> bytes(static_cast<size_t>(width) * height * layers * 4);
+			splat->Read(GL_RGBA, GL_UNSIGNED_BYTE, static_cast<int>(bytes.size()), bytes.data());
+			const int count = std::min(static_cast<int>(materialNames.size()), 4 * layers);
+			return splatmap::FromLayers(bytes.data(), width, height, layers, count);
+		};
+		pack.materials = std::move(materials);
+
+		ExportPanel::BiomeSource biomes;
+		for (size_t b = 0; b < world.biomes.table.size(); b++) {
+			const biome::Biome& entry = world.biomes.table[b];
+			exportpack::Biome out;
+			out.id = static_cast<int>(b);
+			out.name = entry.name;
+			out.color[0] = entry.color.r;
+			out.color[1] = entry.color.g;
+			out.color[2] = entry.color.b;
+			biomes.table.push_back(out);
+		}
+		biomes.readIds = [this] { return biomeMap; };
+		biomes.readColors = [colors] {
+			std::vector<float> rgba(static_cast<size_t>(colors->GetWidth()) * colors->GetHeight() * 4);
+			colors->Read(GL_RGBA, GL_FLOAT, static_cast<int>(rgba.size() * sizeof(float)), rgba.data());
+			return rgba;
+		};
+		pack.biomes = std::move(biomes);
+	}
+	else {
+		pack.layersMissing = "Material and biome maps: turn on biome generation.";
+	}
+
+	//Vegetation: the plants the infinite world places on these texels, with the same settings (seed, density, water, rivers)
+	const bool anyModel = vegetationModels && std::any_of(vegetationModels->GetModels().begin(), vegetationModels->GetModels().end(),
+		[](const VegetationModels::Model& m) { return m.state == VegetationModels::State::READY && !m.variants.empty(); });
+	if (biomesGeneration && sameSize && anyModel) {
+		ExportPanel::VegetationSource vegetation;
+		vegetation.input = [this] {
+			vegexport::Input input;
+			for (const biome::Biome& b : world.biomes.table) {
+				input.plants.push_back(b.plants);
+			}
+			for (const VegetationModels::Model& m : vegetationModels->GetModels()) {
+				const bool ready = m.state == VegetationModels::State::READY && !m.variants.empty();
+				input.models.push_back({ m.name, m.kind, m.asset, ready ? static_cast<int>(m.variants.size()) : 0, vegetationModels->SourceFile(m), m.lodTargets,
+					vegetationModels->CacheFile(m) });
+			}
+			input.settings.heightScale = renderSettings.heightScale;
+			input.settings.waterHeight = world.terrain.WaterHeight();
+			input.settings.density = vegetationLayer.GetDensity();
+			input.settings.seed = static_cast<uint32_t>(world.biomes.detailSeed);
+			if (RiverWater()) {
+				input.rivers = riverNetwork;
+			}
+			input.mapTexel = view.GetMapOffset();
+			return input;
+		};
+		vegetation.readSurface = [this] { return view.ReadSurface(TerrainView::Layer::TERRAIN); };
+		vegetation.readIds = [this] { return biomeMap; };
+		pack.vegetation = std::move(vegetation);
+	}
+	else {
+		pack.vegetationMissing = !biomesGeneration || !sameSize ? "Vegetation grows only with biomes: turn on biome generation."
+			: "No vegetation models loaded (python tools/fetch_models.py).";
+	}
+
+	//Rivers and lakes of the Region method, the network the terrain was carved with
+	if (RiverWater() && riverNetwork) {
+		const float metresPerUnit = pack.metresPerUnit;
+		pack.riverWater = [this, metresPerUnit] {
+			const float texelsPerHeight = renderSettings.heightScale / TerrainView::worldUnitsPerTexel;
+			const std::vector<hydrology::WaterVertex> water = hydrology::BuildWaterMesh(*riverNetwork, world.terrain.WaterHeight(), texelsPerHeight);
+			//The network lies in world map positions, the pack starts at the map's texel (0, 0)
+			const glm::vec2 offset(view.GetMapOffset());
+			std::vector<glm::vec3> triangles;
+			triangles.reserve(water.size());
+			for (const hydrology::WaterVertex& v : water) {
+				triangles.emplace_back((v.x - offset.x) * exportpack::metresPerTexel, v.level * metresPerUnit, (v.y - offset.y) * exportpack::metresPerTexel);
+			}
+			return triangles;
+		};
+	}
+	exporter.ImGuiDraw(pack);
 }
 void TerrainGenerationSys::ImGuiOutput(glm::vec3 pos) {
 	//Camera in world units before modelScale, like the maps
@@ -470,9 +681,9 @@ void TerrainGenerationSys::ImGuiOutput(glm::vec3 pos) {
 	else {
 		ImGui::Text("Last generation (GPU): %.2f ms (%dx%d)", lastGenerationMs, view.GetMapWidth(), view.GetMapHeight());
 		if (biomesGeneration && !biomeMap.Empty()) {
-			//Biome map size, not world.width/height - those may already hold an unapplied resize. TerrainView centers the map
+			//Biome map size, not world.width/height - those may already hold an unapplied resize. TerrainView centers the map on its offset
 			const int width = biomeMap.GetWidth(), height = biomeMap.GetHeight();
-			const glm::ivec2 texel(glm::floor(position / TerrainView::worldUnitsPerTexel + glm::vec2(width, height) / 2.0f));
+			const glm::ivec2 texel(glm::floor((position - view.GetWorldCenter()) / TerrainView::worldUnitsPerTexel + glm::vec2(width, height) / 2.0f));
 			if (texel.x >= 0 && texel.x < width && texel.y >= 0 && texel.y < height) {
 				id = biomeMap.At(texel.x, texel.y);
 			}

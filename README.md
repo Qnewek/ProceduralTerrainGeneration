@@ -34,13 +34,29 @@ algorithms can be changed in the UI (**Dear ImGui** + **ImPlot**) and the terrai
   GPU tessellation (distance-based level of detail), world-space lighting, display modes: greyscale,
   topographical with isolines, monocolor, biomes; wireframe and a top-down 2D map view.
 
+- **Partial map as a part of the world**
+  The partial (finite) map is a window onto the infinite world: leaving infinite generation centres it on the camera,
+  and it can be moved by hand or follow the camera. In TerrainGen it shows the same vegetation, grass, water and sun
+  shadows as the infinite world. Exports record where the map lies in the world (`worldOrigin`).
+
 - **Presets**
   Generation parameters of each mode can be saved to and loaded from JSON files in `presets/`, which can also be
   edited by hand. Render settings and biome definitions are not included.
 
-- **Heightmap export**
-  Maps can be saved to `exports/` as 16-bit PNG or headerless 16-bit RAW (R16, little-endian). Values are mapped from a
-  fixed range: [0, 1] in TerrainGen, [-1, 1] in Noise heightmap. An eroded map that is shown goes to its own `_eroded` file.
+- **Export**
+  The finite map is exported as a pack in `exports/<name>/`: the heightmap as 16-bit PNG, headerless 16-bit RAW (R16,
+  little-endian) or 32-bit float EXR in metres, plus `<name>.json` with the map size and heights in metres, the value
+  encoding of every file, the sea level, import hints for Unreal and Unity, and the generation parameters. With biomes,
+  the pack also gets material maps (8-bit RGBA splat maps with 4 materials each for Unity, one greyscale weight map per
+  material for Unreal or Godot, shares summing to 255) and biome maps (ids with names in the JSON, colors). The terrain
+  can also be exported as a mesh (glTF binary or OBJ, metres, Y up): one file per level of detail, simplified with
+  meshoptimizer where the terrain is flat, split into tiles, with the largest height error of every level in the JSON,
+  plus a water file with the sea, rivers and lakes. Meshes are built in the background. The vegetation goes to
+  `<name>_vegetation.json`: every tree, shrub and rock the app places on the map (position in metres, yaw, scale, model,
+  variant), optionally with the models as glTF files (one node per variant and level of detail, PBR materials, textures
+  copied next to them). 16-bit values
+  are mapped from a fixed range: [0, 1] in TerrainGen, [-1, 1] in Noise heightmap. Each eroded map that is shown goes to
+  its own `_eroded_*` file.
 
 - **Performance**
   Maps are generated in compute shaders, so parameters can be edited live (1024x1024 terrain in ~1.2 ms on an

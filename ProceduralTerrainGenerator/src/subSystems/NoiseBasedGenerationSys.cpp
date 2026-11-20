@@ -36,6 +36,7 @@ bool NoiseBasedGenerationSys::Initialize(int _width, int _height, float _heightS
 void NoiseBasedGenerationSys::Update(Camera& camera)
 {
 	gpu.PollMeasure(lastGenerationMs);
+	exporter.Update();
 	for (int i = 0; i < methodCount; i++) {
 		erosion.PollMeasure(static_cast<erosion::Method>(i), eroded[i].lastMs);
 	}
@@ -47,6 +48,14 @@ void NoiseBasedGenerationSys::Update(Camera& camera)
 		RequestNoise();
 		finiteOutdated = false;
 	}
+	//The finite map shows the part of the world under the camera (its middle at camera / worldUnitsPerTexel, see
+	//TerrainGenerationSys::OffsetUnder); a new part is new noise, which resets erosion
+	if (leftInfinite || (centerOnCamera && !infiniteGeneration)) {
+		const glm::vec3 position = camera.GetPosition() / renderSettings.modelScale;
+		const glm::ivec2 under(glm::round(glm::vec2(position.x, position.z) / TerrainView::worldUnitsPerTexel));
+		MoveMap(under);
+	}
+	centerOnCamera = false;
 	if (infiniteGeneration) {
 		UpdateChunks(camera);
 	}
@@ -139,8 +148,14 @@ void NoiseBasedGenerationSys::GenerateFinite()
 	}
 	if (ValidMapSize(config.width, config.height)) {
 		view.Resize(config.width, config.height);
+		//The eroded maps are made from this one, so they lie where it lies
+		view.SetMapOffset(mapOffset);
+		pipesView.SetMapOffset(mapOffset);
+		MapArea area;
+		area.origin = glm::vec2(mapOffset);
+		area.islandSize = glm::ivec2(config.width, config.height);
 		gpu.BeginMeasure();
-		gpu.GenerateNoise(config.noise, MapArea{}, view.LayerTexture(TerrainView::Layer::TERRAIN, config.width, config.height));
+		gpu.GenerateNoise(config.noise, area, view.LayerTexture(TerrainView::Layer::TERRAIN, config.width, config.height));
 		gpu.EndMeasure();
 	}
 	else {
@@ -175,6 +190,14 @@ void NoiseBasedGenerationSys::RequestNoise()
 {
 	pending.noise = true;
 	pending.resetErosion = true;
+}
+
+void NoiseBasedGenerationSys::MoveMap(glm::ivec2 offset)
+{
+	if (offset != mapOffset) {
+		mapOffset = offset;
+		RequestNoise();
+	}
 }
 
 void NoiseBasedGenerationSys::RequestErosion()
@@ -228,7 +251,9 @@ void NoiseBasedGenerationSys::Draw(Renderer& renderer, Camera& camera, LightSour
 	const float shift = view.GetWorldWidth() * 1.05f;
 	const glm::vec2 half(view.GetWorldWidth() / 2.0f, view.GetWorldHeight() / 2.0f);
 	const std::vector<erosion::Method> methods = ShownMethods();
-	const glm::vec2 flatMin = -half, flatMax(shift * static_cast<float>(methods.size()) + half.x, half.y);
+	//Around the middle of the map, which lies at its offset (TerrainView::GetWorldCenter); Draw adds that to the offsets below
+	const glm::vec2 center = view.GetWorldCenter();
+	const glm::vec2 flatMin = center - half, flatMax = center + glm::vec2(shift * static_cast<float>(methods.size()) + half.x, half.y);
 	//Both views draw with the same 2D camera
 	view.SetFlatViewBounds(flatMin, flatMax);
 	pipesView.SetFlatViewBounds(flatMin, flatMax);
@@ -266,8 +291,9 @@ void NoiseBasedGenerationSys::PlaceLabels(const glm::mat4& viewProjection, const
 	const float halfDepth = view.GetWorldHeight() / 2.0f;
 	//Above the highest possible terrain, so that the label is not inside a mountain in 3D; the 2D view ignores the height
 	const float top = std::abs(renderSettings.heightScale);
+	const glm::vec2 center = view.GetWorldCenter();
 	for (const auto& [offsetX, text] : maps) {
-		const glm::vec3 world = renderSettings.modelScale * glm::vec3(offsetX, top, -halfDepth);
+		const glm::vec3 world = renderSettings.modelScale * glm::vec3(center.x + offsetX, top, center.y - halfDepth);
 		const glm::vec4 clip = viewProjection * glm::vec4(world, 1.0f);
 		//Behind the camera
 		if (clip.w <= 1e-4f) {
@@ -349,6 +375,18 @@ void NoiseBasedGenerationSys::ImGuiDisplay()
 	if (infiniteGeneration) {
 		ImGui::SeparatorText("Infinite generation");
 		chunks.ImGuiDraw();
+		return;
+	}
+	ImGui::SeparatorText("Partial map");
+	const glm::ivec2 shown = view.GetMapOffset();
+	ImGui::Text("Texels %d .. %d x %d .. %d of the world", shown.x, shown.x + view.GetMapWidth() - 1, shown.y, shown.y + view.GetMapHeight() - 1);
+	ImGui::SetItemTooltip("Leaving Infinite generation centres the map on the camera; a new position is new noise (erosion starts again)");
+	if (ImGui::Button("Centre on camera")) {
+		centerOnCamera = true;
+	}
+	ImGui::SameLine();
+	if (ImGui::Button("World origin")) {
+		MoveMap(glm::ivec2(0));
 	}
 }
 
@@ -358,18 +396,24 @@ void NoiseBasedGenerationSys::ImGuiSaving()
 		ImGui::TextWrapped("Saving works on the finite map: switch to Partial generation in the Display tab.");
 		return;
 	}
+	ExportPanel::Pack pack;
+	pack.mode = "Noise heightmap";
+	pack.range = heightmap::noiseRange;
+	pack.metresPerUnit = renderSettings.heightScale / TerrainView::worldUnitsPerTexel;
+	pack.worldOrigin = view.GetMapOffset();
+	pack.generation = [this] { return preset::ToJson(config); };
 	//The base map, plus every eroded map shown, each in its own file
-	std::vector<ExportPanel::Target> exportTargets = { { view.GetMapWidth(), view.GetMapHeight(), "", [this] { return view.ReadLayer(TerrainView::Layer::TERRAIN); } } };
+	pack.heightmaps = { { view.GetMapWidth(), view.GetMapHeight(), "", [this] { return view.ReadLayer(TerrainView::Layer::TERRAIN); } } };
 	for (erosion::Method method : ShownMethods()) {
 		const TextureClass& texture = *ErodedTexture(method);
 		if (method == erosion::Method::PIPES) {
-			exportTargets.push_back({ texture.GetWidth(), texture.GetHeight(), "_eroded_pipes", [this] { return pipesView.ReadLayer(TerrainView::Layer::TERRAIN); } });
+			pack.heightmaps.push_back({ texture.GetWidth(), texture.GetHeight(), "_eroded_pipes", [this] { return pipesView.ReadLayer(TerrainView::Layer::TERRAIN); } });
 		}
 		else {
-			exportTargets.push_back({ texture.GetWidth(), texture.GetHeight(), "_eroded_droplets", [this] { return view.ReadLayer(TerrainView::Layer::OVERLAY); } });
+			pack.heightmaps.push_back({ texture.GetWidth(), texture.GetHeight(), "_eroded_droplets", [this] { return view.ReadLayer(TerrainView::Layer::OVERLAY); } });
 		}
 	}
-	exporter.ImGuiDraw(exportTargets, heightmap::noiseRange);
+	exporter.ImGuiDraw(pack);
 }
 
 void NoiseBasedGenerationSys::ErosionImGui()

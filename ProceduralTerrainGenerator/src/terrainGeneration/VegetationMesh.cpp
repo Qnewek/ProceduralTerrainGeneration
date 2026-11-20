@@ -8,6 +8,7 @@
 #include <fstream>
 #include <functional>
 #include <numeric>
+#include <system_error>
 #include <unordered_map>
 
 #define CGLTF_IMPLEMENTATION
@@ -730,7 +731,8 @@ namespace vegetation
 					const double budget = foliage ? foliageBudget : surfaceBudget;
 					const double kindTriangles = static_cast<double>(foliage ? foliageTriangles : surfaceTriangles);
 					const size_t share = static_cast<size_t>(std::llround(budget * static_cast<double>(part.indices.size() / 3) / kindTriangles));
-					const size_t partTarget = std::clamp<size_t>(share, 4, previous[p]);
+					//At least 4 triangles, but never more than the previous level (a part may have fewer than 4)
+					const size_t partTarget = std::min(std::max<size_t>(share, 4), previous[p]);
 					std::vector<Vertex> vertices;
 					std::vector<uint32_t> indices;
 					if (foliage) {
@@ -894,5 +896,40 @@ namespace vegetation
 		}
 		mesh = std::move(result);
 		return true;
+	}
+
+	namespace {
+		//64-bit FNV-1a
+		void HashBytes(uint64_t& hash, const void* data, size_t size)
+		{
+			const unsigned char* bytes = static_cast<const unsigned char*>(data);
+			for (size_t i = 0; i < size; i++) {
+				hash = (hash ^ bytes[i]) * 1099511628211ull;
+			}
+		}
+	}
+
+	uint64_t CacheKey(const std::filesystem::path& folder, const std::vector<uint32_t>& targets)
+	{
+		uint64_t hash = 14695981039346656037ull;
+		std::vector<std::filesystem::path> files;
+		std::error_code error;
+		for (const auto& entry : std::filesystem::directory_iterator(folder, error)) {
+			const std::string extension = entry.path().extension().string();
+			if (entry.is_regular_file() && (extension == ".gltf" || extension == ".bin")) {
+				files.push_back(entry.path());
+			}
+		}
+		std::sort(files.begin(), files.end());
+		for (const std::filesystem::path& file : files) {
+			const std::string name = file.filename().string();
+			const uint64_t size = std::filesystem::file_size(file, error);
+			const auto time = std::filesystem::last_write_time(file, error).time_since_epoch().count();
+			HashBytes(hash, name.data(), name.size());
+			HashBytes(hash, &size, sizeof(size));
+			HashBytes(hash, &time, sizeof(time));
+		}
+		HashBytes(hash, targets.data(), targets.size() * sizeof(uint32_t));
+		return hash;
 	}
 }
