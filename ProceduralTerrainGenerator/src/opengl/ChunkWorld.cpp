@@ -284,11 +284,21 @@ bool ChunkWorld::InView(int level, glm::ivec2 coord, const View& view) const
 		glm::vec3(corner.x + size, heightBound * scale, corner.y + size));
 }
 
+bool ChunkWorld::InBounds(int level, glm::ivec2 coord) const
+{
+	if (!bounds) {
+		return true;
+	}
+	const int span = chunkSize << level;
+	const glm::ivec2 low = coord * span, high = low + span;
+	return low.x < bounds->max.x && high.x > bounds->min.x && low.y < bounds->max.y && high.y > bounds->min.y;
+}
+
 void ChunkWorld::Select(int level, glm::ivec2 coord, glm::vec2 local, const View& view)
 {
 	const float size = NodeSize(level);
 	const float distance = DistanceToSquare(local, glm::vec2(coord) * size, size);
-	if (distance > planRadius) {
+	if (distance > planRadius || !InBounds(level, coord)) {
 		return;
 	}
 	visited++;
@@ -307,7 +317,7 @@ void ChunkWorld::Select(int level, glm::ivec2 coord, glm::vec2 local, const View
 		for (const glm::ivec2 offset : childOffsets) {
 			const glm::ivec2 childCoord = coord * 2 + offset;
 			const float childDistance = DistanceToSquare(local, glm::vec2(childCoord) * childSize, childSize);
-			if (childDistance > planRadius) {
+			if (childDistance > planRadius || !InBounds(level - 1, childCoord)) {
 				continue;
 			}
 			Chunk* child = Find(level - 1, childCoord);

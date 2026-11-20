@@ -13,10 +13,11 @@
 #include "HeightmapExport.h"
 #include "MaterialExport.h"
 #include "MeshExport.h"
+#include "VegetationExport.h"
 
 //ImGui "Saving" section writing an export pack: a folder <exports>/<name>/ with the height maps, optionally the material and
-//biome maps and the meshes, and <name>.json describing them (exportpack::Manifest). Maps are read and written at once on the
-//main thread; meshes are built on a background thread, and the manifest is written when they are done.
+//biome maps, the meshes and the vegetation, and <name>.json describing them (exportpack::Manifest). Maps are read and written at
+//once on the main thread; meshes and vegetation are built on a background thread, and the manifest is written when they are done.
 class ExportPanel
 {
 public:
@@ -40,12 +41,20 @@ public:
 		std::function<std::vector<float>()> readColors;	//RGBA floats per texel
 	};
 
+	//Plants of the main map, placed as in the infinite world; every function is called only when exporting
+	struct VegetationSource {
+		std::function<vegexport::Input()> input;
+		std::function<std::vector<glm::vec4>()> readSurface;	//surface map of the main map
+		std::function<BiomeMap()> readIds;
+	};
+
 	//What the subsystem exports
 	struct Pack {
 		const char* mode = "";				//generation mode, stored in the manifest
 		heightmap::ValueRange range{ 0.0f, 1.0f };	//values mapped to the 16-bit range
 		float metresPerUnit = 1.0f;			//metres of height value 1 (display height scale / world units per metre)
 		std::optional<float> seaLevel;		//height value of the sea surface, if the mode has a sea
+		glm::ivec2 worldOrigin = glm::ivec2(0);	//world map position of texel (0, 0) of the main map
 		std::function<std::string()> generation;	//generation parameters as preset JSON, called only when exporting
 		std::vector<Target> heightmaps;		//the first one is the main map
 		std::optional<MaterialSource> materials;	//none = the map has no material maps now
@@ -53,14 +62,16 @@ public:
 		const char* layersMissing = nullptr;		//why the material and biome maps are missing, shown instead of their checkboxes
 		//Water surface of rivers and lakes as triangles (3 vertices each, metres, axes of terrainmesh); empty function = none
 		std::function<std::vector<glm::vec3>()> riverWater;
+		std::optional<VegetationSource> vegetation;	//none = no vegetation now
+		const char* vegetationMissing = nullptr;	//why, shown on the disabled checkbox
 	};
 
 	//@param _folder - folder holding the packs, created by the first export
 	explicit ExportPanel(std::filesystem::path _folder);
 
 	void ImGuiDraw(const Pack& pack);
-	//Finishes an export whose meshes are done; call every frame, the section may not be shown
-	void Update() { PollMeshes(); }
+	//Finishes an export whose background part is done; call every frame, the section may not be shown
+	void Update() { PollBackground(); }
 
 private:
 	std::filesystem::path PackFolder() const { return folder / name; }
@@ -74,10 +85,16 @@ private:
 	void SetError(const std::string& fileName, const std::string& error, const std::string& saved);
 	//Writes the manifest of a finished export and sets the status
 	void Finish();
-	//Takes the meshes once they are built and finishes the export
-	void PollMeshes();
+	//Takes the meshes and vegetation once they are written and finishes the export
+	void PollBackground();
 
-	//An export waiting for its meshes, then written by Finish
+	//What the background thread writes; none = not asked for
+	struct Background {
+		std::optional<meshexport::Result> meshes;
+		std::optional<vegexport::Result> vegetation;
+	};
+
+	//An export waiting for its background part, then written by Finish
 	struct Pending {
 		std::filesystem::path folder;
 		exportpack::Manifest manifest;
@@ -86,7 +103,7 @@ private:
 		heightmap::Format format = heightmap::Format::PNG16;
 	};
 	std::optional<Pending> pending;
-	GenerationJob<meshexport::Result> meshJob;
+	GenerationJob<Background> job;
 
 	std::filesystem::path folder;
 	char name[65] = "";
@@ -98,6 +115,8 @@ private:
 	int lodLevels = 3;
 	int tileChoice = 1;		//index in tileSizes
 	bool exportWater = true;
+	bool exportVegetation = false;
+	bool exportModels = true;
 	static constexpr float tileSizes[] = { 128.0f, 256.0f, 512.0f, 1024.0f, 0.0f };
 	std::string status;
 	bool statusIsError = false;

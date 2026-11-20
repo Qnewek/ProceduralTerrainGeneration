@@ -87,6 +87,9 @@ namespace vegetation
 	ModelMesh BuildLods(const std::vector<Material>& materials, const std::vector<SourceModel>& variants, const std::vector<uint32_t>& targetTriangles);
 	constexpr float foliageShare = 0.6f;
 
+	//Key of the cache of a model: the names, sizes and times of the .gltf and .bin files in its folder and the targets of its levels,
+	//so any change rebuilds it
+	uint64_t CacheKey(const std::filesystem::path& folder, const std::vector<uint32_t>& targets);
 	//Cache of a ModelMesh on disk. key identifies the source and the settings it was built with
 	bool SaveCache(const std::filesystem::path& file, const ModelMesh& mesh, uint64_t key);
 	//@return false if the file is missing, damaged, of another format version or built for another key

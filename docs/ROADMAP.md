@@ -587,6 +587,29 @@ Kroki:
   góry ~150 m): siatka 2,1 mln trójkątów; LOD1 523 tys. / 1,1 s / błąd 1,1 m, LOD2 131 tys. / 0,5 s / 1,9 m, LOD3 33 tys. / 0,2 s / 5,9 m (maks. różnica
   pionowa). Pierwsza wersja (bez ściśnięcia) zostawiała odwrócone trójkąty na stromych zboczach (9 z ok. 370 na małej mapie testowej; przy ściśnięciu
   do nachylenia 0,5 jeszcze 39 na mapie 1024² ze zboczami ~17, przy 4× mocniejszym 0) — testy „no folds”.
+  🟡 2026-11-20 krok 4 (`VegetationExport.*`, „Vegetation” / „Vegetation models” w Saving, tylko TerrainGen z biomami i wczytanymi modelami): roślinność
+  skończonej mapy rozmieszczana tym samym `vegetation::PlaceChunk` co świat nieskończony (chunki 128 tekseli z marginesem wyciętym z pełnej mapy, ten sam
+  seed `detailSeed`, gęstość z suwaka, poziom wody, rzeki), więc te same drzewa co w aplikacji — test porównuje chunk paczki z chunkiem aplikacji (inny
+  `mapOrigin`, 4 jednostki na teksel). `_vegetation.json`: lista modeli (nazwa, rodzaj, warstwa, liczba wariantów i instancji, plik i węzły) + wiersze
+  `[x, y, z, yaw, scale, model, variant]` w metrach (pozycja = podstawa modelu na terenie, yaw w radianach wokół +Y jak w shaderze). Modele: `vegetation/<asset>.glb`,
+  węzeł `<nazwa>_<wariant>_LOD<n>` = LOD-y aplikacji (z cache `res/vegetation/cache`, `vegetation::CacheKey` przeniesiony do `ptg_core`; bez cache budowane
+  od nowa), materiały PBR (albedo, normal, ORM; alpha-test = `MASK`, liście dwustronne), tekstury kopiowane do `vegetation/textures/`, osobna mapa alfa
+  łączona z albedo w RGBA PNG. `MeshFile`: węzeł ma teraz kilka prymitywów (po jednym na materiał). Pierwsza wersja zapisywała siatkę źródłową — jodła
+  363 MB; z LOD-ami aplikacji 29 MB (LOD0 150 tys. trójkątów). Wszystkie 14 modeli: test „downloaded models” (`--no-skip`), z cache jodła 0,6 s
+  (bez cache 13 s), krzewy ~0,3 s (kodowanie PNG z alfą). Mapa pochodnych skończonej mapy różni się od chunków tylko na samej krawędzi mapy (nachylenie
+  z obciętej różnicy), więc tam pojedyncze rośliny mogą się różnić.
+- **Mapa częściowa jako wycinek świata:** 🟡 2026-11-20. Stan przed: woda (morze, rzeki, jeziora) była na mapie częściowej, roślinności, trawy i cieni
+  nie było (tylko na chunkach), a mapa zawsze leżała w początku świata (teksele 0..W). Teraz: `mapOffset` (oba tryby z „Infinite generation”) — wyjście
+  ze świata nieskończonego centruje mapę pod kamerą, Display → „Partial map”: offset ręcznie, „Centre on camera”, „World origin”, „Follow camera”
+  (TerrainGen: nowy środek, gdy kamera odejdzie o ćwierć mapy). Generacja z `MapArea::origin`, wyspa nadal w początku świata, region rzek i statystyki
+  lądu wokół mapy; `--gpu-check` „chunk: moved map” = bit w bit. TerrainGen: roślinność, trawa i cienie na mapie częściowej z chunków ograniczonych do
+  jej prostokąta (`ChunkWorld::SetBounds`), więc te same rośliny co w świecie nieskończonym (checkbox „Plants, grass and shadows”). Eksport:
+  `grid.worldOrigin` w manifeście, roślinność i woda rzek względem teksela (0, 0) mapy (test „moved over the world”). Do sprawdzenia w aplikacji:
+  koszt chunków przy edycji na mapie częściowej; cień terenu tuż za krawędzią mapy (chunk na krawędzi rzuca go w całości).
+  Propozycje dalej: (1) region rzek REGION podążający za kamerą w świecie nieskończonym (dziś stoi wokół ostatniej mapy częściowej; przeliczenie sieci
+  zmienia teren, więc trzeba by podmieniać chunki stopniowo); (2) eksport kafli: kilka sąsiednich paczek jednym przyciskiem (offset co rozmiar mapy,
+  `worldOrigin` pozwala złożyć je w silniku); (3) zapisywanie offsetu w presecie / „zakładki” miejsc świata; (4) erozja jako warstwa świata nieskończonego
+  (dziś tylko na mapie) — wymagałaby erozji per chunk z marginesem.
 - **Tryb „Imported map”:** ✅ 2026-11-03 podgląd mapy z pliku (PNG 1/2/4/8/16-bit, kolorowy zamieniany na szary, oraz R16/RAW): `HeightmapImport.*` +
   `subSystems/MapImportSys.*`, wczytywanie w tle. Dalszy ciąg w Fazie 6.
 - **Edytor ręczny:** pędzle (podnieś/obniż/wygładź/spłaszcz) jako warstwa delta nad proceduralną bazą.

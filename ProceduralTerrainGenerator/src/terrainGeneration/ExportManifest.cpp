@@ -77,6 +77,9 @@ namespace exportpack {
 		grid["sizeMetres"] = { (m.width - 1) * metresPerTexel, (m.height - 1) * metresPerTexel };
 		grid["rowOrder"] = "row 0 first; it is the top edge of the 2D map view (the smallest Z)";
 		grid["axes"] = "right-handed, Y up: column = +X (right in the 2D map), row = +Z (down in the 2D map)";
+		//Neighbouring packs of one world fit together at these positions (metres = texels)
+		grid["worldOrigin"] = { m.worldOrigin.x, m.worldOrigin.y };
+		grid["worldOriginNote"] = "world position of texel (0, 0) in texels of the generated world";
 		j["grid"] = grid;
 
 		Json height;
@@ -137,6 +140,11 @@ namespace exportpack {
 				meshes["water"] = { { "file", m.waterMesh }, { "nodes", m.waterNodes } };
 			}
 			j["meshes"] = meshes;
+		}
+
+		if (!m.vegetationFile.empty()) {
+			j["vegetation"] = { { "file", m.vegetationFile }, { "instances", m.vegetationInstances }, { "modelFiles", m.vegetationModels },
+				{ "note", "the instance file lists the models and gives every plant as [x, y, z, yaw, scale, model, variant] in metres" } };
 		}
 
 		if (!m.biomes.empty()) {

@@ -44,6 +44,13 @@ class NoiseBasedGenerationSys
 		bool chunksShown = false;
 		//The noise changed while the chunks were shown, so the finite map needs regenerating
 		bool finiteOutdated = false;
+		//The finite map is a part of the infinite world: world map position of its texel (0, 0); leaving the infinite world puts it
+		//under the camera (as in TerrainGenerationSys)
+		glm::ivec2 mapOffset = glm::ivec2(0);
+		//The Display tab asked to centre the map on the camera (it has no camera)
+		bool centerOnCamera = false;
+		//Moves the finite map so its texel (0, 0) is world map position offset; new noise if that changes
+		void MoveMap(glm::ivec2 offset);
 
 		//Every erosion method keeps its own eroded map, so both can be shown next to the noise map at once:
 		//droplets in the OVERLAY layer of view, pipes in the TERRAIN layer of pipesView (a second view, as TerrainView has one free height layer)

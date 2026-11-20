@@ -54,36 +54,43 @@ namespace meshfile {
 		};
 
 		for (const Node& node : nodes) {
-			const terrainmesh::Mesh* mesh = node.mesh;
-			if (!mesh || mesh->indices.empty() || mesh->positions.empty()) {
+			Json primitives = Json::array();
+			for (const Primitive& p : node.primitives) {
+				const terrainmesh::Mesh* mesh = p.mesh;
+				if (!mesh || mesh->indices.empty() || mesh->positions.empty()) {
+					continue;
+				}
+				const size_t count = mesh->positions.size();
+				Json attributes;
+				const int position = addAccessor(mesh->positions.data(), count * sizeof(glm::vec3), count, FLOAT, "VEC3", ARRAY_BUFFER);
+				//POSITION needs its bounds
+				glm::vec3 low(std::numeric_limits<float>::max()), high(std::numeric_limits<float>::lowest());
+				for (const glm::vec3& v : mesh->positions) {
+					low = glm::min(low, v);
+					high = glm::max(high, v);
+				}
+				accessors[position]["min"] = { low.x, low.y, low.z };
+				accessors[position]["max"] = { high.x, high.y, high.z };
+				attributes["POSITION"] = position;
+				if (mesh->normals.size() == count) {
+					attributes["NORMAL"] = addAccessor(mesh->normals.data(), count * sizeof(glm::vec3), count, FLOAT, "VEC3", ARRAY_BUFFER);
+				}
+				if (mesh->uvs.size() == count) {
+					attributes["TEXCOORD_0"] = addAccessor(mesh->uvs.data(), count * sizeof(glm::vec2), count, FLOAT, "VEC2", ARRAY_BUFFER);
+				}
+				const int indices = addAccessor(mesh->indices.data(), mesh->indices.size() * sizeof(uint32_t), mesh->indices.size(), UNSIGNED_INT,
+					"SCALAR", ELEMENT_ARRAY_BUFFER);
+
+				Json primitive = { { "attributes", attributes }, { "indices", indices }, { "mode", TRIANGLES } };
+				if (p.material >= 0 && p.material < static_cast<int>(materials.size())) {
+					primitive["material"] = p.material;
+				}
+				primitives.push_back(primitive);
+			}
+			if (primitives.empty()) {
 				continue;
 			}
-			const size_t count = mesh->positions.size();
-			Json attributes;
-			const int position = addAccessor(mesh->positions.data(), count * sizeof(glm::vec3), count, FLOAT, "VEC3", ARRAY_BUFFER);
-			//POSITION needs its bounds
-			glm::vec3 low(std::numeric_limits<float>::max()), high(std::numeric_limits<float>::lowest());
-			for (const glm::vec3& p : mesh->positions) {
-				low = glm::min(low, p);
-				high = glm::max(high, p);
-			}
-			accessors[position]["min"] = { low.x, low.y, low.z };
-			accessors[position]["max"] = { high.x, high.y, high.z };
-			attributes["POSITION"] = position;
-			if (mesh->normals.size() == count) {
-				attributes["NORMAL"] = addAccessor(mesh->normals.data(), count * sizeof(glm::vec3), count, FLOAT, "VEC3", ARRAY_BUFFER);
-			}
-			if (mesh->uvs.size() == count) {
-				attributes["TEXCOORD_0"] = addAccessor(mesh->uvs.data(), count * sizeof(glm::vec2), count, FLOAT, "VEC2", ARRAY_BUFFER);
-			}
-			const int indices = addAccessor(mesh->indices.data(), mesh->indices.size() * sizeof(uint32_t), mesh->indices.size(), UNSIGNED_INT,
-				"SCALAR", ELEMENT_ARRAY_BUFFER);
-
-			Json primitive = { { "attributes", attributes }, { "indices", indices }, { "mode", TRIANGLES } };
-			if (node.material >= 0 && node.material < static_cast<int>(materials.size())) {
-				primitive["material"] = node.material;
-			}
-			meshes.push_back({ { "name", node.name }, { "primitives", Json::array({ primitive }) } });
+			meshes.push_back({ { "name", node.name }, { "primitives", primitives } });
 			jsonNodes.push_back({ { "name", node.name }, { "mesh", meshes.size() - 1 } });
 		}
 
@@ -104,23 +111,57 @@ namespace meshfile {
 
 		if (!materials.empty()) {
 			Json jsonMaterials = Json::array(), images = Json::array(), textures = Json::array();
-			for (const Material& m : materials) {
-				Json pbr = { { "baseColorFactor", { m.color.r, m.color.g, m.color.b, m.color.a } }, { "metallicFactor", 0.0f }, { "roughnessFactor", m.roughness } };
-				if (!m.texture.empty()) {
-					images.push_back({ { "uri", m.texture } });
-					textures.push_back({ { "source", images.size() - 1 }, { "sampler", 0 } });
-					pbr["baseColorTexture"] = { { "index", textures.size() - 1 } };
+			//One image per path, one texture per image and sampler
+			auto texture = [&](const std::string& uri, int sampler) {
+				size_t image = 0;
+				while (image < images.size() && images[image]["uri"] != uri) {
+					image++;
 				}
-				Json material = { { "name", m.name }, { "pbrMetallicRoughness", pbr } };
+				if (image == images.size()) {
+					images.push_back({ { "uri", uri } });
+				}
+				for (size_t t = 0; t < textures.size(); t++) {
+					if (textures[t]["source"] == image && textures[t]["sampler"] == sampler) {
+						return t;
+					}
+				}
+				textures.push_back({ { "source", image }, { "sampler", sampler } });
+				return textures.size() - 1;
+			};
+			for (const Material& m : materials) {
+				const int sampler = m.repeat ? 1 : 0;
+				Json pbr = { { "baseColorFactor", { m.color.r, m.color.g, m.color.b, m.color.a } }, { "metallicFactor", m.ormTexture.empty() ? 0.0f : 1.0f },
+					{ "roughnessFactor", m.roughness } };
+				Json material = { { "name", m.name } };
+				if (!m.texture.empty()) {
+					pbr["baseColorTexture"] = { { "index", texture(m.texture, sampler) } };
+				}
+				if (!m.ormTexture.empty()) {
+					const size_t orm = texture(m.ormTexture, sampler);
+					pbr["metallicRoughnessTexture"] = { { "index", orm } };
+					material["occlusionTexture"] = { { "index", orm } };
+				}
+				if (!m.normalTexture.empty()) {
+					material["normalTexture"] = { { "index", texture(m.normalTexture, sampler) } };
+				}
+				material["pbrMetallicRoughness"] = pbr;
 				if (m.blend) {
 					material["alphaMode"] = "BLEND";
+				}
+				else if (m.mask) {
+					material["alphaMode"] = "MASK";
+					material["alphaCutoff"] = 0.5f;
+				}
+				if (m.doubleSided) {
+					material["doubleSided"] = true;
 				}
 				jsonMaterials.push_back(material);
 			}
 			j["materials"] = jsonMaterials;
 			if (!images.empty()) {
-				//Linear filtering with mipmaps, clamped at the map border
-				j["samplers"] = Json::array({ { { "magFilter", 9729 }, { "minFilter", 9987 }, { "wrapS", 33071 }, { "wrapT", 33071 } } });
+				//Linear filtering with mipmaps; 0 = clamped at the edge (maps of the terrain), 1 = repeated (models)
+				j["samplers"] = Json::array({ { { "magFilter", 9729 }, { "minFilter", 9987 }, { "wrapS", 33071 }, { "wrapT", 33071 } },
+					{ { "magFilter", 9729 }, { "minFilter", 9987 }, { "wrapS", 10497 }, { "wrapT", 10497 } } });
 				j["images"] = images;
 				j["textures"] = textures;
 			}
@@ -169,22 +210,19 @@ namespace meshfile {
 		}
 	}
 
-	std::string EncodeObj(const std::vector<Node>& nodes, const std::string& generator)
-	{
-		std::string out = "# " + generator + "\n# metres, Y up\n";
-		//OBJ indices are 1-based and global over the file
-		size_t positionBase = 1, normalBase = 1, uvBase = 1;
-		for (const Node& node : nodes) {
-			const terrainmesh::Mesh* mesh = node.mesh;
-			if (!mesh || mesh->indices.empty() || mesh->positions.empty()) {
-				continue;
-			}
-			const size_t count = mesh->positions.size();
-			const bool normals = mesh->normals.size() == count;
-			const bool uvs = mesh->uvs.size() == count;
-			out.reserve(out.size() + count * (normals && uvs ? 90 : 40) + mesh->indices.size() * 12);
-			out += "o " + node.name + "\n";
-			for (const glm::vec3& p : mesh->positions) {
+	namespace {
+		//1-based indices of the next vertex, texture coordinate and normal of an OBJ file
+		struct ObjBase {
+			size_t position = 1, uv = 1, normal = 1;
+		};
+
+		void PutObjMesh(std::string& out, const terrainmesh::Mesh& mesh, ObjBase& base)
+		{
+			const size_t count = mesh.positions.size();
+			const bool normals = mesh.normals.size() == count;
+			const bool uvs = mesh.uvs.size() == count;
+			out.reserve(out.size() + count * (normals && uvs ? 90 : 40) + mesh.indices.size() * 12);
+			for (const glm::vec3& p : mesh.positions) {
 				out += "v ";
 				PutFloat(out, p.x);
 				out += ' ';
@@ -194,7 +232,7 @@ namespace meshfile {
 				out += '\n';
 			}
 			if (uvs) {
-				for (const glm::vec2& t : mesh->uvs) {
+				for (const glm::vec2& t : mesh.uvs) {
 					out += "vt ";
 					PutFloat(out, t.x);
 					out += ' ';
@@ -203,7 +241,7 @@ namespace meshfile {
 				}
 			}
 			if (normals) {
-				for (const glm::vec3& n : mesh->normals) {
+				for (const glm::vec3& n : mesh.normals) {
 					out += "vn ";
 					PutFloat(out, n.x);
 					out += ' ';
@@ -213,28 +251,48 @@ namespace meshfile {
 					out += '\n';
 				}
 			}
-			for (size_t t = 0; t + 2 < mesh->indices.size(); t += 3) {
+			for (size_t t = 0; t + 2 < mesh.indices.size(); t += 3) {
 				out += 'f';
 				for (int k = 0; k < 3; k++) {
-					const size_t v = mesh->indices[t + k];
+					const size_t v = mesh.indices[t + k];
 					out += ' ';
-					PutInt(out, positionBase + v);
+					PutInt(out, base.position + v);
 					if (uvs || normals) {
 						out += '/';
 						if (uvs) {
-							PutInt(out, uvBase + v);
+							PutInt(out, base.uv + v);
 						}
 						if (normals) {
 							out += '/';
-							PutInt(out, normalBase + v);
+							PutInt(out, base.normal + v);
 						}
 					}
 				}
 				out += '\n';
 			}
-			positionBase += count;
-			uvBase += uvs ? count : 0;
-			normalBase += normals ? count : 0;
+			base.position += count;
+			base.uv += uvs ? count : 0;
+			base.normal += normals ? count : 0;
+		}
+	}
+
+	std::string EncodeObj(const std::vector<Node>& nodes, const std::string& generator)
+	{
+		std::string out = "# " + generator + "\n# metres, Y up\n";
+		//OBJ indices are 1-based and global over the file
+		ObjBase base;
+		for (const Node& node : nodes) {
+			bool named = false;
+			for (const Primitive& primitive : node.primitives) {
+				if (!primitive.mesh || primitive.mesh->indices.empty() || primitive.mesh->positions.empty()) {
+					continue;
+				}
+				if (!named) {
+					out += "o " + node.name + "\n";
+					named = true;
+				}
+				PutObjMesh(out, *primitive.mesh, base);
+			}
 		}
 		return out;
 	}

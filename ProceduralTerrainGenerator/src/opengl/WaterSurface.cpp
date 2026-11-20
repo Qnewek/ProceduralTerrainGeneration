@@ -62,18 +62,16 @@ void WaterSurface::Draw(const ChunkWorld& chunks, Camera& camera, const LightSou
 	DrawQuads(quads, camera, light, settings, waterLevel, chunks.FlatViewMin(), chunks.FlatViewMax(), RiverWater{ rivers, mapOrigin });
 }
 
-void WaterSurface::DrawMap(const TextureClass& heightMap, glm::vec2 size, Camera& camera, const LightSource& light, const TerrainRenderSettings& settings,
-	float waterLevel, glm::vec2 flatMin, glm::vec2 flatMax, const RiverMap* rivers)
+void WaterSurface::DrawMap(const TextureClass& heightMap, glm::vec2 corner, glm::vec2 size, glm::vec2 mapOrigin, Camera& camera, const LightSource& light,
+	const TerrainRenderSettings& settings, float waterLevel, glm::vec2 flatMin, glm::vec2 flatMax, const RiverMap* rivers)
 {
 	if (!enabled || failed) {
 		return;
 	}
 	quads.clear();
 	//Texture coordinates run over the whole map as on the terrain mesh (TerrainView::BuildMesh)
-	quads.push_back({ &heightMap, -size * 0.5f, size, glm::vec2(0.0f), glm::vec2(1.0f) });
-	//Map position p lies at the center of texel p (as ChunkWorld::AlignWithMap places it)
-	const glm::vec2 mapOrigin = -size * 0.5f + 0.5f * TerrainView::worldUnitsPerTexel;
-	DrawQuads(quads, camera, light, settings, waterLevel, flatMin, flatMax, RiverWater{ rivers, mapOrigin, -size * 0.5f, size * 0.5f });
+	quads.push_back({ &heightMap, corner, size, glm::vec2(0.0f), glm::vec2(1.0f) });
+	DrawQuads(quads, camera, light, settings, waterLevel, flatMin, flatMax, RiverWater{ rivers, mapOrigin, corner, corner + size });
 }
 
 bool WaterSurface::CopyScene(glm::ivec4& viewport)

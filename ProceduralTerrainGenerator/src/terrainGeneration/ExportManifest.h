@@ -4,6 +4,8 @@
 #include <string>
 #include <vector>
 
+#include "glm/glm.hpp"
+
 #include "HeightmapExport.h"
 
 //Description of an export pack: one folder with the files of a map and <name>.json telling other tools how to read them
@@ -56,6 +58,7 @@ namespace exportpack {
 		std::string name;
 		std::string mode;					//generation mode of the app, e.g. "TerrainGen"
 		int width = 0, height = 0;			//map size in texels
+		glm::ivec2 worldOrigin = glm::ivec2(0);	//world map position of texel (0, 0): where a partial map lies in the generated world
 		float metresPerUnit = 1.0f;			//metres of height value 1
 		heightmap::ValueRange range{ 0.0f, 1.0f };	//values mapped to 0 - 65535 by the 16-bit files
 		heightmap::ValueRange mapValues{ 0.0f, 0.0f };	//smallest and largest value of the main height map
@@ -68,6 +71,9 @@ namespace exportpack {
 		float tileMetres = 0.0f;			//side of a mesh tile; 0 = one tile per level
 		std::string waterMesh;				//file with the water surfaces; empty = none
 		std::vector<std::string> waterNodes;	//names of its nodes
+		std::string vegetationFile;			//instances of the vegetation (vegexport::InstancesJson); empty = none
+		size_t vegetationInstances = 0;
+		std::vector<std::string> vegetationModels;	//model files written with it
 	};
 
 	//Unreal Engine landscape import of a 16-bit file of the pack: Z scale 100 spans 512 m around the actor's Z

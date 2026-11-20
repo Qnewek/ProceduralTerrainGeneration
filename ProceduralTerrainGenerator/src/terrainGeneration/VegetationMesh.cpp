@@ -8,6 +8,7 @@
 #include <fstream>
 #include <functional>
 #include <numeric>
+#include <system_error>
 #include <unordered_map>
 
 #define CGLTF_IMPLEMENTATION
@@ -894,5 +895,40 @@ namespace vegetation
 		}
 		mesh = std::move(result);
 		return true;
+	}
+
+	namespace {
+		//64-bit FNV-1a
+		void HashBytes(uint64_t& hash, const void* data, size_t size)
+		{
+			const unsigned char* bytes = static_cast<const unsigned char*>(data);
+			for (size_t i = 0; i < size; i++) {
+				hash = (hash ^ bytes[i]) * 1099511628211ull;
+			}
+		}
+	}
+
+	uint64_t CacheKey(const std::filesystem::path& folder, const std::vector<uint32_t>& targets)
+	{
+		uint64_t hash = 14695981039346656037ull;
+		std::vector<std::filesystem::path> files;
+		std::error_code error;
+		for (const auto& entry : std::filesystem::directory_iterator(folder, error)) {
+			const std::string extension = entry.path().extension().string();
+			if (entry.is_regular_file() && (extension == ".gltf" || extension == ".bin")) {
+				files.push_back(entry.path());
+			}
+		}
+		std::sort(files.begin(), files.end());
+		for (const std::filesystem::path& file : files) {
+			const std::string name = file.filename().string();
+			const uint64_t size = std::filesystem::file_size(file, error);
+			const auto time = std::filesystem::last_write_time(file, error).time_since_epoch().count();
+			HashBytes(hash, name.data(), name.size());
+			HashBytes(hash, &size, sizeof(size));
+			HashBytes(hash, &time, sizeof(time));
+		}
+		HashBytes(hash, targets.data(), targets.size() * sizeof(uint32_t));
+		return hash;
 	}
 }

@@ -107,6 +107,7 @@ void ExportPanel::ExportAll(const Pack& pack)
 	manifest.range = pack.range;
 	manifest.metresPerUnit = pack.metresPerUnit;
 	manifest.seaLevel = pack.seaLevel;
+	manifest.worldOrigin = pack.worldOrigin;
 
 	std::string saved;
 	size_t clipped = 0;
@@ -143,61 +144,116 @@ void ExportPanel::ExportAll(const Pack& pack)
 		manifest.generation = pack.generation();
 	}
 	pending = Pending{ packFolder, std::move(manifest), saved, clipped, format };
-	if (meshFormat == 0) {
+	const bool meshes = meshFormat != 0;
+	const bool vegetation = exportVegetation && pack.vegetation;
+	if (!meshes && !vegetation) {
 		Finish();
 		return;
 	}
 
-	//The meshes on a background thread, from copies of everything they need
-	meshexport::Settings settings;
-	settings.name = name;
-	settings.format = static_cast<meshexport::Format>(meshFormat - 1);
-	settings.lodLevels = lodLevels;
-	settings.tileMetres = tileSizes[tileChoice];
-	settings.metresPerUnit = pack.metresPerUnit;
-	for (const exportpack::File& file : pending->manifest.files) {
-		if (file.content == "biome_colors") {
-			settings.terrainTexture = file.path;
+	//Meshes and vegetation on a background thread, from copies of everything they need (the GPU maps are read now)
+	std::optional<meshexport::Settings> meshSettings;
+	if (meshes) {
+		meshexport::Settings& settings = meshSettings.emplace();
+		settings.name = name;
+		settings.format = static_cast<meshexport::Format>(meshFormat - 1);
+		settings.lodLevels = lodLevels;
+		settings.tileMetres = tileSizes[tileChoice];
+		settings.metresPerUnit = pack.metresPerUnit;
+		for (const exportpack::File& file : pending->manifest.files) {
+			if (file.content == "biome_colors") {
+				settings.terrainTexture = file.path;
+			}
 		}
-	}
-	settings.water = exportWater;
-	if (exportWater) {
-		settings.seaLevel = pack.seaLevel;
-		if (pack.riverWater) {
-			settings.riverWater = pack.riverWater();
+		settings.water = exportWater;
+		if (exportWater) {
+			settings.seaLevel = pack.seaLevel;
+			if (pack.riverWater) {
+				settings.riverWater = pack.riverWater();
+			}
 		}
+		pending->manifest.tileMetres = std::max(settings.tileMetres, 0.0f);
 	}
-	pending->manifest.tileMetres = std::max(settings.tileMetres, 0.0f);
-	meshJob.Start([map = std::move(mainMap), settings = std::move(settings), packFolder]() {
-		return meshexport::Write(map, settings, packFolder);
+	struct Plants {
+		vegexport::Input input;
+		std::vector<glm::vec4> surface;
+		BiomeMap ids;
+	};
+	std::optional<Plants> plants;
+	if (vegetation) {
+		plants = Plants{ pack.vegetation->input(), pack.vegetation->readSurface(), pack.vegetation->readIds() };
+		plants->input.metresPerUnit = pack.metresPerUnit;
+	}
+	job.Start([map = std::move(mainMap), meshSettings = std::move(meshSettings), plants = std::move(plants), packFolder, packName = std::string(name),
+		models = exportModels]() {
+		Background result;
+		if (meshSettings) {
+			result.meshes = meshexport::Write(map, *meshSettings, packFolder);
+		}
+		if (plants) {
+			result.vegetation = vegexport::Write(map, plants->surface, plants->ids, plants->input, packName, models, packFolder);
+		}
+		return result;
 	});
-	status = "Saved: " + saved + "\nBuilding the meshes...";
+	status = "Saved: " + saved + (meshes ? "\nBuilding the meshes..." : "\nPlacing the vegetation...");
 	statusIsError = false;
 }
 
-void ExportPanel::PollMeshes()
+void ExportPanel::PollBackground()
 {
-	std::optional<meshexport::Result> result = meshJob.TryTake();
+	std::optional<Background> result = job.TryTake();
 	if (!result || !pending) {
 		return;
 	}
-	if (!result->ok) {
-		SetError("meshes", result->error, pending->saved);
-		pending.reset();
-		return;
-	}
 	exportpack::Manifest& manifest = pending->manifest;
-	for (const exportpack::File& file : result->files) {
-		manifest.files.push_back(file);
-		pending->saved += ", " + file.path;
+	auto addFiles = [&](const std::vector<exportpack::File>& files) {
+		for (const exportpack::File& file : files) {
+			manifest.files.push_back(file);
+			pending->saved += ", " + file.path;
+		}
+	};
+	std::string times;
+	char line[160];
+	if (result->meshes) {
+		const meshexport::Result& meshes = *result->meshes;
+		if (!meshes.ok) {
+			SetError("meshes", meshes.error, pending->saved);
+			pending.reset();
+			return;
+		}
+		addFiles(meshes.files);
+		manifest.meshLevels = meshes.levels;
+		manifest.waterMesh = meshes.waterFile;
+		manifest.waterNodes = meshes.waterNodes;
+		std::snprintf(line, sizeof(line), "\nMeshes built in %.1f s", meshes.ms / 1000.0);
+		times += line;
 	}
-	manifest.meshLevels = result->levels;
-	manifest.waterMesh = result->waterFile;
-	manifest.waterNodes = result->waterNodes;
+	if (result->vegetation) {
+		const vegexport::Result& vegetation = *result->vegetation;
+		if (!vegetation.ok) {
+			SetError("vegetation", vegetation.error, pending->saved);
+			pending.reset();
+			return;
+		}
+		addFiles(vegetation.files);
+		manifest.vegetationInstances = vegetation.instances;
+		for (const exportpack::File& file : vegetation.files) {
+			if (file.content == "vegetation") {
+				manifest.vegetationFile = file.path;
+			}
+			else {
+				manifest.vegetationModels.push_back(file.path);
+			}
+		}
+		std::snprintf(line, sizeof(line), "\nVegetation: %zu plants, %zu model files in %.1f s", vegetation.instances, manifest.vegetationModels.size(),
+			vegetation.ms / 1000.0);
+		times += line;
+		for (const std::string& error : vegetation.modelErrors) {
+			times += "\nModel not written: " + error;
+		}
+	}
 	Finish();
-	char time[64];
-	std::snprintf(time, sizeof(time), "\nMeshes built in %.1f s", result->ms / 1000.0);
-	status += time;
+	status += times;
 }
 
 void ExportPanel::Finish()
@@ -226,8 +282,8 @@ void ExportPanel::Finish()
 
 void ExportPanel::ImGuiDraw(const Pack& pack)
 {
-	PollMeshes();
-	const bool busy = meshJob.IsRunning();
+	PollBackground();
+	const bool busy = job.IsRunning();
 	ImGui::BeginDisabled(busy);
 
 	int selectedFormat = static_cast<int>(format);
@@ -268,6 +324,24 @@ void ExportPanel::ImGuiDraw(const Pack& pack)
 		ImGui::SetItemTooltip(anyWater ? "_water file: the sea surface over the map, rivers and lakes (Region method)" : "This map has no sea, rivers or lakes");
 	}
 
+	ImGui::BeginDisabled(!pack.vegetation);
+	bool vegetationChecked = exportVegetation && pack.vegetation;
+	if (ImGui::Checkbox("Vegetation", &vegetationChecked)) {
+		exportVegetation = vegetationChecked;
+	}
+	ImGui::EndDisabled();
+	if (pack.vegetation) {
+		ImGui::SetItemTooltip("_vegetation.json: every tree, shrub and rock of the map as the infinite world places them\n"
+			"(position in metres, yaw, scale, model and variant), with the list of models");
+		if (exportVegetation) {
+			ImGui::Checkbox("Vegetation models", &exportModels);
+			ImGui::SetItemTooltip("vegetation/<model>.glb for every model on the map, one node per variant, with its textures");
+		}
+	}
+	else {
+		ImGui::SetItemTooltip("%s", pack.vegetationMissing ? pack.vegetationMissing : "No vegetation in this mode");
+	}
+
 	ImGui::InputText("Pack name", name, sizeof(name));
 
 	const bool validName = preset::IsValidName(name);
@@ -289,6 +363,9 @@ void ExportPanel::ImGuiDraw(const Pack& pack)
 		}
 		if (meshFormat != 0) {
 			files += ", " + std::to_string(lodLevels) + " terrain mesh file" + (lodLevels > 1 ? "s" : "");
+		}
+		if (exportVegetation && pack.vegetation) {
+			files += std::string(", ") + name + "_vegetation.json" + (exportModels ? " and its models" : "");
 		}
 		const std::string manifestName = exportpack::ManifestName(name);
 		exists |= std::filesystem::exists(packFolder / manifestName, ec);
