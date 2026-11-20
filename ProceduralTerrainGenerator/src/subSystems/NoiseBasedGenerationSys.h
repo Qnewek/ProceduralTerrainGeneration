@@ -18,6 +18,7 @@
 #include "PlacesPanel.h"
 #include "PackPicker.h"
 #include "PanelTabs.h"
+#include "MapLabels.h"
 
 //What has to be done at the next Update, all on the GPU: the noise map (with infinite generation: the chunks), then erosion of the finite map
 struct NoiseRequest {
@@ -83,18 +84,9 @@ class NoiseBasedGenerationSys
 		const TextureClass* ErodedTexture(erosion::Method method) const;
 		//Methods whose maps are shown next to the noise map, in the order they are drawn
 		std::vector<erosion::Method> ShownMethods() const;
-		static const char* MethodName(erosion::Method method);
 
-		//Labels of the maps of the last Draw, at the top edge of each map in viewport pixels (ImGui coordinates)
-		struct MapLabel {
-			ImVec2 position;
-			std::string text;
-		};
-		std::vector<MapLabel> labels;
-		//Viewport of the last Draw in ImGui coordinates; labels are clipped to it
-		ImVec2 labelClipMin, labelClipMax;
-		//Projects the middle of the top edge of every map drawn (offsets along X, world units) to the screen
-		void PlaceLabels(const glm::mat4& viewProjection, const std::vector<std::pair<float, std::string>>& maps);
+		//Names of the maps of the last Draw
+		MapLabels labels;
 
 		//New noise map; the erosion shown next to it is dropped and starts from the new map
 		void RequestNoise();

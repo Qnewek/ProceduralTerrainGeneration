@@ -627,10 +627,16 @@ Kroki:
      Mapa częściowa bez zmian (region wokół jej środka). Rivers → Region: „Follow camera (infinite world)” (domyślnie wł., nie w presecie), „Region centre”.
      Do sprawdzenia w aplikacji: czas przeskoku (Rivers: czas sieci + Output: czas do odświeżenia chunków po zmianie) i czy różnice rzek w części
      wspólnej regionów są akceptowalne; na granicy chunków starych i nowych rzeka może się chwilę urywać.
-  4. **Erozja poza mapą Noise heightmap** (duży). Etap pośredni: erozja na mapie częściowej TerrainGen (ta sama `GpuErosion`). Docelowo w świecie
-     nieskończonym: erozja nie jest lokalna (krople wędrują, rury propagują przez iteracje), krople nie są bit w bit powtarzalne (atomiki) — potrzebny
-     chunk z szerokim marginesem (64–128 tekseli, zostaje środek), ziarno kropli z pozycji komórki świata, rury bez zależności od kolejności; szwy małe,
-     nie zerowe, koszt GPU na chunk wyraźnie wyższy.
+  4. 🟡 **Erozja na mapie częściowej TerrainGen** (ta sama `GpuErosion`). Erozja w świecie nieskończonym ❌ odrzucona 2026-11-20 decyzją właściciela:
+     erozja to symulacja, nie ma jej w deterministycznej generacji świata proceduralnego, spowalnia generowanie i psułaby szwy chunków (krople wędrują,
+     rury propagują przez iteracje, krople nie są bit w bit powtarzalne).
+     Zrobione 2026-11-20: zakładka Erosion (metoda i parametry wspólne z Noise heightmap, „Erode map” kumuluje, „Reset”), parametry w presecie świata;
+     kopia po erozji obok mapy (jak w Noise heightmap, podpisy map, widok 2D kadruje obie) z biomami i materiałami mapy, z morzem z wysokości kopii
+     i rzekami/jeziorami sieci; rośliny rozmieszczane na kopii od nowa w tle (te same reguły co świat, więc nic nie stoi w nowych żlebach ani na stromiznach;
+     powyżej 2048² tylko drzewa); eksport dopisuje `_height_eroded_<metoda>`. Każda zmiana terenu kasuje kopię.
+     Nie objęte: trawa i cień terenu na kopii (z chunków), przeliczenie biomów z terenu po erozji.
+     Do sprawdzenia w aplikacji: domyślne parametry przy skali 1024 (kroplom może brakować siły, rurom `Height scale` = 256), czas rozmieszczania roślin
+     na dużej mapie, woda rzek wisząca nad korytem obniżonym przez erozję.
 - **Tryb „Imported map”:** ✅ 2026-11-03 podgląd mapy z pliku (PNG 1/2/4/8/16-bit, kolorowy zamieniany na szary, oraz R16/RAW): `HeightmapImport.*` +
   `subSystems/MapImportSys.*`, wczytywanie w tle. Dalszy ciąg w Fazie 6.
 - **Edytor ręczny:** pędzle (podnieś/obniż/wygładź/spłaszcz) jako warstwa delta nad proceduralną bazą.

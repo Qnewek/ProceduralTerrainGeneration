@@ -30,6 +30,9 @@
 #include "VegetationLayer.h"
 #include "ShadowMap.h"
 #include "WaterSurface.h"
+#include "GpuErosion.h"
+#include "MapLabels.h"
+#include "VegetationExport.h"
 
 //What has to be regenerated at the next Update; with infinite generation a terrain or biome request regenerates the chunks
 struct WorldRequest {
@@ -136,6 +139,42 @@ private:
 	//What the generation carves (the network may not be ready yet)
 	RiverInput Rivers() const { return RiverInput{ world.rivers, &riverMap }; }
 
+	//Erosion of the partial map only (a simulation, not part of the deterministic world): the eroded copy of the terrain lies in the OVERLAY
+	//layer and is drawn next to the map along X, with its water and plants; biomes and materials stay those of the map
+	GpuErosion gpuErosion;
+	struct ErodedTerrain {
+		bool shown = false;			//OVERLAY holds an eroded copy of the current terrain
+		bool requested = false;		//"Erode map": erodes at the next Update (the copy again, or the terrain after a reset)
+		bool plantsWanted = false;	//plants of the copy to place once no placement is running
+		uint64_t version = 0;		//grows with every erosion and reset; plants placed for an older copy are dropped
+		uint32_t runs = 0;			//seed of the droplets
+		erosion::Method method = erosion::Method::DROPLETS;	//of the last erosion (label, export)
+		double ms = 0.0, plantsMs = 0.0;
+		bool treesOnly = false;		//the plants of the last placement are trees only (a large map)
+	} eroded;
+	struct ErodedPlants {
+		std::vector<vegetation::Instance> instances;
+		uint64_t version = 0;
+		double ms = 0.0;
+	};
+	GenerationJob<ErodedPlants> erodedPlantsJob;
+	//Above this many texels the eroded copy gets only trees: shrubs and rocks of a whole large map would take millions of instances
+	static constexpr int64_t allPlantsMaxTexels = 2048ll * 2048ll;
+	MapLabels mapLabels;
+	//Gap between the map and its eroded copy: the copy is drawn shifted by this along X (world units before modelScale)
+	float ErodedShift() const { return view.GetWorldWidth() * 1.05f; }
+	//Erodes on request, installs the plants of the copy and starts placing them when wanted; partial map, after GenerateFinite
+	void UpdateErosion();
+	//Drops the eroded copy and its plants (any change of the terrain, leaving the partial map, Reset)
+	void ResetErosion();
+	//Reads the copy and its surface back and places its plants on a worker thread
+	void StartErodedPlants();
+	//true if a vegetation model can be placed
+	bool AnyVegetationModel() const;
+	//The plants of the map as the infinite world places them (the export, the eroded copy)
+	vegexport::Input VegetationExportInput() const;
+	void ErosionEditor();
+
 	//Currently edited noise (terrain or biome component), nullptr if none
 	const noise::NoiseConfigParameters* EditedNoise() const;
 	//Generates the 2D picture of the edited noise if it was requested
@@ -175,6 +214,7 @@ private:
 	static constexpr const char* tabBiomeTable = "Biome table";
 	static constexpr const char* tabBiomeNoises = "Biome noises";
 	static constexpr const char* tabRivers = "Rivers";
+	static constexpr const char* tabErosion = "Erosion";
 	PanelTabs generationTabs;
 
 	//Editor UI state: the component each editor shows
@@ -232,5 +272,7 @@ public:
 	void ImGuiPresets(Camera& camera);
 	void ImGuiSaving();
 	void ImGuiOutput(glm::vec3 pos);
+	//Names of the map and its eroded copy over the scene of the last Draw; in the ImGui frame, after the panels
+	void ImGuiMapLabels() const { mapLabels.ImGuiDraw(); }
 };
 

@@ -81,23 +81,11 @@ bool VegetationLayer::ReloadShader()
 void VegetationLayer::Update(const ChunkWorld& chunks, const VegetationModels* models, const World& world)
 {
 	if (!enabled || !models) {
-		for (auto& [key, chunk] : placed) {
-			Release(chunk);
-		}
-		placed.clear();
-		ground.clear();
-		drawRanges.clear();
-		placedReadyModels = -1;
+		ForgetChunks();
 		return;
 	}
-	const std::vector<VegetationModels::Model>& list = models->GetModels();
-	int ready = 0;
-	for (const VegetationModels::Model& m : list) {
-		ready += m.state == VegetationModels::State::READY ? 1 : 0;
-	}
-	if (ready != tablesReadyModels) {
-		BuildTables(*models);
-	}
+	EnsureTables(*models);
+	const int ready = tablesReadyModels;
 	//Anything placement depends on changed: place every chunk again, nearest first, showing the old instances meanwhile
 	if (ready != placedReadyModels || !SamePlants(world.biomes, placedPlants) || world.waterHeight != placedWater || world.seed != placedSeed
 		|| density != placedDensity || world.rivers != placedRivers || chunks.GetBounds() != placedBounds) {
@@ -153,6 +141,80 @@ void VegetationLayer::Update(const ChunkWorld& chunks, const VegetationModels* m
 		readbacks++;
 	}
 	CollectRanges(chunks);
+}
+
+void VegetationLayer::ForgetChunks()
+{
+	for (auto& [key, chunk] : placed) {
+		Release(chunk);
+	}
+	placed.clear();
+	ground.clear();
+	drawRanges.clear();
+	placedReadyModels = -1;
+}
+
+void VegetationLayer::EnsureTables(const VegetationModels& models)
+{
+	int ready = 0;
+	for (const VegetationModels::Model& m : models.GetModels()) {
+		ready += m.state == VegetationModels::State::READY ? 1 : 0;
+	}
+	if (ready != tablesReadyModels) {
+		BuildTables(models);
+	}
+}
+
+void VegetationLayer::SetExtraInstances(const std::vector<vegetation::Instance>& instances)
+{
+	ClearExtraInstances();
+	if (instances.empty()) {
+		return;
+	}
+	//Sorted into squares of a level 0 chunk, so that culling drops the squares out of view or out of range
+	const float square = static_cast<float>(ChunkWorld::chunkSize) * TerrainView::worldUnitsPerTexel;
+	auto squareOf = [square](const vegetation::Instance& in) {
+		return glm::ivec2(static_cast<int>(std::floor(in.position.x / square)), static_cast<int>(std::floor(in.position.z / square)));
+	};
+	std::vector<uint32_t> order(instances.size());
+	for (uint32_t i = 0; i < order.size(); i++) {
+		order[i] = i;
+	}
+	std::vector<glm::ivec2> squares(instances.size());
+	for (size_t i = 0; i < instances.size(); i++) {
+		squares[i] = squareOf(instances[i]);
+	}
+	std::sort(order.begin(), order.end(), [&](uint32_t a, uint32_t b) {
+		return squares[a].y != squares[b].y ? squares[a].y < squares[b].y : squares[a].x < squares[b].x;
+	});
+
+	std::vector<GpuInstance> gpu(instances.size());
+	extraCount = static_cast<uint32_t>(gpu.size());
+	extraOffset = Allocate(extraCount);
+	for (uint32_t i = 0; i < order.size(); i++) {
+		const vegetation::Instance& in = instances[order[i]];
+		gpu[i] = { glm::vec4(in.position, in.scale),
+			glm::vec4(in.yaw, static_cast<float>(in.variant), static_cast<float>(in.model), static_cast<float>(static_cast<int>(in.layer))) };
+		const glm::ivec2 s = squares[order[i]];
+		if (i == 0 || s != squares[order[i - 1]]) {
+			DrawRange r;
+			r.first = extraOffset + i;
+			r.areaMin = glm::vec2(s) * square;
+			r.areaMax = r.areaMin + square;
+			extraRanges.push_back(r);
+		}
+		extraRanges.back().count++;
+	}
+	glNamedBufferSubData(placedBuffer, static_cast<GLintptr>(extraOffset) * sizeof(GpuInstance), static_cast<GLsizeiptr>(gpu.size() * sizeof(GpuInstance)),
+		gpu.data());
+}
+
+void VegetationLayer::ClearExtraInstances()
+{
+	allocator.Free(extraOffset, extraCount);
+	extraOffset = 0;
+	extraCount = 0;
+	extraRanges.clear();
 }
 
 void VegetationLayer::Install(const Placing& p, PlacementResult& result)
@@ -436,7 +498,10 @@ void VegetationLayer::Draw(Camera& camera, const LightSource& light, const Terra
 		}
 		statsPending = false;
 	}
-	if (!enabled || !models || settings.map2d || drawRanges.empty() || groupCount == 0) {
+	if (models) {
+		EnsureTables(*models);
+	}
+	if (!enabled || !models || settings.map2d || (drawRanges.empty() && extraRanges.empty()) || groupCount == 0) {
 		drawnInstances = 0;
 		drawnTriangles = 0;
 		std::fill(std::begin(drawnPerLod), std::end(drawnPerLod), 0);
@@ -454,7 +519,7 @@ void VegetationLayer::Draw(Camera& camera, const LightSource& light, const Terra
 
 bool VegetationLayer::CullShadows(Camera& camera, const glm::mat4& sunViewProjection, const TerrainRenderSettings& settings, VegetationModels* models)
 {
-	if (!enabled || !shadows || !models || settings.map2d || drawRanges.empty() || groupCount == 0) {
+	if (!enabled || !shadows || !models || settings.map2d || (drawRanges.empty() && extraRanges.empty()) || groupCount == 0) {
 		return false;
 	}
 	//Simpler models than the camera sees: a shadow hardly shows the difference and every cascade draws them
@@ -487,18 +552,20 @@ bool VegetationLayer::Cull(const glm::vec3& eye, const glm::mat4& viewProjection
 	const float scale = std::abs(settings.heightScale);
 	std::vector<glm::uvec4> rangeData;
 	uint32_t total = 0;
-	for (const DrawRange& r : drawRanges) {
-		if (r.count == 0) {
-			continue;
+	for (const std::vector<DrawRange>* list : { &drawRanges, &extraRanges }) {
+		for (const DrawRange& r : *list) {
+			if (r.count == 0) {
+				continue;
+			}
+			const glm::vec2 low = r.areaMin - plantReach * units, high = r.areaMax + plantReach * units;
+			const glm::vec2 nearest = glm::clamp(glm::vec2(eye.x, eye.z), low, high);
+			if (glm::length(nearest - glm::vec2(eye.x, eye.z)) > maxRange
+				|| !frustum.Intersects(glm::vec3(low.x, -heightBound * scale, low.y), glm::vec3(high.x, heightBound * scale + plantHeight * units, high.y))) {
+				continue;
+			}
+			rangeData.push_back(glm::uvec4(r.first, r.count, total, 0u));
+			total += r.count;
 		}
-		const glm::vec2 low = r.areaMin - plantReach * units, high = r.areaMax + plantReach * units;
-		const glm::vec2 nearest = glm::clamp(glm::vec2(eye.x, eye.z), low, high);
-		if (glm::length(nearest - glm::vec2(eye.x, eye.z)) > maxRange
-			|| !frustum.Intersects(glm::vec3(low.x, -heightBound * scale, low.y), glm::vec3(high.x, heightBound * scale + plantHeight * units, high.y))) {
-			continue;
-		}
-		rangeData.push_back(glm::uvec4(r.first, r.count, total, 0u));
-		total += r.count;
 	}
 	if (rangeData.empty()) {
 		return false;
@@ -591,7 +658,7 @@ void VegetationLayer::DrawCulled(const FrameUniforms::Block& frame, const glm::v
 
 size_t VegetationLayer::PlacedCount() const
 {
-	size_t total = 0;
+	size_t total = extraCount;
 	for (const auto& [key, chunk] : placed) {
 		total += chunk.count;
 	}
