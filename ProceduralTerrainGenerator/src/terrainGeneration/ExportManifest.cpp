@@ -119,6 +119,26 @@ namespace exportpack {
 			j["materials"] = materials;
 		}
 
+		if (!m.meshLevels.empty() || !m.waterMesh.empty()) {
+			Json meshes;
+			meshes["units"] = "metres, Y up, right-handed (glTF axes): x = map column, z = map row, texel (0, 0) at the origin";
+			meshes["uv"] = "u = column / (width - 1), v = row / (height - 1): the maps of the pack as textures (OBJ: v flipped)";
+			if (!m.meshLevels.empty()) {
+				meshes["tileMetres"] = m.tileMetres > 0.0f ? Json(m.tileMetres) : Json(nullptr);
+				meshes["tileNames"] = "terrain_<x>_<z>_LOD<n>, x and z = index of the tile square";
+				Json levels = Json::array();
+				for (const MeshLevel& level : m.meshLevels) {
+					levels.push_back({ { "lod", level.lod }, { "file", level.path }, { "triangles", level.triangles }, { "vertices", level.vertices },
+						{ "errorMetres", level.errorMetres }, { "tiles", level.tiles } });
+				}
+				meshes["levels"] = levels;
+			}
+			if (!m.waterMesh.empty()) {
+				meshes["water"] = { { "file", m.waterMesh }, { "nodes", m.waterNodes } };
+			}
+			j["meshes"] = meshes;
+		}
+
 		if (!m.biomes.empty()) {
 			Json biomes;
 			biomes["encoding"] = "biome id per texel; colors are the blended biome colors of the app";

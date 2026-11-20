@@ -34,6 +34,16 @@ namespace exportpack {
 		float coverage = 0.0f;		//mean share over the map
 	};
 
+	//One level of detail of the terrain mesh, a file with its tiles as nodes
+	struct MeshLevel {
+		int lod = 0;
+		std::string path;
+		size_t triangles = 0;
+		size_t vertices = 0;		//over all tiles (a vertex on a tile border is in each tile)
+		float errorMetres = 0.0f;	//largest height error against the full grid (LOD 0 = 0)
+		int tiles = 0;
+	};
+
 	//An entry of the biome table in the biome id map
 	struct Biome {
 		int id = 0;					//value in the id map
@@ -54,6 +64,10 @@ namespace exportpack {
 		std::vector<File> files;
 		std::vector<Material> materials;	//empty = no material maps exported
 		std::vector<Biome> biomes;			//empty = no biome maps exported
+		std::vector<MeshLevel> meshLevels;	//empty = no terrain mesh exported
+		float tileMetres = 0.0f;			//side of a mesh tile; 0 = one tile per level
+		std::string waterMesh;				//file with the water surfaces; empty = none
+		std::vector<std::string> waterNodes;	//names of its nodes
 	};
 
 	//Unreal Engine landscape import of a 16-bit file of the pack: Z scale 100 spans 512 m around the actor's Z

@@ -36,6 +36,7 @@ bool NoiseBasedGenerationSys::Initialize(int _width, int _height, float _heightS
 void NoiseBasedGenerationSys::Update(Camera& camera)
 {
 	gpu.PollMeasure(lastGenerationMs);
+	exporter.Update();
 	for (int i = 0; i < methodCount; i++) {
 		erosion.PollMeasure(static_cast<erosion::Method>(i), eroded[i].lastMs);
 	}

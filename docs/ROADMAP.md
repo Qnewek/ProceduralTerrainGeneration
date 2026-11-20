@@ -580,6 +580,13 @@ Kroki:
   alphamapy Unity) i `_weight_ID_nazwa.png` (szare, po jednej na materiał obecny na mapie — warstwy Unreal, Godot), udziały znormalizowane do sumy 255
   na teksel (największe reszty; GPU gubi do kilku jednostek przy zaokrągleniu do 8 bitów); `_biome_ids.png` (8 bit) i `_biome_colors.png` (RGB).
   W JSON lista materiałów (id, nazwa, plik splat + kanał, plik wag, pokrycie) i biomów (id, nazwa, kolor, udział).
+  🟡 2026-11-20 krok 3 (`TerrainMesh.*`, `MeshFile.*`, `MeshExport.*`, „Terrain mesh” / „Levels of detail” / „Tile size” / „Water” w Saving): siatka terenu
+  w metrach (Y w górę, osie glTF), GLB (własny zapis, walidowany w testach przez cgltf) albo OBJ; plik na LOD, kafle jako węzły; LOD 0 = każdy teksel,
+  kolejne przez `meshopt_simplify` (¼ trójkątów, z poprzedniego poziomu), bez fałd dzięki upraszczaniu kopii ze ściśniętą wysokością; normalne z pełnej
+  rozdzielczości; UV = mapy paczki (w glTF tekstura kolorów biomów). Woda: quad morza + siatka rzek i jezior (REGION). Budowa w tle. Mapa 1024² (fBm,
+  góry ~150 m): siatka 2,1 mln trójkątów; LOD1 523 tys. / 1,1 s / błąd 1,1 m, LOD2 131 tys. / 0,5 s / 1,9 m, LOD3 33 tys. / 0,2 s / 5,9 m (maks. różnica
+  pionowa). Pierwsza wersja (bez ściśnięcia) zostawiała odwrócone trójkąty na stromych zboczach (9 z ok. 370 na małej mapie testowej; przy ściśnięciu
+  do nachylenia 0,5 jeszcze 39 na mapie 1024² ze zboczami ~17, przy 4× mocniejszym 0) — testy „no folds”.
 - **Tryb „Imported map”:** ✅ 2026-11-03 podgląd mapy z pliku (PNG 1/2/4/8/16-bit, kolorowy zamieniany na szary, oraz R16/RAW): `HeightmapImport.*` +
   `subSystems/MapImportSys.*`, wczytywanie w tle. Dalszy ciąg w Fazie 6.
 - **Edytor ręczny:** pędzle (podnieś/obniż/wygładź/spłaszcz) jako warstwa delta nad proceduralną bazą.

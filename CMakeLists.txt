@@ -51,8 +51,11 @@ add_library(ptg_core STATIC
 	${PTG_SRC}/terrainGeneration/Hydrology.cpp
 	${PTG_SRC}/terrainGeneration/LandStats.cpp
 	${PTG_SRC}/terrainGeneration/MaterialExport.cpp
+	${PTG_SRC}/terrainGeneration/MeshExport.cpp
+	${PTG_SRC}/terrainGeneration/MeshFile.cpp
 	${PTG_SRC}/terrainGeneration/Preset.cpp
 	${PTG_SRC}/terrainGeneration/SplineSampling.cpp
+	${PTG_SRC}/terrainGeneration/TerrainMesh.cpp
 	${PTG_SRC}/terrainGeneration/VegetationMesh.cpp
 	${PTG_SRC}/terrainGeneration/VegetationPlacement.cpp
 )
@@ -139,16 +142,21 @@ add_executable(ptg_tests
 	${PTG_DIR}/tests/ImpostorTests.cpp
 	${PTG_DIR}/tests/LandStatsTests.cpp
 	${PTG_DIR}/tests/MaterialExportTests.cpp
+	${PTG_DIR}/tests/MeshExportTests.cpp
+	${PTG_DIR}/tests/MeshFileTests.cpp
 	${PTG_DIR}/tests/PermutationTests.cpp
 	${PTG_DIR}/tests/PresetTests.cpp
 	${PTG_DIR}/tests/RangeAllocatorTests.cpp
 	${PTG_DIR}/tests/SplineTests.cpp
+	${PTG_DIR}/tests/TerrainMeshTests.cpp
 	${PTG_DIR}/tests/RollingStatsTests.cpp
 	${PTG_DIR}/tests/VegetationMeshTests.cpp
 	${PTG_DIR}/tests/VegetationPlacementTests.cpp
 	${PTG_DIR}/tests/TestMain.cpp
 )
 target_include_directories(ptg_tests PRIVATE ${PTG_SRC}/utility)
+# cgltf reads the exported .glb files back (its implementation is in ptg_core)
+target_include_directories(ptg_tests SYSTEM PRIVATE ${CGLTF_INCLUDE_DIRS})
 target_link_libraries(ptg_tests PRIVATE ptg_core doctest::doctest lodepng nlohmann_json::nlohmann_json)
 ptg_set_warnings(ptg_tests)
 add_test(NAME ptg_tests COMMAND ptg_tests)

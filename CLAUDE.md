@@ -67,6 +67,8 @@ ProceduralTerrainGenerator/
       ExportManifest.*           <nazwa>.json paczki eksportu: rozmiar i wysokości w metrach, kodowanie każdego pliku, poziom morza, wskazówki importu, parametry generacji,
                                  lista materiałów (plik splat + kanał, mapa wag) i biomów (id, nazwa, kolor, udział)
       MaterialExport.*           mapy materiałów i biomów paczki (8-bit PNG): splat RGBA po 4 materiały, mapa wag na materiał, id i kolory biomów; Normalize = suma 255 na teksel
+      TerrainMesh.*              siatki eksportu (metry, Y w górę): pełna siatka mapy, LOD-y (meshopt_simplify bez fałd), błąd wysokości, kafle, woda (quad, zupa trójkątów → siatka)
+      MeshFile.*                 zapis GLB (glTF 2.0, ręcznie: JSON + bufor) i OBJ; MeshExport.* = pliki siatek paczki (LOD-y z kaflami + woda), bez GL — w tle
       HeightmapImport.*          odczyt mapy z PNG lub R16/RAW; format po rozszerzeniu, nowy = czytnik i rozszerzenie w tym pliku
       GenerationJob.h            jedno zadanie generacji w tle (std::async + TryTake)
       LandStats.*                udział wody i masy lądu (flood fill) z rzadkiej próbki świata (GpuHeightGenerator::SampleTerrain); „Land statistics” w zakładce Terrain i sekcja land: w --gpu-check
@@ -300,6 +302,14 @@ Wartości szumów są w [-1, 1]. Konwencja indeksowania: `map[y * width + x]`.
   kanał m%4, jak `imageStore` w `biome_compute.shader`), `splatmap::Normalize` (największe reszty) daje sumę 255 na teksel, której oczekują Unity i Unreal.
   `_splat_N.png` = materiały 4N..4N+3 (id z `terrain_materials.json`), `_weight_ID_nazwa.png` tylko dla materiałów obecnych na mapie, `_biome_ids.png` = id
   z `BiomeConfig::table` (≤ 64, 8 bit), `_biome_colors.png` = warstwa BIOMES.
+  Siatki (`meshexport::Write`, w tle przez `GenerationJob`; mapy i manifest w wątku głównym, manifest dopiero po siatkach — `ExportPanel::Update` co klatkę
+  w `Update` subsystemu, bo zakładka Saving może być zamknięta): `_terrain_lod<n>.glb|obj`, kafle jako węzły `terrain_<x>_<z>_LOD<n>` (podział po środku
+  trójkąta, po upraszczaniu — bez szczelin), LOD n+1 z LOD n (¼ trójkątów). `meshopt_simplify` odrzuca tylko obrót normalnej > 90°, więc na stromym zboczu
+  robił fałdy (trójkąt odwrócony w rzucie z góry): upraszczana jest kopia ze ściśniętą wysokością (najbardziej strome nachylenie 0,25), przy fałdzie ponownie
+  4× mocniej (`terrainmesh::Folds`; trójkąty pionowe są dozwolone). Błąd w JSON = `MaxHeightError` (maks. różnica pionowa względem pełnej siatki), nie metryka
+  meshoptimizer (ta jest prostopadła do powierzchni, na stromiznach wielokrotnie mniejsza). Pomiar: test „Mesh export timing” (`--no-skip`).
+  Woda `_water.*`: węzeł `sea` (quad na poziomie morza) i `rivers_lakes` (`hydrology::BuildWaterMesh` z `riverNetwork`, tylko REGION, przycięte do mapy).
+  Tekstura terenu w glTF = `_biome_colors.png`, jeśli eksportowany (zewnętrzny plik obok).
 - Import map: plik nie przechowuje zakresu wartości, więc wybiera go użytkownik (`valueRanges` w `MapImportSys.cpp`). `lodepng` nie zamienia koloru na szary
   ani niższej głębi na 16 bitów (błąd 56), dlatego PNG dekodujemy do RGBA o głębi pliku. Mapa żyje w `MapImportSys::map`, stąd pójdą przyszłe operacje na niej
   (jak w innych trybach: w tle, na kopii).

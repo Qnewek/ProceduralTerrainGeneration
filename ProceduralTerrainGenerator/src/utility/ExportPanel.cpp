@@ -1,5 +1,6 @@
 #include "ExportPanel.h"
 
+#include <algorithm>
 #include <cstdio>
 #include <system_error>
 
@@ -109,6 +110,7 @@ void ExportPanel::ExportAll(const Pack& pack)
 
 	std::string saved;
 	size_t clipped = 0;
+	HeightField mainMap;
 	for (size_t i = 0; i < pack.heightmaps.size(); i++) {
 		const Target& target = pack.heightmaps[i];
 		const std::string fileName = HeightFileName(target);
@@ -117,6 +119,7 @@ void ExportPanel::ExportAll(const Pack& pack)
 			manifest.width = map.GetWidth();
 			manifest.height = map.GetHeight();
 			manifest.mapValues = heightmap::MinMax(map);
+			mainMap = map;
 		}
 		size_t mapClipped = 0;
 		std::string error;
@@ -139,27 +142,94 @@ void ExportPanel::ExportAll(const Pack& pack)
 	if (pack.generation) {
 		manifest.generation = pack.generation();
 	}
-	const std::string manifestName = exportpack::ManifestName(name);
-	const std::string json = exportpack::ToJson(manifest);
-	std::string error;
-	if (!WriteFileAtomic(packFolder / manifestName, json.data(), json.size(), error)) {
-		SetError(manifestName, error, saved);
+	pending = Pending{ packFolder, std::move(manifest), saved, clipped, format };
+	if (meshFormat == 0) {
+		Finish();
 		return;
 	}
-	saved += ", " + manifestName;
+
+	//The meshes on a background thread, from copies of everything they need
+	meshexport::Settings settings;
+	settings.name = name;
+	settings.format = static_cast<meshexport::Format>(meshFormat - 1);
+	settings.lodLevels = lodLevels;
+	settings.tileMetres = tileSizes[tileChoice];
+	settings.metresPerUnit = pack.metresPerUnit;
+	for (const exportpack::File& file : pending->manifest.files) {
+		if (file.content == "biome_colors") {
+			settings.terrainTexture = file.path;
+		}
+	}
+	settings.water = exportWater;
+	if (exportWater) {
+		settings.seaLevel = pack.seaLevel;
+		if (pack.riverWater) {
+			settings.riverWater = pack.riverWater();
+		}
+	}
+	pending->manifest.tileMetres = std::max(settings.tileMetres, 0.0f);
+	meshJob.Start([map = std::move(mainMap), settings = std::move(settings), packFolder]() {
+		return meshexport::Write(map, settings, packFolder);
+	});
+	status = "Saved: " + saved + "\nBuilding the meshes...";
+	statusIsError = false;
+}
+
+void ExportPanel::PollMeshes()
+{
+	std::optional<meshexport::Result> result = meshJob.TryTake();
+	if (!result || !pending) {
+		return;
+	}
+	if (!result->ok) {
+		SetError("meshes", result->error, pending->saved);
+		pending.reset();
+		return;
+	}
+	exportpack::Manifest& manifest = pending->manifest;
+	for (const exportpack::File& file : result->files) {
+		manifest.files.push_back(file);
+		pending->saved += ", " + file.path;
+	}
+	manifest.meshLevels = result->levels;
+	manifest.waterMesh = result->waterFile;
+	manifest.waterNodes = result->waterNodes;
+	Finish();
+	char time[64];
+	std::snprintf(time, sizeof(time), "\nMeshes built in %.1f s", result->ms / 1000.0);
+	status += time;
+}
+
+void ExportPanel::Finish()
+{
+	Pending& p = *pending;
+	const std::string manifestName = exportpack::ManifestName(p.manifest.name);
+	const std::string json = exportpack::ToJson(p.manifest);
+	std::string error;
+	if (!WriteFileAtomic(p.folder / manifestName, json.data(), json.size(), error)) {
+		SetError(manifestName, error, p.saved);
+		pending.reset();
+		return;
+	}
+	p.saved += ", " + manifestName;
 
 	std::error_code ec;
-	std::u8string location = std::filesystem::absolute(packFolder, ec).u8string();
-	status = "Saved: " + saved + "\nFolder: " + std::string(location.begin(), location.end());
-	if (clipped > 0) {
-		status += format == heightmap::Format::EXR32 ? "\nInvalid (non-finite) cells replaced: " : "\nCells outside the value range were clipped: ";
-		status += std::to_string(clipped);
+	std::u8string location = std::filesystem::absolute(p.folder, ec).u8string();
+	status = "Saved: " + p.saved + "\nFolder: " + std::string(location.begin(), location.end());
+	if (p.clipped > 0) {
+		status += p.format == heightmap::Format::EXR32 ? "\nInvalid (non-finite) cells replaced: " : "\nCells outside the value range were clipped: ";
+		status += std::to_string(p.clipped);
 	}
 	statusIsError = false;
+	pending.reset();
 }
 
 void ExportPanel::ImGuiDraw(const Pack& pack)
 {
+	PollMeshes();
+	const bool busy = meshJob.IsRunning();
+	ImGui::BeginDisabled(busy);
+
 	int selectedFormat = static_cast<int>(format);
 	if (ImGui::Combo("Height format", &selectedFormat, "PNG 16-bit\0RAW 16-bit (R16)\0EXR 32-bit float (metres)\0")) {
 		format = static_cast<heightmap::Format>(selectedFormat);
@@ -183,6 +253,21 @@ void ExportPanel::ImGuiDraw(const Pack& pack)
 		ImGui::TextDisabled("%s", pack.layersMissing);
 	}
 
+	ImGui::Combo("Terrain mesh", &meshFormat, "None\0glTF binary (.glb)\0OBJ\0");
+	ImGui::SetItemTooltip("Terrain as triangles in metres (Y up): one file per level of detail, tiles as separate objects.\n"
+		"glTF: one compact file, colored with the biome colors when biome maps are exported.\nOBJ: plain text, large files.");
+	if (meshFormat != 0) {
+		ImGui::SliderInt("Levels of detail", &lodLevels, 1, 5);
+		ImGui::SetItemTooltip("LOD 0 = every texel; each next level has about 4 times fewer triangles (simplified where the terrain is flat).\n"
+			"The largest height error of every level is in the .json.");
+		ImGui::Combo("Tile size", &tileChoice, "128 m\0" "256 m\0" "512 m\0" "1024 m\0" "Whole map\0");
+		const bool anyWater = pack.seaLevel.has_value() || static_cast<bool>(pack.riverWater);
+		ImGui::BeginDisabled(!anyWater);
+		ImGui::Checkbox("Water", &exportWater);
+		ImGui::EndDisabled();
+		ImGui::SetItemTooltip(anyWater ? "_water file: the sea surface over the map, rivers and lakes (Region method)" : "This map has no sea, rivers or lakes");
+	}
+
 	ImGui::InputText("Pack name", name, sizeof(name));
 
 	const bool validName = preset::IsValidName(name);
@@ -202,6 +287,9 @@ void ExportPanel::ImGuiDraw(const Pack& pack)
 		if (exportBiomes && pack.biomes) {
 			files += ", biome maps";
 		}
+		if (meshFormat != 0) {
+			files += ", " + std::to_string(lodLevels) + " terrain mesh file" + (lodLevels > 1 ? "s" : "");
+		}
 		const std::string manifestName = exportpack::ManifestName(name);
 		exists |= std::filesystem::exists(packFolder / manifestName, ec);
 		files += ", " + manifestName;
@@ -211,6 +299,8 @@ void ExportPanel::ImGuiDraw(const Pack& pack)
 	if (ImGui::Button(exists ? "Overwrite export" : "Export")) {
 		ExportAll(pack);
 	}
+	ImGui::EndDisabled();
+	//The whole section stays disabled while the meshes are built
 	ImGui::EndDisabled();
 
 	if (name[0] != '\0' && !validName) {
