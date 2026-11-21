@@ -13,9 +13,6 @@
 //(size and heights in metres, value encoding, sea level, axes) plus the generation parameters, so the map can be made again.
 //Later parts of the pack (material maps, meshes, vegetation) add their files to the same list.
 namespace exportpack {
-	//Metres per map texel; the app draws one texel as TerrainView::worldUnitsPerTexel world units = 1 m
-	inline constexpr float metresPerTexel = 1.0f;
-
 	//One file of the pack
 	struct File {
 		std::string path;		//relative to the manifest
@@ -59,6 +56,8 @@ namespace exportpack {
 		std::string name;
 		std::string mode;					//generation mode of the app, e.g. "TerrainGen"
 		int width = 0, height = 0;			//map size in texels
+		//Metres per map texel: generated maps 1 (a texel is drawn as TerrainView::worldUnitsPerTexel world units = 1 m), imported maps their pixel size
+		float metresPerTexel = 1.0f;
 		glm::ivec2 worldOrigin = glm::ivec2(0);	//world map position of texel (0, 0): where a partial map lies in the generated world
 		float metresPerUnit = 1.0f;			//metres of height value 1
 		heightmap::ValueRange range{ 0.0f, 1.0f };	//values mapped to 0 - 65535 by the 16-bit files

@@ -18,6 +18,8 @@ find_package(lodepng CONFIG REQUIRED)
 find_package(Stb REQUIRED)
 find_package(doctest CONFIG REQUIRED)
 find_package(TIFF REQUIRED)
+# Compression of the project files (MapProject)
+find_package(ZLIB REQUIRED)
 find_package(meshoptimizer CONFIG REQUIRED)
 # cgltf is a single header (the implementation is compiled in VegetationMesh.cpp)
 find_path(CGLTF_INCLUDE_DIRS "cgltf.h" REQUIRED)
@@ -52,6 +54,7 @@ add_library(ptg_core STATIC
 	${PTG_SRC}/terrainGeneration/HeightmapImport.cpp
 	${PTG_SRC}/terrainGeneration/Hydrology.cpp
 	${PTG_SRC}/terrainGeneration/LandStats.cpp
+	${PTG_SRC}/terrainGeneration/MapProject.cpp
 	${PTG_SRC}/terrainGeneration/MaterialExport.cpp
 	${PTG_SRC}/terrainGeneration/MeshExport.cpp
 	${PTG_SRC}/terrainGeneration/MeshFile.cpp
@@ -66,7 +69,7 @@ add_library(ptg_core STATIC
 target_include_directories(ptg_core PUBLIC ${PTG_SRC}/terrainGeneration)
 target_include_directories(ptg_core SYSTEM PRIVATE ${CGLTF_INCLUDE_DIRS})
 target_link_libraries(ptg_core PUBLIC ptg_vendor glm::glm)
-target_link_libraries(ptg_core PRIVATE nlohmann_json::nlohmann_json lodepng meshoptimizer::meshoptimizer TIFF::TIFF)
+target_link_libraries(ptg_core PRIVATE nlohmann_json::nlohmann_json lodepng meshoptimizer::meshoptimizer TIFF::TIFF ZLIB::ZLIB)
 ptg_set_warnings(ptg_core)
 
 add_executable(ProceduralTerrainGenerator
@@ -111,6 +114,7 @@ add_executable(ProceduralTerrainGenerator
 	${PTG_SRC}/utility/PackPicker.cpp
 	${PTG_SRC}/utility/PlacesPanel.cpp
 	${PTG_SRC}/utility/PresetPanel.cpp
+	${PTG_SRC}/utility/SendToImported.cpp
 	${PTG_SRC}/utility/Sky.cpp
 	${PTG_SRC}/utility/utilities.cpp
 	${PTG_SRC}/utility/PanelTabs.cpp
@@ -150,6 +154,7 @@ add_executable(ptg_tests
 	${PTG_DIR}/tests/HydrologyTests.cpp
 	${PTG_DIR}/tests/ImpostorTests.cpp
 	${PTG_DIR}/tests/LandStatsTests.cpp
+	${PTG_DIR}/tests/MapProjectTests.cpp
 	${PTG_DIR}/tests/MaterialExportTests.cpp
 	${PTG_DIR}/tests/MeshExportTests.cpp
 	${PTG_DIR}/tests/MeshFileTests.cpp

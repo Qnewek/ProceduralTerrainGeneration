@@ -657,6 +657,11 @@ oryginał tylko w pamięci i w projekcie („Wróć do oryginału”), plus Cofn
 - **B1. Projekt i przenoszenie:** plik projektu `.ptgmap` (nagłówek JSON + kopia robocza i oryginał float32 skompresowane zlib), Save (Ctrl+S) /
   Save as / Open project / Import map, gwiazdka i pytanie o niezapisane zmiany; „Send to Imported map” w TerrainGen i Noise heightmap (bieżąca mapa
   częściowa w metrach z poziomem morza, osobno kopia po erozji); zakładka Saving eksportuje kopię roboczą w metrach.
+  🟡 2026-11-21 (branch `feat/map-project`): `MapProject.*` (format z testami: ucięty/uszkodzony plik, nowsza wersja, NaN), zakładka Project w prawym panelu
+  Imported map (decyzja właściciela: nie pasek menu) z listą `projects/`, okno „Unsaved changes” przy Open/Load/przyjęciu mapy/zamknięciu okna (w każdym trybie),
+  „Send map” / „Send eroded copy” w Saving obu trybów (mapa jak w eksporcie, przełącza tryb, kamera z góry), Saving w Imported map z prawdziwym pikselem
+  (`metresPerTexel` stał się polem paczki: manifest, siatki; rozmiar kafla siatki w tekselach, z metrami w etykiecie). Poziom morza tylko zapisywany (woda w B2).
+  Do sprawdzenia w aplikacji: czas zapisu/odczytu i rozmiar pliku 8192², kadr po Send/Open, okno „Unsaved changes” przy zamykaniu z innego trybu.
 - **B2. Operacje, woda, rzeki:** erozja (parametry w metrach na piksel), wygładzanie, przeskalowanie wysokości, każda operacja krokiem historii
   (limit pamięci); poziom wody w metrach; rzeki i jeziora `hydrology::Compute` na kopii w tle, liczone od nowa po zmianie (bez rzeźbienia koryt).
 - **C. Modelowanie ręczne:** pędzle GPU (podnieś, obniż, wygładź, spłaszcz, szum) kursorem w 3D, promień/siła/zanik, pociągnięcie = krok historii.

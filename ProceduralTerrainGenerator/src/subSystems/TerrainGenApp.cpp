@@ -151,22 +151,37 @@ void TerrainGenApp::Start()
         else if (currentMode == mode::TERRAIN_GEN) {
             terrainGenSys.Update(camera);
         }
-        else if (currentMode == mode::MAP_IMPORT) {
-            mapImportSys.Update();
-
-        }
+        //Every frame: a project save started before leaving the mode (or before closing the window) has to finish
+        mapImportSys.Update(camera, currentMode == mode::MAP_IMPORT);
         //The sky and the light colors of this frame, read by every lit shader (also in the 2D map)
         light.Update(deltaTime);
         sky.Update(camera, light);
 
 		Draw();
         ImGuiRender();
+        //"Send map" pressed in a Saving tab this frame: the map opens in the Imported map mode
+        std::optional<mapproject::Project> sent = noiseGenSys.TakeSentMap();
+        if (!sent) {
+            sent = terrainGenSys.TakeSentMap();
+        }
+        if (sent) {
+            mapImportSys.Receive(std::move(*sent));
+            currentMode = mode::MAP_IMPORT;
+        }
         const bool holeInView = (currentMode == mode::NOISE_HEIGHTMAP && noiseGenSys.HoleInView()) || (currentMode == mode::TERRAIN_GEN && terrainGenSys.HoleInView());
         metrics->EndFrame(deltaTime * 1000.0, (glfwGetTime() - currentFrame) * 1000.0, camera.GetPosition(), holeInView);
 
         camera.SetScreenSize(ViewportWidth(), ViewportHeight());
         
         glfwPollEvents();
+        //Closing the window with an unsaved project asks first; the window closes once the changes are saved or discarded
+        if (glfwWindowShouldClose(window) && mapImportSys.HasUnsavedChanges()) {
+            glfwSetWindowShouldClose(window, GLFW_FALSE);
+            mapImportSys.RequestQuit();
+        }
+        if (mapImportSys.TakeQuit()) {
+            glfwSetWindowShouldClose(window, GLFW_TRUE);
+        }
         if (glfwGetWindowAttrib(window, GLFW_ICONIFIED) != 0)
         {
             ImGui_ImplGlfw_Sleep(10);
@@ -295,6 +310,9 @@ void TerrainGenApp::ImGuiRender()
         viewTabs.push_back({ "Presets", [this] { terrainGenSys.ImGuiPresets(camera); } });
         viewTabs.push_back({ "Saving", [this] { terrainGenSys.ImGuiSaving(); } });
     }
+    else if (currentMode == mode::MAP_IMPORT) {
+        viewTabs.push_back({ "Saving", [this] { mapImportSys.ImGuiSaving(); } });
+    }
     viewTabs.push_back({ "About", [] {
         ImGui::TextWrapped("Hi Dear User!\n"
             "I am more than happy to be able to introduce my Procedural Generation App to you.\n"
@@ -379,6 +397,8 @@ void TerrainGenApp::ImGuiRender()
     else if (currentMode == mode::TERRAIN_GEN) {
         terrainGenSys.ImGuiMapLabels();
     }
+    //In every mode: closing the window asks about an unsaved project too
+    mapImportSys.ImGuiModals();
 
     ImGui::Render();
     metrics->BeginUi();

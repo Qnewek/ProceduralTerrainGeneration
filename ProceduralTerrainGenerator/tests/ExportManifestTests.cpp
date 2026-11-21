@@ -42,6 +42,21 @@ TEST_CASE("Manifest gives the size and heights in metres")
 	CHECK(j["grid"]["worldOrigin"] == Json::array({ 0, 0 }));
 }
 
+TEST_CASE("Manifest uses the pixel size of the pack")
+{
+	exportpack::Manifest m = SampleManifest();
+	m.width = 11;
+	m.height = 6;
+	m.metresPerTexel = 30.0f;
+	const Json j = Json::parse(exportpack::ToJson(m));
+	CHECK(j["grid"]["metresPerTexel"].get<float>() == doctest::Approx(30.0f));
+	CHECK(j["grid"]["sizeMetres"][0].get<float>() == doctest::Approx(300.0f));
+	CHECK(j["grid"]["sizeMetres"][1].get<float>() == doctest::Approx(150.0f));
+	CHECK(j["import"]["unreal"]["scale"][0].get<float>() == doctest::Approx(3000.0f));
+	CHECK(j["import"]["unity"]["terrainSize"][0].get<float>() == doctest::Approx(300.0f));
+	CHECK(j["import"]["unity"]["terrainSize"][2].get<float>() == doctest::Approx(150.0f));
+}
+
 TEST_CASE("Manifest gives where a moved partial map lies in the world")
 {
 	exportpack::Manifest m = SampleManifest();

@@ -54,7 +54,8 @@ ProceduralTerrainGenerator/
                                  (Display, Camera, Sun & sky, Materials, Presets, Saving, About), prawy = zakładki generacji subsystemu trybu
       NoiseBasedGenerationSys.*  tryb "Noise heightmap": jeden szum + erozja (podgląd obok)
       TerrainGenerationSys.*     tryb "TerrainGen": 3 szumy + splajny + biomy, edytory ImPlot
-      MapImportSys.*             tryb "Imported map": podgląd mapy wysokości z pliku, wczytywanej w tle
+      MapImportSys.*             tryb "Imported map": projekt z jedną kopią roboczą mapy (z pliku mapy, z projektu .ptgmap albo wysłana z innego trybu),
+                                 zakładki Project (Open/Save/Save as, Ctrl+S, `*`) i Load, Saving = paczka eksportu; odczyt i zapis w tle
     terrainGeneration/
       WorldConfig.h              same dane: WorldConfig (TerrainConfig + BiomeConfig), NoiseMapConfig, ErosionConfig
       Noise.h                    noise::NoiseConfigParameters (fBm, ridge, island, redistribution); sam szum jest tylko w GLSL
@@ -75,6 +76,8 @@ ProceduralTerrainGenerator/
                                  `Inspect` = sam nagłówek, `Import(ImportOptions)` = odczyt → wycinek → NoData (tylko w wycinku) → zmniejszenie → wynik ≤ 8192²;
                                  próbki |v| ≥ 1e30 to też NoData (±FLT_MAX bez znacznika)
       DemTools.*                 mapy rzeczywiste: wypełnianie NoData z sąsiadów, wycinek, zmniejszenie (średnia bloków), piksel w metrach ze stopni
+      MapProject.*               plik projektu .ptgmap: sygnatura + długość + nagłówek JSON (rozmiar, piksel, morze, źródło, preset, przewyższenie) + bloki zlib
+                                 (float32 w metrach rozdzielone na 4 płaszczyzny bajtów): kopia robocza i oryginał (tylko gdy się różni); zmiana pól = podbicie `currentVersion`
       GenerationJob.h            jedno zadanie generacji w tle (std::async + TryTake)
       LandStats.*                udział wody i masy lądu (flood fill) z rzadkiej próbki świata (GpuHeightGenerator::SampleTerrain); „Land statistics” w zakładce Terrain i sekcja land: w --gpu-check
       Hydrology.*                sieć rzek regionu (metoda REGION): priority-flood, spływ D8, akumulacja, jeziora, biegi rzek → siatki dla RiverMap
@@ -105,7 +108,8 @@ ProceduralTerrainGenerator/
       ExportPanel.*              sekcja „Saving” w ImGui: paczka w exports/<nazwa>/; subsystem podaje `ExportPanel::Pack` (mapy, zakres, metry na jednostkę, morze, preset)
       BiomeEditor.*              edytor tabeli biomów (lista, zakresy, diagram Whittakera T × H); edytuje tabelę w miejscu, subsystem przelicza biomy
       PanelTabs.*                zakładki panelu: rzędy przycisków na górze (zawijane, gdy się nie mieszczą) + przewijana treść pod nimi; wybór trzymany po nazwie
-      FileDialog.*               systemowe okno wyboru pliku (tylko Windows, comdlg32); przy porcie na Linuksa do zastąpienia
+      FileDialog.*               systemowe okna otwierania i zapisu pliku (tylko Windows, comdlg32); przy porcie na Linuksa do zastąpienia
+      SendToImported.*           przyciski „Send map” / „Send eroded copy” w Saving TerrainGen i Noise: mapa z `ExportPanel::Pack` w metrach → `mapproject::Project`
       utilities.*                helpery ImGui (NoiseImGui, DisplayModeImGui...), siatka patchy, kolory biomów
     vendor/                      SimplexNoise (z niego tylko makePermutation: tablice permutacji dla GPU), stb_image
   tests/                         testy jednostkowe ptg_core (doctest)
@@ -120,7 +124,7 @@ ProceduralTerrainGenerator/
   res/textures/terrain_materials.json   lista materiałów (kolejność = id); same tekstury w res/textures/terrain/ (poza gitem)
 tools/fetch_textures.py          pobiera tekstury materiałów (CC0, Poly Haven / ambientCG), tylko biblioteka standardowa Pythona
 tools/fetch_models.py            pobiera modele roślinności i kamieni (CC0 glTF, Poly Haven) z mapami alpha liści
-CMakeLists.txt, CMakePresets.json, vcpkg.json   build; GLFW, GLEW, glm, ImGui, ImPlot, stb, libtiff (z zlib, tylko ptg_core i testy) z vcpkg
+CMakeLists.txt, CMakePresets.json, vcpkg.json   build; GLFW, GLEW, glm, ImGui, ImPlot, stb, libtiff (z zlib, tylko ptg_core i testy), zlib (projekty .ptgmap, ptg_core) z vcpkg
 .github/workflows/build.yml      CI (Windows x64 Debug/Release, build + testy jednostkowe)
 ```
 
@@ -326,7 +330,7 @@ Wartości szumów są w [-1, 1]. Konwencja indeksowania: `map[y * width + x]`.
   Miejsca (`places/`, poza gitem) nie trzymają parametrów generacji.
 - Eksport map: zakres wartości plików 16-bit jest stały (`heightmap::terrainRange`, `noiseRange`), nie min–max mapy. Zmiana zakresu generacji wymaga zmiany
   tych stałych, inaczej wartości zostaną przycięte. Eksport czyta mapę z tekstury w chwili zapisu, w wątku głównym.
-  Paczka (`exports/<nazwa>/`): pliki `<nazwa>_height*.{png,r16,exr}` + `<nazwa>.json` (`exportpack::ToJson`). Metry: 1 teksel = 1 m (`exportpack::metresPerTexel`),
+  Paczka (`exports/<nazwa>/`): pliki `<nazwa>_height*.{png,r16,exr}` + `<nazwa>.json` (`exportpack::ToJson`). Metry: 1 teksel = `Pack::metresPerTexel` (mapy generowane 1 m, Imported map = piksel mapy; roślinność tylko 1 m),
   wysokość 1 = `heightScale / worldUnitsPerTexel` m z bieżącego „Height scale” (TerrainGen domyślnie 256 m). EXR trzyma metry, 16-bit — wartości z zakresu.
   Kolejne części eksportu (siatki, roślinność) dopisują swoje pliki do `Manifest::files`; zmiana nazw pól JSON = podbicie `manifestVersion`.
   Mapy materiałów i biomów (tylko TerrainGen z biomami): splat czytany z GPU (`TextureClass::Read` tablicy = warstwa po warstwie, materiał m = warstwa m/4,
@@ -355,6 +359,11 @@ Wartości szumów są w [-1, 1]. Konwencja indeksowania: `map[y * width + x]`.
   (piksel po zmniejszeniu), ustawiane po wczytaniu, „Vertical exaggeration” = `heightScale / trueHeightScale`. libtiff 4.7 nie zna znaczników GeoTIFF
   (33550, 33922, 34735) ani GDAL_NODATA (42113) — czytamy je jako pola anonimowe (licznik uint16 albo uint32, `GetArray`); testowy zapis rejestruje je
   `TIFFMergeFieldInfo`. Mapy w stopniach (GeoTIFF `GTModelTypeGeoKey` = 2, `.hgt`, `.asc` z małą komórką) bez reprojekcji: piksel w metrach przy szerokości środka.
+  Projekt (B1, `MapProject.*`): plik trzyma metry, pamięć — jednostki; `metresPerUnit` liczone od nowa przy Open i przyjęciu mapy (max |h| kopii i oryginału, ≥ 1 m).
+  Każda akcja, która zastępuje mapę (Open, Load, przyjęcie mapy, zamknięcie okna), idzie przez `MapImportSys::Request`: przy niezapisanych zmianach okno
+  „Unsaved changes” (Save → akcja po udanym zapisie). Wyjątek: zmiana zakresu wartości przeładowuje ten sam plik bez pytania. Każda instalacja mapy podbija
+  `mapVersion`; wynik wczytywania lub zapisu rozpoczęty przy starszej wersji jest odrzucany (zapis nie nadaje projektowi nazwy). `MapImportSys::Update` idzie
+  co klatkę w każdym trybie (zapis przed zamknięciem z innego trybu), a `ImGuiModals` też. Mapa wysłana z TerrainGen/Noise = to, co eksport (`Pack`), w metrach.
 - Rzeki (tylko TerrainGen, zakładka „Rivers”, `WorldConfig::rivers`, domyślnie `NONE`): `carveRivers` (`common/rivers.glsl`) to ostatni krok wysokości w obu ścieżkach
   (`height_compute` i `biome_compute` z `writeHeight`), po modyfikatorach; biomy wybiera wysokość sprzed rzek. Generacja dostaje `const RiverInput*` (config + `RiverMap`);
   `SampleTerrain` zawsze bez rzek (z niej liczy się sieć — inaczej sprzężenie). Każdy dispatch ustawia `riverMethod` (program pamięta uniformy).
