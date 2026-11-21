@@ -1,5 +1,7 @@
 #include "NoiseBasedGenerationSys.h"
 
+#include "SendToImported.h"
+
 #include <algorithm>
 #include <iostream>
 
@@ -432,6 +434,9 @@ void NoiseBasedGenerationSys::ImGuiSaving()
 		}
 	}
 	exporter.ImGuiDraw(pack);
+	if (std::optional<mapproject::Project> sent = SendToImportedImGui(pack)) {
+		sentMap = std::move(sent);
+	}
 }
 
 void NoiseBasedGenerationSys::ErosionImGui()

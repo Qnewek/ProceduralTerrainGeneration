@@ -21,6 +21,7 @@ namespace meshexport {
 		int lodLevels = 3;				//LOD 0 = the full grid, each next level aims at a quarter of the triangles of the previous one
 		float tileMetres = 256.0f;		//<= 0 = one tile per level
 		float metresPerUnit = 1.0f;		//metres of height value 1
+		float metresPerTexel = 1.0f;	//metres between neighbouring map samples
 		std::string terrainTexture;		//base color image of the terrain (a file of the pack, glTF only); empty = plain grey
 		bool water = false;				//write the water file (if it has anything)
 		std::optional<float> seaLevel;	//height value of the sea surface, a quad over the map; none = no sea

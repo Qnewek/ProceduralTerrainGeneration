@@ -53,6 +53,7 @@ public:
 		const char* mode = "";				//generation mode, stored in the manifest
 		heightmap::ValueRange range{ 0.0f, 1.0f };	//values mapped to the 16-bit range
 		float metresPerUnit = 1.0f;			//metres of height value 1 (display height scale / world units per metre)
+		float metresPerTexel = 1.0f;		//metres between neighbouring map samples: 1 for generated maps, the pixel size of imported ones
 		std::optional<float> seaLevel;		//height value of the sea surface, if the mode has a sea
 		glm::ivec2 worldOrigin = glm::ivec2(0);	//world map position of texel (0, 0) of the main map
 		std::function<std::string()> generation;	//generation parameters as preset JSON, called only when exporting
@@ -113,11 +114,12 @@ private:
 	//0 = no meshes, then meshexport::Format + 1
 	int meshFormat = 0;
 	int lodLevels = 3;
-	int tileChoice = 1;		//index in tileSizes
+	int tileChoice = 1;		//index in tileTexels
 	bool exportWater = true;
 	bool exportVegetation = false;
 	bool exportModels = true;
-	static constexpr float tileSizes[] = { 128.0f, 256.0f, 512.0f, 1024.0f, 0.0f };
+	//Side of a mesh tile in map texels (metres = texels * Pack::metresPerTexel); 0 = whole map
+	static constexpr float tileTexels[] = { 128.0f, 256.0f, 512.0f, 1024.0f, 0.0f };
 	std::string status;
 	bool statusIsError = false;
 };

@@ -34,6 +34,27 @@ static cgltf_data* LoadGlb(const std::filesystem::path& path)
 	return data;
 }
 
+TEST_CASE("Mesh export uses the pixel size")
+{
+	const std::filesystem::path folder = std::filesystem::temp_directory_path() / "ptg_mesh_pixel_tests";
+	std::filesystem::remove_all(folder);
+	meshexport::Settings settings;
+	settings.name = "dem";
+	settings.lodLevels = 1;
+	settings.tileMetres = 0.0f;
+	settings.metresPerTexel = 30.0f;
+	const meshexport::Result result = meshexport::Write(Valley(9, 5), settings, folder);
+	REQUIRE_MESSAGE(result.ok, result.error);
+	cgltf_data* data = LoadGlb(folder / result.levels[0].path);
+	REQUIRE(data != nullptr);
+	REQUIRE(data->nodes_count == 1);
+	const cgltf_accessor* positions = data->nodes[0].mesh->primitives[0].attributes[0].data;
+	CHECK(positions->max[0] == doctest::Approx(240.0f));
+	CHECK(positions->max[2] == doctest::Approx(120.0f));
+	cgltf_free(data);
+	std::filesystem::remove_all(folder);
+}
+
 TEST_CASE("Mesh export writes a file per level of detail with the tiles, and the water")
 {
 	const std::filesystem::path folder = std::filesystem::temp_directory_path() / "ptg_mesh_export_tests";

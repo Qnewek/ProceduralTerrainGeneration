@@ -30,7 +30,7 @@ namespace meshexport {
 		const auto start = std::chrono::steady_clock::now();
 		Result result;
 		const int width = map.GetWidth(), height = map.GetHeight();
-		const terrainmesh::Mesh grid = terrainmesh::BuildGrid(map, settings.metresPerUnit, exportpack::metresPerTexel);
+		const terrainmesh::Mesh grid = terrainmesh::BuildGrid(map, settings.metresPerUnit, settings.metresPerTexel);
 		if (grid.positions.empty()) {
 			result.error = "The map is smaller than 2 x 2 texels";
 			return result;
@@ -52,7 +52,7 @@ namespace meshexport {
 			if (lod > 0) {
 				//From the previous level: much faster than from the full grid, about the same error (measured on 1024^2)
 				indices = terrainmesh::Simplify(grid, indices, indices.size() / 3 / 4);
-				level.errorMetres = terrainmesh::MaxHeightError(grid, indices, width, height, exportpack::metresPerTexel);
+				level.errorMetres = terrainmesh::MaxHeightError(grid, indices, width, height, settings.metresPerTexel);
 			}
 			const std::vector<terrainmesh::Tile> tiles = terrainmesh::SplitTiles(grid, indices, settings.tileMetres);
 			std::vector<meshfile::Node> nodes;
@@ -73,7 +73,7 @@ namespace meshexport {
 		}
 
 		if (settings.water) {
-			const glm::vec2 mapMax(static_cast<float>(width - 1) * exportpack::metresPerTexel, static_cast<float>(height - 1) * exportpack::metresPerTexel);
+			const glm::vec2 mapMax(static_cast<float>(width - 1) * settings.metresPerTexel, static_cast<float>(height - 1) * settings.metresPerTexel);
 			terrainmesh::Mesh sea, rivers;
 			std::vector<meshfile::Node> nodes;
 			if (settings.seaLevel) {
