@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <filesystem>
+#include <functional>
 #include <optional>
 #include <string>
 #include <vector>
@@ -11,10 +12,15 @@
 #include "Camera.h"
 #include "ExportPanel.h"
 #include "GenerationJob.h"
+#include "GpuErosion.h"
 #include "HeightmapImport.h"
+#include "Hydrology.h"
 #include "LightSource.h"
+#include "MapEdit.h"
 #include "MapProject.h"
+#include "RiverMap.h"
 #include "TerrainView.h"
+#include "WaterSurface.h"
 #include "utilities.h"
 #include "PanelTabs.h"
 
@@ -43,7 +49,7 @@ public:
 	void Draw(Renderer& renderer, Camera& camera, LightSource& light);
 	//true while the 2D map is shown instead of the 3D view
 	bool FlatView() const { return renderSettings.map2d; }
-	void ReloadShaders() { view.ReloadShader(); }
+	void ReloadShaders() { view.ReloadShader(); erosion.ReloadShaders(); water.ReloadShader(); }
 	//Right panel: the Load tab
 	void ImGuiRightPanel();
 	//Content of the Display tab of the left panel
@@ -96,11 +102,42 @@ private:
 	void Run(PendingAction& action);
 	void InstallReceived(mapproject::Project& project);
 
-	//Shows a map: values in map units (metres / metresPerUnit)
+	//Shows a new map (values in map units, metres / metresPerUnit) and clears the history
 	void InstallMap(HeightField units, float _metresPerUnit, glm::dvec2 _pixelMetres);
+	//Shows a map in map units; the true proportions follow it, the history stays
+	void ShowUnits(HeightField units, float _metresPerUnit, glm::dvec2 _pixelMetres);
+
+	//Edits of the working copy (Edit tab)
+	struct EditResult {
+		HeightField metres;
+		std::string label;		//of the history step
+		uint64_t version = 0;	//mapVersion when the edit started
+		double ms = 0.0;
+		std::string error;
+	};
+	//The working copy in metres
+	HeightField WorkingMetres() const;
+	//Shows an edited map in metres without a history step: map units again from the largest height of it and of the original, the same
+	//vertical exaggeration, a change to save; the original keeps its heights
+	void ShowMetres(HeightField metres);
+	//An operation finished: before goes to the history, the map and the sea level become the new state
+	void ApplyEdit(HeightField metres, std::optional<float> seaLevel, mapedit::Step before);
+	//The sea level changed (a history step without a map)
+	void SetSeaLevel(std::optional<float> metres, std::optional<float> before);
+	//Undo (redo = false) or redo the last step
+	void StepHistory(bool redo);
+	//Runs an operation on a copy of the working copy in metres on a background thread
+	void StartEdit(const std::string& label, std::function<void(HeightField&)> operation);
+	void FinishEdit(EditResult& result);
+	//The map or the sea level changed: what is computed from them (rivers) is out of date
+	void OnMapChanged() { mapChanged = true; }
+	void SetEditStatus(const std::string& text, bool isError);
+	//Content of the Edit tab
+	void EditImGui();
+	void HistoryImGui();
 	//Divides the maps by max(|height|, 1 m) over both; @return that divisor (metresPerUnit)
 	static float ToUnits(HeightField& working, HeightField& original);
-	bool Busy() const { return job.IsRunning() || projectJob.IsRunning() || saveJob.IsRunning(); }
+	bool Busy() const { return job.IsRunning() || projectJob.IsRunning() || saveJob.IsRunning() || editJob.IsRunning(); }
 
 	//Project file
 	void SaveProject();
@@ -175,6 +212,46 @@ private:
 	std::string questionError;	//why the save asked for by the question did not happen, shown when it is asked again
 	bool quitApproved = false;
 	ExportPanel exporter{ "exports" };
+
+	//Edit state
+	mapedit::History history{ size_t(1024) << 20 };
+	int historyMegabytes = 1024;
+	std::string historyNote;		//why the last step is not in the history
+	GenerationJob<EditResult> editJob;
+	bool mapChanged = false;		//rivers have to be computed again
+	std::string editStatus;
+	bool editStatusIsError = false;
+	int smoothRadius = 4;
+	float smoothStrength = 1.0f;
+	float scaleFactor = 1.0f;
+	float scaleOffset = 0.0f;		//metres
+	float seaBefore = 0.0f;			//sea level when dragging its slider started
+	//Erosion on the GPU, in erosion units (mapedit::ErosionScale), run in Update
+	GpuErosion erosion;
+	erosion::ErosionConfig erosionConfig = WorldConfig::DefaultWorldErosion();
+	bool erodeRequested = false;
+	uint32_t erosionRuns = 0;
+	//Erodes the working copy now (GL thread)
+	void Erode();
+
+	//Rivers and lakes of the working copy (hydrology::ComputeOnMap), computed on a background thread after every change; not carved
+	struct RiverResult {
+		hydrology::MapRivers rivers;
+		uint64_t version = 0;	//mapVersion when the computation started
+		double ms = 0.0;
+	};
+	rivers::RiverConfig riverConfig;	//method NONE = off, REGION = on
+	GenerationJob<RiverResult> riverJob;
+	std::optional<hydrology::MapRivers> riverNetwork;	//heights in metres / hydrology::mapMetresPerHeight
+	double riverMs = 0.0;
+	RiverMap riverMap;
+	WaterSurface water;
+	bool RiversOn() const { return riverConfig.method == rivers::Method::REGION; }
+	//Takes a finished network and starts a new one when the map changed; called every frame
+	void UpdateRivers();
+	//Water of the network to the GPU, levels in map units
+	void UploadRiverWater();
+	void RiversImGui();
 
 	//File selection state
 	char folder[260] = "exports";

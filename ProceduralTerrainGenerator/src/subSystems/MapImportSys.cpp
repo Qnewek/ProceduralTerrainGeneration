@@ -12,6 +12,7 @@
 
 #include "DemTools.h"
 #include "FileDialog.h"
+#include "Preset.h"
 
 //What the lowest and the highest sample of a file without units (PNG, R16) mean, in the order shown in the UI.
 //Files do not store this; a map exported by this app needs the range of the mode it came from. The last entry, "Custom (metres)", is not in the table
@@ -35,6 +36,10 @@ bool MapImportSys::Initialize(int _width, int _height, float _heightScale)
 	if (!view.Initialize(_width, _height)) {
 		return false;
 	}
+	if (!erosion.Initialize()) {
+		std::cout << "[ERROR] MapImportSys: erosion shaders could not be built\n";
+		return false;
+	}
 	std::cout << "[LOG] MapImportSys initialized\n";
 	return true;
 }
@@ -50,6 +55,14 @@ void MapImportSys::Update(Camera& camera, bool active)
 	if (std::optional<SaveResult> result = saveJob.TryTake()) {
 		FinishSaving(*result);
 	}
+	if (std::optional<EditResult> result = editJob.TryTake()) {
+		FinishEdit(*result);
+	}
+	if (erodeRequested) {
+		erodeRequested = false;
+		Erode();
+	}
+	UpdateRivers();
 	//Meshes of an export are written in the background; the Saving tab may be closed
 	exporter.Update();
 	if (lookDown && active && !map.Empty()) {
@@ -76,6 +89,19 @@ float MapImportSys::ToUnits(HeightField& working, HeightField& original)
 
 void MapImportSys::InstallMap(HeightField units, float _metresPerUnit, glm::dvec2 _pixelMetres)
 {
+	//The network of the previous map would be drawn over the new one until its own is computed
+	riverNetwork.reset();
+	riverMap.Clear();
+	erodeRequested = false;
+	ShowUnits(std::move(units), _metresPerUnit, _pixelMetres);
+	history.Clear();
+	historyNote.clear();
+	editStatus.clear();
+	OnMapChanged();
+}
+
+void MapImportSys::ShowUnits(HeightField units, float _metresPerUnit, glm::dvec2 _pixelMetres)
+{
 	map = std::move(units);
 	metresPerUnit = _metresPerUnit;
 	pixelMetres = _pixelMetres;
@@ -89,6 +115,10 @@ void MapImportSys::InstallMap(HeightField units, float _metresPerUnit, glm::dvec
 	view.Resize(map.GetWidth(), map.GetHeight());
 	view.SetLayer(TerrainView::Layer::TERRAIN, map);
 	mapVersion++;
+	//The water of the network shown until the new one comes keeps its metres in the new map units
+	if (riverNetwork) {
+		UploadRiverWater();
+	}
 }
 
 std::string MapImportSys::ProjectName() const
@@ -156,6 +186,7 @@ void MapImportSys::StartSaving(const std::filesystem::path& path)
 	project.source = projectSource;
 	project.generation = projectGeneration;
 	project.verticalExaggeration = renderSettings.heightScale / trueHeightScale;
+	project.rivers = preset::RiversJson(riverConfig);
 	const float unit = metresPerUnit;
 	const uint64_t version = mapVersion;
 	saveJob.Start([project = std::move(project), path, unit, version]() mutable {
@@ -456,6 +487,14 @@ void MapImportSys::InstallProject(ProjectLoad& result)
 	lastLoadMs = result.ms;
 	lookDown = true;
 	SetProjectStatus("Opened " + FileNameOf(result.path), false);
+	//River settings of the project (none in version 1: rivers off)
+	riverConfig = rivers::RiverConfig();
+	if (!project.rivers.empty()) {
+		std::string riverError;
+		if (!preset::RiversFromJson(project.rivers, riverConfig, riverError)) {
+			SetProjectStatus("Opened " + FileNameOf(result.path) + "; river settings ignored: " + riverError, true);
+		}
+	}
 }
 
 std::filesystem::path MapImportSys::ProjectFolder() const
@@ -658,6 +697,19 @@ void MapImportSys::InstallResult(LoadResult& result)
 void MapImportSys::Draw(Renderer& renderer, Camera& camera, LightSource& light)
 {
 	view.Draw(renderer, camera, light, renderSettings);
+	const bool rivers = RiversOn() && riverMap.Ready();
+	const TextureClass* height = view.GetLayerTexture(TerrainView::Layer::TERRAIN);
+	if (map.Empty() || !height || (!seaLevelMetres && !rivers)) {
+		return;
+	}
+	//Water last: it reads a copy of everything drawn before
+	const glm::vec2 size(view.GetWorldWidth(), view.GetWorldHeight());
+	//World XZ of map position (0, 0), where the river network lies: the centre of texel (0, 0)
+	const glm::vec2 worldTexelOrigin = (-glm::vec2(view.GetMapWidth(), view.GetMapHeight()) * 0.5f + 0.5f) * TerrainView::worldUnitsPerTexel;
+	//Without a sea its surface lies under the whole map, hidden by the terrain
+	const float sea = seaLevelMetres ? *seaLevelMetres / metresPerUnit : mapMin - 1.0f;
+	water.DrawMap(*height, view.GetWorldCorner(), size, worldTexelOrigin, camera, light, renderSettings, sea * renderSettings.heightScale,
+		view.GetFlatViewMin(), view.GetFlatViewMax(), rivers ? &riverMap : nullptr);
 }
 
 std::filesystem::path MapImportSys::Folder() const
@@ -701,11 +753,23 @@ void MapImportSys::BrowseForFile()
 void MapImportSys::ImGuiRightPanel()
 {
 	//Ctrl+S anywhere in this mode, unless a text field takes the keys
-	if (!ImGui::GetIO().WantTextInput && ImGui::IsKeyChordPressed(ImGuiMod_Ctrl | ImGuiKey_S) && !map.Empty()) {
-		SaveProject();
+	if (!ImGui::GetIO().WantTextInput && !map.Empty()) {
+		if (ImGui::IsKeyChordPressed(ImGuiMod_Ctrl | ImGuiKey_S)) {
+			SaveProject();
+		}
+		//Undo and redo; not while an operation, a load or a save runs
+		if (!Busy()) {
+			if (ImGui::IsKeyChordPressed(ImGuiMod_Ctrl | ImGuiKey_Z)) {
+				StepHistory(false);
+			}
+			else if (ImGui::IsKeyChordPressed(ImGuiMod_Ctrl | ImGuiKey_Y) || ImGui::IsKeyChordPressed(ImGuiMod_Ctrl | ImGuiMod_Shift | ImGuiKey_Z)) {
+				StepHistory(true);
+			}
+		}
 	}
 	const PanelTabs::Tab tabs[] = {
 		{ "Project", [this] { ProjectImGui(); } },
+		{ "Edit", [this] { EditImGui(); } },
 		{ "Load", [this] { LoadImGui(); } },
 	};
 	importTabs.Draw("import", tabs);
@@ -787,9 +851,14 @@ bool MapImportSys::OptionsImGui()
 
 	bool valid = true;
 	if (NeedsRange()) {
-		//Changing the range of the loaded map reads its file again; the new range applies to it right away
-		if (ImGui::Combo("Value range", &selectedRange, valueRangeNames) && mapPath == selected && selectedRange != customRange) {
+		//Changing the range of the loaded map reads its file again; the new range applies to it right away. Not once the map is edited:
+		//the reload would replace the edits without asking, so the range waits for the next Load (which asks about unsaved changes)
+		const bool edited = !original.Empty() || history.CanUndo();
+		if (ImGui::Combo("Value range", &selectedRange, valueRangeNames) && mapPath == selected && selectedRange != customRange && !edited) {
 			StartLoading(selected, true);
+		}
+		if (edited && mapPath == selected) {
+			ImGui::TextDisabled("The map is edited: a new range applies when the file is loaded again.");
 		}
 		if (selectedRange == customRange) {
 			ImGui::InputFloat("Lowest (m)", &customLowest, 0.0f, 0.0f, "%.1f");
@@ -847,6 +916,7 @@ void MapImportSys::ImGuiDisplay()
 		}
 	}
 	utilities::TerrainDetailImGui(s.tessPixels);
+	water.ImGuiDraw();
 }
 
 void MapImportSys::ImGuiSaving()
@@ -869,6 +939,18 @@ void MapImportSys::ImGuiSaving()
 	pack.heightmaps = { { map.GetWidth(), map.GetHeight(), "", [this] { return map; } } };
 	pack.layersMissing = "Material and biome maps: not available for imported maps.";
 	pack.vegetationMissing = "Vegetation: not available for imported maps.";
+	//Rivers and lakes of the network shown: positions in map texels, levels in metres / mapMetresPerHeight
+	if (RiversOn() && riverNetwork && !riverNetwork->water.empty()) {
+		const float pixel = static_cast<float>(pixelMetres.x);
+		pack.riverWater = [this, pixel] {
+			std::vector<glm::vec3> triangles;
+			triangles.reserve(riverNetwork->water.size());
+			for (const hydrology::WaterVertex& v : riverNetwork->water) {
+				triangles.emplace_back(v.x * pixel, v.level * hydrology::mapMetresPerHeight, v.y * pixel);
+			}
+			return triangles;
+		};
+	}
 	exporter.ImGuiDraw(pack);
 }
 

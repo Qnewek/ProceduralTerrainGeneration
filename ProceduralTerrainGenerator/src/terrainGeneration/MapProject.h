@@ -24,9 +24,11 @@ namespace mapproject {
 		std::string source;				//where the map came from: a file name or the generation mode and the map position
 		std::string generation;			//generation parameters as preset JSON; empty = none
 		float verticalExaggeration = 1.0f;	//of the view, against the true proportions
+		std::string rivers;				//river settings as JSON (preset::RiversJson); empty = defaults, no rivers
 	};
 
-	inline constexpr int currentVersion = 1;
+	//2 (2026-11-21): rivers; version 1 is still read
+	inline constexpr int currentVersion = 2;
 	inline constexpr const char* extension = ".ptgmap";
 
 	//@param out - the bytes of the file, replaced on success

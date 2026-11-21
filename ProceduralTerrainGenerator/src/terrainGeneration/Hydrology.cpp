@@ -8,6 +8,8 @@
 #include <queue>
 #include <utility>
 
+#include "DemTools.h"
+
 namespace hydrology {
 	namespace {
 		constexpr int neighbourCount = 8;
@@ -392,6 +394,28 @@ namespace hydrology {
 			}
 		}
 		return vertices;
+	}
+
+	MapRivers ComputeOnMap(const HeightField& metres, double pixelMetres, std::optional<float> seaMetres, const rivers::RiverConfig& config)
+	{
+		MapRivers result;
+		const int cell = std::max(config.cellSize, 1);
+		const int cellsX = metres.GetWidth() / cell, cellsY = metres.GetHeight() / cell;
+		if (cellsX < 1 || cellsY < 1) {
+			result.error = "The map is smaller than one river cell";
+			return result;
+		}
+		//Whole cells only, so every cell centre lies (cell - 1) / 2 texels from the corner of its block
+		HeightField sample = dem::Downsample(dem::Crop(metres, glm::ivec2(0), glm::ivec2(cellsX, cellsY) * cell), cell);
+		for (size_t i = 0; i < sample.Size(); i++) {
+			sample[i] /= mapMetresPerHeight;
+		}
+		const float waterHeight = seaMetres ? *seaMetres / mapMetresPerHeight
+			: *std::min_element(sample.Data(), sample.Data() + sample.Size()) - 1.0f;
+		const glm::vec2 origin(0.5f * static_cast<float>(cell - 1));
+		result.network = Compute(sample, origin, static_cast<float>(cell), waterHeight, config);
+		result.water = BuildWaterMesh(result.network, waterHeight, static_cast<float>(mapMetresPerHeight / pixelMetres));
+		return result;
 	}
 
 	float RegionStep(int regionSize, int cellSize)

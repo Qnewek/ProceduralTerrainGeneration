@@ -38,6 +38,7 @@ static mapproject::Project FullProject()
 	project.source = "alps.tif";
 	project.generation = "{\"a\":1}";
 	project.verticalExaggeration = 2.0f;
+	project.rivers = "{\"cellSize\":4}";
 	return project;
 }
 
@@ -81,6 +82,25 @@ TEST_CASE("Project round trip keeps every field")
 	CHECK(read.source == "alps.tif");
 	CHECK(read.generation == "{\"a\":1}");
 	CHECK(read.verticalExaggeration == 2.0f);
+	CHECK(read.rivers == "{\"cellSize\":4}");
+}
+
+TEST_CASE("Project of version 1 is read without rivers")
+{
+	mapproject::Project project;
+	project.working = SmallMap();
+	std::vector<uint8_t> bytes = Bytes(project);
+	const std::string from = "\"version\":" + std::to_string(mapproject::currentVersion);
+	const std::string text(bytes.begin(), bytes.end());
+	const size_t at = text.find(from);
+	REQUIRE(at != std::string::npos);
+	REQUIRE(mapproject::currentVersion < 10);
+	bytes[at + from.size() - 1] = '1';
+	mapproject::Project read = FullProject();
+	std::string error;
+	REQUIRE_MESSAGE(mapproject::Deserialize(bytes.data(), bytes.size(), read, error), error);
+	CHECK(SameBits(read.working, project.working));
+	CHECK(read.rivers.empty());
 }
 
 TEST_CASE("Project without original, sea level and generation")
@@ -138,11 +158,12 @@ TEST_CASE("Damaged project fails")
 TEST_CASE("Project from a newer version fails")
 {
 	std::vector<uint8_t> bytes = Bytes(FullProject());
-	const std::string from = "\"version\":1";
+	const std::string from = "\"version\":" + std::to_string(mapproject::currentVersion);
 	std::string text(bytes.begin(), bytes.end());
 	const size_t at = text.find(from);
 	REQUIRE(at != std::string::npos);
-	bytes[at + from.size() - 1] = '2';
+	REQUIRE(mapproject::currentVersion < 9);
+	bytes[at + from.size() - 1] = static_cast<uint8_t>('0' + mapproject::currentVersion + 1);
 	mapproject::Project read = Marker();
 	std::string error;
 	CHECK_FALSE(mapproject::Deserialize(bytes.data(), bytes.size(), read, error));

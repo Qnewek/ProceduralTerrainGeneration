@@ -54,6 +54,7 @@ add_library(ptg_core STATIC
 	${PTG_SRC}/terrainGeneration/HeightmapImport.cpp
 	${PTG_SRC}/terrainGeneration/Hydrology.cpp
 	${PTG_SRC}/terrainGeneration/LandStats.cpp
+	${PTG_SRC}/terrainGeneration/MapEdit.cpp
 	${PTG_SRC}/terrainGeneration/MapProject.cpp
 	${PTG_SRC}/terrainGeneration/MaterialExport.cpp
 	${PTG_SRC}/terrainGeneration/MeshExport.cpp
@@ -99,6 +100,7 @@ add_executable(ProceduralTerrainGenerator
 	${PTG_SRC}/opengl/VegetationLayer.cpp
 	${PTG_SRC}/opengl/VertexArray.cpp
 	${PTG_SRC}/opengl/VertexBuffer.cpp
+	${PTG_SRC}/subSystems/MapImportEdit.cpp
 	${PTG_SRC}/subSystems/MapImportSys.cpp
 	${PTG_SRC}/subSystems/NoiseBasedGenerationSys.cpp
 	${PTG_SRC}/subSystems/TerrainGenApp.cpp
@@ -154,6 +156,7 @@ add_executable(ptg_tests
 	${PTG_DIR}/tests/HydrologyTests.cpp
 	${PTG_DIR}/tests/ImpostorTests.cpp
 	${PTG_DIR}/tests/LandStatsTests.cpp
+	${PTG_DIR}/tests/MapEditTests.cpp
 	${PTG_DIR}/tests/MapProjectTests.cpp
 	${PTG_DIR}/tests/MaterialExportTests.cpp
 	${PTG_DIR}/tests/MeshExportTests.cpp
