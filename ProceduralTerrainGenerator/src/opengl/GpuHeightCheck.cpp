@@ -19,6 +19,7 @@
 #include "Grid.h"
 #include "GpuErosion.h"
 #include "GpuHeightGenerator.h"
+#include "GpuSculpt.h"
 #include "GpuSurfacePass.h"
 #include "Hydrology.h"
 #include "LandStats.h"
@@ -1182,6 +1183,66 @@ namespace {
 		return ok;
 	}
 
+	//Every brush on the GPU against sculpt::Apply on the CPU, over the whole map (texels outside the brush must not change)
+	bool CheckSculpt(GpuSculpt& sculptor)
+	{
+		std::cout << "\nsculpt\n";
+		constexpr int width = 200, height = 120;
+		const HeightField input = ErosionInput(width, height, [](int x, int y) { return 0.9f * std::sin(0.11f * x) * std::cos(0.07f * y); });
+
+		struct SculptCase {
+			const char* name;
+			sculpt::Brush brush;
+			float radius, hardness, amount;
+			glm::vec2 center;
+		};
+		//Radii from small to larger than the map, so the copy of the heights from before the dab has to grow
+		const SculptCase cases[] = {
+			{ "sculpt: raise, hard, small", sculpt::Brush::RAISE, 3.5f, 1.0f, 0.05f, { 100.0f, 60.0f } },
+			{ "sculpt: raise at the edge", sculpt::Brush::RAISE, 24.0f, 0.5f, 0.05f, { -3.0f, 50.0f } },
+			{ "sculpt: raise to the limit", sculpt::Brush::RAISE, 40.0f, 0.3f, 0.9f, { 57.0f, 0.0f } },
+			{ "sculpt: lower", sculpt::Brush::LOWER, 24.0f, 0.5f, 0.05f, { 100.3f, 61.7f } },
+			{ "sculpt: lower at the corner", sculpt::Brush::LOWER, 30.0f, 0.0f, 0.4f, { 198.0f, 119.5f } },
+			{ "sculpt: smooth", sculpt::Brush::SMOOTH, 24.0f, 0.5f, 0.8f, { 100.3f, 61.7f } },
+			{ "sculpt: smooth at the edge", sculpt::Brush::SMOOTH, 50.0f, 0.5f, 1.0f, { 190.0f, 3.0f } },
+			{ "sculpt: flatten", sculpt::Brush::FLATTEN, 24.0f, 0.5f, 0.6f, { 100.3f, 61.7f } },
+			{ "sculpt: noise", sculpt::Brush::NOISE, 24.0f, 0.5f, 0.3f, { 100.3f, 61.7f } },
+			{ "sculpt: noise larger than the map", sculpt::Brush::NOISE, 300.0f, 0.5f, 0.3f, { 80.0f, 70.0f } },
+			{ "sculpt: smooth larger than the map", sculpt::Brush::SMOOTH, 300.0f, 0.5f, 1.0f, { 80.0f, 70.0f } },
+		};
+		bool ok = true;
+		for (const SculptCase& c : cases) {
+			sculpt::BrushConfig config;
+			config.brush = c.brush;
+			config.radius = c.radius;
+			config.hardness = c.hardness;
+			config.noiseScale = 9.0f;
+			const sculpt::Dab dab{ c.center, c.amount, 0.1f, 12345u, 1.5f };
+
+			HeightField expected = input;
+			sculpt::Apply(expected, config, dab);
+			TextureClass texture(width, height, GL_R32F);
+			texture.Upload(input.Data(), GL_RED, GL_FLOAT);
+			sculptor.Apply(config, dab, texture);
+			const HeightField result = ReadHeight(texture);
+
+			float largest = 0.0f;
+			int changed = 0;
+			bool finite = true;
+			for (size_t i = 0; i < result.Size(); i++) {
+				finite = finite && std::isfinite(result[i]);
+				largest = std::max(largest, std::abs(result[i] - expected[i]));
+				changed += expected[i] != input[i] ? 1 : 0;
+			}
+			const bool caseOk = finite && largest <= 1e-5f && changed > 0;
+			std::ostringstream details;
+			details << "largest difference " << std::scientific << std::setprecision(1) << largest << ", changed " << changed;
+			Report(c.name, details.str(), caseOk);
+			ok = ok && caseOk;
+		}
+		return ok;
+	}
+
 	//@return median time of finishing the work given by fn, in ms. The first run is skipped: drivers finish compiling shaders then
 	template<typename F>
 	double MedianMs(F fn, int runs)
@@ -1298,7 +1359,8 @@ int RunGpuHeightCheck()
 		GpuHeightGenerator gpu;
 		GpuSurfacePass surfacePass;
 		GpuErosion erosion;
-		if (gpu.Initialize() && surfacePass.Initialize() && erosion.Initialize()) {
+		GpuSculpt sculptor;
+		if (gpu.Initialize() && surfacePass.Initialize() && erosion.Initialize() && sculptor.Initialize()) {
 			bool ok = CheckRanges(gpu);
 			ok = CheckDeterminism(gpu) && ok;
 			ok = CheckShapeOperations(gpu) && ok;
@@ -1313,6 +1375,7 @@ int RunGpuHeightCheck()
 			ok = CheckRivers(gpu) && ok;
 			ok = CheckSurface(surfacePass) && ok;
 			ok = CheckErosion(gpu, erosion) && ok;
+			ok = CheckSculpt(sculptor) && ok;
 			RunTimings(gpu, surfacePass);
 			RunErosionTimings(gpu, erosion);
 			std::cout << "\n" << (ok ? "All checks passed" : "[ERROR] Some checks failed") << std::endl;

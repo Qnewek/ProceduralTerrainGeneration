@@ -215,6 +215,7 @@ void MapImportSys::EditImGui()
 			ImGui::PopStyleColor();
 		}
 	}
+	SculptImGui();
 
 	ImGui::BeginDisabled(Busy() || erodeRequested);
 	ImGui::SeparatorText("Erosion");

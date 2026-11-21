@@ -44,9 +44,18 @@ public:
 	glm::mat4* GetViewMatrix();
 	glm::mat4* GetProjectionMatrix();
 	glm::vec3 GetPosition() const { return position; }
+	glm::vec3 GetFront() const { return front; }
+	//Degrees
+	float GetFov() const { return fov; }
+	//Degrees per pixel of mouse movement
+	float GetSensitivity() const { return sensitivity; }
+	//World units per second
+	float GetSpeed() const { return initSpeed; }
 	//projection * view as GetProjectionMatrix and GetViewMatrix give them for the current position and settings
 	glm::mat4 GetViewProjection() const { return ComputeProjection() * ComputeView(); }
 
+	//true while the mouse steers the camera (M)
+	bool MouseControl() const { return mouseControl; }
 	void EnableMouseControl(GLFWwindow* window);
 	void DisableMouseControl(GLFWwindow* window);
 

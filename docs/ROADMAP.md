@@ -670,6 +670,16 @@ oryginał tylko w pamięci i w projekcie („Wróć do oryginału”), plus Cofn
   ustawienia rzek w projekcie (`.ptgmap` wersja 2). Do sprawdzenia w aplikacji: wygląd erozji na DEM 30 m i na mapie wysłanej z TerrainGen, czas
   wygładzania i rzek na 8192², woda bez morza, Cofnij po erozji.
 - **C. Modelowanie ręczne:** pędzle GPU (podnieś, obniż, wygładź, spłaszcz, szum) kursorem w 3D, promień/siła/zanik, pociągnięcie = krok historii.
+  Wymaganie właściciela (2026-11-21): przy edycji potrzebne jest drugie sterowanie kamerą, jak w edytorach silników gier (Unity): obracanie widoku
+  myszką bez przełączania klawiszem M (przytrzymany prawy przycisk = rozglądanie, z WASD = lot), orbita wokół punktu pod kursorem (Alt + lewy),
+  przesuwanie (środkowy), przybliżanie kółkiem; lewy przycisk zostaje dla pędzla. Dzisiejsze sterowanie (M = mysz kamery) zostaje.
+  🟡 2026-11-21 (branch `feat/map-sculpt`): `Sculpt.*` (pędzle na CPU = wzorzec, rzut kursora, testy), `GpuSculpt` + `sculpt_compute.shader` (kwadrat wokół
+  pędzla, sekcja `sculpt:` w `--gpu-check` porównuje z CPU), sekcja „Sculpt” w zakładce Edit (5 pędzli, promień 1–512 px, siła w m/s lub tempo, twardość,
+  skala szumu; LMB maluje w 3D i na mapie 2D, Ctrl odwraca podnieś/obniż, Shift + kółko = promień, kółko pędzla na terenie). Kamera edytora we wszystkich
+  trybach (`EditorCamera` + `CameraMath.*` z testami; checkbox „Editor camera (mouse)” w zakładce Camera). Do sprawdzenia w aplikacji: odczucie pędzli
+  (tempo, twardość, szum) na DEM i mapie z TerrainGen, Cofnij po pociągnięciu, kółko pędzla w 2D, orbita/przesuwanie/kółko kamery w każdym trybie,
+  FPS malowania na 8192² (każda klatka liczy całą mapę pochodnych od nowa).
+  Otwarte: kamera edytora w widoku 2D (przesuwanie i zoom kadru — każdy tryb ustawia kadr sam w `Draw`); mapa pochodnych tylko w kwadracie pędzla.
 - **D. Biomy i roślinność — decyzja po C.** Propozycja „klimat z terenu”: temperatura i wilgotność to szumy zależne tylko od położenia (da się je policzyć
   nad każdą mapą), brakujące kontynentalność/górzystość liczone z mapy wysokości (wysokość nad wodą / odległość od brzegu, lokalna rzeźba), weirdness
   neutralne; dalej istniejąca tabela, materiały i `vegexport::PlaceMap`. Alternatywa: import mapy pokrycia terenu (np. ESA WorldCover) jako id biomów.
