@@ -1,7 +1,9 @@
 #include "doctest/doctest.h"
 
+#include <algorithm>
 #include <cmath>
 #include <functional>
+#include <optional>
 
 #include "Hydrology.h"
 
@@ -280,4 +282,69 @@ TEST_CASE("Region centre: partial map, infinite world following the camera, and 
 	//No region yet: around the middle of the map
 	CHECK(hydrology::PlaceRegion(true, false, std::nullopt, camera, mapCenter, 8192, 8).center == mapCenter);
 	CHECK(hydrology::PlaceRegion(true, false, current, camera, mapCenter, 8192, 8).step == hydrology::RegionStep(8192, 8));
+}
+
+namespace {
+	//Metres, 256 x 192: a V valley along y = 96 falling towards the border x = 0
+	HeightField ValleyMetres()
+	{
+		HeightField map(256, 192);
+		for (int y = 0; y < map.GetHeight(); y++) {
+			for (int x = 0; x < map.GetWidth(); x++) {
+				map.At(x, y) = 2.0f * std::abs(static_cast<float>(y - 96)) + 0.5f * static_cast<float>(x);
+			}
+		}
+		return map;
+	}
+
+	rivers::RiverConfig MapRiverConfig()
+	{
+		rivers::RiverConfig config;
+		config.method = rivers::Method::REGION;
+		config.cellSize = 4;
+		config.sourceArea = 2000.0f;
+		return config;
+	}
+}
+
+TEST_CASE("Rivers on a map follow a valley to the sea")
+{
+	const HeightField map = ValleyMetres();
+	const hydrology::MapRivers result = hydrology::ComputeOnMap(map, 10.0, 1.0f, MapRiverConfig());
+	CHECK(result.error.empty());
+	CHECK(result.network.riverCells > 0);
+	REQUIRE_FALSE(result.water.empty());
+	const float highest = *std::max_element(map.Data(), map.Data() + map.Size()) / hydrology::mapMetresPerHeight;
+	for (const hydrology::WaterVertex& v : result.water) {
+		CHECK(std::isfinite(v.level));
+		CHECK(v.level <= highest);
+		CHECK(v.x >= -1.0f);
+		CHECK(v.x <= static_cast<float>(map.GetWidth()));
+		CHECK(v.y >= -1.0f);
+		CHECK(v.y <= static_cast<float>(map.GetHeight()));
+	}
+}
+
+TEST_CASE("Rivers on a map without a sea drain to the border")
+{
+	const hydrology::MapRivers result = hydrology::ComputeOnMap(ValleyMetres(), 10.0, std::nullopt, MapRiverConfig());
+	CHECK(result.error.empty());
+	CHECK(result.network.riverCells > 0);
+}
+
+TEST_CASE("Sea above the whole map gives no rivers")
+{
+	const hydrology::MapRivers result = hydrology::ComputeOnMap(ValleyMetres(), 10.0, 10000.0f, MapRiverConfig());
+	CHECK(result.network.riverCells == 0);
+	CHECK(result.water.empty());
+}
+
+TEST_CASE("Map smaller than a river cell")
+{
+	rivers::RiverConfig config = MapRiverConfig();
+	config.cellSize = 8;
+	const hydrology::MapRivers result = hydrology::ComputeOnMap(HeightField(3, 3), 10.0, std::nullopt, config);
+	CHECK_FALSE(result.error.empty());
+	CHECK(result.network.riverCells == 0);
+	CHECK(result.water.empty());
 }

@@ -676,3 +676,20 @@ TEST_CASE("Presets are saved to and loaded from files")
 
 	std::filesystem::remove_all(folder);
 }
+
+TEST_CASE("Rivers JSON round trip")
+{
+	const rivers::RiverConfig original = DistinctWorld().rivers;
+	rivers::RiverConfig loaded;
+	std::string error;
+	REQUIRE_MESSAGE(preset::RiversFromJson(preset::RiversJson(original), loaded, error), error);
+	CheckSameRivers(loaded, original);
+
+	rivers::RiverConfig untouched;
+	CHECK_FALSE(preset::RiversFromJson("{ not json", untouched, error));
+	CHECK_FALSE(error.empty());
+	error.clear();
+	CHECK_FALSE(preset::RiversFromJson(R"({"cellSize": 0})", untouched, error));
+	CHECK_FALSE(error.empty());
+	CheckSameRivers(untouched, rivers::RiverConfig{});
+}

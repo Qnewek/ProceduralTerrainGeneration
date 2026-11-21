@@ -1,6 +1,7 @@
 #pragma once
 
 #include <optional>
+#include <string>
 #include <vector>
 
 #include "glm/glm.hpp"
@@ -94,6 +95,20 @@ namespace hydrology {
 	//@param waterHeight - sea level; water not above it is left to the sea surface
 	//@param texelsPerHeight - map texels as long as the height 1 is high (TerrainGen: 1024 world units / 4 per texel), for the flow speed
 	std::vector<WaterVertex> BuildWaterMesh(const Network& network, float waterHeight, float texelsPerHeight);
+
+	//Rivers and lakes of a whole map in metres (the "Imported map" mode): heights of the network and of the water are metres / mapMetresPerHeight
+	//(as TerrainGen: height 1 = 256 m), so the height parameters of RiverConfig mean the same metres on any map; lengths are map pixels and
+	//positions map texels (texel (0, 0) at position (0, 0))
+	inline constexpr float mapMetresPerHeight = 256.0f;
+	struct MapRivers {
+		Network network;
+		std::vector<WaterVertex> water;
+		std::string error;	//why there is no network; empty when it was computed
+	};
+	//@param pixelMetres - size of a map pixel, for the flow speed
+	//@param seaMetres - sea level; none = water leaves only over the map border
+	//@param config - REGION parameters; regionSize is ignored (the whole map)
+	MapRivers ComputeOnMap(const HeightField& metres, double pixelMetres, std::optional<float> seaMetres, const rivers::RiverConfig& config);
 
 	//The region following the camera in the infinite world jumps over a fixed grid, so a place gets the same network whichever region the camera
 	//came from, and the cells of every region lie on the same map positions (the same terrain samples)
