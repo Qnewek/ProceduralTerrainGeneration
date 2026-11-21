@@ -71,7 +71,10 @@ ProceduralTerrainGenerator/
       TerrainMesh.*              siatki eksportu (metry, Y w górę): pełna siatka mapy, LOD-y (meshopt_simplify bez fałd), błąd wysokości, kafle, woda (quad, zupa trójkątów → siatka)
       MeshFile.*                 zapis GLB (glTF 2.0, ręcznie: JSON + bufor; węzeł = prymityw na materiał) i OBJ; MeshExport.* = pliki siatek paczki (LOD-y z kaflami + woda), bez GL — w tle
       VegetationExport.*         roślinność paczki: PlaceChunk na chunkach skończonej mapy (jak świat nieskończony) → _vegetation.json, modele z LOD-ami aplikacji → vegetation/*.glb
-      HeightmapImport.*          odczyt mapy z PNG lub R16/RAW; format po rozszerzeniu, nowy = czytnik i rozszerzenie w tym pliku
+      HeightmapImport.*          odczyt mapy z PNG, R16/RAW, GeoTIFF (libtiff), SRTM .hgt, ESRI .asc; format po rozszerzeniu, nowy = czytnik i rozszerzenie w tym pliku;
+                                 `Inspect` = sam nagłówek, `Import(ImportOptions)` = odczyt → wycinek → NoData (tylko w wycinku) → zmniejszenie → wynik ≤ 8192²;
+                                 próbki |v| ≥ 1e30 to też NoData (±FLT_MAX bez znacznika)
+      DemTools.*                 mapy rzeczywiste: wypełnianie NoData z sąsiadów, wycinek, zmniejszenie (średnia bloków), piksel w metrach ze stopni
       GenerationJob.h            jedno zadanie generacji w tle (std::async + TryTake)
       LandStats.*                udział wody i masy lądu (flood fill) z rzadkiej próbki świata (GpuHeightGenerator::SampleTerrain); „Land statistics” w zakładce Terrain i sekcja land: w --gpu-check
       Hydrology.*                sieć rzek regionu (metoda REGION): priority-flood, spływ D8, akumulacja, jeziora, biegi rzek → siatki dla RiverMap
@@ -117,7 +120,7 @@ ProceduralTerrainGenerator/
   res/textures/terrain_materials.json   lista materiałów (kolejność = id); same tekstury w res/textures/terrain/ (poza gitem)
 tools/fetch_textures.py          pobiera tekstury materiałów (CC0, Poly Haven / ambientCG), tylko biblioteka standardowa Pythona
 tools/fetch_models.py            pobiera modele roślinności i kamieni (CC0 glTF, Poly Haven) z mapami alpha liści
-CMakeLists.txt, CMakePresets.json, vcpkg.json   build; GLFW, GLEW, glm, ImGui, ImPlot, stb z vcpkg
+CMakeLists.txt, CMakePresets.json, vcpkg.json   build; GLFW, GLEW, glm, ImGui, ImPlot, stb, libtiff (z zlib, tylko ptg_core i testy) z vcpkg
 .github/workflows/build.yml      CI (Windows x64 Debug/Release, build + testy jednostkowe)
 ```
 
@@ -345,9 +348,13 @@ Wartości szumów są w [-1, 1]. Konwencja indeksowania: `map[y * width + x]`.
   `PlacementSettings` wymaga tej samej zmiany w `vegexport::Input` budowanym w `TerrainGenerationSys::ImGuiSaving`. Modele: LOD-y z cache aplikacji
   (`vegetation::CacheKey` w `VegetationMesh`, wspólny z `VegetationModels`), węzły `<nazwa>_<wariant>_LOD<n>`; id wariantu w JSON = kolejność wariantów
   `LoadGltf`, więc liczba wariantów pliku musi zgadzać się z aplikacją (`Result::modelErrors`, jeśli nie).
-- Import map: plik nie przechowuje zakresu wartości, więc wybiera go użytkownik (`valueRanges` w `MapImportSys.cpp`). `lodepng` nie zamienia koloru na szary
+- Import map: PNG/R16 nie przechowują zakresu wartości, więc wybiera go użytkownik (`valueRanges` w `MapImportSys.cpp`, albo „Custom (metres)”). `lodepng` nie zamienia koloru na szary
   ani niższej głębi na 16 bitów (błąd 56), dlatego PNG dekodujemy do RGBA o głębi pliku. Mapa żyje w `MapImportSys::map`, stąd pójdą przyszłe operacje na niej
-  (jak w innych trybach: w tle, na kopii).
+  (Faza 6: jedna widoczna kopia robocza). Jednostki: mapa = metry / `metresPerUnit` (DEM i „Custom”: max(|min|, |max|, 1 m); zakres TerrainGen = 256, Noise = 64),
+  więc tryby wyświetlania i culling (|h| ≤ 1,5) widzą ok. [-1, 1]; prawdziwe proporcje `trueHeightScale = metresPerUnit · worldUnitsPerTexel / piksel [m]`
+  (piksel po zmniejszeniu), ustawiane po wczytaniu, „Vertical exaggeration” = `heightScale / trueHeightScale`. libtiff 4.7 nie zna znaczników GeoTIFF
+  (33550, 33922, 34735) ani GDAL_NODATA (42113) — czytamy je jako pola anonimowe (licznik uint16 albo uint32, `GetArray`); testowy zapis rejestruje je
+  `TIFFMergeFieldInfo`. Mapy w stopniach (GeoTIFF `GTModelTypeGeoKey` = 2, `.hgt`, `.asc` z małą komórką) bez reprojekcji: piksel w metrach przy szerokości środka.
 - Rzeki (tylko TerrainGen, zakładka „Rivers”, `WorldConfig::rivers`, domyślnie `NONE`): `carveRivers` (`common/rivers.glsl`) to ostatni krok wysokości w obu ścieżkach
   (`height_compute` i `biome_compute` z `writeHeight`), po modyfikatorach; biomy wybiera wysokość sprzed rzek. Generacja dostaje `const RiverInput*` (config + `RiverMap`);
   `SampleTerrain` zawsze bez rzek (z niej liczy się sieć — inaczej sprzężenie). Każdy dispatch ustawia `riverMethod` (program pamięta uniformy).
