@@ -1,8 +1,11 @@
 #include "MapImportSys.h"
 
 #include <algorithm>
+#include <cctype>
+#include <cfloat>
 #include <chrono>
 #include <cmath>
+#include <cstdio>
 #include <iostream>
 
 #include "imgui.h"
@@ -36,11 +39,509 @@ bool MapImportSys::Initialize(int _width, int _height, float _heightScale)
 	return true;
 }
 
-void MapImportSys::Update()
+void MapImportSys::Update(Camera& camera, bool active)
 {
 	if (std::optional<LoadResult> result = job.TryTake()) {
 		InstallResult(*result);
 	}
+	if (std::optional<ProjectLoad> result = projectJob.TryTake()) {
+		InstallProject(*result);
+	}
+	if (std::optional<SaveResult> result = saveJob.TryTake()) {
+		FinishSaving(*result);
+	}
+	//Meshes of an export are written in the background; the Saving tab may be closed
+	exporter.Update();
+	if (lookDown && active && !map.Empty()) {
+		lookDown = false;
+		TerrainView::LookDownAtMap(camera, renderSettings, glm::ivec2(0), glm::ivec2(map.GetWidth(), map.GetHeight()));
+	}
+}
+
+float MapImportSys::ToUnits(HeightField& working, HeightField& original)
+{
+	float largest = 1.0f;
+	for (const HeightField* m : { &working, &original }) {
+		for (size_t i = 0; i < m->Size(); i++) {
+			largest = std::max(largest, std::abs((*m)[i]));
+		}
+	}
+	for (HeightField* m : { &working, &original }) {
+		for (size_t i = 0; i < m->Size(); i++) {
+			(*m)[i] /= largest;
+		}
+	}
+	return largest;
+}
+
+void MapImportSys::InstallMap(HeightField units, float _metresPerUnit, glm::dvec2 _pixelMetres)
+{
+	map = std::move(units);
+	metresPerUnit = _metresPerUnit;
+	pixelMetres = _pixelMetres;
+	auto [lowest, highest] = std::minmax_element(map.Data(), map.Data() + map.Size());
+	mapMin = *lowest;
+	mapMax = *highest;
+	//Height 1 = metresPerUnit metres; a texel = worldUnitsPerTexel world units = pixelMetres metres
+	trueHeightScale = static_cast<float>(metresPerUnit * TerrainView::worldUnitsPerTexel / pixelMetres.x);
+	renderSettings.heightScale = trueHeightScale;
+
+	view.Resize(map.GetWidth(), map.GetHeight());
+	view.SetLayer(TerrainView::Layer::TERRAIN, map);
+	mapVersion++;
+}
+
+std::string MapImportSys::ProjectName() const
+{
+	return projectPath.empty() ? std::string("Untitled") : FileNameOf(projectPath);
+}
+
+void MapImportSys::SetProjectStatus(const std::string& text, bool isError)
+{
+	projectStatus = text;
+	projectStatusIsError = isError;
+}
+
+void MapImportSys::SaveProject()
+{
+	if (projectPath.empty()) {
+		SaveProjectAs();
+	}
+	else {
+		StartSaving(projectPath);
+	}
+}
+
+void MapImportSys::SaveProjectAs()
+{
+	if (map.Empty()) {
+		return;
+	}
+	if (Busy()) {
+		SetProjectStatus("Wait for the current save or load to finish", true);
+		return;
+	}
+	if (projectPath.empty()) {
+		//The dialog ignores a folder that does not exist yet and opens anywhere; the project list reads this folder
+		std::error_code ec;
+		std::filesystem::create_directories(ProjectFolder(), ec);
+	}
+	std::string dialogError;
+	const std::u8string stem = projectPath.stem().u8string();
+	const std::optional<std::filesystem::path> file = SaveFileDialog(L"Terrain project (*.ptgmap)\0*.ptgmap\0", L"ptgmap",
+		projectPath.empty() ? ProjectFolder() : projectPath.parent_path(), projectPath.empty() ? suggestedName : std::string(stem.begin(), stem.end()), dialogError);
+	if (!file) {
+		if (!dialogError.empty()) {
+			SetProjectStatus(dialogError, true);
+		}
+		return;
+	}
+	StartSaving(mapproject::WithExtension(*file));
+}
+
+void MapImportSys::StartSaving(const std::filesystem::path& path)
+{
+	if (map.Empty()) {
+		return;
+	}
+	if (Busy()) {
+		SetProjectStatus("Wait for the current save or load to finish", true);
+		return;
+	}
+	mapproject::Project project;
+	project.working = map;
+	project.original = original;
+	project.pixelMetres = pixelMetres;
+	project.seaLevel = seaLevelMetres;
+	project.source = projectSource;
+	project.generation = projectGeneration;
+	project.verticalExaggeration = renderSettings.heightScale / trueHeightScale;
+	const float unit = metresPerUnit;
+	const uint64_t version = mapVersion;
+	saveJob.Start([project = std::move(project), path, unit, version]() mutable {
+		SaveResult result;
+		result.path = path;
+		result.version = version;
+		auto start = std::chrono::steady_clock::now();
+		//An exception would come back in future.get() on the main thread and end the app
+		try {
+			for (HeightField* m : { &project.working, &project.original }) {
+				for (size_t i = 0; i < m->Size(); i++) {
+					(*m)[i] *= unit;
+				}
+			}
+			result.ok = mapproject::Save(path, project, result.error);
+		}
+		catch (const std::bad_alloc&) {
+			result.ok = false;
+			result.error = "Not enough memory to save the project";
+		}
+		catch (const std::exception& e) {
+			result.ok = false;
+			result.error = e.what();
+		}
+		if (result.ok) {
+			std::error_code ec;
+			result.bytes = std::filesystem::file_size(path, ec);
+		}
+		result.ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count();
+		return result;
+	});
+	SetProjectStatus("Saving " + FileNameOf(path) + "...", false);
+}
+
+void MapImportSys::FinishSaving(SaveResult& result)
+{
+	if (!result.ok) {
+		//The project keeps its changes and its previous file
+		SetProjectStatus("Could not save " + FileNameOf(result.path) + ": " + result.error, true);
+		//What the save was for does not happen (it would lose the changes): the question comes back with the reason, in any mode
+		if (afterSave) {
+			pending = std::move(afterSave);
+			afterSave.reset();
+			questionError = projectStatus;
+			openQuestion = true;
+		}
+		return;
+	}
+	char text[128];
+	std::snprintf(text, sizeof(text), " (%.1f MB in %.0f ms)", static_cast<double>(result.bytes) / (1024.0 * 1024.0), result.ms);
+	SetProjectStatus("Saved " + FileNameOf(result.path) + text, false);
+	std::cout << "[LOG] Project saved: " << FileNameOf(result.path) << text << "\n";
+	projectsListed = false;
+	//Another map shown during the save is a different project, still not saved
+	if (result.version == mapVersion) {
+		projectPath = result.path;
+		const std::u8string stem = projectPath.stem().u8string();
+		suggestedName = std::string(stem.begin(), stem.end());
+		dirty = false;
+	}
+	if (afterSave) {
+		PendingAction action = std::move(*afterSave);
+		afterSave.reset();
+		Request(std::move(action));
+	}
+}
+
+void MapImportSys::Request(PendingAction action)
+{
+	if (!HasUnsavedChanges()) {
+		Run(action);
+		return;
+	}
+	//A newer request replaces one still waiting for the answer
+	pending = std::move(action);
+	openQuestion = true;
+}
+
+void MapImportSys::Run(PendingAction& action)
+{
+	switch (action.kind) {
+	case PendingAction::Kind::OPEN:
+		OpenProject(action.path);
+		break;
+	case PendingAction::Kind::LOAD:
+		StartLoading(action.path);
+		break;
+	case PendingAction::Kind::RECEIVE:
+		if (action.received) {
+			InstallReceived(*action.received);
+		}
+		break;
+	case PendingAction::Kind::QUIT:
+		quitApproved = true;
+		break;
+	}
+}
+
+void MapImportSys::Receive(mapproject::Project project)
+{
+	PendingAction action;
+	action.kind = PendingAction::Kind::RECEIVE;
+	action.received = std::move(project);
+	Request(std::move(action));
+}
+
+void MapImportSys::InstallReceived(mapproject::Project& project)
+{
+	if (project.working.Empty()) {
+		return;
+	}
+	//Shown at once, also while a file is loading or a project saving: their results see the new map version
+	HeightField noOriginal;
+	const float unit = ToUnits(project.working, noOriginal);
+	InstallMap(std::move(project.working), unit, project.pixelMetres);
+	original = HeightField();
+	projectPath.clear();
+	projectSource = project.source;
+	projectGeneration = project.generation;
+	seaLevelMetres = project.seaLevel;
+	//"TerrainGen map at (12, -40)" -> "terraingen_map_at_12_-40"
+	suggestedName.clear();
+	for (char c : project.source) {
+		const unsigned char u = static_cast<unsigned char>(c);
+		if (std::isalnum(u) || c == '-') {
+			suggestedName += static_cast<char>(std::tolower(u));
+		}
+		else if (!suggestedName.empty() && suggestedName.back() != '_') {
+			suggestedName += '_';
+		}
+	}
+	while (!suggestedName.empty() && suggestedName.back() == '_') {
+		suggestedName.pop_back();
+	}
+	if (suggestedName.empty()) {
+		suggestedName = "map";
+	}
+	dirty = true;
+	mapPath.clear();
+	mapInfo = heightmap::ImportInfo();
+	mapInfo.bitsPerSample = 32;
+	mapInfo.floatingPoint = true;
+	mapInfo.metres = true;
+	lastLoadMs = 0.0;
+	lookDown = true;
+	SetProjectStatus("Received: " + project.source, false);
+}
+
+void MapImportSys::RequestQuit()
+{
+	//Closing again while the save asked for by the question is running: it closes the window when it is done
+	if (afterSave && afterSave->kind == PendingAction::Kind::QUIT) {
+		return;
+	}
+	PendingAction action;
+	action.kind = PendingAction::Kind::QUIT;
+	Request(std::move(action));
+}
+
+bool MapImportSys::TakeQuit()
+{
+	const bool approved = quitApproved;
+	quitApproved = false;
+	return approved;
+}
+
+void MapImportSys::ImGuiModals()
+{
+	const char* title = "Unsaved changes";
+	//A save asked for by the question may take seconds and the Project tab may not be shown: say so over the scene
+	if (afterSave && saveJob.IsRunning()) {
+		ImGui::SetNextWindowPos(ImGui::GetMainViewport()->GetCenter(), ImGuiCond_Always, ImVec2(0.5f, 0.5f));
+		ImGui::Begin("##savingProject", nullptr, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoInputs |
+			ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoNav);
+		ImGui::TextUnformatted(projectStatus.c_str());
+		ImGui::End();
+	}
+	if (openQuestion) {
+		ImGui::OpenPopup(title);
+		openQuestion = false;
+	}
+	ImGui::SetNextWindowPos(ImGui::GetMainViewport()->GetCenter(), ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+	if (!ImGui::BeginPopupModal(title, nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+		return;
+	}
+	const char* what = "";
+	if (pending) {
+		switch (pending->kind) {
+		case PendingAction::Kind::OPEN: what = "opening another project"; break;
+		case PendingAction::Kind::LOAD: what = "loading another map"; break;
+		case PendingAction::Kind::RECEIVE: what = "taking the map sent from another mode"; break;
+		case PendingAction::Kind::QUIT: what = "closing the application"; break;
+		}
+	}
+	ImGui::Text("The project %s has changes that are not saved.", ProjectName().c_str());
+	ImGui::Text("Save them before %s?", what);
+	if (!questionError.empty()) {
+		ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.3f, 0.3f, 1.0f));
+		ImGui::TextWrapped("%s", questionError.c_str());
+		ImGui::PopStyleColor();
+	}
+	if (ImGui::Button("Save")) {
+		afterSave = std::move(pending);
+		pending.reset();
+		questionError.clear();
+		ImGui::CloseCurrentPopup();
+		//A project without a file asks where to save it: cancelling that cancels the action too
+		SetProjectStatus("", false);
+		SaveProject();
+		if (!saveJob.IsRunning()) {
+			//A save that could not start (busy, dialog failed) asks again with the reason
+			if (projectStatusIsError && afterSave) {
+				pending = std::move(afterSave);
+				questionError = projectStatus;
+				openQuestion = true;
+			}
+			afterSave.reset();
+		}
+	}
+	ImGui::SameLine();
+	if (ImGui::Button("Discard")) {
+		questionError.clear();
+		ImGui::CloseCurrentPopup();
+		if (pending) {
+			PendingAction action = std::move(*pending);
+			pending.reset();
+			Run(action);
+		}
+	}
+	ImGui::SameLine();
+	if (ImGui::Button("Cancel") || ImGui::IsKeyPressed(ImGuiKey_Escape)) {
+		pending.reset();
+		questionError.clear();
+		ImGui::CloseCurrentPopup();
+	}
+	ImGui::EndPopup();
+}
+
+void MapImportSys::OpenProject(const std::filesystem::path& path)
+{
+	if (Busy()) {
+		SetProjectStatus("Wait for the current save or load to finish", true);
+		return;
+	}
+	const uint64_t version = mapVersion;
+	projectJob.Start([path, version]() {
+		ProjectLoad result;
+		result.path = path;
+		result.version = version;
+		auto start = std::chrono::steady_clock::now();
+		try {
+			result.ok = mapproject::Load(path, result.project, result.error);
+			if (result.ok) {
+				result.metresPerUnit = ToUnits(result.project.working, result.project.original);
+			}
+		}
+		catch (const std::bad_alloc&) {
+			result.ok = false;
+			result.error = "Not enough memory to open the project";
+		}
+		catch (const std::exception& e) {
+			result.ok = false;
+			result.error = e.what();
+		}
+		result.ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count();
+		return result;
+	});
+	SetProjectStatus("Opening " + FileNameOf(path) + "...", false);
+}
+
+void MapImportSys::InstallProject(ProjectLoad& result)
+{
+	if (!result.ok) {
+		//The current map and project stay
+		SetProjectStatus("Could not open " + FileNameOf(result.path) + ": " + result.error, true);
+		return;
+	}
+	if (result.version != mapVersion) {
+		SetProjectStatus("Dropped " + FileNameOf(result.path) + ": another map was shown while it was opening", true);
+		return;
+	}
+	mapproject::Project& project = result.project;
+	InstallMap(std::move(project.working), result.metresPerUnit, project.pixelMetres);
+	original = std::move(project.original);
+	renderSettings.heightScale = trueHeightScale * project.verticalExaggeration;
+	projectPath = result.path;
+	projectSource = project.source;
+	projectGeneration = project.generation;
+	seaLevelMetres = project.seaLevel;
+	const std::u8string stem = projectPath.stem().u8string();
+	suggestedName = std::string(stem.begin(), stem.end());
+	dirty = false;
+	mapPath = result.path;
+	mapInfo = heightmap::ImportInfo();
+	mapInfo.bitsPerSample = 32;
+	mapInfo.floatingPoint = true;
+	mapInfo.metres = true;
+	lastLoadMs = result.ms;
+	lookDown = true;
+	SetProjectStatus("Opened " + FileNameOf(result.path), false);
+}
+
+std::filesystem::path MapImportSys::ProjectFolder() const
+{
+	const std::string text = projectFolder;
+	return std::filesystem::path(std::u8string(text.begin(), text.end()));
+}
+
+void MapImportSys::RefreshProjects()
+{
+	projects = mapproject::ListProjects(ProjectFolder());
+	projectsListed = true;
+}
+
+void MapImportSys::BrowseForProject()
+{
+	std::string dialogError;
+	const std::optional<std::filesystem::path> file = OpenFileDialog(L"Terrain project (*.ptgmap)\0*.ptgmap\0", ProjectFolder(), dialogError);
+	if (!file) {
+		if (!dialogError.empty()) {
+			SetProjectStatus(dialogError, true);
+		}
+		return;
+	}
+	Request({ PendingAction::Kind::OPEN, *file, std::nullopt });
+}
+
+void MapImportSys::ProjectImGui()
+{
+	if (!projectsListed) {
+		RefreshProjects();
+	}
+	const bool busy = Busy();
+	ImGui::Text("Project: %s%s", ProjectName().c_str(), HasUnsavedChanges() ? " *" : "");
+	if (!projectSource.empty()) {
+		ImGui::TextWrapped("Source: %s", projectSource.c_str());
+	}
+
+	ImGui::BeginDisabled(busy);
+	if (ImGui::Button("Open...")) {
+		BrowseForProject();
+	}
+	ImGui::SameLine();
+	ImGui::BeginDisabled(map.Empty());
+	if (ImGui::Button("Save")) {
+		SaveProject();
+	}
+	ImGui::SameLine();
+	if (ImGui::Button("Save as...")) {
+		SaveProjectAs();
+	}
+	ImGui::EndDisabled();
+	ImGui::EndDisabled();
+	ImGui::SetItemTooltip("Ctrl+S saves the project");
+
+	if (!projectStatus.empty()) {
+		if (projectStatusIsError) {
+			ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.3f, 0.3f, 1.0f));
+		}
+		ImGui::TextWrapped("%s", projectStatus.c_str());
+		if (projectStatusIsError) {
+			ImGui::PopStyleColor();
+		}
+	}
+
+	ImGui::SeparatorText("Projects in folder");
+	if (ImGui::InputText("Folder##projects", projectFolder, sizeof(projectFolder))) {
+		RefreshProjects();
+	}
+	if (ImGui::Button("Refresh list##projects")) {
+		RefreshProjects();
+	}
+	if (projects.empty()) {
+		ImGui::TextWrapped("No projects (.ptgmap) in this folder.");
+	}
+	else if (ImGui::BeginListBox("##projects", ImVec2(-FLT_MIN, 0.0f))) {
+		for (const std::filesystem::path& file : projects) {
+			const bool current = file == projectPath;
+			ImGui::Selectable(FileNameOf(file).c_str(), current, ImGuiSelectableFlags_AllowDoubleClick);
+			if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left) && !busy) {
+				Request({ PendingAction::Kind::OPEN, file, std::nullopt });
+			}
+		}
+		ImGui::EndListBox();
+	}
+	ImGui::TextDisabled("Double click opens a project.");
 }
 
 int MapImportSys::Downsample() const
@@ -72,8 +573,12 @@ void MapImportSys::Select(const std::filesystem::path& path)
 	pixelSize = static_cast<float>((filePixelMetres.x + filePixelMetres.y) / 2.0);
 }
 
-void MapImportSys::StartLoading(const std::filesystem::path& path)
+void MapImportSys::StartLoading(const std::filesystem::path& path, bool reload)
 {
+	if (Busy()) {
+		error = "Wait for the current save or load to finish";
+		return;
+	}
 	error.clear();
 	heightmap::ImportOptions options;
 	const bool custom = selectedRange == customRange;
@@ -84,9 +589,12 @@ void MapImportSys::StartLoading(const std::filesystem::path& path)
 	}
 	const float rangeUnit = custom ? 0.0f : rangeMetresPerUnit[selectedRange];
 	const double pixel = static_cast<double>(pixelSize) * options.downsample;
-	job.Start([path, options, custom, rangeUnit, pixel]() {
+	const uint64_t version = mapVersion;
+	job.Start([path, options, custom, rangeUnit, pixel, reload, version]() {
 		LoadResult result;
 		result.path = path;
+		result.reload = reload;
+		result.version = version;
 		auto start = std::chrono::steady_clock::now();
 		//An exception would come back in future.get() on the main thread and end the app
 		try {
@@ -126,21 +634,25 @@ void MapImportSys::InstallResult(LoadResult& result)
 		error = FileNameOf(result.path) + ": " + result.error;
 		return;
 	}
-	map = std::move(result.map);
+	if (result.version != mapVersion) {
+		error = "Dropped " + FileNameOf(result.path) + ": another map was shown while it was loading";
+		return;
+	}
 	mapInfo = result.info;
 	mapPath = result.path;
 	lastLoadMs = result.ms;
-	metresPerUnit = result.metresPerUnit;
-	pixelMetres = result.pixelMetres;
-	auto [lowest, highest] = std::minmax_element(map.Data(), map.Data() + map.Size());
-	mapMin = *lowest;
-	mapMax = *highest;
-	//Height 1 = metresPerUnit metres; a texel = worldUnitsPerTexel world units = pixelMetres metres
-	trueHeightScale = static_cast<float>(metresPerUnit * TerrainView::worldUnitsPerTexel / pixelMetres.x);
-	renderSettings.heightScale = trueHeightScale;
-
-	view.Resize(map.GetWidth(), map.GetHeight());
-	view.SetLayer(TerrainView::Layer::TERRAIN, map);
+	InstallMap(std::move(result.map), result.metresPerUnit, result.pixelMetres);
+	original = HeightField();
+	dirty = true;
+	if (!result.reload) {
+		//A new project, not saved yet
+		projectPath.clear();
+		projectSource = FileNameOf(result.path);
+		projectGeneration.clear();
+		seaLevelMetres.reset();
+		const std::u8string stem = result.path.stem().u8string();
+		suggestedName = std::string(stem.begin(), stem.end());
+	}
 }
 
 void MapImportSys::Draw(Renderer& renderer, Camera& camera, LightSource& light)
@@ -188,7 +700,12 @@ void MapImportSys::BrowseForFile()
 
 void MapImportSys::ImGuiRightPanel()
 {
+	//Ctrl+S anywhere in this mode, unless a text field takes the keys
+	if (!ImGui::GetIO().WantTextInput && ImGui::IsKeyChordPressed(ImGuiMod_Ctrl | ImGuiKey_S) && !map.Empty()) {
+		SaveProject();
+	}
 	const PanelTabs::Tab tabs[] = {
+		{ "Project", [this] { ProjectImGui(); } },
 		{ "Load", [this] { LoadImGui(); } },
 	};
 	importTabs.Draw("import", tabs);
@@ -199,7 +716,7 @@ void MapImportSys::LoadImGui()
 	if (!listed) {
 		RefreshFiles();
 	}
-	const bool loading = job.IsRunning();
+	const bool loading = Busy();
 
 	ImGui::BeginDisabled(loading);
 	if (ImGui::Button("Browse...")) {
@@ -236,7 +753,7 @@ void MapImportSys::LoadImGui()
 
 	ImGui::BeginDisabled(loading || selected.empty() || !valid);
 	if (ImGui::Button("Load")) {
-		StartLoading(selected);
+		Request({ PendingAction::Kind::LOAD, selected, std::nullopt });
 	}
 	ImGui::EndDisabled();
 	if (loading) {
@@ -272,7 +789,7 @@ bool MapImportSys::OptionsImGui()
 	if (NeedsRange()) {
 		//Changing the range of the loaded map reads its file again; the new range applies to it right away
 		if (ImGui::Combo("Value range", &selectedRange, valueRangeNames) && mapPath == selected && selectedRange != customRange) {
-			StartLoading(selected);
+			StartLoading(selected, true);
 		}
 		if (selectedRange == customRange) {
 			ImGui::InputFloat("Lowest (m)", &customLowest, 0.0f, 0.0f, "%.1f");
@@ -332,13 +849,37 @@ void MapImportSys::ImGuiDisplay()
 	utilities::TerrainDetailImGui(s.tessPixels);
 }
 
+void MapImportSys::ImGuiSaving()
+{
+	if (map.Empty()) {
+		ImGui::TextWrapped("Load a map or open a project first.");
+		return;
+	}
+	ExportPanel::Pack pack;
+	pack.mode = "Imported map";
+	//Map units are metres / metresPerUnit with metresPerUnit = the largest |height|, so they never leave [-1, 1]
+	pack.range = heightmap::noiseRange;
+	pack.metresPerUnit = metresPerUnit;
+	pack.metresPerTexel = static_cast<float>(pixelMetres.x);
+	if (seaLevelMetres) {
+		pack.seaLevel = *seaLevelMetres / metresPerUnit;
+	}
+	const std::string generation = projectGeneration;
+	pack.generation = [generation] { return generation; };
+	pack.heightmaps = { { map.GetWidth(), map.GetHeight(), "", [this] { return map; } } };
+	pack.layersMissing = "Material and biome maps: not available for imported maps.";
+	pack.vegetationMissing = "Vegetation: not available for imported maps.";
+	exporter.ImGuiDraw(pack);
+}
+
 void MapImportSys::ImGuiOutput()
 {
 	if (map.Empty()) {
 		ImGui::Text("No map loaded");
 		return;
 	}
-	ImGui::Text("Map: %s (%dx%d, %d-bit%s%s), loaded in %.1f ms", FileNameOf(mapPath).c_str(), map.GetWidth(), map.GetHeight(),
+	ImGui::Text("Project: %s%s - %s", ProjectName().c_str(), HasUnsavedChanges() ? " *" : "", projectSource.c_str());
+	ImGui::Text("Map: %s (%dx%d, %d-bit%s%s), loaded in %.1f ms", mapPath.empty() ? "-" : FileNameOf(mapPath).c_str(), map.GetWidth(), map.GetHeight(),
 		mapInfo.bitsPerSample, mapInfo.floatingPoint ? " float" : "", mapInfo.convertedFromColor ? ", color converted to grey" : "", lastLoadMs);
 	ImGui::Text("Pixel: %.2f m%s", pixelMetres.x, mapInfo.geographic ? " (from degrees)" : "");
 	ImGui::Text("Heights: %.1f to %.1f m", mapMin * metresPerUnit, mapMax * metresPerUnit);

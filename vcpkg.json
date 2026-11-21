@@ -21,6 +21,7 @@
       "name": "tiff",
       "default-features": false,
       "features": [ "zip" ]
-    }
+    },
+    "zlib"
   ]
 }

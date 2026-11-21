@@ -18,6 +18,8 @@
 
 namespace vegexport {
 	using Json = nlohmann::ordered_json;
+	//Vegetation grows only on generated maps, where a texel is 1 m (as the app places it: TerrainView::worldUnitsPerTexel world units)
+	constexpr float metresPerTexel = 1.0f;
 
 	std::vector<Placed> PlaceMap(const HeightField& height, const std::vector<glm::vec4>& surface, const BiomeMap& ids, const Input& input)
 	{
@@ -82,7 +84,7 @@ namespace vegexport {
 						continue;
 					}
 					Placed p;
-					p.position = glm::vec3(x * exportpack::metresPerTexel, in.position.y * input.metresPerUnit, z * exportpack::metresPerTexel);
+					p.position = glm::vec3(x * metresPerTexel, in.position.y * input.metresPerUnit, z * metresPerTexel);
 					p.yaw = in.yaw;
 					p.scale = in.scale / vegetation::unitsPerMetre;
 					p.model = in.model;
@@ -100,7 +102,7 @@ namespace vegexport {
 		std::vector<vegetation::Instance> instances;
 		instances.reserve(placed.size());
 		//1 texel = 1 m = vegetation::unitsPerMetre world units
-		const float unitsPerMetre = vegetation::unitsPerMetre / exportpack::metresPerTexel;
+		const float unitsPerMetre = vegetation::unitsPerMetre / metresPerTexel;
 		for (const Placed& p : placed) {
 			vegetation::Instance in;
 			in.position = glm::vec3(texelZeroWorld.x + p.position.x * unitsPerMetre, p.position.y / metresPerUnit, texelZeroWorld.y + p.position.z * unitsPerMetre);
