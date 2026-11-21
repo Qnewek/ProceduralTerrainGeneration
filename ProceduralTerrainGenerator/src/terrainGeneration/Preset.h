@@ -56,6 +56,12 @@ namespace preset {
 	//no leading or trailing space
 	bool IsValidName(const std::string& name);
 
+	//River settings alone as JSON (the "rivers" object of a world preset), e.g. for a map project
+	std::string RiversJson(const rivers::RiverConfig& config);
+	//@param out - replaced only on success; fields missing in the text keep their default values
+	//@param error - description of the problem on failure (not JSON, a field of a wrong type, a value generation cannot use)
+	bool RiversFromJson(const std::string& text, rivers::RiverConfig& out, std::string& error);
+
 	//@return .json files in folder sorted by path; empty if the folder does not exist
 	std::vector<std::filesystem::path> List(const std::filesystem::path& folder);
 }
