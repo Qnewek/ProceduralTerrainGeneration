@@ -106,6 +106,7 @@ void ExportPanel::ExportAll(const Pack& pack)
 	manifest.mode = pack.mode;
 	manifest.range = pack.range;
 	manifest.metresPerUnit = pack.metresPerUnit;
+	manifest.metresPerTexel = pack.metresPerTexel;
 	manifest.seaLevel = pack.seaLevel;
 	manifest.worldOrigin = pack.worldOrigin;
 
@@ -158,8 +159,9 @@ void ExportPanel::ExportAll(const Pack& pack)
 		settings.name = name;
 		settings.format = static_cast<meshexport::Format>(meshFormat - 1);
 		settings.lodLevels = lodLevels;
-		settings.tileMetres = tileSizes[tileChoice];
+		settings.tileMetres = tileTexels[tileChoice] * pack.metresPerTexel;
 		settings.metresPerUnit = pack.metresPerUnit;
+		settings.metresPerTexel = pack.metresPerTexel;
 		for (const exportpack::File& file : pending->manifest.files) {
 			if (file.content == "biome_colors") {
 				settings.terrainTexture = file.path;
@@ -316,7 +318,20 @@ void ExportPanel::ImGuiDraw(const Pack& pack)
 		ImGui::SliderInt("Levels of detail", &lodLevels, 1, 5);
 		ImGui::SetItemTooltip("LOD 0 = every texel; each next level has about 4 times fewer triangles (simplified where the terrain is flat).\n"
 			"The largest height error of every level is in the .json.");
-		ImGui::Combo("Tile size", &tileChoice, "128 m\0" "256 m\0" "512 m\0" "1024 m\0" "Whole map\0");
+		//Texels, so a map with large pixels (an imported DEM) is not cut into thousands of tiny tiles
+		std::string tileNames;
+		for (float texels : tileTexels) {
+			char item[64];
+			if (texels > 0.0f) {
+				std::snprintf(item, sizeof(item), "%.0f texels (%.0f m)", texels, texels * pack.metresPerTexel);
+			}
+			else {
+				std::snprintf(item, sizeof(item), "Whole map");
+			}
+			tileNames += item;
+			tileNames += '\0';
+		}
+		ImGui::Combo("Tile size", &tileChoice, tileNames.c_str());
 		const bool anyWater = pack.seaLevel.has_value() || static_cast<bool>(pack.riverWater);
 		ImGui::BeginDisabled(!anyWater);
 		ImGui::Checkbox("Water", &exportWater);

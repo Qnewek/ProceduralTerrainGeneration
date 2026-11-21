@@ -2,6 +2,7 @@
 
 #include <memory>
 #include <optional>
+#include <utility>
 #include <vector>
 
 #include "glm/glm.hpp"
@@ -22,6 +23,7 @@
 #include "TerrainView.h"
 #include "PresetPanel.h"
 #include "ExportPanel.h"
+#include "MapProject.h"
 #include "PlacesPanel.h"
 #include "PackPicker.h"
 #include "BiomeEditor.h"
@@ -193,6 +195,7 @@ private:
 	void ApplyWorld(const WorldConfig& loaded);
 	PresetPanel presets{ "presets/world" };
 	ExportPanel exporter{ "exports" };
+	std::optional<mapproject::Project> sentMap;	//"Send map" pressed, waiting for TakeSentMap
 	PlacesPanel places{ "places/world.json" };
 	PackPicker packs{ "exports" };
 	//Mode name in export packs
@@ -271,6 +274,8 @@ public:
 	//@param camera - saved with a place, moved by loading one
 	void ImGuiPresets(Camera& camera);
 	void ImGuiSaving();
+	//A map sent to the Imported map mode from the Saving tab, once
+	std::optional<mapproject::Project> TakeSentMap() { return std::exchange(sentMap, std::nullopt); }
 	void ImGuiOutput(glm::vec3 pos);
 	//Names of the map and its eroded copy over the scene of the last Draw; in the ImGui frame, after the panels
 	void ImGuiMapLabels() const { mapLabels.ImGuiDraw(); }

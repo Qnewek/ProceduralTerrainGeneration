@@ -78,9 +78,9 @@ namespace exportpack {
 		Json grid;
 		grid["width"] = m.width;
 		grid["height"] = m.height;
-		grid["metresPerTexel"] = metresPerTexel;
+		grid["metresPerTexel"] = m.metresPerTexel;
 		//Texel centres: the first and the last sample of a row are width - 1 texels apart
-		grid["sizeMetres"] = { (m.width - 1) * metresPerTexel, (m.height - 1) * metresPerTexel };
+		grid["sizeMetres"] = { (m.width - 1) * m.metresPerTexel, (m.height - 1) * m.metresPerTexel };
 		grid["rowOrder"] = "row 0 first; it is the top edge of the 2D map view (the smallest Z)";
 		grid["axes"] = "right-handed, Y up: column = +X (right in the 2D map), row = +Z (down in the 2D map)";
 		//Neighbouring packs of one world fit together at these positions (metres = texels)
@@ -168,13 +168,13 @@ namespace exportpack {
 		Json import;
 		import["unreal"] = {
 			{ "files", "png16 or r16" },
-			{ "scale", { 100.0f * metresPerTexel, 100.0f * metresPerTexel, unreal.zScale } },
+			{ "scale", { 100.0f * m.metresPerTexel, 100.0f * m.metresPerTexel, unreal.zScale } },
 			{ "locationZ", unreal.locationZ },
 			{ "note", "Landscape import; Z scale 100 spans 512 m centred on the actor" }
 		};
 		import["unity"] = {
 			{ "files", "r16 (Byte Order: Windows)" },
-			{ "terrainSize", { (m.width - 1) * metresPerTexel, (m.range.max - m.range.min) * m.metresPerUnit, (m.height - 1) * metresPerTexel } },
+			{ "terrainSize", { (m.width - 1) * m.metresPerTexel, (m.range.max - m.range.min) * m.metresPerUnit, (m.height - 1) * m.metresPerTexel } },
 			{ "positionY", m.range.min * m.metresPerUnit },
 			{ "note", "Unity needs a square heightmap of 2^n + 1 texels" }
 		};

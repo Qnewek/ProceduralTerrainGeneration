@@ -1,5 +1,7 @@
 #include "TerrainGenerationSys.h"
 
+#include "SendToImported.h"
+
 #include <iostream>
 #include <algorithm>
 #include <chrono>
@@ -905,7 +907,8 @@ void TerrainGenerationSys::ImGuiSaving()
 	//Rivers and lakes of the Region method, the network the terrain was carved with
 	if (RiverWater() && riverNetwork) {
 		const float metresPerUnit = pack.metresPerUnit;
-		pack.riverWater = [this, metresPerUnit] {
+		const float metresPerTexel = pack.metresPerTexel;
+		pack.riverWater = [this, metresPerUnit, metresPerTexel] {
 			const float texelsPerHeight = renderSettings.heightScale / TerrainView::worldUnitsPerTexel;
 			const std::vector<hydrology::WaterVertex> water = hydrology::BuildWaterMesh(*riverNetwork, world.terrain.WaterHeight(), texelsPerHeight);
 			//The network lies in world map positions, the pack starts at the map's texel (0, 0)
@@ -913,12 +916,15 @@ void TerrainGenerationSys::ImGuiSaving()
 			std::vector<glm::vec3> triangles;
 			triangles.reserve(water.size());
 			for (const hydrology::WaterVertex& v : water) {
-				triangles.emplace_back((v.x - offset.x) * exportpack::metresPerTexel, v.level * metresPerUnit, (v.y - offset.y) * exportpack::metresPerTexel);
+				triangles.emplace_back((v.x - offset.x) * metresPerTexel, v.level * metresPerUnit, (v.y - offset.y) * metresPerTexel);
 			}
 			return triangles;
 		};
 	}
 	exporter.ImGuiDraw(pack);
+	if (std::optional<mapproject::Project> sent = SendToImportedImGui(pack)) {
+		sentMap = std::move(sent);
+	}
 }
 void TerrainGenerationSys::ImGuiOutput(glm::vec3 pos) {
 	//Camera in world units before modelScale, like the maps

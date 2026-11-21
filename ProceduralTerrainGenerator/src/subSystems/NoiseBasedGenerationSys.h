@@ -1,5 +1,6 @@
 #pragma once
 #include <memory>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -15,6 +16,7 @@
 #include "TerrainView.h"
 #include "PresetPanel.h"
 #include "ExportPanel.h"
+#include "MapProject.h"
 #include "PlacesPanel.h"
 #include "PackPicker.h"
 #include "PanelTabs.h"
@@ -100,6 +102,7 @@ class NoiseBasedGenerationSys
 		void ApplyConfig(const NoiseMapConfig& loaded);
 		PresetPanel presets{ "presets/noise" };
 		ExportPanel exporter{ "exports" };
+		std::optional<mapproject::Project> sentMap;	//"Send map" pressed, waiting for TakeSentMap
 		PlacesPanel places{ "places/noise.json" };
 		PackPicker packs{ "exports" };
 		//Mode name in export packs
@@ -136,6 +139,8 @@ class NoiseBasedGenerationSys
 		//@param camera - saved with a place, moved by loading one
 		void ImGuiPresets(Camera& camera);
 		void ImGuiSaving();
+		//A map sent to the Imported map mode from the Saving tab, once
+		std::optional<mapproject::Project> TakeSentMap() { return std::exchange(sentMap, std::nullopt); }
 		void ImGuiOutput();
 };
 
