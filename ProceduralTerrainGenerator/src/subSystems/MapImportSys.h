@@ -8,11 +8,13 @@
 #include <vector>
 
 #include "glm/glm.hpp"
+#include "imgui.h"
 
 #include "Camera.h"
 #include "ExportPanel.h"
 #include "GenerationJob.h"
 #include "GpuErosion.h"
+#include "GpuSculpt.h"
 #include "HeightmapImport.h"
 #include "Hydrology.h"
 #include "LightSource.h"
@@ -34,7 +36,8 @@ public:
 	//Called every frame before Draw: installs a map or a project that finished loading, finishes a save
 	//@param camera - moved to look down at a project that was opened or a map that was received
 	//@param active - Imported map is the mode shown; the camera of another mode is left alone until it is
-	void Update(Camera& camera, bool active);
+	//@param deltaTime - seconds since the last frame (the pace of the brushes)
+	void Update(Camera& camera, bool active, float deltaTime);
 	//true while the project has changes that are not saved
 	bool HasUnsavedChanges() const { return dirty && !map.Empty(); }
 	//The "Unsaved changes" question; drawn in every mode, because closing the window asks it too
@@ -49,8 +52,8 @@ public:
 	void Draw(Renderer& renderer, Camera& camera, LightSource& light);
 	//true while the 2D map is shown instead of the 3D view
 	bool FlatView() const { return renderSettings.map2d; }
-	void ReloadShaders() { view.ReloadShader(); erosion.ReloadShaders(); water.ReloadShader(); }
-	//Right panel: the Load tab
+	void ReloadShaders() { view.ReloadShader(); erosion.ReloadShaders(); water.ReloadShader(); sculptor.ReloadShaders(); }
+	//Right panel: the Project, Edit and Load tabs; also the mouse input of the brushes and their outline on the terrain
 	void ImGuiRightPanel();
 	//Content of the Display tab of the left panel
 	void ImGuiDisplay();
@@ -137,7 +140,7 @@ private:
 	void HistoryImGui();
 	//Divides the maps by max(|height|, 1 m) over both; @return that divisor (metresPerUnit)
 	static float ToUnits(HeightField& working, HeightField& original);
-	bool Busy() const { return job.IsRunning() || projectJob.IsRunning() || saveJob.IsRunning() || editJob.IsRunning(); }
+	bool Busy() const { return job.IsRunning() || projectJob.IsRunning() || saveJob.IsRunning() || editJob.IsRunning() || stroke.has_value(); }
 
 	//Project file
 	void SaveProject();
@@ -233,6 +236,40 @@ private:
 	uint32_t erosionRuns = 0;
 	//Erodes the working copy now (GL thread)
 	void Erode();
+
+	//Sculpt brushes (MapImportSculpt.cpp). While a stroke runs the map lives only on the GPU (the TERRAIN layer); map keeps the state
+	//from before it, and letting the button go reads the layer back as one history step
+	struct Stroke {
+		HeightField before;		//metres, for the history
+		float target = 0.0f;	//FLATTEN: map units under the cursor where the stroke started
+		uint32_t seed = 0;		//NOISE
+		bool painted = false;	//a dab was applied; a click without one leaves no history step
+	};
+	sculpt::BrushConfig brush;
+	//BrushConfig::strength of the two kinds of brushes, kept apart (they have different units)
+	float raiseRate = 10.0f;	//RAISE, LOWER, NOISE: metres per second
+	float smoothRate = 2.0f;	//SMOOTH, FLATTEN: part of the way per second
+	bool sculptOn = false;
+	GpuSculpt sculptor;
+	//Map texel under the cursor, from the depth of the scene drawn in the last frame
+	std::optional<glm::vec2> hoverTexel;
+	std::optional<Stroke> stroke;
+	uint32_t strokeSeed = 0;
+	//Mouse input of the last ImGui frame (Update runs before the next one): the left button went down over the scene, is held
+	bool paintPressed = false, paintHeld = false, paintInvert = false;
+	//Outline of the brush on the terrain, ImGui coordinates, and the viewport it is clipped to
+	std::vector<ImVec2> brushOutline;
+	ImVec2 outlineClipMin, outlineClipMax;
+	//Starts, continues or ends a stroke (GL thread)
+	void UpdateSculpt(const Camera& camera, bool active, float deltaTime);
+	//Ends a stroke: the layer read back becomes a history step
+	void FinishStroke();
+	//After the terrain is drawn: the texel under the cursor and the outline of the brush around it
+	void PickUnderCursor(Camera& camera, LightSource& light);
+	//Mouse input and the outline; every frame of the mode, inside the ImGui frame
+	void SculptInputImGui();
+	//The Sculpt section of the Edit tab
+	void SculptImGui();
 
 	//Rivers and lakes of the working copy (hydrology::ComputeOnMap), computed on a background thread after every change; not carved
 	struct RiverResult {

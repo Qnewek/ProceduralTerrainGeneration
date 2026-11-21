@@ -135,6 +135,7 @@ void TerrainGenApp::Start()
 
         UpdateWindowSize();
 
+        editorCamera.Update(window, camera, ViewportRect(), FlatView());
         camera.SteerCamera(window, deltaTime, true);
 
         bool reloadKeyDown = glfwGetKey(window, GLFW_KEY_F5) == GLFW_PRESS;
@@ -152,12 +153,14 @@ void TerrainGenApp::Start()
             terrainGenSys.Update(camera);
         }
         //Every frame: a project save started before leaving the mode (or before closing the window) has to finish
-        mapImportSys.Update(camera, currentMode == mode::MAP_IMPORT);
+        mapImportSys.Update(camera, currentMode == mode::MAP_IMPORT, deltaTime);
         //The sky and the light colors of this frame, read by every lit shader (also in the 2D map)
         light.Update(deltaTime);
         sky.Update(camera, light);
 
 		Draw();
+        //The depth of the scene is still there: the point a drag started this frame turns around
+        editorCamera.AfterDraw(camera, ViewportRect());
         ImGuiRender();
         //"Send map" pressed in a Saving tab this frame: the map opens in the Imported map mode
         std::optional<mapproject::Project> sent = noiseGenSys.TakeSentMap();
@@ -270,6 +273,7 @@ void TerrainGenApp::ImGuiRender()
     ImGui_ImplOpenGL3_NewFrame();
     ImGui_ImplGlfw_NewFrame();
     ImGui::NewFrame();
+    editorCamera.ImGuiWheel(window, camera, ViewportRect(), FlatView());
 
     //Left panel
     ImGui::SetNextWindowPos(ImVec2(0, 0), ImGuiCond_Always);
@@ -290,7 +294,7 @@ void TerrainGenApp::ImGuiRender()
                 mapImportSys.ImGuiDisplay();
             }
         } },
-        { "Camera", [this] { camera.ImGuiDraw(); } },
+        { "Camera", [this] { camera.ImGuiDraw(); editorCamera.ImGuiDraw(); } },
         { "Sun & sky", [this] { light.ImGuiDraw(); } },
         { "Materials", [this] { materials->ImGuiDraw(); } },
         { "Vegetation", [this] {

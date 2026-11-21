@@ -47,6 +47,7 @@ target_include_directories(ptg_vendor SYSTEM PUBLIC ${PTG_SRC}/vendor ${Stb_INCL
 # Generation itself runs only in compute shaders (res/shaders/ComputeShaders)
 add_library(ptg_core STATIC
 	${PTG_SRC}/terrainGeneration/Biome.cpp
+	${PTG_SRC}/terrainGeneration/CameraMath.cpp
 	${PTG_SRC}/terrainGeneration/DemTools.cpp
 	${PTG_SRC}/terrainGeneration/ExportManifest.cpp
 	${PTG_SRC}/terrainGeneration/FileIO.cpp
@@ -56,6 +57,7 @@ add_library(ptg_core STATIC
 	${PTG_SRC}/terrainGeneration/LandStats.cpp
 	${PTG_SRC}/terrainGeneration/MapEdit.cpp
 	${PTG_SRC}/terrainGeneration/MapProject.cpp
+	${PTG_SRC}/terrainGeneration/Sculpt.cpp
 	${PTG_SRC}/terrainGeneration/MaterialExport.cpp
 	${PTG_SRC}/terrainGeneration/MeshExport.cpp
 	${PTG_SRC}/terrainGeneration/MeshFile.cpp
@@ -80,6 +82,7 @@ add_executable(ProceduralTerrainGenerator
 	${PTG_SRC}/opengl/GpuHeightCheck.cpp
 	${PTG_SRC}/opengl/GpuHeightGenerator.cpp
 	${PTG_SRC}/opengl/GpuQuery.cpp
+	${PTG_SRC}/opengl/GpuSculpt.cpp
 	${PTG_SRC}/opengl/GpuSurfacePass.cpp
 	${PTG_SRC}/opengl/IndexBuffer.cpp
 	${PTG_SRC}/opengl/NoisePreview.cpp
@@ -101,11 +104,13 @@ add_executable(ProceduralTerrainGenerator
 	${PTG_SRC}/opengl/VertexArray.cpp
 	${PTG_SRC}/opengl/VertexBuffer.cpp
 	${PTG_SRC}/subSystems/MapImportEdit.cpp
+	${PTG_SRC}/subSystems/MapImportSculpt.cpp
 	${PTG_SRC}/subSystems/MapImportSys.cpp
 	${PTG_SRC}/subSystems/NoiseBasedGenerationSys.cpp
 	${PTG_SRC}/subSystems/TerrainGenApp.cpp
 	${PTG_SRC}/subSystems/TerrainGenerationSys.cpp
 	${PTG_SRC}/utility/Camera.cpp
+	${PTG_SRC}/utility/EditorCamera.cpp
 	${PTG_SRC}/utility/ExportPanel.cpp
 	${PTG_SRC}/utility/BiomeEditor.cpp
 	${PTG_SRC}/utility/FileDialog.cpp
@@ -146,6 +151,7 @@ ptg_set_warnings(ProceduralTerrainGenerator)
 enable_testing()
 add_executable(ptg_tests
 	${PTG_DIR}/tests/BiomeTests.cpp
+	${PTG_DIR}/tests/CameraMathTests.cpp
 	${PTG_DIR}/tests/DemToolsTests.cpp
 	${PTG_DIR}/tests/ExportManifestTests.cpp
 	${PTG_DIR}/tests/FlightRecordTests.cpp
@@ -165,6 +171,7 @@ add_executable(ptg_tests
 	${PTG_DIR}/tests/PlacesTests.cpp
 	${PTG_DIR}/tests/PresetTests.cpp
 	${PTG_DIR}/tests/RangeAllocatorTests.cpp
+	${PTG_DIR}/tests/SculptTests.cpp
 	${PTG_DIR}/tests/SplineTests.cpp
 	${PTG_DIR}/tests/TerrainMeshTests.cpp
 	${PTG_DIR}/tests/RollingStatsTests.cpp

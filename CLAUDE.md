@@ -32,7 +32,7 @@ Plan napraw i rozwoju: `docs/ROADMAP.md` (ID zadań `B*`, `A*`, `F*` są tam zde
 - **Test generacji: `out\build\x64-release\ProceduralTerrainGenerator.exe --gpu-check`** (ukryte okno, potrzebny GPU z OpenGL 4.5; uruchamiaj po każdej
   zmianie shaderów generacji). Sprawdza: wartości skończone i w zakresie opcji (każda opcja, ridge, wyspy, metody terenu), determinizm i wpływ seeda,
   zgodność id i kolorów biomów, chunki i poziomy LOD bit w bit z pełną mapą, mapę pochodnych na mapach o znanych pochodnych, udział wody domyślnego świata
-  (55–65%, ≥ 80% lądu w kontynentach), rzeki (obie metody: zakres, jeden przebieg = dwa, chunki), erozję (krople i rury); potem czasy GPU generacji i erozji.
+  (55–65%, ≥ 80% lądu w kontynentach), rzeki (obie metody: zakres, jeden przebieg = dwa, chunki), erozję (krople i rury), pędzle (GPU = `sculpt::Apply`); potem czasy GPU generacji i erozji.
   Nowa opcja generacji = nowy przypadek w `CheckRanges` (`GpuHeightCheck.cpp`).
 - **Wielkość liter ścieżek = dokładnie taka jak w gicie** (`git ls-files`): `src/opengl`, `src/subSystems`,
   `src/terrainGeneration`, `src/utility`, `src/vendor`, `res/shaders`, `res/textures`.
@@ -56,7 +56,8 @@ ProceduralTerrainGenerator/
       TerrainGenerationSys.*     tryb "TerrainGen": 3 szumy + splajny + biomy, edytory ImPlot
       MapImportSys.*             tryb "Imported map": projekt z jedną kopią roboczą mapy (z pliku mapy, z projektu .ptgmap albo wysłana z innego trybu),
                                  zakładki Project (Open/Save/Save as, Ctrl+S, `*`), Edit i Load, Saving = paczka eksportu; odczyt i zapis w tle;
-                                 MapImportEdit.cpp = zakładka Edit tej klasy (erozja, wygładzanie, skala wysokości, oryginał, Cofnij/Ponów, morze, rzeki i jeziora)
+                                 MapImportEdit.cpp = zakładka Edit tej klasy (erozja, wygładzanie, skala wysokości, oryginał, Cofnij/Ponów, morze, rzeki i jeziora);
+                                 MapImportSculpt.cpp = pędzle (punkt pod kursorem, pociągnięcie na GPU, kółko pędzla)
     terrainGeneration/
       WorldConfig.h              same dane: WorldConfig (TerrainConfig + BiomeConfig), NoiseMapConfig, ErosionConfig
       Noise.h                    noise::NoiseConfigParameters (fBm, ridge, island, redistribution); sam szum jest tylko w GLSL
@@ -81,6 +82,8 @@ ProceduralTerrainGenerator/
                                  (float32 w metrach rozdzielone na 4 płaszczyzny bajtów): kopia robocza i oryginał (tylko gdy się różni); zmiana pól = podbicie `currentVersion`
                                  (2 = ustawienia rzek jako JSON `preset::RiversJson`; wersja 1 nadal czytana)
       MapEdit.*                  operacje na mapie w metrach (wygładzanie pudełkowe, skala + przesunięcie, `ErosionScale`) i historia Cofnij/Ponów z limitem pamięci
+      Sculpt.*                   pędzle (podnieś, obniż, wygładź, spłaszcz, szum) na CPU = wzorzec `sculpt_compute.shader`, zanik, rzut kursora na teksel mapy (głębia → teksel)
+      CameraMath.*               matematyka kamery edytora: rozglądanie, orbita wokół punktu (punkt zostaje w tym samym miejscu widoku), przesuwanie, jednostki na piksel
       GenerationJob.h            jedno zadanie generacji w tle (std::async + TryTake)
       LandStats.*                udział wody i masy lądu (flood fill) z rzadkiej próbki świata (GpuHeightGenerator::SampleTerrain); „Land statistics” w zakładce Terrain i sekcja land: w --gpu-check
       Hydrology.*                sieć rzek regionu (metoda REGION): priority-flood, spływ D8, akumulacja, jeziora, biegi rzek → siatki dla RiverMap;
@@ -93,13 +96,14 @@ ProceduralTerrainGenerator/
       GpuSurfacePass.*           mapa pochodnych (gradient + laplasjan) z mapy wysokości; uruchamia ją TerrainView i ChunkWorld
       GpuErosion.*               erozja w compute: kroplowa (erosion_droplet_compute.shader, algorytm dawnej wersji CPU) albo rury wirtualne + termiczna
                                  (erosion_pipe_compute.shader); metoda = ErosionConfig::method
+      GpuSculpt.*                pędzel na GPU (sculpt_compute.shader): jeden dab w kwadracie wokół pędzla, wprost do warstwy wysokości
       Clouds.*                   chmury wolumetryczne: szumy 3D + mapa pogody (raz), ray march w compute w połowie rozdzielczości, składane przez niebo / po scenie
       ShadowMap.*                cienie słońca: cascaded shadow maps (teren + roślinność), dane kaskad w FrameBlock; WaterSurface.* = woda
       ChunkWorld.*               „Infinite generation”: quadtree chunków 128² z LOD wokół kamery, kolejka wg odległości, cache, skirts, rysowanie shaderem terenu
       TerrainMaterials.*         materiały terenu (tryb TEXTURED): lista z terrain_materials.json, texture arrays (albedo+wysokość, normal+roughness+AO; jednostki 4, 5)
                                  + UBO parametrów FS (binding 0), sekcja „Terrain materials”
     utility/
-      Camera.*                   kamera FPS (WASD, Space/Ctrl, M = mysz, Esc = zwolnij mysz)
+      Camera.*                   kamera FPS (WASD, Space/Ctrl, M = mysz, Esc = zwolnij mysz); EditorCamera.* = sterowanie myszą jak w edytorach (prawy, Alt + lewy, środkowy, kółko)
       LightSource.*              słońce: światło kierunkowe (azymut, pora dnia = wysokość, cykl dnia), ambient, mgła (zamglenie wysokościowe + zanikanie na granicy)
       Sky.*                      atmosfera: LUT transmitancji i widoku nieba (rozpraszanie Rayleigh/Mie/ozon, compute, co klatkę) + tło 3D (niebo, tarcza słońca, gwiazdy)
       FrameMetrics.*             pomiary w panelu Output (czas klatki/CPU/GPU, trójkąty); RollingStats.h = średnia i maks. z ostatnich próbek;
@@ -375,6 +379,18 @@ Wartości szumów są w [-1, 1]. Konwencja indeksowania: `map[y * width + x]`.
   z |h| > 127 jednostek (bufor stałoprzecinkowy). Rzeki: `OnMapChanged` ustawia flagę, `UpdateRivers` liczy `hydrology::ComputeOnMap` w tle (wysokości
   metry / 256, długości w pikselach, próbka = całe komórki), wynik starszej `mapVersion` odrzucany; woda przez `WaterSurface::DrawMap` (poziomy siatki
   przeliczane na jednostki mapy w `UploadRiverWater`), bez żłobienia koryt. Historia nie trafia do pliku, ustawienia rzek tak.
+  Pędzle (C, sekcja „Sculpt” zakładki Edit, `MapImportSculpt.cpp`): wzory pędzli są dwa razy — `sculpt::Apply` (`Sculpt.cpp`, testy) i `sculpt_compute.shader`
+  (`GpuSculpt`, kwadrat `sculpt::Area` wokół pędzla, czyta kopię kwadratu poszerzoną o zasięg SMOOTH) — zmiana w jednym wymaga zmiany w drugim, sprawdza
+  `--gpu-check` (sekcja `sculpt:`, ≤ 1e-5). Punkt pod kursorem: `PickUnderCursor` po `view.Draw` czyta 1 piksel głębi (`glReadPixels`) i odwraca macierze
+  `TerrainView::FrameBlock` (te same w 3D i 2D), `sculpt::PickTexel` zakłada mapę bez offsetu. Wejście myszy (przycisk, Shift + kółko) zapamiętuje
+  `SculptInputImGui` w ramce ImGui (`io.MouseWheel` znika w `EndFrame`), `UpdateSculpt` (w `Update`, następna klatka) prowadzi pociągnięcie: w trakcie mapa
+  żyje tylko na GPU (`view.LayerTexture`, przycięta do |h| ≤ 1,5 = granica cullingu; przed pociągnięciem podnieś/obniż/szum `sculpt::StrokeUnit` powiększa
+  jednostkę mapy, żeby zostało miejsce na 30 s malowania — płaska mapa ma jednostkę 1 m), `map` na CPU = stan sprzed pociągnięcia (FLATTEN bierze z niej cel),
+  `Busy()` obejmuje pociągnięcie; puszczenie przycisku (też utrata fokusu, wyjście z trybu, M) = `ReadLayer` → `ApplyEdit` jednym krokiem historii.
+  Działanie na klatkę × `deltaTime` (≤ 0,1 s). Każda klatka malowania liczy całą `surfaceMap` od nowa (na 8192² to koszt pełnego przebiegu).
+- Kamera edytora (`EditorCamera`, wszystkie tryby, tylko widok 3D i bez M): prawy przycisk = rozglądanie (z WASD lot), Alt + lewy = orbita, środkowy = przesuwanie,
+  kółko = przód/tył (Shift + kółko nigdy — zostaje dla promienia pędzla). Punkt obrotu i odległość przesuwania: `AfterDraw` czyta głębię pod kursorem po `Draw`
+  (macierze `camera.GetViewProjection()`), bez trafienia punkt przed kamerą. Matematyka w `CameraMath.*` (`ptg_core`, testy). Lewy przycisk bez Alt należy do pędzli.
 - Rzeki (tylko TerrainGen, zakładka „Rivers”, `WorldConfig::rivers`, domyślnie `NONE`): `carveRivers` (`common/rivers.glsl`) to ostatni krok wysokości w obu ścieżkach
   (`height_compute` i `biome_compute` z `writeHeight`), po modyfikatorach; biomy wybiera wysokość sprzed rzek. Generacja dostaje `const RiverInput*` (config + `RiverMap`);
   `SampleTerrain` zawsze bez rzek (z niej liczy się sieć — inaczej sprzężenie). Każdy dispatch ustawia `riverMethod` (program pamięta uniformy).
