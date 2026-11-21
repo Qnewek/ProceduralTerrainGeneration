@@ -1074,6 +1074,31 @@ namespace preset {
 		return LoadConfig(path, out, mapOffset, error);
 	}
 
+	std::string RiversJson(const rivers::RiverConfig& config)
+	{
+		return RiversToJson(config).dump();
+	}
+
+	bool RiversFromJson(const std::string& text, rivers::RiverConfig& out, std::string& error)
+	{
+		try {
+			json root;
+			root["rivers"] = json::parse(text);
+			if (!root["rivers"].is_object()) {
+				throw std::runtime_error("River settings must be a JSON object");
+			}
+			rivers::RiverConfig config;
+			ReadRivers(Reader(root, "project"), "rivers", config);
+			CheckRivers(config);
+			out = config;
+			return true;
+		}
+		catch (const std::exception& e) {
+			error = e.what();
+			return false;
+		}
+	}
+
 	bool IsValidName(const std::string& name)
 	{
 		if (name.empty() || name.size() > 64 || name.front() == ' ' || name.back() == ' ') {

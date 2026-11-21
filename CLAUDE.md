@@ -55,7 +55,8 @@ ProceduralTerrainGenerator/
       NoiseBasedGenerationSys.*  tryb "Noise heightmap": jeden szum + erozja (podgląd obok)
       TerrainGenerationSys.*     tryb "TerrainGen": 3 szumy + splajny + biomy, edytory ImPlot
       MapImportSys.*             tryb "Imported map": projekt z jedną kopią roboczą mapy (z pliku mapy, z projektu .ptgmap albo wysłana z innego trybu),
-                                 zakładki Project (Open/Save/Save as, Ctrl+S, `*`) i Load, Saving = paczka eksportu; odczyt i zapis w tle
+                                 zakładki Project (Open/Save/Save as, Ctrl+S, `*`), Edit i Load, Saving = paczka eksportu; odczyt i zapis w tle;
+                                 MapImportEdit.cpp = zakładka Edit tej klasy (erozja, wygładzanie, skala wysokości, oryginał, Cofnij/Ponów, morze, rzeki i jeziora)
     terrainGeneration/
       WorldConfig.h              same dane: WorldConfig (TerrainConfig + BiomeConfig), NoiseMapConfig, ErosionConfig
       Noise.h                    noise::NoiseConfigParameters (fBm, ridge, island, redistribution); sam szum jest tylko w GLSL
@@ -78,9 +79,12 @@ ProceduralTerrainGenerator/
       DemTools.*                 mapy rzeczywiste: wypełnianie NoData z sąsiadów, wycinek, zmniejszenie (średnia bloków), piksel w metrach ze stopni
       MapProject.*               plik projektu .ptgmap: sygnatura + długość + nagłówek JSON (rozmiar, piksel, morze, źródło, preset, przewyższenie) + bloki zlib
                                  (float32 w metrach rozdzielone na 4 płaszczyzny bajtów): kopia robocza i oryginał (tylko gdy się różni); zmiana pól = podbicie `currentVersion`
+                                 (2 = ustawienia rzek jako JSON `preset::RiversJson`; wersja 1 nadal czytana)
+      MapEdit.*                  operacje na mapie w metrach (wygładzanie pudełkowe, skala + przesunięcie, `ErosionScale`) i historia Cofnij/Ponów z limitem pamięci
       GenerationJob.h            jedno zadanie generacji w tle (std::async + TryTake)
       LandStats.*                udział wody i masy lądu (flood fill) z rzadkiej próbki świata (GpuHeightGenerator::SampleTerrain); „Land statistics” w zakładce Terrain i sekcja land: w --gpu-check
-      Hydrology.*                sieć rzek regionu (metoda REGION): priority-flood, spływ D8, akumulacja, jeziora, biegi rzek → siatki dla RiverMap
+      Hydrology.*                sieć rzek regionu (metoda REGION): priority-flood, spływ D8, akumulacja, jeziora, biegi rzek → siatki dla RiverMap;
+                                 `ComputeOnMap` = sieć całej mapy w metrach (Imported map)
     opengl/                      cienkie wrappery: Shader, VertexArray/Buffer, IndexBuffer, TextureClass, Renderer, GpuQuery
       TerrainView.*              siatka + shader + tekstury (TERRAIN/OVERLAY/BIOMES), wspólny dla obu trybów
       GpuHeightGenerator.*       jedyna generacja: szum, teren i biomy w compute shaderach (GenerateWorld = teren + biomy w jednym przebiegu); GpuHeightCheck.* = testy generacji (--gpu-check)
@@ -364,6 +368,13 @@ Wartości szumów są w [-1, 1]. Konwencja indeksowania: `map[y * width + x]`.
   „Unsaved changes” (Save → akcja po udanym zapisie). Wyjątek: zmiana zakresu wartości przeładowuje ten sam plik bez pytania. Każda instalacja mapy podbija
   `mapVersion`; wynik wczytywania lub zapisu rozpoczęty przy starszej wersji jest odrzucany (zapis nie nadaje projektowi nazwy). `MapImportSys::Update` idzie
   co klatkę w każdym trybie (zapis przed zamknięciem z innego trybu), a `ImGuiModals` też. Mapa wysłana z TerrainGen/Noise = to, co eksport (`Pack`), w metrach.
+  Edycja (B2, zakładka Edit, `MapImportEdit.cpp`): każda operacja = krok `mapedit::History` (mapy w metrach, stan sprzed operacji; krok morza bez mapy),
+  `ApplyEdit` → `ShowMetres` (jednostki od nowa z max |h| kopii i oryginału, przewyższenie zachowane, `mapVersion++`); pierwsza zmiana mapy bez oryginału
+  zapamiętuje go. Nowa mapa (`InstallMap`) czyści historię; `ShowUnits` jej nie rusza. Wygładzanie i skala w tle (`editJob`), erozja w `Update` (GL):
+  jednostki erozji = metry / (piksel · 256), więc parametry TerrainGen (`DefaultWorldErosion`) działają tak samo na każdej mapie; krople odrzucają mapę
+  z |h| > 127 jednostek (bufor stałoprzecinkowy). Rzeki: `OnMapChanged` ustawia flagę, `UpdateRivers` liczy `hydrology::ComputeOnMap` w tle (wysokości
+  metry / 256, długości w pikselach, próbka = całe komórki), wynik starszej `mapVersion` odrzucany; woda przez `WaterSurface::DrawMap` (poziomy siatki
+  przeliczane na jednostki mapy w `UploadRiverWater`), bez żłobienia koryt. Historia nie trafia do pliku, ustawienia rzek tak.
 - Rzeki (tylko TerrainGen, zakładka „Rivers”, `WorldConfig::rivers`, domyślnie `NONE`): `carveRivers` (`common/rivers.glsl`) to ostatni krok wysokości w obu ścieżkach
   (`height_compute` i `biome_compute` z `writeHeight`), po modyfikatorach; biomy wybiera wysokość sprzed rzek. Generacja dostaje `const RiverInput*` (config + `RiverMap`);
   `SampleTerrain` zawsze bez rzek (z niej liczy się sieć — inaczej sprzężenie). Każdy dispatch ustawia `riverMethod` (program pamięta uniformy).

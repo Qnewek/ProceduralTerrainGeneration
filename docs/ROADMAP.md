@@ -664,6 +664,11 @@ oryginał tylko w pamięci i w projekcie („Wróć do oryginału”), plus Cofn
   Do sprawdzenia w aplikacji: czas zapisu/odczytu i rozmiar pliku 8192², kadr po Send/Open, okno „Unsaved changes” przy zamykaniu z innego trybu.
 - **B2. Operacje, woda, rzeki:** erozja (parametry w metrach na piksel), wygładzanie, przeskalowanie wysokości, każda operacja krokiem historii
   (limit pamięci); poziom wody w metrach; rzeki i jeziora `hydrology::Compute` na kopii w tle, liczone od nowa po zmianie (bez rzeźbienia koryt).
+  🟡 2026-11-21 (branch `feat/map-edit`): `MapEdit.*` (wygładzanie, skala, historia z limitem, testy), zakładka Edit w Imported map (erozja obiema metodami
+  w jednostkach „piksel / 256”, wygładzanie, skala + przesunięcie w metrach, „Revert to original”, Undo/Redo + Ctrl+Z/Ctrl+Y, limit historii 256–8192 MB,
+  poziom morza w metrach z wodą), `hydrology::ComputeOnMap` (rzeki i jeziora całej mapy w tle, wysokości w metrach), woda rzek w eksporcie paczki,
+  ustawienia rzek w projekcie (`.ptgmap` wersja 2). Do sprawdzenia w aplikacji: wygląd erozji na DEM 30 m i na mapie wysłanej z TerrainGen, czas
+  wygładzania i rzek na 8192², woda bez morza, Cofnij po erozji.
 - **C. Modelowanie ręczne:** pędzle GPU (podnieś, obniż, wygładź, spłaszcz, szum) kursorem w 3D, promień/siła/zanik, pociągnięcie = krok historii.
 - **D. Biomy i roślinność — decyzja po C.** Propozycja „klimat z terenu”: temperatura i wilgotność to szumy zależne tylko od położenia (da się je policzyć
   nad każdą mapą), brakujące kontynentalność/górzystość liczone z mapy wysokości (wysokość nad wodą / odległość od brzegu, lokalna rzeźba), weirdness

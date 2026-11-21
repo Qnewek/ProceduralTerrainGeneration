@@ -128,6 +128,9 @@ namespace mapproject {
 		header["source"] = project.source;
 		header["generation"] = project.generation;
 		header["verticalExaggeration"] = project.verticalExaggeration;
+		if (!project.rivers.empty()) {
+			header["rivers"] = project.rivers;
+		}
 		header["blocks"] = json::array();
 		header["blocks"].push_back({ { "name", workingBlock }, { "bytes", workingData.size() } });
 		if (hasOriginal) {
@@ -196,6 +199,8 @@ namespace mapproject {
 			}
 			project.source = header.value("source", std::string());
 			project.generation = header.value("generation", std::string());
+			//Version 2: river settings; version 1 has none
+			project.rivers = header.value("rivers", std::string());
 			project.verticalExaggeration = header.value("verticalExaggeration", 1.0f);
 			if (!(project.verticalExaggeration > 0.0f) || !std::isfinite(project.verticalExaggeration)) {
 				project.verticalExaggeration = 1.0f;
