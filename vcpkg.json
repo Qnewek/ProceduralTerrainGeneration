@@ -16,6 +16,11 @@
     "lodepng",
     "meshoptimizer",
     "nlohmann-json",
-    "stb"
+    "stb",
+    {
+      "name": "tiff",
+      "default-features": false,
+      "features": [ "zip" ]
+    }
   ]
 }

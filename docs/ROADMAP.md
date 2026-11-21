@@ -643,11 +643,26 @@ Kroki:
 - **Node graph** (imnodes) do składania szumów i operacji zamiast sztywnego continentalness/mountainousness/weirdness.
 
 ### Faza 6 — operacje na wczytanej mapie (otwarte)
-Rozwinięcie trybu „Imported map”, który dziś tylko pokazuje mapę z pliku.
+Rozwinięcie trybu „Imported map”, który dziś tylko pokazuje mapę z pliku, w edytor terenu, także dla map ze świata rzeczywistego (decyzje właściciela
+2026-11-20). Zasada: widoczna jest jedna mapa — kopia robocza, na której działają wszystkie zmiany (inaczej niż porównanie metod w Noise heightmap);
+oryginał tylko w pamięci i w projekcie („Wróć do oryginału”), plus Cofnij/Ponów. Kolejność A → B1 → B2 → C, każdy etap osobny plan i branch.
 
-1. **Operacje na mapie:** erozja i inne modyfikacje wykonywane w tle, na kopii `MapImportSys::map`, jak w pozostałych trybach.
-2. **Eksport wyniku:** zapis zmienionej mapy przez `ExportPanel`, z zakresem wartości wybranym przy wczytaniu.
-3. **Kolejne formaty:** np. EXR, TIFF; nowy format to czytnik i rozszerzenie w `HeightmapImport.cpp`.
+- **A. Import map rzeczywistych (DEM):** GeoTIFF przez libtiff (vcpkg; 16/32 bit, kompresja, kafle; rozmiar piksela i NoData ze znaczników GeoTIFF),
+  `.hgt` (SRTM) i `.asc` (ESRI ASCII) bez bibliotek; wysokości w metrach, rozmiar piksela z pliku lub ręcznie, prawdziwe proporcje + przewyższenie;
+  NoData wypełniane z sąsiadów; wycinek i zmniejszenie dla plików ponad 8192²; mapy w stopniach — ostrzeżenie, bez przeliczania układów.
+  🟡 2026-11-20 (branch `feat/import-dem`): `HeightmapImport` czyta `.tif/.tiff/.hgt/.asc` (`Inspect` = sam nagłówek, `ImportOptions` = zakres, wycinek,
+  zmniejszenie), `DemTools` (NoData, wycinek, zmniejszenie, piksel w metrach); zakładka Load z wycinkiem, zmniejszeniem, rozmiarem piksela i zakresem
+  „Custom (metres)” dla PNG/R16; Display: „Vertical exaggeration” + „True proportions”. Do sprawdzenia w aplikacji: prawdziwy kafel Copernicus/SRTM
+  (GeoTIFF i `.hgt`), czas wczytania 3601², wygląd proporcji i przewyższenia.
+- **B1. Projekt i przenoszenie:** plik projektu `.ptgmap` (nagłówek JSON + kopia robocza i oryginał float32 skompresowane zlib), Save (Ctrl+S) /
+  Save as / Open project / Import map, gwiazdka i pytanie o niezapisane zmiany; „Send to Imported map” w TerrainGen i Noise heightmap (bieżąca mapa
+  częściowa w metrach z poziomem morza, osobno kopia po erozji); zakładka Saving eksportuje kopię roboczą w metrach.
+- **B2. Operacje, woda, rzeki:** erozja (parametry w metrach na piksel), wygładzanie, przeskalowanie wysokości, każda operacja krokiem historii
+  (limit pamięci); poziom wody w metrach; rzeki i jeziora `hydrology::Compute` na kopii w tle, liczone od nowa po zmianie (bez rzeźbienia koryt).
+- **C. Modelowanie ręczne:** pędzle GPU (podnieś, obniż, wygładź, spłaszcz, szum) kursorem w 3D, promień/siła/zanik, pociągnięcie = krok historii.
+- **D. Biomy i roślinność — decyzja po C.** Propozycja „klimat z terenu”: temperatura i wilgotność to szumy zależne tylko od położenia (da się je policzyć
+  nad każdą mapą), brakujące kontynentalność/górzystość liczone z mapy wysokości (wysokość nad wodą / odległość od brzegu, lokalna rzeźba), weirdness
+  neutralne; dalej istniejąca tabela, materiały i `vegexport::PlaceMap`. Alternatywa: import mapy pokrycia terenu (np. ESA WorldCover) jako id biomów.
 
 ---
 
