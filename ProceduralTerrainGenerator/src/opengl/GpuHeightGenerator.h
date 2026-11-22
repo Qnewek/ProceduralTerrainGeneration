@@ -1,11 +1,13 @@
 #pragma once
 
 #include <memory>
+#include <optional>
 #include <vector>
 
 #include "Biome.h"
 #include "Grid.h"
 #include "GpuQuery.h"
+#include "MapBiomes.h"
 #include "RiverMap.h"
 #include "Shader.h"
 #include "TextureClass.h"
@@ -26,6 +28,14 @@ struct RiverInput {
 	const rivers::RiverConfig& config;
 	//rivers::Method::REGION: the network of the region; nullptr or not Ready() = no rivers yet
 	const RiverMap* map = nullptr;
+};
+
+//A map that was not generated (Imported map), for its biomes (GpuHeightGenerator::GenerateMapBiomes)
+struct MapBiomeInput {
+	const TextureClass& heights;	//GL_R32F, map units
+	const TextureClass& climate;	//GL_RG16F of the same size: continentalness and mountainousness (mapbiomes::ComputeClimate)
+	float metresPerUnit = 1.0f;		//metres of map height 1
+	glm::vec2 texelMetres = glm::vec2(1.0f);	//size of a texel along x and y
 };
 
 //Generates all maps of the application in compute shaders (the only implementation of the generation; --gpu-check tests it).
@@ -71,6 +81,12 @@ public:
 	void GenerateWorld(const TerrainConfig& terrain, const BiomeConfig& biomes, const MapArea& area, TextureClass& height,
 		TextureClass& colors, TextureClass& ids, TextureClass* splat = nullptr, const RiverInput* rivers = nullptr);
 
+	//Biomes of a map that was not generated (map_biome_compute.shader): continentalness and mountainousness from input.climate, weirdness 0,
+	//temperature and humidity noises at settings.climateOrigin + texel * texelMetres, the climate from mapbiomes::ClimateHeight; then the
+	//nearest biome, blended colors and the splat map as GenerateBiomes (without terrain modifiers and rivers). The size comes from colors
+	//@param colors, ids, splat - as in GenerateBiomes
+	void GenerateMapBiomes(const mapbiomes::Settings& settings, std::optional<float> seaLevelMetres, const MapBiomeInput& input, TextureClass& colors,
+		TextureClass& ids, TextureClass* splat);
 	//Coarse sample of the terrain (without rivers) over a large area, read back to the CPU (waits for the GPU), for statistics of the world
 	//and the river network of a region (sample i lies at map position center - size * step / 2 + i * step)
 	//@param center - map position in the middle of the sampled area
@@ -97,7 +113,7 @@ private:
 	void RunBiomeShader(const BiomeConfig& biomes, const TerrainConfig& terrain, const MapArea& area, TextureClass& colors, TextureClass& ids,
 		TextureClass* splat, TextureClass* height, const RiverInput* rivers);
 
-	std::unique_ptr<Shader> heightShader, biomeShader;
+	std::unique_ptr<Shader> heightShader, biomeShader, mapBiomeShader;
 	unsigned int worldInput = 0, biomeTable = 0;
 	std::unique_ptr<GpuQuery> timer;
 };

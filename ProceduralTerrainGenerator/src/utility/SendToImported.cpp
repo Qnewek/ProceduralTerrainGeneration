@@ -4,6 +4,8 @@
 
 #include "imgui.h"
 
+#include "MapBiomes.h"
+
 std::optional<mapproject::Project> SendToImportedImGui(const ExportPanel::Pack& pack)
 {
 	ImGui::SeparatorText("Imported map");
@@ -39,5 +41,8 @@ std::optional<mapproject::Project> SendToImportedImGui(const ExportPanel::Pack& 
 	if (pack.generation) {
 		project.generation = pack.generation();
 	}
+	//The biomes of the world it came from, at the same noise positions and heights
+	project.biomes = mapbiomes::ToJson(mapbiomes::FromGeneration(project.generation, pack.worldOrigin, pack.metresPerUnit, project.seaLevel,
+		pack.biomes.has_value()));
 	return project;
 }

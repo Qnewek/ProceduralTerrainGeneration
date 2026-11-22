@@ -9,6 +9,7 @@
 #include "imgui.h"
 #include "implot.h"
 
+#include "BiomeSettingsPanel.h"
 #include "ErosionPanel.h"
 #include "Preset.h"
 #include "SplineSampling.h"
@@ -857,35 +858,8 @@ void TerrainGenerationSys::ImGuiSaving()
 	const bool sameSize = splat && colors && !biomeMap.Empty() && splat->GetWidth() == view.GetMapWidth() && splat->GetHeight() == view.GetMapHeight()
 		&& biomeMap.GetWidth() == view.GetMapWidth() && biomeMap.GetHeight() == view.GetMapHeight();
 	if (biomesGeneration && sameSize) {
-		ExportPanel::MaterialSource materials;
-		materials.names = materialNames;
-		materials.read = [this, splat] {
-			const int width = splat->GetWidth(), height = splat->GetHeight(), layers = splat->GetLayers();
-			std::vector<uint8_t> bytes(static_cast<size_t>(width) * height * layers * 4);
-			splat->Read(GL_RGBA, GL_UNSIGNED_BYTE, static_cast<int>(bytes.size()), bytes.data());
-			const int count = std::min(static_cast<int>(materialNames.size()), 4 * layers);
-			return splatmap::FromLayers(bytes.data(), width, height, layers, count);
-		};
-		pack.materials = std::move(materials);
-
-		ExportPanel::BiomeSource biomes;
-		for (size_t b = 0; b < world.biomes.table.size(); b++) {
-			const biome::Biome& entry = world.biomes.table[b];
-			exportpack::Biome out;
-			out.id = static_cast<int>(b);
-			out.name = entry.name;
-			out.color[0] = entry.color.r;
-			out.color[1] = entry.color.g;
-			out.color[2] = entry.color.b;
-			biomes.table.push_back(out);
-		}
-		biomes.readIds = [this] { return biomeMap; };
-		biomes.readColors = [colors] {
-			std::vector<float> rgba(static_cast<size_t>(colors->GetWidth()) * colors->GetHeight() * 4);
-			colors->Read(GL_RGBA, GL_FLOAT, static_cast<int>(rgba.size() * sizeof(float)), rgba.data());
-			return rgba;
-		};
-		pack.biomes = std::move(biomes);
+		pack.materials = ExportPanel::SplatSource(*splat, materialNames);
+		pack.biomes = ExportPanel::BiomeTableSource(world.biomes.table, [this] { return biomeMap; }, *colors);
 	}
 	else {
 		pack.layersMissing = "Material and biome maps: turn on biome generation.";
@@ -1043,21 +1017,11 @@ void TerrainGenerationSys::BiomesEditor()
 	if (!biomesGeneration) {
 		return;
 	}
-	if (ImGui::SliderFloat("Blend width", &world.biomes.blendWidth, 0.0f, 0.5f)) {
+	if (biomepanel::Blend(world.biomes)) {
 		RequestBiomes();
 	}
-	ImGui::SetItemTooltip("How far (in noise values) a biome fades into the nearest one; 0 = sharp borders");
 
-	ImGui::SeparatorText("Climate");
-	biome::Climate& climate = world.biomes.climate;
-	bool climateChanged = ImGui::SliderFloat("Lapse rate", &climate.lapseRate, 0.0f, 3.0f);
-	ImGui::SetItemTooltip("Temperature drop per unit of terrain height above the water (heights are in [0, 1]).\n"
-		"Makes high mountains cold: snowy peaks without a rule of their own");
-	climateChanged |= ImGui::SliderFloat("Coast humidity", &climate.coastHumidity, -1.0f, 1.0f);
-	ImGui::SetItemTooltip("Humidity added at the water surface, fading out with height");
-	//Divides the height in the shader, so it stays above 0
-	climateChanged |= ImGui::SliderFloat("Coast range", &climate.coastRange, 0.005f, 0.5f, "%.3f", ImGuiSliderFlags_AlwaysClamp);
-	ImGui::SetItemTooltip("Height above the water where the coast humidity fades to 0");
+	const bool climateChanged = biomepanel::Climate(world.biomes.climate);
 	if (world.terrain.method != EvaluationMethod::LAYERED) {
 		ImGui::TextDisabled("This terrain method has no sea: heights are measured from 0");
 	}
@@ -1082,19 +1046,7 @@ void TerrainGenerationSys::BiomesEditor()
 		RequestBiomes();
 	}
 
-	ImGui::SeparatorText("Surface materials");
-	ImGui::TextDisabled("Seen in the TEXTURED display mode; each biome's mix is in the biome table");
-	//Both divide in the shader, so they stay above 0
-	bool materialsChanged = ImGui::SliderFloat("Material blend width", &b.materialBlendWidth, 0.01f, 0.5f, "%.3f", ImGuiSliderFlags_AlwaysClamp);
-	ImGui::SetItemTooltip("How far (in noise values) the materials of neighbouring biomes mix");
-	materialsChanged |= ImGui::SliderFloat("Patchiness", &b.materialPatchiness, 0.0f, 1.0f, "%.2f", ImGuiSliderFlags_AlwaysClamp);
-	ImGui::SetItemTooltip("How strongly noise breaks a biome's mix into patches of its materials; 0 = an even mix.\n"
-		"At 1 each material covers about its share of the biome's area");
-	materialsChanged |= ImGui::SliderFloat("Patch contrast", &b.materialPatchContrast, 1.0f, 16.0f, "%.1f", ImGuiSliderFlags_AlwaysClamp | ImGuiSliderFlags_Logarithmic);
-	ImGui::SetItemTooltip("How sharp the edges of the patches are; 1 = soft gradients. Takes full effect at patchiness 1");
-	materialsChanged |= ImGui::SliderFloat("Patch size", &b.materialPatchSize, 2.0f, 256.0f, "%.0f texels", ImGuiSliderFlags_AlwaysClamp | ImGuiSliderFlags_Logarithmic);
-	ImGui::SetItemTooltip("Wavelength of the patch noise in map texels; the detail seed above chooses its pattern");
-	if (materialsChanged) {
+	if (biomepanel::Materials(b, false)) {
 		RequestBiomes();
 	}
 }

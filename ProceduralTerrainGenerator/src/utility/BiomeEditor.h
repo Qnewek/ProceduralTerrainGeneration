@@ -30,6 +30,9 @@ public:
 	//Models offered for plants; a plant may still name one not in the list (it shows as unknown)
 	void SetPlantModels(std::vector<PlantModel> models);
 
+	//Shows the terrain modifier of the selected biome (default); Imported map hides it, because it does not change a map that was not generated
+	void ShowTerrainModifiers(bool show) { showTerrainModifiers = show; }
+
 private:
 	//Biomes as rectangles of their temperature and humidity ranges; click selects, the selected one can be dragged
 	//@return true if the ranges of the selected biome changed
@@ -37,6 +40,8 @@ private:
 	//Material layers of a biome: material and weight of each; keeps at least one weight above 0
 	//@return true if a layer changed
 	bool MaterialLayers(biome::Biome& b);
+	//@return true if the modifier changed
+	bool TerrainModifier(biome::TerrainModifier& t);
 	//Plants of a biome: adding, removing, reordering and their settings
 	void Plants(biome::Biome& b);
 
@@ -44,4 +49,5 @@ private:
 	int selected = 0;
 	std::vector<std::string> materialNames;
 	std::vector<PlantModel> plantModels;
+	bool showTerrainModifiers = true;
 };

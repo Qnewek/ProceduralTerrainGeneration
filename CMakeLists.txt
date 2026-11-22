@@ -55,6 +55,7 @@ add_library(ptg_core STATIC
 	${PTG_SRC}/terrainGeneration/HeightmapImport.cpp
 	${PTG_SRC}/terrainGeneration/Hydrology.cpp
 	${PTG_SRC}/terrainGeneration/LandStats.cpp
+	${PTG_SRC}/terrainGeneration/MapBiomes.cpp
 	${PTG_SRC}/terrainGeneration/MapEdit.cpp
 	${PTG_SRC}/terrainGeneration/MapProject.cpp
 	${PTG_SRC}/terrainGeneration/Sculpt.cpp
@@ -103,6 +104,7 @@ add_executable(ProceduralTerrainGenerator
 	${PTG_SRC}/opengl/VegetationLayer.cpp
 	${PTG_SRC}/opengl/VertexArray.cpp
 	${PTG_SRC}/opengl/VertexBuffer.cpp
+	${PTG_SRC}/subSystems/MapImportBiomes.cpp
 	${PTG_SRC}/subSystems/MapImportEdit.cpp
 	${PTG_SRC}/subSystems/MapImportSculpt.cpp
 	${PTG_SRC}/subSystems/MapImportSys.cpp
@@ -113,6 +115,7 @@ add_executable(ProceduralTerrainGenerator
 	${PTG_SRC}/utility/EditorCamera.cpp
 	${PTG_SRC}/utility/ExportPanel.cpp
 	${PTG_SRC}/utility/BiomeEditor.cpp
+	${PTG_SRC}/utility/BiomeSettingsPanel.cpp
 	${PTG_SRC}/utility/FileDialog.cpp
 	${PTG_SRC}/utility/ErosionPanel.cpp
 	${PTG_SRC}/utility/FrameMetrics.cpp
@@ -162,6 +165,7 @@ add_executable(ptg_tests
 	${PTG_DIR}/tests/HydrologyTests.cpp
 	${PTG_DIR}/tests/ImpostorTests.cpp
 	${PTG_DIR}/tests/LandStatsTests.cpp
+	${PTG_DIR}/tests/MapBiomesTests.cpp
 	${PTG_DIR}/tests/MapEditTests.cpp
 	${PTG_DIR}/tests/MapProjectTests.cpp
 	${PTG_DIR}/tests/MaterialExportTests.cpp

@@ -31,7 +31,7 @@ Plan napraw i rozwoju: `docs/ROADMAP.md` (ID zadań `B*`, `A*`, `F*` są tam zde
   i ID z ROADMAP; po naprawie błędu test zacznie zgłaszać niepowodzenie, wtedy usuń oznaczenie.
 - **Test generacji: `out\build\x64-release\ProceduralTerrainGenerator.exe --gpu-check`** (ukryte okno, potrzebny GPU z OpenGL 4.5; uruchamiaj po każdej
   zmianie shaderów generacji). Sprawdza: wartości skończone i w zakresie opcji (każda opcja, ridge, wyspy, metody terenu), determinizm i wpływ seeda,
-  zgodność id i kolorów biomów, chunki i poziomy LOD bit w bit z pełną mapą, mapę pochodnych na mapach o znanych pochodnych, udział wody domyślnego świata
+  zgodność id i kolorów biomów (też biomów Imported map, `mapbiomes:`), chunki i poziomy LOD bit w bit z pełną mapą, mapę pochodnych na mapach o znanych pochodnych, udział wody domyślnego świata
   (55–65%, ≥ 80% lądu w kontynentach), rzeki (obie metody: zakres, jeden przebieg = dwa, chunki), erozję (krople i rury), pędzle (GPU = `sculpt::Apply`); potem czasy GPU generacji i erozji.
   Nowa opcja generacji = nowy przypadek w `CheckRanges` (`GpuHeightCheck.cpp`).
 - **Wielkość liter ścieżek = dokładnie taka jak w gicie** (`git ls-files`): `src/opengl`, `src/subSystems`,
@@ -57,10 +57,13 @@ ProceduralTerrainGenerator/
       MapImportSys.*             tryb "Imported map": projekt z jedną kopią roboczą mapy (z pliku mapy, z projektu .ptgmap albo wysłana z innego trybu),
                                  zakładki Project (Open/Save/Save as, Ctrl+S, `*`), Edit i Load, Saving = paczka eksportu; odczyt i zapis w tle;
                                  MapImportEdit.cpp = zakładka Edit tej klasy (erozja, wygładzanie, skala wysokości, oryginał, Cofnij/Ponów, morze, rzeki i jeziora);
-                                 MapImportSculpt.cpp = pędzle (punkt pod kursorem, pociągnięcie na GPU, kółko pędzla)
+                                 MapImportSculpt.cpp = pędzle (punkt pod kursorem, pociągnięcie na GPU, kółko pędzla);
+                                 MapImportBiomes.cpp = zakładka Biomes (klimat z terenu w tle, przebieg GPU biomów, ustawienia projektu)
     terrainGeneration/
       WorldConfig.h              same dane: WorldConfig (TerrainConfig + BiomeConfig), NoiseMapConfig, ErosionConfig
       Noise.h                    noise::NoiseConfigParameters (fBm, ridge, island, redistribution); sam szum jest tylko w GLSL
+      MapBiomes.*                biomy mapy niegenerowanej (Imported map): `mapbiomes::Settings` (JSON w projekcie), C i M z mapy w metrach (`ComputeClimate`:
+                                 odległość od brzegu, rzeźba w promieniu), wysokość dla klimatu (`ClimateHeight`) — wzorzec CPU dla `map_biome_compute.shader`
       Biome.*                    biom = zakresy 6 parametrów (5 szumów + elewacja) + kolor; najbliższy biom (Nearest) i wagi przejść (BlendWeight) — opis reguł, które liczy biome_compute.shader
       Grid.h                     mapy Grid<T>
       SplineSampling.*           próbkowanie splajnu do tablicy (dla GPU i wykresu w edytorze)
@@ -80,7 +83,7 @@ ProceduralTerrainGenerator/
       DemTools.*                 mapy rzeczywiste: wypełnianie NoData z sąsiadów, wycinek, zmniejszenie (średnia bloków), piksel w metrach ze stopni
       MapProject.*               plik projektu .ptgmap: sygnatura + długość + nagłówek JSON (rozmiar, piksel, morze, źródło, preset, przewyższenie) + bloki zlib
                                  (float32 w metrach rozdzielone na 4 płaszczyzny bajtów): kopia robocza i oryginał (tylko gdy się różni); zmiana pól = podbicie `currentVersion`
-                                 (2 = ustawienia rzek jako JSON `preset::RiversJson`; wersja 1 nadal czytana)
+                                 (2 = ustawienia rzek jako JSON `preset::RiversJson`, 3 = ustawienia biomów `mapbiomes::ToJson`; wersje 1–2 nadal czytane)
       MapEdit.*                  operacje na mapie w metrach (wygładzanie pudełkowe, skala + przesunięcie, `ErosionScale`) i historia Cofnij/Ponów z limitem pamięci
       Sculpt.*                   pędzle (podnieś, obniż, wygładź, spłaszcz, szum) na CPU = wzorzec `sculpt_compute.shader`, zanik, rzut kursora na teksel mapy (głębia → teksel)
       CameraMath.*               matematyka kamery edytora: rozglądanie, orbita wokół punktu (punkt zostaje w tym samym miejscu widoku), przesuwanie, jednostki na piksel
@@ -114,7 +117,9 @@ ProceduralTerrainGenerator/
       ErosionPanel.*             parametry erozji (wybór metody + jej pola, bez przycisków), wspólne dla zakładek Erosion obu trybów; nazwa metody
       MapLabels.*                podpisy map rysowanych obok siebie (mapa + kopie po erozji): rzut w Draw, rysowanie w ramce ImGui
       ExportPanel.*              sekcja „Saving” w ImGui: paczka w exports/<nazwa>/; subsystem podaje `ExportPanel::Pack` (mapy, zakres, metry na jednostkę, morze, preset)
-      BiomeEditor.*              edytor tabeli biomów (lista, zakresy, diagram Whittakera T × H); edytuje tabelę w miejscu, subsystem przelicza biomy
+      BiomeEditor.*              edytor tabeli biomów (lista, zakresy, diagram Whittakera T × H); edytuje tabelę w miejscu, subsystem przelicza biomy;
+                                 `ShowTerrainModifiers(false)` w Imported map
+      BiomeSettingsPanel.*       sekcje ustawień biomów wspólne dla TerrainGen i Imported map (blend, klimat, materiały)
       PanelTabs.*                zakładki panelu: rzędy przycisków na górze (zawijane, gdy się nie mieszczą) + przewijana treść pod nimi; wybór trzymany po nazwie
       FileDialog.*               systemowe okna otwierania i zapisu pliku (tylko Windows, comdlg32); przy porcie na Linuksa do zastąpienia
       SendToImported.*           przyciski „Send map” / „Send eroded copy” w Saving TerrainGen i Noise: mapa z `ExportPanel::Pack` w metrach → `mapproject::Project`
@@ -124,7 +129,7 @@ ProceduralTerrainGenerator/
   legacy/cpuErosion/             LEGACY, niekompilowane: erozja kroplowa na CPU z pracy dyplomowej + jej testy, tylko poglądowo
   res/shaders/
     TerrainShaders/              VS → TCS → TES → FS, jedyny zestaw dla terenu (oba tryby)
-    ComputeShaders/              height_compute.shader (szum, teren), biome_compute.shader, surface_compute.shader, erosion_droplet/pipe_compute.shader; wspólne: common/noise.glsl, noise_params.glsl, simplex.glsl, surface.glsl,
+    ComputeShaders/              height_compute.shader (szum, teren), biome_compute.shader, map_biome_compute.shader (biomy Imported map), surface_compute.shader, erosion_droplet/pipe_compute.shader; wspólne: common/noise.glsl, noise_params.glsl, simplex.glsl, surface.glsl,
                                  terrain.glsl (wysokość terenu z C/M/W), rivers.glsl (żłobienie koryt), world_input.glsl (wspólny bufor wejściowy), biomes.glsl (reguły biomów, klimat, modyfikatory terenu, mieszanie materiałów)
     common/materials.glsl        próbkowanie materiałów w trybie TEXTURED (triplanar, anti-tiling), blok TerrainMaterialBlock = TerrainMaterials::Block
     sky_vertex/fragment.shader   niebo; kolory nieba i światła w common/sky.glsl (z LUT), mgła w common/fog.glsl; model atmosfery common/atmosphere_model.glsl, LUT-y w AtmosphereShaders/;
@@ -389,6 +394,17 @@ Wartości szumów są w [-1, 1]. Konwencja indeksowania: `map[y * width + x]`.
   patchy w TCS (`TerrainRenderSettings::heightBound`, ustawiane w `MapImportSys::Draw`), `map` na CPU = stan sprzed pociągnięcia (FLATTEN bierze z niej cel),
   `Busy()` obejmuje pociągnięcie; puszczenie przycisku (też utrata fokusu, wyjście z trybu, M) = `ReadLayer` → `ApplyEdit` jednym krokiem historii.
   Działanie na klatkę × `deltaTime` (≤ 0,1 s). Każda klatka malowania liczy całą `surfaceMap` od nowa (na 8192² to koszt pełnego przebiegu).
+  Biomy (D1, zakładka Biomes, `MapImportBiomes.cpp`): tabela, klimat, szumy T/H i materiały jak w TerrainGen (`mapbiomes::Settings::config`), ale C i M
+  z mapy: C = podpisana odległość od brzegu (transformata odległości, ląd > morze) / `coastMetres` w [-1, 1] (bez morza 1), M = 2 · (max − min
+  w promieniu `reliefRadiusMetres`) / `reliefMetres` − 1, W = 0; T i H = szumy w `climateOrigin + teksel · piksel` (metry), plamy materiałów w tekselach
+  (`patchOrigin` = origin / piksel + teksel — na DEM 30 m plamy w metrach byłyby mniejsze od piksela). Klimat i elewacja biomów widzą
+  wysokość h' = (metry − `baseMetres`) / `heightUnitMetres`, a płaskie morze mapy rzeczywistej (≤ 1 m pod poziomem) h' = `WaterHeight` · (1 − |C|), żeby
+  biomy wody głębiały od brzegu. C/M liczy CPU w tle (`climateJob`, half2 → `GL_RG16F`) po każdej zmianie mapy/morza/ustawień klimatu (`climateStale`,
+  ustawiane też w `OnMapChanged`; „Height of terrain 1” i „Height 0 at” tylko przebieg GPU), przebieg GPU (`GenerateMapBiomes` → warstwa BIOMES, id `GL_R32I`, splat) po zmianie tabeli/szumów/materiałów
+  (`biomesStale`); w trakcie pociągnięcia pędzla nic się nie przelicza. Wzory są dwa razy: `MapBiomes.cpp` (+ `Biome.cpp`) i `map_biome_compute.shader`
+  (+ `common/biomes.glsl`) — sprawdza `--gpu-check` (sekcja `mapbiomes:`). Modyfikatorów terenu i rzek w biomach mapy nie ma. Id czytane z GPU dopiero
+  przy eksporcie (eksport map biomów zablokowany, gdy coś jest nieaktualne). Mapa wysłana z TerrainGen: `mapbiomes::FromGeneration` (tabela presetu,
+  `heightUnitMetres` = metry na jednostkę, origin = `worldOrigin`), więc biomy wychodzą podobne do TerrainGen (C/M z mapy, nie z szumów).
 - Kamera edytora (`EditorCamera`, wszystkie tryby, tylko widok 3D i bez M): prawy przycisk = rozglądanie (z WASD lot), Alt + lewy = orbita, środkowy = przesuwanie,
   kółko = przód/tył (Shift + kółko nigdy — zostaje dla promienia pędzla). Punkt obrotu i odległość przesuwania: `AfterDraw` czyta głębię pod kursorem po `Draw`
   (macierze `camera.GetViewProjection()`), bez trafienia punkt przed kamerą. Matematyka w `CameraMath.*` (`ptg_core`, testy). Lewy przycisk bez Alt należy do pędzli.

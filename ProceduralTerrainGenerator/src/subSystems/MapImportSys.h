@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <filesystem>
 #include <functional>
+#include <memory>
 #include <optional>
 #include <string>
 #include <vector>
@@ -10,14 +11,17 @@
 #include "glm/glm.hpp"
 #include "imgui.h"
 
+#include "BiomeEditor.h"
 #include "Camera.h"
 #include "ExportPanel.h"
 #include "GenerationJob.h"
 #include "GpuErosion.h"
+#include "GpuHeightGenerator.h"
 #include "GpuSculpt.h"
 #include "HeightmapImport.h"
 #include "Hydrology.h"
 #include "LightSource.h"
+#include "MapBiomes.h"
 #include "MapEdit.h"
 #include "MapProject.h"
 #include "RiverMap.h"
@@ -25,6 +29,8 @@
 #include "WaterSurface.h"
 #include "utilities.h"
 #include "PanelTabs.h"
+
+class VegetationModels;
 
 //"Imported map" mode: a terrain project (mapproject::Project, .ptgmap) holding one working copy of a map, shown on screen,
 //and its original. A map comes from a height map file, a project file or another mode; files are read and written on
@@ -52,7 +58,7 @@ public:
 	void Draw(Renderer& renderer, Camera& camera, LightSource& light);
 	//true while the 2D map is shown instead of the 3D view
 	bool FlatView() const { return renderSettings.map2d; }
-	void ReloadShaders() { view.ReloadShader(); erosion.ReloadShaders(); water.ReloadShader(); sculptor.ReloadShaders(); }
+	void ReloadShaders() { view.ReloadShader(); erosion.ReloadShaders(); water.ReloadShader(); sculptor.ReloadShaders(); biomeGenerator.ReloadShaders(); biomesStale = true; }
 	//Right panel: the Project, Edit and Load tabs; also the mouse input of the brushes and their outline on the terrain
 	void ImGuiRightPanel();
 	//Content of the Display tab of the left panel
@@ -60,6 +66,11 @@ public:
 	//Content of the Saving tab: an export pack of the working copy in metres, with the true pixel size
 	void ImGuiSaving();
 	void ImGuiOutput();
+
+	//Names of the surface materials in the order of their ids, for the biome editor
+	void SetMaterialNames(std::vector<std::string> names) { materialNames = names; biomeEditor.SetMaterialNames(std::move(names)); }
+	//Models the plants of the biome editor can name; nullptr = none (the models are being released)
+	void SetVegetationModels(const VegetationModels* models);
 
 private:
 	struct LoadResult {
@@ -133,7 +144,7 @@ private:
 	void StartEdit(const std::string& label, std::function<void(HeightField&)> operation);
 	void FinishEdit(EditResult& result);
 	//The map or the sea level changed: what is computed from them (rivers) is out of date
-	void OnMapChanged() { mapChanged = true; }
+	void OnMapChanged() { mapChanged = true; climateStale = true; }
 	void SetEditStatus(const std::string& text, bool isError);
 	//Content of the Edit tab
 	void EditImGui();
@@ -290,6 +301,43 @@ private:
 	//Water of the network to the GPU, levels in map units
 	void UploadRiverWater();
 	void RiversImGui();
+
+	//Biomes of the working copy (MapImportBiomes.cpp): continentalness and mountainousness from the map on a background thread
+	//(mapbiomes::ComputeClimate) after every change of it, then the biome colors and the splat map on the GPU (GenerateMapBiomes)
+	struct ClimateResult {
+		mapbiomes::ClimateMaps maps;
+		uint64_t version = 0;	//mapVersion when the computation started
+		double ms = 0.0;
+		std::string error;		//the computation failed (out of memory); maps empty
+	};
+	mapbiomes::Settings biomeSettings = mapbiomes::Default(std::nullopt);
+	BiomeEditor biomeEditor;
+	std::vector<std::string> materialNames;	//in the order of their ids, for the export of the splat map
+	GpuHeightGenerator biomeGenerator;
+	std::unique_ptr<TextureClass> climateTexture;	//GL_RG16F, the last climate computed
+	std::unique_ptr<TextureClass> biomeIds;			//GL_R32I; read only for an export
+	GenerationJob<ClimateResult> climateJob;
+	bool climateStale = false;		//the map, the sea or the climate settings changed: continentalness and mountainousness again
+	bool biomesStale = false;		//the biome table, climate, noises or materials changed: the GPU pass again
+	double climateMs = 0.0;
+	std::string biomeStatus;
+	bool biomeStatusIsError = false;
+	int biomeNoise = 0;				//noise edited in the Biomes tab: 0 temperature, 1 humidity
+	std::vector<std::filesystem::path> biomePresets;
+	bool biomePresetsListed = false;
+	int biomePreset = 0;
+	bool BiomesOn() const { return biomeSettings.enabled; }
+	//Takes a finished climate, starts a new one, runs the GPU pass; called every frame (GL thread)
+	void UpdateBiomes();
+	//Settings of a new map: from the JSON of a project (empty = defaults for the sea level); @return why they were ignored, empty if not
+	std::string UseBiomeSettings(const std::string& json);
+	//Display mode and splat map after biomes were turned on or off
+	void ShowBiomesState();
+	//Content of the Biomes tab
+	void BiomesImGui();
+	//The settings of the climate from the terrain; sets climateStale or biomesStale for what changed
+	//@return true if one changed
+	bool ClimateSourceImGui();
 
 	//File selection state
 	char folder[260] = "exports";

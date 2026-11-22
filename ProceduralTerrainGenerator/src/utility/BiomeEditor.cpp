@@ -121,8 +121,19 @@ bool BiomeEditor::ImGuiDraw(std::vector<biome::Biome>& table)
 	}
 	ImGui::SetItemTooltip("Set all ranges to [-1, 1]");
 
+	if (showTerrainModifiers) {
+		changed |= TerrainModifier(b.terrain);
+	}
+
+	changed |= MaterialLayers(b);
+	Plants(b);
+	return changed;
+}
+
+bool BiomeEditor::TerrainModifier(biome::TerrainModifier& t)
+{
 	ImGui::SeparatorText("Terrain modifier");
-	biome::TerrainModifier& t = b.terrain;
+	bool changed = false;
 	changed |= ImGui::SliderFloat("Amplitude", &t.amplitude, 0.0f, 3.0f);
 	ImGui::SetItemTooltip("Scales the height above (and depth below) the water: < 1 flattens (swamps, plains), > 1 sharpens (mountains)");
 	changed |= ImGui::SliderFloat("Offset", &t.offset, -0.3f, 0.3f, "%.3f");
@@ -141,9 +152,6 @@ bool BiomeEditor::ImGuiDraw(std::vector<biome::Biome>& table)
 		changed = true;
 	}
 	ImGui::SetItemTooltip("The biome keeps the terrain as it is");
-
-	changed |= MaterialLayers(b);
-	Plants(b);
 	return changed;
 }
 

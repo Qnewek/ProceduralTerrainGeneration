@@ -683,6 +683,17 @@ oryginał tylko w pamięci i w projekcie („Wróć do oryginału”), plus Cofn
 - **D. Biomy i roślinność — decyzja po C.** Propozycja „klimat z terenu”: temperatura i wilgotność to szumy zależne tylko od położenia (da się je policzyć
   nad każdą mapą), brakujące kontynentalność/górzystość liczone z mapy wysokości (wysokość nad wodą / odległość od brzegu, lokalna rzeźba), weirdness
   neutralne; dalej istniejąca tabela, materiały i `vegexport::PlaceMap`. Alternatywa: import mapy pokrycia terenu (np. ESA WorldCover) jako id biomów.
+  Decyzje właściciela (2026-11-22): oba źródła (klimat z terenu i plik pokrycia terenu) + pędzel biomów (biom z listy) + edytor biomów z TerrainGen;
+  warstwy: źródło automatyczne przeliczane po każdej zmianie terenu/tabeli + malowana warstwa nadpisań na wierzchu (gumka = automat); roślinność
+  z limitem (> 2 mln instancji → tylko drzewa, drzew > 2 mln → brak, z komunikatem); nowy `map_biome_compute.shader` obok `biome_compute.shader`.
+  Etapy: D1 (klimat z terenu, zakładka Biomes, TEXTURED, projekt v3, eksport map biomów i materiałów) → D2 (pędzel + historia) → D3 (pokrycie terenu
+  z georeferencją) → D4 (roślinność).
+  🟡 D1 2026-11-22 (branch `feat/map-biomes`): `MapBiomes.*` (ustawienia z JSON, C = odległość od brzegu / „Coast distance”, M = rzeźba w promieniu,
+  wysokość dla klimatu z metrów, testy; 8192² w ~3 s na CPU w tle), `map_biome_compute.shader` + `GpuHeightGenerator::GenerateMapBiomes` (sekcja
+  `mapbiomes:` w `--gpu-check` porównuje z CPU), zakładka Biomes w Imported map (wspólne panele z TerrainGen `BiomeSettingsPanel`, edytor tabeli bez
+  modyfikatorów terenu, „Load biomes from preset”), mapa wysłana z TerrainGen dostaje jego biomy, `.ptgmap` wersja 3, mapy splat/biomów w paczce eksportu.
+  Do sprawdzenia w aplikacji: DEM z morzem i bez (czy suwaki C/M dają sensowne biomy), mapa wysłana z TerrainGen (biomy podobne do TerrainGen), TEXTURED,
+  Cofnij po pędzlu przelicza biomy, Save → Open zachowuje ustawienia, eksport paczki z biomami (`_splat_*`, `_biome_ids`, `_biome_colors`, manifest).
 
 ---
 

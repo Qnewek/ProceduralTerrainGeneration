@@ -131,6 +131,9 @@ namespace mapproject {
 		if (!project.rivers.empty()) {
 			header["rivers"] = project.rivers;
 		}
+		if (!project.biomes.empty()) {
+			header["biomes"] = project.biomes;
+		}
 		header["blocks"] = json::array();
 		header["blocks"].push_back({ { "name", workingBlock }, { "bytes", workingData.size() } });
 		if (hasOriginal) {
@@ -201,6 +204,8 @@ namespace mapproject {
 			project.generation = header.value("generation", std::string());
 			//Version 2: river settings; version 1 has none
 			project.rivers = header.value("rivers", std::string());
+			//Version 3: biome settings; older versions have none
+			project.biomes = header.value("biomes", std::string());
 			project.verticalExaggeration = header.value("verticalExaggeration", 1.0f);
 			if (!(project.verticalExaggeration > 0.0f) || !std::isfinite(project.verticalExaggeration)) {
 				project.verticalExaggeration = 1.0f;
