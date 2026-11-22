@@ -56,6 +56,7 @@ add_library(ptg_core STATIC
 	${PTG_SRC}/terrainGeneration/Hydrology.cpp
 	${PTG_SRC}/terrainGeneration/LandStats.cpp
 	${PTG_SRC}/terrainGeneration/MapBiomes.cpp
+	${PTG_SRC}/terrainGeneration/BiomePaint.cpp
 	${PTG_SRC}/terrainGeneration/MapEdit.cpp
 	${PTG_SRC}/terrainGeneration/MapProject.cpp
 	${PTG_SRC}/terrainGeneration/Sculpt.cpp
@@ -166,6 +167,7 @@ add_executable(ptg_tests
 	${PTG_DIR}/tests/ImpostorTests.cpp
 	${PTG_DIR}/tests/LandStatsTests.cpp
 	${PTG_DIR}/tests/MapBiomesTests.cpp
+	${PTG_DIR}/tests/BiomePaintTests.cpp
 	${PTG_DIR}/tests/MapEditTests.cpp
 	${PTG_DIR}/tests/MapProjectTests.cpp
 	${PTG_DIR}/tests/MaterialExportTests.cpp

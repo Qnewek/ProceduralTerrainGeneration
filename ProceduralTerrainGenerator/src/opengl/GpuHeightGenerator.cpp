@@ -81,12 +81,13 @@ namespace {
 		return config.method == EvaluationMethod::LAYERED ? MODE_LAYERED : MODE_SPLINE;
 	}
 
-	//Runs the bound shader over the whole map in parts; it reads the part from the tileOrigin uniform
-	void DispatchTiles(Shader& shader, int width, int height)
+	//Runs the bound shader over the texels from (x0, y0) to before (x1, y1) in parts; it reads the part from the tileOrigin uniform
+	//and must skip texels past the end itself
+	void DispatchRect(Shader& shader, int x0, int y0, int x1, int y1)
 	{
 		const unsigned int groups = (tileSize + localSize - 1) / localSize;
-		for (int y = 0; y < height; y += tileSize) {
-			for (int x = 0; x < width; x += tileSize) {
+		for (int y = y0; y < y1; y += tileSize) {
+			for (int x = x0; x < x1; x += tileSize) {
 				shader.SetUniform2i("tileOrigin", x, y);
 				glDispatchCompute(groups, groups, 1);
 				//Lets the driver submit each part separately
@@ -96,6 +97,12 @@ namespace {
 		//Makes the result visible to sampling in shaders and to reading the texture back
 		glMemoryBarrier(GL_TEXTURE_FETCH_BARRIER_BIT | GL_TEXTURE_UPDATE_BARRIER_BIT);
 		shader.Unbind();
+	}
+
+	//Runs the bound shader over the whole map in parts
+	void DispatchTiles(Shader& shader, int width, int height)
+	{
+		DispatchRect(shader, 0, 0, width, height);
 	}
 
 	//Sets the uniforms shared by the generating shaders; the shader must be bound
@@ -240,6 +247,9 @@ bool GpuHeightGenerator::Initialize()
 	glCreateBuffers(1, &worldInput);
 	glNamedBufferStorage(worldInput, sizeof(GpuWorldInput), nullptr, GL_DYNAMIC_STORAGE_BIT);
 	glCreateBuffers(1, &biomeTable);
+	noPaint = std::make_unique<TextureClass>(1, 1, GL_RG8UI);
+	const unsigned char unpainted[2] = { 0, 0 };
+	noPaint->UploadRegion(0, 0, 1, 1, 1, unpainted, GL_RG_INTEGER, GL_UNSIGNED_BYTE);
 	timer = std::make_unique<GpuQuery>(GL_TIME_ELAPSED);
 	return true;
 }
@@ -337,6 +347,23 @@ void GpuHeightGenerator::GenerateMapBiomes(const mapbiomes::Settings& settings, 
 	shader.SetUniform2f("patchOrigin", settings.climateOrigin.x / input.texelMetres.x, settings.climateOrigin.y / input.texelMetres.y);
 	shader.SetUniform2i("mapSize", colors.GetWidth(), colors.GetHeight());
 	shader.SetUniform2i("islandSize", colors.GetWidth(), colors.GetHeight());
+	//Painted biomes; without them every slot is automatic
+	std::array<int, 256> paintBiomes;
+	paintBiomes.fill(-1);
+	if (input.paint) {
+		paintBiomes = input.paintBiomes;
+	}
+	shader.SetUniform1iv("paintBiomes", static_cast<int>(paintBiomes.size()), paintBiomes.data());
+	(input.paint ? *input.paint : *noPaint).BindImage(5, GL_READ_ONLY);
+	//Only the rectangle (the region of a brush), clipped to the map
+	int x0 = 0, y0 = 0, x1 = colors.GetWidth(), y1 = colors.GetHeight();
+	if (input.region.z >= 0) {
+		x0 = std::clamp(input.region.x, 0, x1);
+		y0 = std::clamp(input.region.y, 0, y1);
+		x1 = std::clamp(input.region.x + input.region.z, x0, x1);
+		y1 = std::clamp(input.region.y + input.region.w, y0, y1);
+	}
+	shader.SetUniform2i("regionEnd", x1, y1);
 	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, worldInput);
 	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, biomeTable);
 	colors.BindImage(0, GL_WRITE_ONLY);
@@ -351,7 +378,11 @@ void GpuHeightGenerator::GenerateMapBiomes(const mapbiomes::Settings& settings, 
 		shader.SetUniform1f("materialPatchSize", biomes.materialPatchSize);
 		splat->BindImage(2, GL_WRITE_ONLY);
 	}
-	DispatchTiles(shader, colors.GetWidth(), colors.GetHeight());
+	if (x0 >= x1 || y0 >= y1) {
+		shader.Unbind();
+		return;
+	}
+	DispatchRect(shader, x0, y0, x1, y1);
 }
 
 void GpuHeightGenerator::RunBiomeShader(const BiomeConfig& biomes, const TerrainConfig& terrain, const MapArea& area, TextureClass& colors, TextureClass& ids,

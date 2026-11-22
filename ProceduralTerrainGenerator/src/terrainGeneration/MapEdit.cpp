@@ -60,7 +60,7 @@ namespace mapedit {
 
 	size_t History::BytesOf(const Step& step)
 	{
-		return step.map ? step.map->Size() * sizeof(float) : 0;
+		return (step.map ? step.map->Size() * sizeof(float) : 0) + (step.paint ? step.paint->Bytes() : 0);
 	}
 
 	void History::SetLimit(size_t _bytes)
@@ -107,30 +107,41 @@ namespace mapedit {
 		return redo.empty() ? none : redo.back().label;
 	}
 
-	bool History::Move(std::deque<Step>& from, std::deque<Step>& to, HeightField& map, std::optional<float>& seaLevel)
+	std::optional<Restored> History::Move(std::deque<Step>& from, std::deque<Step>& to, HeightField& map, std::optional<float>& seaLevel,
+		biomepaint::Layer& paint)
 	{
 		if (from.empty()) {
-			return false;
+			return std::nullopt;
 		}
 		Step step = std::move(from.back());
 		from.pop_back();
+		//A swapped layer may have another size (0x0 before the first stroke and after Clear painting)
+		bytes -= BytesOf(step);
+		Restored restored;
 		if (step.map) {
 			std::swap(*step.map, map);
+			restored.map = true;
 		}
+		if (step.paint) {
+			std::swap(*step.paint, paint);
+			restored.paint = true;
+		}
+		restored.seaLevel = step.seaLevel != seaLevel;
 		std::swap(step.seaLevel, seaLevel);
+		bytes += BytesOf(step);
 		to.push_back(std::move(step));
-		return true;
+		Fit();
+		return restored;
 	}
 
-	bool History::Undo(HeightField& map, std::optional<float>& seaLevel)
+	std::optional<Restored> History::Undo(HeightField& map, std::optional<float>& seaLevel, biomepaint::Layer& paint)
 	{
-		//The maps swapped have the same size, so the bytes do not change
-		return Move(undo, redo, map, seaLevel);
+		return Move(undo, redo, map, seaLevel, paint);
 	}
 
-	bool History::Redo(HeightField& map, std::optional<float>& seaLevel)
+	std::optional<Restored> History::Redo(HeightField& map, std::optional<float>& seaLevel, biomepaint::Layer& paint)
 	{
-		return Move(redo, undo, map, seaLevel);
+		return Move(redo, undo, map, seaLevel, paint);
 	}
 
 	void History::Clear()

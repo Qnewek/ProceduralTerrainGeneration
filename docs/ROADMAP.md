@@ -694,6 +694,12 @@ oryginał tylko w pamięci i w projekcie („Wróć do oryginału”), plus Cofn
   modyfikatorów terenu, „Load biomes from preset”), mapa wysłana z TerrainGen dostaje jego biomy, `.ptgmap` wersja 3, mapy splat/biomów w paczce eksportu.
   Do sprawdzenia w aplikacji: DEM z morzem i bez (czy suwaki C/M dają sensowne biomy), mapa wysłana z TerrainGen (biomy podobne do TerrainGen), TEXTURED,
   Cofnij po pędzlu przelicza biomy, Save → Open zachowuje ustawienia, eksport paczki z biomami (`_splat_*`, `_biome_ids`, `_biome_colors`, manifest).
+  🟡 D2 2026-11-22 (branch `feat/map-biome-paint`): pędzel biomów, sekcja „Paint” zakładki Biomes. `BiomePaint.*` (paleta nazw ≤ 255, na teksel slot +
+  siła 0–255, miękka krawędź `sculpt::Falloff`, B na A najpierw wygasza A, gumka = Ctrl, testy), mieszanie w `map_biome_compute.shader` (kolor i materiały
+  wg siły, id od siły ≥ 128; nazwa spoza tabeli = automat; `--gpu-check`: paint matches / follows names / region equals the whole map), przebieg GPU
+  tylko na prostokącie daba, pociągnięcie = krok historii (`mapedit::Step::paint`), „Clear painting”, `.ptgmap` wersja 4 (paleta w nagłówku, blok zlib).
+  Do sprawdzenia w aplikacji: malowanie miękkie i ostre, A → B, gumka, Ctrl+Z/Y, zmiana nazwy i kolejności biomu w tabeli, Save → Open, eksport
+  paczki z malowanymi biomami, płynność na 8192².
 
 ---
 

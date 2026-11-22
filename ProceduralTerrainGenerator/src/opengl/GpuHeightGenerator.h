@@ -1,5 +1,6 @@
 #pragma once
 
+#include <array>
 #include <memory>
 #include <optional>
 #include <vector>
@@ -36,6 +37,12 @@ struct MapBiomeInput {
 	const TextureClass& climate;	//GL_RG16F of the same size: continentalness and mountainousness (mapbiomes::ComputeClimate)
 	float metresPerUnit = 1.0f;		//metres of map height 1
 	glm::vec2 texelMetres = glm::vec2(1.0f);	//size of a texel along x and y
+	//Painted biomes (biomepaint::Layer, GL_RG8UI of the same size: R = slot, G = strength); nullptr = nothing painted
+	const TextureClass* paint = nullptr;
+	//Index in the table of the biome of each slot, -1 = automatic (biomepaint::SlotBiomes); ignored without paint
+	std::array<int, 256> paintBiomes{};
+	//Rectangle (x, y, width, height) to generate, the rest of the targets stays; width < 0 = the whole map
+	glm::ivec4 region = glm::ivec4(0, 0, -1, -1);
 };
 
 //Generates all maps of the application in compute shaders (the only implementation of the generation; --gpu-check tests it).
@@ -114,6 +121,8 @@ private:
 		TextureClass* splat, TextureClass* height, const RiverInput* rivers);
 
 	std::unique_ptr<Shader> heightShader, biomeShader, mapBiomeShader;
+	//Bound as the painted biomes when there are none (1x1, slot 0)
+	std::unique_ptr<TextureClass> noPaint;
 	unsigned int worldInput = 0, biomeTable = 0;
 	std::unique_ptr<GpuQuery> timer;
 };

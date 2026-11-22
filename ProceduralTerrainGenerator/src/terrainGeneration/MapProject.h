@@ -9,6 +9,7 @@
 
 #include "glm/glm.hpp"
 
+#include "BiomePaint.h"
 #include "Grid.h"
 
 //Project file of the "Imported map" mode (.ptgmap): the working copy of a map and its original, in metres, with what the
@@ -26,10 +27,12 @@ namespace mapproject {
 		float verticalExaggeration = 1.0f;	//of the view, against the true proportions
 		std::string rivers;				//river settings as JSON (preset::RiversJson); empty = defaults, no rivers
 		std::string biomes;				//biome settings as JSON (mapbiomes::ToJson); empty = defaults, no biomes
+		biomepaint::Layer paint;		//biomes painted over the automatic ones, the size of working; Empty() = none (not saved)
 	};
 
-	//2 (2026-11-21): rivers; 3 (2026-11-22): biomes; versions 1 and 2 are still read
-	inline constexpr int currentVersion = 3;
+	//2 (2026-11-21): rivers; 3 (2026-11-22): biomes; 4 (2026-11-22): painted biomes (header "biomePaint": palette, block "biomePaint":
+	//zlib of the uint16 texels, little-endian); versions 1 to 3 are still read
+	inline constexpr int currentVersion = 4;
 	inline constexpr const char* extension = ".ptgmap";
 
 	//@param out - the bytes of the file, replaced on success

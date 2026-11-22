@@ -107,9 +107,12 @@ void MapImportSys::InstallMap(HeightField units, float _metresPerUnit, glm::dvec
 	erodeRequested = false;
 	//Busy() keeps a new map away while a stroke runs; if one came anyway, its heights belong to the old map
 	stroke.reset();
+	paintStroke.reset();
 	hoverTexel.reset();
 	brushOutline.clear();
 	ShowUnits(std::move(units), _metresPerUnit, _pixelMetres);
+	//Painted biomes belong to the previous map (a project or a reload puts its own back after this)
+	UsePaint(biomepaint::Layer());
 	history.Clear();
 	historyNote.clear();
 	editStatus.clear();
@@ -204,6 +207,9 @@ void MapImportSys::StartSaving(const std::filesystem::path& path)
 	project.verticalExaggeration = renderSettings.heightScale / trueHeightScale;
 	project.rivers = preset::RiversJson(riverConfig);
 	project.biomes = mapbiomes::ToJson(biomeSettings);
+	if (!biomePaint.texels.empty()) {
+		project.paint = biomePaint;
+	}
 	const float unit = metresPerUnit;
 	const uint64_t version = mapVersion;
 	saveJob.Start([project = std::move(project), path, unit, version]() mutable {
@@ -519,6 +525,15 @@ void MapImportSys::InstallProject(ProjectLoad& result)
 	if (const std::string biomeError = UseBiomeSettings(project.biomes); !biomeError.empty()) {
 		SetProjectStatus("Opened " + FileNameOf(result.path) + "; biome settings ignored: " + biomeError, true);
 	}
+	//Painted biomes of the project (version 4)
+	if (!project.paint.texels.empty()) {
+		if (project.paint.width == map.GetWidth() && project.paint.height == map.GetHeight()) {
+			UsePaint(std::move(project.paint));
+		}
+		else {
+			SetProjectStatus("Opened " + FileNameOf(result.path) + "; painted biomes of another size ignored", true);
+		}
+	}
 }
 
 std::filesystem::path MapImportSys::ProjectFolder() const
@@ -704,7 +719,15 @@ void MapImportSys::InstallResult(LoadResult& result)
 	mapInfo = result.info;
 	mapPath = result.path;
 	lastLoadMs = result.ms;
+	//The same file again (another value range): the painting stays when the size does
+	biomepaint::Layer keptPaint;
+	if (result.reload) {
+		keptPaint = std::move(biomePaint);
+	}
 	InstallMap(std::move(result.map), result.metresPerUnit, result.pixelMetres);
+	if (!keptPaint.texels.empty() && keptPaint.width == map.GetWidth() && keptPaint.height == map.GetHeight()) {
+		UsePaint(std::move(keptPaint));
+	}
 	original = HeightField();
 	dirty = true;
 	if (!result.reload) {
@@ -974,7 +997,7 @@ void MapImportSys::ImGuiSaving()
 	const TextureClass* colors = view.GetLayerTexture(TerrainView::Layer::BIOMES);
 	auto sameSize = [width, height](const TextureClass* t) { return t && t->GetWidth() == width && t->GetHeight() == height; };
 	//Ids of an older table or map would not match the manifest or the heights
-	const bool biomesCurrent = !climateStale && !biomesStale && !climateJob.IsRunning() && !stroke;
+	const bool biomesCurrent = !climateStale && !biomesStale && !climateJob.IsRunning() && !stroke && !paintStroke;
 	if (BiomesOn() && biomesCurrent && sameSize(splat) && sameSize(colors) && sameSize(biomeIds.get())) {
 		pack.materials = ExportPanel::SplatSource(*splat, materialNames);
 		const TextureClass* ids = biomeIds.get();

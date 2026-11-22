@@ -5,6 +5,9 @@
 // common/biomes.glsl, shared with biome_compute.shader). --gpu-check, section mapbiomes, compares both.
 // Continentalness and mountainousness come from the map (climateMap, mapbiomes::ComputeClimate), weirdness is 0, temperature and humidity
 // are the noises of the biome config at positionOrigin + texel * texelMetres (metres). No terrain modifiers, no rivers.
+// Painted biomes (biomepaint, stage D2) go over the automatic ones by their strength s: color = mix(automatic, painted, s), materials = the
+// normalized automatic mix and the normalized layers of the painted biome mixed by s (biomepaint::PaintedMaterials) before the patches,
+// id = painted from s >= 128 / 255. A slot whose name is not in the table (paintBiomes = -1) stays automatic.
 
 layout(local_size_x = 32, local_size_y = 32) in;
 
@@ -14,6 +17,9 @@ layout(r32i, binding = 1) uniform writeonly iimage2D idMap;
 layout(rgba8, binding = 2) uniform writeonly image2DArray splatMap;
 layout(r32f, binding = 3) uniform readonly image2D heights;		// map units
 layout(rg16f, binding = 4) uniform readonly image2D climateMap;	// continentalness, mountainousness
+layout(rg8ui, binding = 5) uniform readonly uimage2D paintMap;	// slot of the palette, strength 0-255
+uniform int paintBiomes[256];	// biome of each slot, -1 = automatic
+uniform ivec2 regionEnd;		// texels from here on are not generated (a pass over the region of a brush)
 uniform bool writeSplat;
 
 #include "../common/noise_params.glsl"
@@ -44,10 +50,35 @@ float climateHeight(float metres, float continentalness)
 	return (metres - baseMetres) / heightUnit;
 }
 
+// biomepaint::PaintedMaterials; a painted biome without materials leaves the automatic ones
+void paintMaterials(inout float weights[MAX_MATERIALS], int biome, float strength)
+{
+	float painted[MAX_MATERIALS];
+	float automaticSum = 0.0, layerSum = 0.0;
+	for (int m = 0; m < MAX_MATERIALS; m++) {
+		painted[m] = 0.0;
+		automaticSum += weights[m];
+	}
+	for (int l = 0; l < MATERIAL_LAYERS; l++) {
+		painted[biomes[biome].materials[l]] += biomes[biome].materialWeights[l];
+	}
+	for (int m = 0; m < MAX_MATERIALS; m++) {
+		layerSum += painted[m];
+	}
+	if (layerSum <= 0.0) {
+		strength = 0.0;
+	}
+	for (int m = 0; m < MAX_MATERIALS; m++) {
+		float a = automaticSum > 0.0 ? weights[m] / automaticSum : 0.0;
+		float p = layerSum > 0.0 ? painted[m] / layerSum : 0.0;
+		weights[m] = a + (p - a) * strength;
+	}
+}
+
 void main()
 {
 	ivec2 texel = tileOrigin + ivec2(gl_GlobalInvocationID.xy);
-	if (any(greaterThanEqual(texel, mapSize))) {
+	if (any(greaterThanEqual(texel, mapSize)) || any(greaterThanEqual(texel, regionEnd))) {
 		return;
 	}
 
@@ -94,6 +125,20 @@ void main()
 
 	// total >= 1: the nearest biome has weight 1
 	vec3 color = blendColor ? colorSum / colorTotal : vec3(biomes[id].r, biomes[id].g, biomes[id].b);
+
+	uvec2 paint = imageLoad(paintMap, texel).rg;
+	int painted = paint.x > 0u ? paintBiomes[paint.x] : -1;
+	if (painted >= 0 && paint.y > 0u) {
+		float strength = float(paint.y) / 255.0;
+		color = color + (vec3(biomes[painted].r, biomes[painted].g, biomes[painted].b) - color) * strength;
+		if (paint.y >= 128u) {
+			id = painted;
+		}
+		if (writeSplat) {
+			paintMaterials(weights, painted, strength);
+		}
+	}
+
 	imageStore(colorMap, texel, vec4(color, 1.0));
 	imageStore(idMap, texel, ivec4(id));
 
