@@ -22,6 +22,7 @@ namespace mapproject {
 		constexpr int compressionLevel = 3;
 		constexpr const char* workingBlock = "working";
 		constexpr const char* originalBlock = "original";
+		constexpr const char* paintBlock = "biomePaint";
 
 		bool AllFinite(const HeightField& map)
 		{
@@ -82,6 +83,43 @@ namespace mapproject {
 			return true;
 		}
 
+		//Texels of painted biomes as little-endian bytes
+		bool CompressPaint(const biomepaint::Layer& paint, std::vector<uint8_t>& out, std::string& error)
+		{
+			std::vector<uint8_t> bytes(paint.texels.size() * 2);
+			for (size_t i = 0; i < paint.texels.size(); i++) {
+				bytes[2 * i] = static_cast<uint8_t>(paint.texels[i] & 0xFF);
+				bytes[2 * i + 1] = static_cast<uint8_t>(paint.texels[i] >> 8);
+			}
+			uLongf size = compressBound(static_cast<uLong>(bytes.size()));
+			out.resize(size);
+			if (compress2(out.data(), &size, bytes.data(), static_cast<uLong>(bytes.size()), compressionLevel) != Z_OK) {
+				error = "Compression failed";
+				return false;
+			}
+			out.resize(size);
+			return true;
+		}
+
+		bool DecompressPaint(const uint8_t* data, size_t size, biomepaint::Layer& paint, std::string& error)
+		{
+			std::vector<uint8_t> bytes(paint.texels.size() * 2);
+			uLongf unpacked = static_cast<uLongf>(bytes.size());
+			if (uncompress(bytes.data(), &unpacked, data, static_cast<uLong>(size)) != Z_OK || unpacked != bytes.size()) {
+				error = "The biome paint data is damaged";
+				return false;
+			}
+			const size_t slots = paint.palette.size();
+			for (size_t i = 0; i < paint.texels.size(); i++) {
+				paint.texels[i] = static_cast<uint16_t>(bytes[2 * i] | (bytes[2 * i + 1] << 8));
+				if ((paint.texels[i] & 0xFF) > slots) {
+					error = "The biome paint data is damaged (a biome without a name)";
+					return false;
+				}
+			}
+			return true;
+		}
+
 		std::string LowercaseExtension(const std::filesystem::path& path)
 		{
 			const std::u8string text = path.extension().u8string();
@@ -112,8 +150,20 @@ namespace mapproject {
 			return false;
 		}
 
-		std::vector<uint8_t> workingData, originalData;
-		if (!Compress(working, workingData, error) || (hasOriginal && !Compress(project.original, originalData, error))) {
+		const bool hasPaint = !project.paint.Empty();
+		if (hasPaint && (project.paint.width != working.GetWidth() || project.paint.height != working.GetHeight()
+			|| project.paint.texels.size() != working.Size())) {
+			error = "The painted biomes have another size than the map";
+			return false;
+		}
+		if (hasPaint && static_cast<int>(project.paint.palette.size()) > biomepaint::maxPalette) {
+			error = "Too many painted biomes";
+			return false;
+		}
+
+		std::vector<uint8_t> workingData, originalData, paintData;
+		if (!Compress(working, workingData, error) || (hasOriginal && !Compress(project.original, originalData, error))
+			|| (hasPaint && !CompressPaint(project.paint, paintData, error))) {
 			return false;
 		}
 
@@ -134,16 +184,22 @@ namespace mapproject {
 		if (!project.biomes.empty()) {
 			header["biomes"] = project.biomes;
 		}
+		if (hasPaint) {
+			header["biomePaint"] = { { "palette", project.paint.palette } };
+		}
 		header["blocks"] = json::array();
 		header["blocks"].push_back({ { "name", workingBlock }, { "bytes", workingData.size() } });
 		if (hasOriginal) {
 			header["blocks"].push_back({ { "name", originalBlock }, { "bytes", originalData.size() } });
 		}
+		if (hasPaint) {
+			header["blocks"].push_back({ { "name", paintBlock }, { "bytes", paintData.size() } });
+		}
 		//Text that is not valid UTF-8 (a file name in the system code page) is kept with replaced characters
 		const std::string text = header.dump(-1, ' ', false, json::error_handler_t::replace);
 
 		out.clear();
-		out.reserve(sizeof(signature) + lengthBytes + text.size() + workingData.size() + originalData.size());
+		out.reserve(sizeof(signature) + lengthBytes + text.size() + workingData.size() + originalData.size() + paintData.size());
 		out.insert(out.end(), std::begin(signature), std::end(signature));
 		const uint32_t length = static_cast<uint32_t>(text.size());
 		for (size_t i = 0; i < lengthBytes; i++) {
@@ -152,6 +208,7 @@ namespace mapproject {
 		out.insert(out.end(), text.begin(), text.end());
 		out.insert(out.end(), workingData.begin(), workingData.end());
 		out.insert(out.end(), originalData.begin(), originalData.end());
+		out.insert(out.end(), paintData.begin(), paintData.end());
 		return true;
 	}
 
@@ -172,6 +229,7 @@ namespace mapproject {
 		}
 
 		Project project;
+		//map = nullptr: the block of painted biomes
 		struct Block { HeightField* map; size_t bytes; };
 		std::vector<Block> blocks;
 		try {
@@ -206,6 +264,15 @@ namespace mapproject {
 			project.rivers = header.value("rivers", std::string());
 			//Version 3: biome settings; older versions have none
 			project.biomes = header.value("biomes", std::string());
+			//Version 4: painted biomes; the palette here, the texels in their block
+			std::vector<std::string> palette;
+			if (version >= 4 && header.contains("biomePaint")) {
+				palette = header.at("biomePaint").at("palette").get<std::vector<std::string>>();
+				if (static_cast<int>(palette.size()) > biomepaint::maxPalette) {
+					error = "The project has too many painted biomes";
+					return false;
+				}
+			}
 			project.verticalExaggeration = header.value("verticalExaggeration", 1.0f);
 			if (!(project.verticalExaggeration > 0.0f) || !std::isfinite(project.verticalExaggeration)) {
 				project.verticalExaggeration = 1.0f;
@@ -214,6 +281,16 @@ namespace mapproject {
 			for (const json& block : header.at("blocks")) {
 				const std::string name = block.at("name").get<std::string>();
 				const size_t bytes = block.at("bytes").get<size_t>();
+				if (name == paintBlock && version >= 4) {
+					if (!project.paint.texels.empty()) {
+						error = "Repeated block \"" + name + "\" in the project";
+						return false;
+					}
+					project.paint = biomepaint::Make(width, height);
+					project.paint.palette = palette;
+					blocks.push_back({ nullptr, bytes });
+					continue;
+				}
 				HeightField* map = name == workingBlock ? &project.working : name == originalBlock ? &project.original : nullptr;
 				if (!map || !map->Empty()) {
 					error = "Unknown or repeated block \"" + name + "\" in the project";
@@ -238,7 +315,7 @@ namespace mapproject {
 				error = "The project file is cut short";
 				return false;
 			}
-			if (!Decompress(data + offset, block.bytes, *block.map, error)) {
+			if (block.map ? !Decompress(data + offset, block.bytes, *block.map, error) : !DecompressPaint(data + offset, block.bytes, project.paint, error)) {
 				return false;
 			}
 			offset += block.bytes;

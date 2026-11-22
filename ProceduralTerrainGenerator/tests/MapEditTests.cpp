@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <numeric>
 
+#include "BiomePaint.h"
 #include "MapEdit.h"
 
 namespace {
@@ -94,6 +95,7 @@ TEST_CASE("History undo and redo swap the map")
 	mapedit::History history(1 << 20);
 	HeightField current = Filled(4, 4, 2.0f);
 	std::optional<float> sea = 5.0f;
+	biomepaint::Layer paint;
 	mapedit::Step before = MapStep("Smooth", 1.0f);
 	before.seaLevel = 5.0f;
 	REQUIRE(history.Push(std::move(before)));
@@ -101,16 +103,16 @@ TEST_CASE("History undo and redo swap the map")
 	CHECK(!history.CanRedo());
 	CHECK(history.UndoLabel() == "Smooth");
 
-	REQUIRE(history.Undo(current, sea));
+	REQUIRE(history.Undo(current, sea, paint).has_value());
 	CHECK(current[0] == 1.0f);
 	CHECK(!history.CanUndo());
 	CHECK(history.CanRedo());
 	CHECK(history.RedoLabel() == "Smooth");
 
-	REQUIRE(history.Redo(current, sea));
+	REQUIRE(history.Redo(current, sea, paint).has_value());
 	CHECK(current[0] == 2.0f);
 	CHECK(history.CanUndo());
-	CHECK(!history.Redo(current, sea));
+	CHECK(!history.Redo(current, sea, paint).has_value());
 }
 
 TEST_CASE("History step without a map keeps the map")
@@ -118,19 +120,20 @@ TEST_CASE("History step without a map keeps the map")
 	mapedit::History history(1 << 20);
 	HeightField current = Filled(4, 4, 2.0f);
 	std::optional<float> sea = 12.0f;
+	biomepaint::Layer paint;
 	mapedit::Step before;
 	before.label = "Sea level";
 	before.seaLevel = 3.0f;
 	REQUIRE(history.Push(std::move(before)));
 	CHECK(history.Bytes() == 0);
 
-	REQUIRE(history.Undo(current, sea));
+	REQUIRE(history.Undo(current, sea, paint).has_value());
 	REQUIRE(sea.has_value());
 	CHECK(*sea == 3.0f);
 	CHECK(current.GetWidth() == 4);
 	CHECK(current[0] == 2.0f);
 
-	REQUIRE(history.Redo(current, sea));
+	REQUIRE(history.Redo(current, sea, paint).has_value());
 	CHECK(*sea == 12.0f);
 	CHECK(current[0] == 2.0f);
 }
@@ -140,8 +143,9 @@ TEST_CASE("Push clears redo")
 	mapedit::History history(1 << 20);
 	HeightField current = Filled(4, 4, 2.0f);
 	std::optional<float> sea;
+	biomepaint::Layer paint;
 	history.Push(MapStep("1", 1.0f));
-	history.Undo(current, sea);
+	history.Undo(current, sea, paint);
 	REQUIRE(history.CanRedo());
 	history.Push(MapStep("2", 3.0f));
 	CHECK(!history.CanRedo());
@@ -159,12 +163,13 @@ TEST_CASE("History drops the oldest steps over the limit")
 
 	HeightField current = Filled(4, 4, 4.0f);
 	std::optional<float> sea;
-	REQUIRE(history.Undo(current, sea));
+	biomepaint::Layer paint;
+	REQUIRE(history.Undo(current, sea, paint).has_value());
 	CHECK(current[0] == 3.0f);
-	REQUIRE(history.Undo(current, sea));
+	REQUIRE(history.Undo(current, sea, paint).has_value());
 	CHECK(current[0] == 2.0f);
 	//Step "1" was dropped
-	CHECK(!history.Undo(current, sea));
+	CHECK(!history.Undo(current, sea, paint).has_value());
 }
 
 TEST_CASE("A step larger than the limit leaves no history")
@@ -184,7 +189,8 @@ TEST_CASE("Lowering the limit drops steps")
 	}
 	HeightField current = Filled(4, 4, 4.0f);
 	std::optional<float> sea;
-	history.Undo(current, sea);
+	biomepaint::Layer paint;
+	history.Undo(current, sea, paint);
 	REQUIRE(history.Bytes() == 3 * step);
 	history.SetLimit(step);
 	CHECK(history.Limit() == step);
@@ -192,4 +198,101 @@ TEST_CASE("Lowering the limit drops steps")
 	//The older undo steps go first, the redo step stays
 	CHECK(!history.CanUndo());
 	CHECK(history.CanRedo());
+}
+
+TEST_CASE("Paint step restores only the paint")
+{
+	mapedit::History history(1 << 20);
+	HeightField current = Filled(4, 4, 2.0f);
+	std::optional<float> sea = 7.0f;
+	biomepaint::Layer before = biomepaint::Make(4, 4);
+	before.palette = { "A" };
+	before.texels[5] = static_cast<uint16_t>((200 << 8) | 1);
+	biomepaint::Layer paint = biomepaint::Make(4, 4);
+	paint.palette = { "B" };
+	mapedit::Step step;
+	step.label = "Paint biomes";
+	step.seaLevel = 7.0f;
+	step.paint = before;
+	REQUIRE(history.Push(std::move(step)));
+
+	const std::optional<mapedit::Restored> undone = history.Undo(current, sea, paint);
+	REQUIRE(undone.has_value());
+	CHECK(!undone->map);
+	CHECK(!undone->seaLevel);
+	CHECK(undone->paint);
+	CHECK(paint.palette == std::vector<std::string>{ "A" });
+	CHECK(paint.texels == before.texels);
+	CHECK(current[0] == 2.0f);
+	REQUIRE(sea.has_value());
+	CHECK(*sea == 7.0f);
+
+	const std::optional<mapedit::Restored> redone = history.Redo(current, sea, paint);
+	REQUIRE(redone.has_value());
+	CHECK(redone->paint);
+	CHECK(paint.palette == std::vector<std::string>{ "B" });
+	CHECK(!history.Redo(current, sea, paint).has_value());
+}
+
+TEST_CASE("Paint counts in the history memory")
+{
+	mapedit::History history(1 << 20);
+	mapedit::Step step;
+	step.label = "Paint biomes";
+	step.paint = biomepaint::Make(8, 6);
+	const size_t bytes = step.paint->Bytes();
+	REQUIRE(bytes == 8 * 6 * 2);
+	REQUIRE(history.Push(std::move(step)));
+	CHECK(history.Bytes() == bytes);
+}
+
+TEST_CASE("Sea step reports the sea level and the map step the map")
+{
+	mapedit::History history(1 << 20);
+	HeightField current = Filled(4, 4, 2.0f);
+	std::optional<float> sea = 12.0f;
+	biomepaint::Layer paint;
+	mapedit::Step seaStep;
+	seaStep.label = "Sea level";
+	seaStep.seaLevel = 3.0f;
+	REQUIRE(history.Push(std::move(seaStep)));
+	const std::optional<mapedit::Restored> undone = history.Undo(current, sea, paint);
+	REQUIRE(undone.has_value());
+	CHECK(undone->seaLevel);
+	CHECK(!undone->map);
+	CHECK(!undone->paint);
+
+	mapedit::Step mapStep = MapStep("Smooth", 1.0f);
+	mapStep.seaLevel = sea;
+	REQUIRE(history.Push(std::move(mapStep)));
+	const std::optional<mapedit::Restored> map = history.Undo(current, sea, paint);
+	REQUIRE(map.has_value());
+	CHECK(map->map);
+	CHECK(!map->seaLevel);
+}
+
+TEST_CASE("Paint step of another size keeps the history memory right")
+{
+	//The first stroke saves the empty layer (0x0); undo swaps the painted one into the step
+	mapedit::History history(1 << 20);
+	HeightField current = Filled(4, 4, 2.0f);
+	std::optional<float> sea;
+	biomepaint::Layer paint = biomepaint::Make(8, 6);
+	mapedit::Step step;
+	step.label = "Paint biomes";
+	step.paint = biomepaint::Layer();
+	REQUIRE(history.Push(std::move(step)));
+	CHECK(history.Bytes() == 0);
+
+	REQUIRE(history.Undo(current, sea, paint).has_value());
+	CHECK(paint.texels.empty());
+	CHECK(history.Bytes() == 8 * 6 * 2);
+
+	//A new step drops the redo step and its bytes; the history keeps working
+	mapedit::Step next;
+	next.label = "Sea level";
+	REQUIRE(history.Push(std::move(next)));
+	CHECK(history.Bytes() == 0);
+	CHECK(history.CanUndo());
+	CHECK(history.UndoLabel() == "Sea level");
 }

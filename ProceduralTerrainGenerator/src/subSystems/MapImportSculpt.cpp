@@ -38,6 +38,11 @@ static_assert(sculpt::worldUnitsPerTexel == TerrainView::worldUnitsPerTexel, "sc
 
 void MapImportSys::UpdateSculpt(const Camera& camera, bool active, float deltaTime)
 {
+	//The biome brush shares the mouse input; a sculpt stroke still running ends below first
+	if ((biomePaintOn || paintStroke) && !stroke) {
+		UpdateBiomePaint(camera, active, deltaTime);
+		return;
+	}
 	const bool pressed = std::exchange(paintPressed, false);
 	const bool canPaint = sculptOn && active && !map.Empty() && !camera.MouseControl();
 	if (stroke) {
@@ -127,7 +132,7 @@ void MapImportSys::PickUnderCursor(Camera& camera, LightSource& light)
 	brushOutline.clear();
 	const ImGuiIO& io = ImGui::GetIO();
 	//Over a panel only while no stroke runs: a stroke dragged over a panel goes on (ImGui does not take a button pressed over the scene)
-	if (!sculptOn || map.Empty() || camera.MouseControl() || !ImGui::IsMousePosValid() || (io.WantCaptureMouse && !stroke)) {
+	if (!BrushOn() || map.Empty() || camera.MouseControl() || !ImGui::IsMousePosValid() || (io.WantCaptureMouse && !stroke && !paintStroke)) {
 		return;
 	}
 	//Viewport in framebuffer pixels, origin at the bottom left; ImGui counts window points from the top left
@@ -156,7 +161,7 @@ void MapImportSys::PickUnderCursor(Camera& camera, LightSource& light)
 	//The outline on the terrain: heights of the map from before a running stroke, close enough for a guide
 	for (int i = 0; i < outlinePoints; i++) {
 		const float angle = 2.0f * std::numbers::pi_v<float> * static_cast<float>(i) / outlinePoints;
-		const glm::vec2 texel = *hoverTexel + brush.radius * glm::vec2(std::cos(angle), std::sin(angle));
+		const glm::vec2 texel = *hoverTexel + ActiveBrushRadius() * glm::vec2(std::cos(angle), std::sin(angle));
 		const glm::ivec2 nearest = glm::clamp(glm::ivec2(glm::round(texel)), glm::ivec2(0), size - 1);
 		const glm::vec3 world = sculpt::TexelToWorld(texel, map.At(nearest.x, nearest.y), renderSettings.heightScale, renderSettings.modelScale, size);
 		const glm::vec4 clip = viewProjection * glm::vec4(world, 1.0f);
@@ -180,18 +185,30 @@ void MapImportSys::SculptInputImGui()
 	paintHeld = ImGui::IsMouseDown(ImGuiMouseButton_Left);
 	paintPressed = paintPressed || (ImGui::IsMouseClicked(ImGuiMouseButton_Left) && !io.WantCaptureMouse && !io.KeyAlt);
 	paintInvert = io.KeyCtrl;
-	if (!sculptOn) {
+	if (!BrushOn()) {
 		return;
 	}
 	if (!io.WantCaptureMouse && io.KeyShift && io.MouseWheel != 0.0f) {
-		brush.radius = std::clamp(brush.radius * std::pow(1.1f, io.MouseWheel), 1.0f, largestRadius);
+		float& radius = biomePaintOn ? paintRadius : brush.radius;
+		radius = std::clamp(radius * std::pow(1.1f, io.MouseWheel), 1.0f, largestRadius);
+	}
+	//The biome brush in the colour of its biome, grey while erasing
+	ImU32 outlineColor = OutlineColor(brush.brush);
+	if (biomePaintOn) {
+		outlineColor = IM_COL32(200, 200, 200, 230);
+		const std::vector<biome::Biome>& table = biomeSettings.config.table;
+		const auto painted = std::find_if(table.begin(), table.end(), [&](const biome::Biome& b) { return b.name == paintBiome; });
+		if (!paintInvert && painted != table.end()) {
+			const glm::vec3 c = glm::clamp(painted->color, 0.0f, 1.0f) * 255.0f;
+			outlineColor = IM_COL32(static_cast<int>(c.r), static_cast<int>(c.g), static_cast<int>(c.b), 230);
+		}
 	}
 	if (brushOutline.size() >= 2) {
 		//The background list draws over the 3D scene and under the panels
 		ImDrawList* drawList = ImGui::GetBackgroundDrawList();
 		drawList->PushClipRect(outlineClipMin, outlineClipMax, true);
 		drawList->AddPolyline(brushOutline.data(), static_cast<int>(brushOutline.size()), IM_COL32(0, 0, 0, 140), ImDrawFlags_Closed, 3.5f);
-		drawList->AddPolyline(brushOutline.data(), static_cast<int>(brushOutline.size()), OutlineColor(brush.brush), ImDrawFlags_Closed, 1.5f);
+		drawList->AddPolyline(brushOutline.data(), static_cast<int>(brushOutline.size()), outlineColor, ImDrawFlags_Closed, 1.5f);
 		drawList->PopClipRect();
 	}
 }
@@ -199,7 +216,9 @@ void MapImportSys::SculptInputImGui()
 void MapImportSys::SculptImGui()
 {
 	ImGui::SeparatorText("Sculpt");
-	ImGui::Checkbox("Sculpt with the mouse", &sculptOn);
+	if (ImGui::Checkbox("Sculpt with the mouse", &sculptOn) && sculptOn) {
+		biomePaintOn = false;
+	}
 	ImGui::SetItemTooltip("Left button paints on the terrain, in 3D and on the 2D map");
 	if (!sculptOn) {
 		return;

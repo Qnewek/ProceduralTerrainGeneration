@@ -16,6 +16,7 @@
 #include <GL/glew.h>
 #include <GLFW/glfw3.h>
 
+#include "BiomePaint.h"
 #include "Grid.h"
 #include "GpuErosion.h"
 #include "GpuHeightGenerator.h"
@@ -1282,75 +1283,198 @@ namespace {
 		TextureClass heightTexture(width, height, GL_R32F), climateTexture(width, height, GL_RG16F);
 		heightTexture.Upload(units.Data(), GL_RED, GL_FLOAT);
 		climateTexture.Upload(climate.packed.data(), GL_RG, GL_HALF_FLOAT);
-		auto run = [&](const mapbiomes::Settings& s, glm::vec2 texelMetres) {
-			TextureClass colors(width, height, GL_RGBA32F), ids(width, height, GL_R32I);
-			TextureClass splat(width, height, GL_RGBA8, GpuHeightGenerator::splatLayers);
-			gpu.GenerateMapBiomes(s, sea, MapBiomeInput{ heightTexture, climateTexture, metresPerUnit, texelMetres }, colors, ids, &splat);
+		struct Targets {
+			TextureClass colors{ mapWidth, mapHeight, GL_RGBA32F };
+			TextureClass ids{ mapWidth, mapHeight, GL_R32I };
+			TextureClass splat{ mapWidth, mapHeight, GL_RGBA8, GpuHeightGenerator::splatLayers };
+		};
+		auto runWith = [&](const mapbiomes::Settings& s, const MapBiomeInput& in, Targets& t) {
+			gpu.GenerateMapBiomes(s, sea, in, t.colors, t.ids, &t.splat);
 			MapBiomesRun result;
 			result.ids.resize(texels);
 			result.colors.resize(texels * 4);
 			result.splat.resize(texels * 4 * GpuHeightGenerator::splatLayers);
-			ids.Read(GL_RED_INTEGER, GL_INT, static_cast<int>(result.ids.size() * sizeof(int)), result.ids.data());
-			colors.Read(GL_RGBA, GL_FLOAT, static_cast<int>(result.colors.size() * sizeof(float)), result.colors.data());
-			splat.Read(GL_RGBA, GL_UNSIGNED_BYTE, static_cast<int>(result.splat.size()), result.splat.data());
+			t.ids.Read(GL_RED_INTEGER, GL_INT, static_cast<int>(result.ids.size() * sizeof(int)), result.ids.data());
+			t.colors.Read(GL_RGBA, GL_FLOAT, static_cast<int>(result.colors.size() * sizeof(float)), result.colors.data());
+			t.splat.Read(GL_RGBA, GL_UNSIGNED_BYTE, static_cast<int>(result.splat.size()), result.splat.data());
 			return result;
 		};
-		const MapBiomesRun gpuRun = run(settings, glm::vec2(pixel));
+		auto input = [&](glm::vec2 texelMetres) { return MapBiomeInput{ heightTexture, climateTexture, metresPerUnit, texelMetres }; };
+		auto run = [&](const mapbiomes::Settings& s, glm::vec2 texelMetres) {
+			Targets t;
+			return runWith(s, input(texelMetres), t);
+		};
 
-		const BiomeConfig& config = settings.config;
-		const float water = mapbiomes::WaterHeight(settings, sea);
-		size_t idMismatch = 0, ambiguous = 0;
-		float colorError = 0.0f, splatError = 0.0f;
-		std::array<size_t, biome::maxBiomes> seen{};
-		const biome::MaterialWeights noPatch{};
+		//The CPU rules for every texel against a GPU result; paint = nullptr: nothing painted
+		struct Comparison {
+			size_t idMismatch = 0, ambiguous = 0, kinds = 0;
+			float colorError = 0.0f, splatError = 0.0f;
+		};
+		auto compare = [&](const MapBiomesRun& gpuRun, const mapbiomes::Settings& s, const biomepaint::Layer* paint) {
+			Comparison result;
+			const BiomeConfig& config = s.config;
+			const float water = mapbiomes::WaterHeight(s, sea);
+			std::array<int, 256> slots{};
+			slots.fill(-1);
+			if (paint) {
+				slots = biomepaint::SlotBiomes(*paint, config.table);
+			}
+			std::array<size_t, biome::maxBiomes> seen{};
+			const biome::MaterialWeights noPatch{};
+			for (int y = 0; y < height; y++) {
+				for (int x = 0; x < width; x++) {
+					const size_t i = static_cast<size_t>(y) * width + x;
+					const glm::vec2 cm = glm::unpackHalf2x16(climate.packed[i]);
+					const float h = mapbiomes::ClimateHeight(metres[i], cm.x, sea, s);
+					const biome::ParameterValues values = biome::ApplyClimate({ cm.x, cm.y, 0.0f, 0.0f, 0.0f, 0.0f }, h, water, config.climate);
+					int id = biome::Nearest(config.table, values);
+					const float nearest = config.table[id].Distance(values);
+					//A texel where two biomes are almost equally near may go either way on the GPU
+					float second = 1e30f;
+					glm::vec3 colorSum(0.0f);
+					float colorTotal = 0.0f;
+					for (size_t b = 0; b < config.table.size(); b++) {
+						const float d = config.table[b].Distance(values);
+						if (static_cast<int>(b) != id) {
+							second = std::min(second, d);
+						}
+						const float w = biome::BlendWeight(d, nearest, config.blendWidth);
+						colorSum += w * config.table[b].color;
+						colorTotal += w;
+					}
+					const bool tie = second - nearest < 1e-4f;
+					glm::vec3 color = config.blendWidth > 0.0f ? colorSum / colorTotal : config.table[id].color;
+					biome::MaterialWeights mix = biome::MixMaterials(config.table, values, config.materialBlendWidth, 0.0f, config.materialPatchContrast, noPatch);
+					bool paintedId = false;
+					if (paint) {
+						const int slot = paint->texels[i] & 0xFF, strength = paint->texels[i] >> 8;
+						const int b = slots[slot];
+						if (b >= 0 && strength > 0) {
+							const float share = strength / 255.0f;
+							color = color + (config.table[b].color - color) * share;
+							mix = biomepaint::PaintedMaterials(mix, config.table[b], share);
+							if (strength >= 128) {
+								id = b;
+								paintedId = true;
+							}
+						}
+					}
+					if (gpuRun.ids[i] != id) {
+						(tie && !paintedId ? result.ambiguous : result.idMismatch)++;
+						continue;
+					}
+					seen[id]++;
+					for (int c = 0; c < 3; c++) {
+						result.colorError = std::max(result.colorError, std::abs(gpuRun.colors[i * 4 + c] - color[c]));
+					}
+					for (int m = 0; m < biome::maxMaterials; m++) {
+						const float share = gpuRun.splat[((m / 4) * texels + i) * 4 + m % 4] / 255.0f;
+						result.splatError = std::max(result.splatError, std::abs(share - mix[m]));
+					}
+				}
+			}
+			result.kinds = static_cast<size_t>(std::count_if(seen.begin(), seen.end(), [](size_t c) { return c > 0; }));
+			return result;
+		};
+		auto matches = [&](const Comparison& c) {
+			return c.idMismatch == 0 && c.ambiguous < texels / 1000 && c.colorError <= 1e-5f && c.splatError <= 1.0f / 255.0f + 1e-4f;
+		};
+		auto details = [](const Comparison& c) {
+			std::ostringstream text;
+			text << c.idMismatch << " wrong ids, " << c.ambiguous << " ties, largest difference " << std::scientific << std::setprecision(1)
+				<< std::max(c.colorError, c.splatError);
+			return text.str();
+		};
+
+		const MapBiomesRun gpuRun = run(settings, glm::vec2(pixel));
+		const Comparison plain = compare(gpuRun, settings, nullptr);
+		const bool idsOk = plain.idMismatch == 0 && plain.ambiguous < texels / 1000 && plain.kinds > 2;
+		Report("mapbiomes: ids match the CPU", std::to_string(plain.kinds) + " biomes, " + std::to_string(plain.idMismatch) + " wrong, "
+			+ std::to_string(plain.ambiguous) + " ties", idsOk);
+		std::ostringstream colorDetails, splatDetails;
+		colorDetails << "largest difference " << std::scientific << std::setprecision(1) << plain.colorError;
+		splatDetails << "largest difference " << std::scientific << std::setprecision(1) << plain.splatError;
+		const bool colorsOk = plain.colorError <= 1e-5f;
+		const bool splatOk = plain.splatError <= 1.0f / 255.0f + 1e-4f;
+		Report("mapbiomes: colors match the CPU", colorDetails.str(), colorsOk);
+		Report("mapbiomes: splat matches the CPU", splatDetails.str(), splatOk);
+
+		//Painted biomes: a strong patch with a soft edge and a weak one; the CPU mix (biomepaint) against the shader
+		const std::vector<biome::Biome>& table = settings.config.table;
+		TextureClass paintTexture(width, height, GL_RG8UI);
+		auto paintDab = [](glm::vec2 center, float radius, float hardness, float amount, uint8_t slot) {
+			biomepaint::Dab dab;
+			dab.center = center;
+			dab.radius = radius;
+			dab.hardness = hardness;
+			dab.amount = amount;
+			dab.slot = slot;
+			return dab;
+		};
+		auto paintedInput = [&](const biomepaint::Layer& layer, const std::vector<biome::Biome>& biomes) {
+			paintTexture.UploadRegion(0, 0, width, height, width, layer.texels.data(), GL_RG_INTEGER, GL_UNSIGNED_BYTE);
+			MapBiomeInput in = input(glm::vec2(pixel));
+			in.paint = &paintTexture;
+			in.paintBiomes = biomepaint::SlotBiomes(layer, biomes);
+			return in;
+		};
+		biomepaint::Layer paint = biomepaint::Make(width, height);
+		const uint8_t strongSlot = biomepaint::SlotOf(paint, table[2].name), weakSlot = biomepaint::SlotOf(paint, table[4].name);
+		biomepaint::Apply(paint, paintDab({ 300.0f, 100.0f }, 60.0f, 0.3f, 1.0f, strongSlot));
+		biomepaint::Apply(paint, paintDab({ 700.0f, 150.0f }, 50.0f, 0.0f, 0.25f, weakSlot));
+		Targets paintTargets;
+		const MapBiomesRun paintedRun = runWith(settings, paintedInput(paint, table), paintTargets);
+		const Comparison painted = compare(paintedRun, settings, &paint);
+		size_t paintChanged = 0;
+		for (size_t i = 0; i < texels; i++) {
+			paintChanged += paintedRun.ids[i] != gpuRun.ids[i] ? 1 : 0;
+		}
+		const bool paintOk = matches(painted) && paintChanged > 0;
+		Report("mapbiomes: paint matches the CPU", details(painted) + ", " + std::to_string(paintChanged) + " ids painted", paintOk);
+
+		//Names: the table reversed and a name that is not in it (automatic biomes there)
+		mapbiomes::Settings reversed = settings;
+		std::reverse(reversed.config.table.begin(), reversed.config.table.end());
+		biomepaint::Layer named = paint;
+		biomepaint::Apply(named, paintDab({ 500.0f, 200.0f }, 40.0f, 1.0f, 1.0f, biomepaint::SlotOf(named, "No such biome")));
+		Targets namedTargets;
+		const Comparison byName = compare(runWith(reversed, paintedInput(named, reversed.config.table), namedTargets), reversed, &named);
+		const bool namesOk = matches(byName);
+		Report("mapbiomes: paint follows names", details(byName), namesOk);
+
+		//A pass over a rectangle after a pass over the whole map: inside it the result of the whole map with the new paint, outside the old one
+		biomepaint::Layer more = paint;
+		biomepaint::Apply(more, paintDab({ 790.0f, 110.0f }, 70.0f, 0.5f, 1.0f, strongSlot));
+		const glm::ivec4 region(300, 40, 500, 150);
+		MapBiomeInput regionInput = paintedInput(more, table);
+		regionInput.region = region;
+		const MapBiomesRun regionRun = runWith(settings, regionInput, paintTargets);
+		Targets wholeTargets;
+		const MapBiomesRun wholeRun = runWith(settings, paintedInput(more, table), wholeTargets);
+		size_t regionWrong = 0, outsideChanged = 0;
 		for (int y = 0; y < height; y++) {
 			for (int x = 0; x < width; x++) {
 				const size_t i = static_cast<size_t>(y) * width + x;
-				const glm::vec2 cm = glm::unpackHalf2x16(climate.packed[i]);
-				const float h = mapbiomes::ClimateHeight(metres[i], cm.x, sea, settings);
-				const biome::ParameterValues values = biome::ApplyClimate({ cm.x, cm.y, 0.0f, 0.0f, 0.0f, 0.0f }, h, water, config.climate);
-				const int id = biome::Nearest(config.table, values);
-				const float nearest = config.table[id].Distance(values);
-				//A texel where two biomes are almost equally near may go either way on the GPU
-				float second = 1e30f;
-				glm::vec3 colorSum(0.0f);
-				float colorTotal = 0.0f;
-				for (size_t b = 0; b < config.table.size(); b++) {
-					const float d = config.table[b].Distance(values);
-					if (static_cast<int>(b) != id) {
-						second = std::min(second, d);
+				const bool inside = x >= region.x && y >= region.y && x < region.x + region.z && y < region.y + region.w;
+				const MapBiomesRun& expected = inside ? wholeRun : paintedRun;
+				bool same = regionRun.ids[i] == expected.ids[i];
+				for (int c = 0; c < 4; c++) {
+					same = same && regionRun.colors[i * 4 + c] == expected.colors[i * 4 + c];
+				}
+				for (int l = 0; l < GpuHeightGenerator::splatLayers; l++) {
+					for (int c = 0; c < 4; c++) {
+						const size_t at = (static_cast<size_t>(l) * texels + i) * 4 + c;
+						same = same && regionRun.splat[at] == expected.splat[at];
 					}
-					const float w = biome::BlendWeight(d, nearest, config.blendWidth);
-					colorSum += w * config.table[b].color;
-					colorTotal += w;
 				}
-				if (gpuRun.ids[i] != id) {
-					(second - nearest < 1e-4f ? ambiguous : idMismatch)++;
-					continue;
-				}
-				seen[id]++;
-				const glm::vec3 color = config.blendWidth > 0.0f ? colorSum / colorTotal : config.table[id].color;
-				for (int c = 0; c < 3; c++) {
-					colorError = std::max(colorError, std::abs(gpuRun.colors[i * 4 + c] - color[c]));
-				}
-				const biome::MaterialWeights mix = biome::MixMaterials(config.table, values, config.materialBlendWidth, 0.0f, config.materialPatchContrast, noPatch);
-				for (int m = 0; m < biome::maxMaterials; m++) {
-					const float share = gpuRun.splat[((m / 4) * texels + i) * 4 + m % 4] / 255.0f;
-					splatError = std::max(splatError, std::abs(share - mix[m]));
-				}
+				regionWrong += same ? 0 : 1;
+				outsideChanged += !inside && wholeRun.ids[i] != paintedRun.ids[i] ? 1 : 0;
 			}
 		}
-		const size_t kinds = static_cast<size_t>(std::count_if(seen.begin(), seen.end(), [](size_t c) { return c > 0; }));
-		const bool idsOk = idMismatch == 0 && ambiguous < texels / 1000 && kinds > 2;
-		Report("mapbiomes: ids match the CPU", std::to_string(kinds) + " biomes, " + std::to_string(idMismatch) + " wrong, "
-			+ std::to_string(ambiguous) + " ties", idsOk);
-		std::ostringstream colorDetails, splatDetails;
-		colorDetails << "largest difference " << std::scientific << std::setprecision(1) << colorError;
-		splatDetails << "largest difference " << std::scientific << std::setprecision(1) << splatError;
-		const bool colorsOk = colorError <= 1e-5f;
-		const bool splatOk = splatError <= 1.0f / 255.0f + 1e-4f;
-		Report("mapbiomes: colors match the CPU", colorDetails.str(), colorsOk);
-		Report("mapbiomes: splat matches the CPU", splatDetails.str(), splatOk);
+		//The new dab reaches past the rectangle, so a pass over the whole map differs there: the region pass must have kept the old result
+		const bool regionOk = regionWrong == 0 && outsideChanged > 0;
+		Report("mapbiomes: region equals the whole map", std::to_string(regionWrong) + " texels differ, " + std::to_string(outsideChanged)
+			+ " kept outside", regionOk);
 
 		const MapBiomesRun again = run(settings, glm::vec2(pixel));
 		const bool deterministic = again.ids == gpuRun.ids && again.colors == gpuRun.colors && again.splat == gpuRun.splat;
@@ -1382,7 +1506,7 @@ namespace {
 		}
 		const bool patchesOk = fine.ids == coarse.ids && patchDiffer == 0;
 		Report("mapbiomes: patches in texels", std::to_string(patchDiffer) + " splat bytes differ at 15x larger pixels", patchesOk);
-		return idsOk && colorsOk && splatOk && deterministic && noiseOk && patchesOk;
+		return idsOk && colorsOk && splatOk && deterministic && noiseOk && patchesOk && paintOk && namesOk && regionOk;
 	}
 
 	//@return median time of finishing the work given by fn, in ms. The first run is skipped: drivers finish compiling shaders then
