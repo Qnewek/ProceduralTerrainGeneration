@@ -8,12 +8,15 @@
 
 #include "glm/glm.hpp"
 
+#include "Biome.h"
 #include "ExportManifest.h"
 #include "GenerationJob.h"
 #include "HeightmapExport.h"
 #include "MaterialExport.h"
 #include "MeshExport.h"
 #include "VegetationExport.h"
+
+class TextureClass;
 
 //ImGui "Saving" section writing an export pack: a folder <exports>/<name>/ with the height maps, optionally the material and
 //biome maps, the meshes and the vegetation, and <name>.json describing them (exportpack::Manifest). Maps are read and written at
@@ -69,6 +72,12 @@ public:
 
 	//@param _folder - folder holding the packs, created by the first export
 	explicit ExportPanel(std::filesystem::path _folder);
+
+	//Materials read from a splat map (GL_RGBA8 array, materials 4l..4l+3 in layer l); the texture must live until the export ends
+	//@param names - every material in the order of their ids
+	static MaterialSource SplatSource(const TextureClass& splat, std::vector<std::string> names);
+	//Biomes of a table (id = index); colors read from the BIOMES layer (GL_RGBA32F), which must live until the export ends
+	static BiomeSource BiomeTableSource(const std::vector<biome::Biome>& table, std::function<BiomeMap()> readIds, const TextureClass& colors);
 
 	void ImGuiDraw(const Pack& pack);
 	//Finishes an export whose background part is done; call every frame, the section may not be shown

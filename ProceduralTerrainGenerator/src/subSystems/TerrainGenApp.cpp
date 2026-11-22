@@ -109,13 +109,15 @@ bool TerrainGenApp::Initialize()
 	for (const TerrainMaterial& m : materials->GetMaterials()) {
 		materialNames.push_back(m.name);
 	}
-	terrainGenSys.SetMaterialNames(std::move(materialNames));
+	terrainGenSys.SetMaterialNames(materialNames);
 	terrainGenSys.SetVegetationModels(vegetation.get());
 	terrainGenSys.SetTerrainMaterials(materials.get());
 	if (!mapImportSys.Initialize(width, height, heightScale)) {
 		std::cout << "[ERROR] Failed to initialize MapImportSys" << std::endl;
 		return false;
 	}
+	mapImportSys.SetMaterialNames(std::move(materialNames));
+	mapImportSys.SetVegetationModels(vegetation.get());
     if (!sky.Initialize() || !clouds.Initialize()) {
         return false;
     }
@@ -196,6 +198,7 @@ void TerrainGenApp::Start()
     metrics.reset();
     materials.reset();
     terrainGenSys.SetVegetationModels(nullptr);
+    mapImportSys.SetVegetationModels(nullptr);
     terrainGenSys.SetTerrainMaterials(nullptr);
     vegetation.reset();
     ImGui_ImplOpenGL3_Shutdown();

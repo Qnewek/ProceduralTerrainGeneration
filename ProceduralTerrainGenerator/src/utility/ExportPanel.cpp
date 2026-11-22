@@ -8,6 +8,42 @@
 
 #include "FileIO.h"
 #include "Preset.h"
+#include "TextureClass.h"
+
+ExportPanel::MaterialSource ExportPanel::SplatSource(const TextureClass& splat, std::vector<std::string> names)
+{
+	MaterialSource source;
+	source.names = std::move(names);
+	const int count = static_cast<int>(source.names.size());
+	source.read = [texture = &splat, count] {
+		const int width = texture->GetWidth(), height = texture->GetHeight(), layers = texture->GetLayers();
+		std::vector<uint8_t> bytes(static_cast<size_t>(width) * height * layers * 4);
+		texture->Read(GL_RGBA, GL_UNSIGNED_BYTE, static_cast<int>(bytes.size()), bytes.data());
+		return splatmap::FromLayers(bytes.data(), width, height, layers, std::min(count, 4 * layers));
+	};
+	return source;
+}
+
+ExportPanel::BiomeSource ExportPanel::BiomeTableSource(const std::vector<biome::Biome>& table, std::function<BiomeMap()> readIds, const TextureClass& colors)
+{
+	BiomeSource source;
+	for (size_t b = 0; b < table.size(); b++) {
+		exportpack::Biome out;
+		out.id = static_cast<int>(b);
+		out.name = table[b].name;
+		out.color[0] = table[b].color.r;
+		out.color[1] = table[b].color.g;
+		out.color[2] = table[b].color.b;
+		source.table.push_back(out);
+	}
+	source.readIds = std::move(readIds);
+	source.readColors = [texture = &colors] {
+		std::vector<float> rgba(static_cast<size_t>(texture->GetWidth()) * texture->GetHeight() * 4);
+		texture->Read(GL_RGBA, GL_FLOAT, static_cast<int>(rgba.size() * sizeof(float)), rgba.data());
+		return rgba;
+	};
+	return source;
+}
 
 ExportPanel::ExportPanel(std::filesystem::path _folder) : folder(std::move(_folder))
 {

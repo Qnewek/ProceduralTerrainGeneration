@@ -39,6 +39,7 @@ static mapproject::Project FullProject()
 	project.generation = "{\"a\":1}";
 	project.verticalExaggeration = 2.0f;
 	project.rivers = "{\"cellSize\":4}";
+	project.biomes = "{\"enabled\":true}";
 	return project;
 }
 
@@ -82,6 +83,35 @@ TEST_CASE("Project round trip keeps every field")
 	CHECK(read.source == "alps.tif");
 	CHECK(read.generation == "{\"a\":1}");
 	CHECK(read.verticalExaggeration == 2.0f);
+	CHECK(read.rivers == "{\"cellSize\":4}");
+}
+
+TEST_CASE("Project keeps its biome settings")
+{
+	CHECK(mapproject::currentVersion == 3);
+	const mapproject::Project project = FullProject();
+	const std::vector<uint8_t> bytes = Bytes(project);
+	mapproject::Project read;
+	std::string error;
+	REQUIRE_MESSAGE(mapproject::Deserialize(bytes.data(), bytes.size(), read, error), error);
+	CHECK(read.biomes == "{\"enabled\":true}");
+}
+
+TEST_CASE("Version 2 project has no biome settings")
+{
+	mapproject::Project project;
+	project.working = SmallMap();
+	project.rivers = "{\"cellSize\":4}";
+	std::vector<uint8_t> bytes = Bytes(project);
+	const std::string from = "\"version\":" + std::to_string(mapproject::currentVersion);
+	const std::string text(bytes.begin(), bytes.end());
+	const size_t at = text.find(from);
+	REQUIRE(at != std::string::npos);
+	bytes[at + from.size() - 1] = '2';
+	mapproject::Project read = FullProject();
+	std::string error;
+	REQUIRE_MESSAGE(mapproject::Deserialize(bytes.data(), bytes.size(), read, error), error);
+	CHECK(read.biomes.empty());
 	CHECK(read.rivers == "{\"cellSize\":4}");
 }
 

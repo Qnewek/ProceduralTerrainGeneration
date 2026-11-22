@@ -285,6 +285,39 @@ TEST_CASE("A world preset keeps every field")
 	CheckSameErosion(loaded.erosion, original.erosion);
 }
 
+TEST_CASE("Biome config survives its own JSON")
+{
+	const BiomeConfig original = DistinctWorld().biomes;
+	BiomeConfig loaded;
+	std::string error;
+	REQUIRE_MESSAGE(preset::BiomesFromJson(preset::BiomesJson(original), loaded, error), error);
+	CheckSameNoise(loaded.temperature, original.temperature);
+	CheckSameNoise(loaded.humidity, original.humidity);
+	CHECK(loaded.blendWidth == original.blendWidth);
+	CHECK(loaded.climate.lapseRate == original.climate.lapseRate);
+	CHECK(loaded.climate.coastHumidity == original.climate.coastHumidity);
+	CHECK(loaded.climate.coastRange == original.climate.coastRange);
+	CHECK(loaded.modifyTerrain == original.modifyTerrain);
+	CHECK(loaded.terrainBlendWidth == original.terrainBlendWidth);
+	CHECK(loaded.detailSeed == original.detailSeed);
+	CHECK(loaded.materialBlendWidth == original.materialBlendWidth);
+	CHECK(loaded.materialPatchiness == original.materialPatchiness);
+	CHECK(loaded.materialPatchContrast == original.materialPatchContrast);
+	CHECK(loaded.materialPatchSize == original.materialPatchSize);
+	CheckSameBiomes(loaded.table, original.table);
+}
+
+TEST_CASE("Biome config JSON rejects an empty table")
+{
+	BiomeConfig loaded;
+	loaded.blendWidth = 0.123f;
+	std::string error;
+	CHECK_FALSE(preset::BiomesFromJson(R"({"table": []})", loaded, error));
+	CHECK_FALSE(error.empty());
+	CHECK(loaded.blendWidth == 0.123f);
+	CHECK_FALSE(preset::BiomesFromJson("not json", loaded, error));
+}
+
 TEST_CASE("A world preset without erosion gets the TerrainGen defaults")
 {
 	WorldConfig loaded;

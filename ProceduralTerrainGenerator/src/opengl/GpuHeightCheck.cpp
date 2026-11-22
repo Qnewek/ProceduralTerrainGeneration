@@ -23,6 +23,8 @@
 #include "GpuSurfacePass.h"
 #include "Hydrology.h"
 #include "LandStats.h"
+#include "MapBiomes.h"
+#include "glm/gtc/packing.hpp"
 #include "RiverMap.h"
 
 namespace {
@@ -1243,6 +1245,146 @@ namespace {
 		return ok;
 	}
 
+	//Biomes of a map that was not generated (GenerateMapBiomes) against the CPU rules: mapbiomes::ClimateHeight, biome::ApplyClimate,
+	//Nearest, BlendWeight and MixMaterials
+	struct MapBiomesRun {
+		std::vector<int> ids;
+		std::vector<float> colors;		//RGBA
+		std::vector<unsigned char> splat;	//layer after layer, RGBA
+	};
+
+	bool CheckMapBiomes(GpuHeightGenerator& gpu)
+	{
+		std::cout << "\nmapbiomes: biomes of a map from its climate\n";
+		const int width = mapWidth, height = mapHeight;
+		const size_t texels = static_cast<size_t>(width) * height;
+		const float sea = 0.0f, metresPerUnit = 300.0f;
+		const glm::dvec2 pixel(2.0, 3.0);
+		HeightField metres(width, height), units(width, height);
+		for (int y = 0; y < height; y++) {
+			for (int x = 0; x < width; x++) {
+				metres.At(x, y) = -50.0f + 350.0f * x / (width - 1) + 20.0f * std::sin(0.5f * y);
+				units.At(x, y) = metres.At(x, y) / metresPerUnit;
+			}
+		}
+		mapbiomes::Settings settings = mapbiomes::Default(sea);
+		settings.coastMetres = 400.0f;
+		settings.reliefRadiusMetres = 6.0f;
+		settings.reliefMetres = 50.0f;
+		//Temperature and humidity cover the whole range in every biome, so the result does not depend on their noises
+		for (biome::Biome& b : settings.config.table) {
+			b.ranges[biome::TEMPERATURE] = biome::Range{};
+			b.ranges[biome::HUMIDITY] = biome::Range{};
+		}
+		settings.config.materialPatchiness = 0.0f;
+		const mapbiomes::ClimateMaps climate = mapbiomes::ComputeClimate(metres, pixel, sea, settings);
+
+		TextureClass heightTexture(width, height, GL_R32F), climateTexture(width, height, GL_RG16F);
+		heightTexture.Upload(units.Data(), GL_RED, GL_FLOAT);
+		climateTexture.Upload(climate.packed.data(), GL_RG, GL_HALF_FLOAT);
+		auto run = [&](const mapbiomes::Settings& s, glm::vec2 texelMetres) {
+			TextureClass colors(width, height, GL_RGBA32F), ids(width, height, GL_R32I);
+			TextureClass splat(width, height, GL_RGBA8, GpuHeightGenerator::splatLayers);
+			gpu.GenerateMapBiomes(s, sea, MapBiomeInput{ heightTexture, climateTexture, metresPerUnit, texelMetres }, colors, ids, &splat);
+			MapBiomesRun result;
+			result.ids.resize(texels);
+			result.colors.resize(texels * 4);
+			result.splat.resize(texels * 4 * GpuHeightGenerator::splatLayers);
+			ids.Read(GL_RED_INTEGER, GL_INT, static_cast<int>(result.ids.size() * sizeof(int)), result.ids.data());
+			colors.Read(GL_RGBA, GL_FLOAT, static_cast<int>(result.colors.size() * sizeof(float)), result.colors.data());
+			splat.Read(GL_RGBA, GL_UNSIGNED_BYTE, static_cast<int>(result.splat.size()), result.splat.data());
+			return result;
+		};
+		const MapBiomesRun gpuRun = run(settings, glm::vec2(pixel));
+
+		const BiomeConfig& config = settings.config;
+		const float water = mapbiomes::WaterHeight(settings, sea);
+		size_t idMismatch = 0, ambiguous = 0;
+		float colorError = 0.0f, splatError = 0.0f;
+		std::array<size_t, biome::maxBiomes> seen{};
+		const biome::MaterialWeights noPatch{};
+		for (int y = 0; y < height; y++) {
+			for (int x = 0; x < width; x++) {
+				const size_t i = static_cast<size_t>(y) * width + x;
+				const glm::vec2 cm = glm::unpackHalf2x16(climate.packed[i]);
+				const float h = mapbiomes::ClimateHeight(metres[i], cm.x, sea, settings);
+				const biome::ParameterValues values = biome::ApplyClimate({ cm.x, cm.y, 0.0f, 0.0f, 0.0f, 0.0f }, h, water, config.climate);
+				const int id = biome::Nearest(config.table, values);
+				const float nearest = config.table[id].Distance(values);
+				//A texel where two biomes are almost equally near may go either way on the GPU
+				float second = 1e30f;
+				glm::vec3 colorSum(0.0f);
+				float colorTotal = 0.0f;
+				for (size_t b = 0; b < config.table.size(); b++) {
+					const float d = config.table[b].Distance(values);
+					if (static_cast<int>(b) != id) {
+						second = std::min(second, d);
+					}
+					const float w = biome::BlendWeight(d, nearest, config.blendWidth);
+					colorSum += w * config.table[b].color;
+					colorTotal += w;
+				}
+				if (gpuRun.ids[i] != id) {
+					(second - nearest < 1e-4f ? ambiguous : idMismatch)++;
+					continue;
+				}
+				seen[id]++;
+				const glm::vec3 color = config.blendWidth > 0.0f ? colorSum / colorTotal : config.table[id].color;
+				for (int c = 0; c < 3; c++) {
+					colorError = std::max(colorError, std::abs(gpuRun.colors[i * 4 + c] - color[c]));
+				}
+				const biome::MaterialWeights mix = biome::MixMaterials(config.table, values, config.materialBlendWidth, 0.0f, config.materialPatchContrast, noPatch);
+				for (int m = 0; m < biome::maxMaterials; m++) {
+					const float share = gpuRun.splat[((m / 4) * texels + i) * 4 + m % 4] / 255.0f;
+					splatError = std::max(splatError, std::abs(share - mix[m]));
+				}
+			}
+		}
+		const size_t kinds = static_cast<size_t>(std::count_if(seen.begin(), seen.end(), [](size_t c) { return c > 0; }));
+		const bool idsOk = idMismatch == 0 && ambiguous < texels / 1000 && kinds > 2;
+		Report("mapbiomes: ids match the CPU", std::to_string(kinds) + " biomes, " + std::to_string(idMismatch) + " wrong, "
+			+ std::to_string(ambiguous) + " ties", idsOk);
+		std::ostringstream colorDetails, splatDetails;
+		colorDetails << "largest difference " << std::scientific << std::setprecision(1) << colorError;
+		splatDetails << "largest difference " << std::scientific << std::setprecision(1) << splatError;
+		const bool colorsOk = colorError <= 1e-5f;
+		const bool splatOk = splatError <= 1.0f / 255.0f + 1e-4f;
+		Report("mapbiomes: colors match the CPU", colorDetails.str(), colorsOk);
+		Report("mapbiomes: splat matches the CPU", splatDetails.str(), splatOk);
+
+		const MapBiomesRun again = run(settings, glm::vec2(pixel));
+		const bool deterministic = again.ids == gpuRun.ids && again.colors == gpuRun.colors && again.splat == gpuRun.splat;
+		Report("mapbiomes: deterministic", deterministic ? "same result twice" : "results differ", deterministic);
+
+		//Two biomes split by temperature: different temperature seeds give different maps (large texels, so the noise changes over the map)
+		mapbiomes::Settings split = settings;
+		split.config.table.resize(2);
+		split.config.table[0].ranges = {};
+		split.config.table[1].ranges = {};
+		split.config.table[0].ranges[biome::TEMPERATURE] = biome::Range{ -1.0f, 0.0f };
+		split.config.table[1].ranges[biome::TEMPERATURE] = biome::Range{ 0.0f, 1.0f };
+		std::vector<std::vector<int>> maps;
+		for (int seed = 1; seed <= 6; seed++) {
+			split.config.temperature.seed = seed;
+			maps.push_back(run(split, glm::vec2(500.0f)).ids);
+		}
+		const bool noiseOk = std::any_of(maps.begin() + 1, maps.end(), [&](const std::vector<int>& m) { return m != maps[0]; });
+		Report("mapbiomes: temperature noise matters", noiseOk ? "seeds change the biomes" : "the same biomes for every seed", noiseOk);
+
+		//Material patches are measured in texels like in TerrainGen, so a map of large pixels (a DEM) gets patches of the same size in texels;
+		//the biomes here do not depend on temperature and humidity, so only the patches could change with the pixel size
+		mapbiomes::Settings patchy = settings;
+		patchy.config.materialPatchiness = 1.0f;
+		const MapBiomesRun fine = run(patchy, glm::vec2(pixel)), coarse = run(patchy, glm::vec2(pixel) * 15.0f);
+		size_t patchDiffer = 0;
+		for (size_t i = 0; i < fine.splat.size(); i++) {
+			patchDiffer += fine.splat[i] != coarse.splat[i] ? 1 : 0;
+		}
+		const bool patchesOk = fine.ids == coarse.ids && patchDiffer == 0;
+		Report("mapbiomes: patches in texels", std::to_string(patchDiffer) + " splat bytes differ at 15x larger pixels", patchesOk);
+		return idsOk && colorsOk && splatOk && deterministic && noiseOk && patchesOk;
+	}
+
 	//@return median time of finishing the work given by fn, in ms. The first run is skipped: drivers finish compiling shaders then
 	template<typename F>
 	double MedianMs(F fn, int runs)
@@ -1376,6 +1518,7 @@ int RunGpuHeightCheck()
 			ok = CheckSurface(surfacePass) && ok;
 			ok = CheckErosion(gpu, erosion) && ok;
 			ok = CheckSculpt(sculptor) && ok;
+			ok = CheckMapBiomes(gpu) && ok;
 			RunTimings(gpu, surfacePass);
 			RunErosionTimings(gpu, erosion);
 			std::cout << "\n" << (ok ? "All checks passed" : "[ERROR] Some checks failed") << std::endl;
