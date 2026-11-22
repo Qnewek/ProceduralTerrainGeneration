@@ -40,11 +40,15 @@ bool MapImportSys::Initialize(int _width, int _height, float _heightScale)
 		std::cout << "[ERROR] MapImportSys: erosion shaders could not be built\n";
 		return false;
 	}
+	if (!sculptor.Initialize()) {
+		std::cout << "[ERROR] MapImportSys: the sculpt shader could not be built\n";
+		return false;
+	}
 	std::cout << "[LOG] MapImportSys initialized\n";
 	return true;
 }
 
-void MapImportSys::Update(Camera& camera, bool active)
+void MapImportSys::Update(Camera& camera, bool active, float deltaTime)
 {
 	if (std::optional<LoadResult> result = job.TryTake()) {
 		InstallResult(*result);
@@ -58,6 +62,7 @@ void MapImportSys::Update(Camera& camera, bool active)
 	if (std::optional<EditResult> result = editJob.TryTake()) {
 		FinishEdit(*result);
 	}
+	UpdateSculpt(camera, active, deltaTime);
 	if (erodeRequested) {
 		erodeRequested = false;
 		Erode();
@@ -93,6 +98,10 @@ void MapImportSys::InstallMap(HeightField units, float _metresPerUnit, glm::dvec
 	riverNetwork.reset();
 	riverMap.Clear();
 	erodeRequested = false;
+	//Busy() keeps a new map away while a stroke runs; if one came anyway, its heights belong to the old map
+	stroke.reset();
+	hoverTexel.reset();
+	brushOutline.clear();
 	ShowUnits(std::move(units), _metresPerUnit, _pixelMetres);
 	history.Clear();
 	historyNote.clear();
@@ -696,7 +705,11 @@ void MapImportSys::InstallResult(LoadResult& result)
 
 void MapImportSys::Draw(Renderer& renderer, Camera& camera, LightSource& light)
 {
+	//A stroke may paint above 1.5 map units (the units change only after it); the culling has to keep those patches
+	renderSettings.heightBound = stroke ? stroke->limit : 1.5f;
 	view.Draw(renderer, camera, light, renderSettings);
+	//Before the water, which writes no depth anyway: the depth under the cursor is the terrain
+	PickUnderCursor(camera, light);
 	const bool rivers = RiversOn() && riverMap.Ready();
 	const TextureClass* height = view.GetLayerTexture(TerrainView::Layer::TERRAIN);
 	if (map.Empty() || !height || (!seaLevelMetres && !rivers)) {
@@ -752,6 +765,7 @@ void MapImportSys::BrowseForFile()
 
 void MapImportSys::ImGuiRightPanel()
 {
+	SculptInputImGui();
 	//Ctrl+S anywhere in this mode, unless a text field takes the keys
 	if (!ImGui::GetIO().WantTextInput && !map.Empty()) {
 		if (ImGui::IsKeyChordPressed(ImGuiMod_Ctrl | ImGuiKey_S)) {

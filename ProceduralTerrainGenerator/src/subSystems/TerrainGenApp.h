@@ -9,6 +9,7 @@
 #include "FrameMetrics.h"
 #include "Renderer.h"
 #include "Camera.h"
+#include "EditorCamera.h"
 #include "Noise.h"
 #include "LightSource.h"
 #include "Clouds.h"
@@ -74,9 +75,12 @@ private:
 	//Size of the 3D viewport between the ImGui panels, in pixels
 	int ViewportWidth() const { return std::max(1, static_cast<int>(windowWidth - rightPanelWidth - leftPanelWidth)); }
 	int ViewportHeight() const { return std::max(1, static_cast<int>(windowHeight - topPanelHeight - bottomPanelHeight)); }
+	//x, y, width, height of the 3D view in framebuffer pixels, origin at the bottom left (as glViewport in Draw)
+	glm::ivec4 ViewportRect() const { return { static_cast<int>(leftPanelWidth), static_cast<int>(bottomPanelHeight), ViewportWidth(), ViewportHeight() }; }
 	GLFWwindow* window;
 	Renderer renderer;
 	Camera camera;
+	EditorCamera editorCamera;
 	//The sun
 	LightSource light;
 	Sky sky;
