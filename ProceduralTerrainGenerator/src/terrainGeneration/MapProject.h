@@ -10,6 +10,7 @@
 #include "glm/glm.hpp"
 
 #include "BiomePaint.h"
+#include "GeoReference.h"
 #include "Grid.h"
 
 //Project file of the "Imported map" mode (.ptgmap): the working copy of a map and its original, in metres, with what the
@@ -28,11 +29,13 @@ namespace mapproject {
 		std::string rivers;				//river settings as JSON (preset::RiversJson); empty = defaults, no rivers
 		std::string biomes;				//biome settings as JSON (mapbiomes::ToJson); empty = defaults, no biomes
 		biomepaint::Layer paint;		//biomes painted over the automatic ones, the size of working; Empty() = none (not saved)
+		std::optional<geo::GeoReference> georeference;	//where the pixels of working lie; none = not known
 	};
 
 	//2 (2026-11-21): rivers; 3 (2026-11-22): biomes; 4 (2026-11-22): painted biomes (header "biomePaint": palette, block "biomePaint":
-	//zlib of the uint16 texels, little-endian); versions 1 to 3 are still read
-	inline constexpr int currentVersion = 4;
+	//zlib of the uint16 texels, little-endian); 5 (2026-11-22): georeference (header "georeference": {"epsg", "origin": [x, y],
+	//"pixel": [x, y]}); versions 1 to 4 are still read
+	inline constexpr int currentVersion = 5;
 	inline constexpr const char* extension = ".ptgmap";
 
 	//@param out - the bytes of the file, replaced on success

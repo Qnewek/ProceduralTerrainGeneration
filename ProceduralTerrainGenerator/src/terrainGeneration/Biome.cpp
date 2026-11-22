@@ -6,6 +6,20 @@
 #include <utility>
 
 namespace biome {
+	namespace {
+		//The mask limited to the biomes of the table; a mask with none of them allows all
+		uint64_t Effective(const std::vector<Biome>& table, uint64_t mask)
+		{
+			const uint64_t inTable = table.size() >= 64 ? allBiomes : (uint64_t(1) << table.size()) - 1;
+			return (mask & inTable) != 0 ? mask & inTable : inTable;
+		}
+
+		bool Allowed(uint64_t mask, size_t biome)
+		{
+			return biome < 64 && ((mask >> biome) & 1) != 0;
+		}
+	}
+
 	float Biome::Distance(const ParameterValues& values) const
 	{
 		float sum = 0.0f;
@@ -16,18 +30,43 @@ namespace biome {
 		return std::sqrt(sum);
 	}
 
-	int Nearest(const std::vector<Biome>& table, const ParameterValues& values)
+	int Nearest(const std::vector<Biome>& table, const ParameterValues& values, uint64_t mask)
 	{
-		int nearest = 0;
-		float best = table[0].Distance(values);
-		for (int i = 1; i < static_cast<int>(table.size()); i++) {
+		mask = Effective(table, mask);
+		int nearest = -1;
+		float best = 0.0f;
+		for (int i = 0; i < static_cast<int>(table.size()); i++) {
+			if (!Allowed(mask, static_cast<size_t>(i))) {
+				continue;
+			}
 			const float distance = table[i].Distance(values);
-			if (distance < best) {
+			if (nearest < 0 || distance < best) {
 				best = distance;
 				nearest = i;
 			}
 		}
 		return nearest;
+	}
+
+	glm::vec3 MixColor(const std::vector<Biome>& table, const ParameterValues& values, float blendWidth, uint64_t mask)
+	{
+		mask = Effective(table, mask);
+		const int id = Nearest(table, values, mask);
+		if (blendWidth <= 0.0f) {
+			return table[id].color;
+		}
+		const float nearest = table[id].Distance(values);
+		glm::vec3 sum(0.0f);
+		float total = 0.0f;
+		for (size_t i = 0; i < table.size(); i++) {
+			if (Allowed(mask, i)) {
+				const float w = BlendWeight(table[i].Distance(values), nearest, blendWidth);
+				sum += w * table[i].color;
+				total += w;
+			}
+		}
+		//total >= 1: the nearest biome has weight 1
+		return sum / total;
 	}
 
 	float BlendWeight(float distance, float nearestDistance, float blendWidth)
@@ -77,11 +116,16 @@ namespace biome {
 	}
 
 	MaterialWeights MixMaterials(const std::vector<Biome>& table, const ParameterValues& values, float blendWidth, float patchiness,
-		float contrast, const MaterialWeights& patch)
+		float contrast, const MaterialWeights& patch, uint64_t mask)
 	{
-		const float nearest = table[Nearest(table, values)].Distance(values);
+		mask = Effective(table, mask);
+		const float nearest = table[Nearest(table, values, mask)].Distance(values);
 		MaterialWeights mixed{};
-		for (const Biome& b : table) {
+		for (size_t i = 0; i < table.size(); i++) {
+			if (!Allowed(mask, i)) {
+				continue;
+			}
+			const Biome& b = table[i];
 			const float weight = BlendWeight(b.Distance(values), nearest, blendWidth);
 			float layerSum = 0.0f;
 			for (const MaterialLayer& layer : b.materials) {

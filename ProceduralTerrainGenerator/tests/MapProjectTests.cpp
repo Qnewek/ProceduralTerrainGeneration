@@ -99,7 +99,7 @@ static mapproject::Project PaintedProject()
 
 TEST_CASE("Project keeps its biome paint")
 {
-	CHECK(mapproject::currentVersion == 4);
+	CHECK(mapproject::currentVersion == 5);
 	const mapproject::Project project = PaintedProject();
 	const std::vector<uint8_t> bytes = Bytes(project);
 	mapproject::Project read;
@@ -344,4 +344,60 @@ TEST_CASE("Smooth map compresses")
 		}
 	}
 	CHECK(Bytes(project).size() < size_t(256) * 256 * 4);
+}
+
+static mapproject::Project GeoProject()
+{
+	mapproject::Project project = FullProject();
+	project.georeference = geo::GeoReference{ 2180, { 1234.5, 300000.125 }, { 30.0, -29.5 } };
+	return project;
+}
+
+TEST_CASE("Project keeps its georeference")
+{
+	const mapproject::Project project = GeoProject();
+	const std::vector<uint8_t> bytes = Bytes(project);
+	mapproject::Project read;
+	std::string error;
+	REQUIRE_MESSAGE(mapproject::Deserialize(bytes.data(), bytes.size(), read, error), error);
+	REQUIRE(read.georeference.has_value());
+	CHECK(read.georeference->epsg == 2180);
+	CHECK(read.georeference->origin == project.georeference->origin);
+	CHECK(read.georeference->pixel == project.georeference->pixel);
+
+	//None stays none
+	const std::vector<uint8_t> plain = Bytes(FullProject());
+	read = GeoProject();
+	REQUIRE_MESSAGE(mapproject::Deserialize(plain.data(), plain.size(), read, error), error);
+	CHECK_FALSE(read.georeference.has_value());
+}
+
+TEST_CASE("Version 4 project has no georeference")
+{
+	std::vector<uint8_t> bytes = Bytes(GeoProject());
+	const std::string from = "\"version\":" + std::to_string(mapproject::currentVersion);
+	const std::string text(bytes.begin(), bytes.end());
+	const size_t at = text.find(from);
+	REQUIRE(at != std::string::npos);
+	bytes[at + from.size() - 1] = '4';
+	mapproject::Project read = GeoProject();
+	std::string error;
+	REQUIRE_MESSAGE(mapproject::Deserialize(bytes.data(), bytes.size(), read, error), error);
+	CHECK_FALSE(read.georeference.has_value());
+}
+
+TEST_CASE("Damaged georeference fails")
+{
+	std::vector<uint8_t> bytes = Bytes(GeoProject());
+	//The same length, so the header length stays right
+	const std::string from = "1234.5", to = "1e400 ";
+	const std::string text(bytes.begin(), bytes.end());
+	const size_t at = text.find(from);
+	REQUIRE(at != std::string::npos);
+	std::copy(to.begin(), to.end(), bytes.begin() + at);
+	mapproject::Project read = Marker();
+	std::string error;
+	CHECK_FALSE(mapproject::Deserialize(bytes.data(), bytes.size(), read, error));
+	CHECK_FALSE(error.empty());
+	CHECK(IsMarker(read));
 }

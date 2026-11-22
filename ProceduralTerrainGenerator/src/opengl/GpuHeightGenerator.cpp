@@ -230,8 +230,8 @@ void GpuHeightGenerator::RunHeightShader(int mode, bool modify, const MapArea& a
 
 GpuHeightGenerator::~GpuHeightGenerator()
 {
-	const unsigned int buffers[] = { worldInput, biomeTable };
-	glDeleteBuffers(2, buffers);
+	const unsigned int buffers[] = { worldInput, biomeTable, classMaskBuffer };
+	glDeleteBuffers(3, buffers);
 }
 
 bool GpuHeightGenerator::Initialize()
@@ -250,6 +250,11 @@ bool GpuHeightGenerator::Initialize()
 	noPaint = std::make_unique<TextureClass>(1, 1, GL_RG8UI);
 	const unsigned char unpainted[2] = { 0, 0 };
 	noPaint->UploadRegion(0, 0, 1, 1, 1, unpainted, GL_RG_INTEGER, GL_UNSIGNED_BYTE);
+	noClasses = std::make_unique<TextureClass>(1, 1, GL_R8UI);
+	const unsigned char noClass = 0;
+	noClasses->UploadRegion(0, 0, 1, 1, 1, &noClass, GL_RED_INTEGER, GL_UNSIGNED_BYTE);
+	glCreateBuffers(1, &classMaskBuffer);
+	glNamedBufferStorage(classMaskBuffer, 256 * 2 * sizeof(uint32_t), nullptr, GL_DYNAMIC_STORAGE_BIT);
 	timer = std::make_unique<GpuQuery>(GL_TIME_ELAPSED);
 	return true;
 }
@@ -355,6 +360,17 @@ void GpuHeightGenerator::GenerateMapBiomes(const mapbiomes::Settings& settings, 
 	}
 	shader.SetUniform1iv("paintBiomes", static_cast<int>(paintBiomes.size()), paintBiomes.data());
 	(input.paint ? *input.paint : *noPaint).BindImage(5, GL_READ_ONLY);
+	//Land cover: the class of each texel and the allowed biomes of each class; without it every mask is 0 (all biomes)
+	std::array<uint32_t, 512> masks{};
+	if (input.classes) {
+		for (int code = 0; code < 256; code++) {
+			masks[code * 2] = static_cast<uint32_t>(input.classMasks[code]);
+			masks[code * 2 + 1] = static_cast<uint32_t>(input.classMasks[code] >> 32);
+		}
+	}
+	glNamedBufferSubData(classMaskBuffer, 0, sizeof(masks), masks.data());
+	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 2, classMaskBuffer);
+	(input.classes ? *input.classes : *noClasses).BindImage(6, GL_READ_ONLY);
 	//Only the rectangle (the region of a brush), clipped to the map
 	int x0 = 0, y0 = 0, x1 = colors.GetWidth(), y1 = colors.GetHeight();
 	if (input.region.z >= 0) {

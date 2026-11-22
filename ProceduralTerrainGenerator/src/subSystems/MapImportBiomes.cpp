@@ -11,6 +11,7 @@
 #include "imgui.h"
 
 #include "BiomeSettingsPanel.h"
+#include "FileDialog.h"
 #include "Preset.h"
 #include "VegetationModels.h"
 
@@ -31,14 +32,22 @@ void MapImportSys::SetVegetationModels(const VegetationModels* models)
 	biomeEditor.SetPlantModels(std::move(names));
 }
 
-std::string MapImportSys::UseBiomeSettings(const std::string& json)
+std::string MapImportSys::UseBiomeSettings(const std::string& json, const std::filesystem::path& folderOfProject)
 {
+	mapbiomes::Settings previous = std::move(biomeSettings);
 	biomeSettings = mapbiomes::Default(seaLevelMetres);
 	std::string jsonError;
 	if (!json.empty()) {
 		//Replaced only on success, so a broken text leaves the defaults
-		mapbiomes::FromJson(json, biomeSettings, jsonError);
+		mapbiomes::FromJson(json, biomeSettings, jsonError, folderOfProject);
 	}
+	else {
+		//A new map of the same region usually wants the same land cover
+		biomeSettings.source = previous.source;
+		biomeSettings.landCoverFiles = std::move(previous.landCoverFiles);
+		biomeSettings.classes = std::move(previous.classes);
+	}
+	LandCoverInputChanged();
 	biomeEditor.Reset();
 	//The climate of the previous map must not color this one
 	climateTexture.reset();
@@ -86,6 +95,10 @@ bool MapImportSys::RunBiomePass(glm::ivec4 region)
 	if (paintTexture) {
 		input.paint = paintTexture.get();
 		input.paintBiomes = biomepaint::SlotBiomes(biomePaint, biomeSettings.config.table);
+	}
+	if (LandCoverOn() && sameSize(classTexture.get())) {
+		input.classes = classTexture.get();
+		input.classMasks = mapbiomes::ClassMasks(biomeSettings);
 	}
 	input.region = region;
 	biomeGenerator.GenerateMapBiomes(biomeSettings, seaLevelMetres, input, view.LayerTexture(TerrainView::Layer::BIOMES, width, height), *biomeIds,
@@ -245,7 +258,7 @@ void MapImportSys::ShowBiomesState()
 {
 	utilities::heightMapMode& mode = renderSettings.displayMode;
 	if (BiomesOn()) {
-		if (mode != utilities::heightMapMode::TEXTURED) {
+		if (mode != utilities::heightMapMode::TEXTURED && mode != utilities::heightMapMode::LAND_COVER) {
 			mode = utilities::heightMapMode::BIOMES;
 		}
 		climateStale = true;
@@ -260,6 +273,7 @@ void MapImportSys::ShowBiomesState()
 
 void MapImportSys::UpdateBiomes()
 {
+	UpdateLandCover();
 	if (std::optional<ClimateResult> result = climateJob.TryTake()) {
 		if (!result->error.empty()) {
 			//Not started again by itself: the next change of the map or the settings tries again
@@ -382,6 +396,7 @@ void MapImportSys::BiomesImGui()
 		biomesChanged = true;
 	}
 	ImGui::SetItemTooltip("Position of the top-left pixel in the temperature and humidity noises");
+	LandCoverImGui();
 
 	ImGui::SeparatorText("Biomes");
 	biomesChanged |= biomepanel::Blend(config);
@@ -445,5 +460,346 @@ void MapImportSys::BiomesImGui()
 	if (biomesChanged) {
 		biomesStale = true;
 		dirty = true;
+	}
+}
+
+void MapImportSys::SetGeoreference(std::optional<geo::GeoReference> reference)
+{
+	georeference = reference;
+	dirty = true;
+	LandCoverInputChanged();
+}
+
+void MapImportSys::LandCoverImGui()
+{
+	mapbiomes::Settings& s = biomeSettings;
+	ImGui::SeparatorText("Biome source");
+	int source = s.source == mapbiomes::Source::LAND_COVER ? 1 : 0;
+	bool sourceChanged = ImGui::RadioButton("Climate from terrain", &source, 0);
+	ImGui::SetItemTooltip("Every biome of the table can be anywhere; the climate decides");
+	ImGui::SameLine();
+	sourceChanged |= ImGui::RadioButton("Land cover", &source, 1);
+	ImGui::SetItemTooltip("Classes of a land cover file (ESA WorldCover and the like) allow some biomes; the climate picks among them");
+	if (sourceChanged) {
+		s.source = source == 1 ? mapbiomes::Source::LAND_COVER : mapbiomes::Source::CLIMATE;
+		dirty = true;
+		biomesStale = true;
+		//The class map is not kept with the climate source: read the files again
+		if (!classTexture) {
+			LandCoverInputChanged();
+		}
+	}
+	if (!LandCoverOn()) {
+		return;
+	}
+
+	ImGui::SeparatorText("Land cover");
+	GeoreferenceImGui();
+	ImGui::Spacing();
+	//Files: the first one wins where two have a class
+	int removed = -1;
+	for (int i = 0; i < static_cast<int>(s.landCoverFiles.size()); i++) {
+		ImGui::PushID(i);
+		const std::string& path = s.landCoverFiles[i];
+		const std::filesystem::path filePath(std::u8string(path.begin(), path.end()));
+		if (ImGui::SmallButton("Remove")) {
+			removed = i;
+		}
+		ImGui::SameLine();
+		ImGui::TextUnformatted(BiomeFileNameOf(filePath).c_str());
+		ImGui::SetItemTooltip("%s", path.c_str());
+		//The status of the last class map, when it was computed for these files
+		const landcover::FileStatus* status = i < static_cast<int>(landCoverFiles.size()) && landCoverFiles[i].path == path ? &landCoverFiles[i] : nullptr;
+		if (status) {
+			ImGui::Indent();
+			if (!status->error.empty()) {
+				ImGui::TextColored(ImVec4(1.0f, 0.3f, 0.3f, 1.0f), "%s", status->error.c_str());
+			}
+			else {
+				const std::string system = status->system.empty() ? "" : status->system + ", ";
+				if (!status->skipped.empty()) {
+					ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.3f, 1.0f), "%sskipped: %s", system.c_str(), status->skipped.c_str());
+				}
+				else if (status->stretched) {
+					ImGui::TextDisabled("%sstretched over the map", system.c_str());
+				}
+				else {
+					ImGui::TextDisabled("%scovers %.0f%% of the map", system.c_str(), 100.0f * status->coverage);
+				}
+			}
+			ImGui::Unindent();
+		}
+		ImGui::PopID();
+	}
+	if (removed >= 0) {
+		s.landCoverFiles.erase(s.landCoverFiles.begin() + removed);
+		dirty = true;
+		LandCoverInputChanged();
+	}
+	if (ImGui::Button("Add file...")) {
+		std::string dialogError;
+		const std::filesystem::path startFolder = s.landCoverFiles.empty() ? mapPath.parent_path()
+			: std::filesystem::path(std::u8string(s.landCoverFiles.back().begin(), s.landCoverFiles.back().end())).parent_path();
+		if (const std::optional<std::filesystem::path> file = OpenFileDialog(L"Land cover GeoTIFF (*.tif, *.tiff)\0*.tif;*.tiff\0", startFolder, dialogError)) {
+			const std::u8string text = std::filesystem::absolute(*file).lexically_normal().u8string();
+			const std::string added(text.begin(), text.end());
+			if (std::find(s.landCoverFiles.begin(), s.landCoverFiles.end(), added) == s.landCoverFiles.end()) {
+				s.landCoverFiles.push_back(added);
+				dirty = true;
+				LandCoverInputChanged();
+			}
+		}
+		else if (!dialogError.empty()) {
+			landCoverError = dialogError;
+		}
+	}
+	ImGui::SetItemTooltip("A GeoTIFF of 8-bit class codes, e.g. a tile of ESA WorldCover; several tiles can cover the map together");
+	ImGui::SameLine();
+	if (ImGui::Button("Refresh##landcover")) {
+		LandCoverInputChanged();
+	}
+	ImGui::SetItemTooltip("Reads the files again");
+	if (landCoverJob.IsRunning() || landCoverStale) {
+		ImGui::TextDisabled("Reading land cover...");
+	}
+	else if (landCoverMs > 0.0 && classTexture) {
+		ImGui::TextDisabled("Land cover read in %.0f ms", landCoverMs);
+	}
+	if (!landCoverError.empty()) {
+		ImGui::TextColored(ImVec4(1.0f, 0.3f, 0.3f, 1.0f), "%s", landCoverError.c_str());
+	}
+	uint64_t classified = 0;
+	for (int code = 1; code < 256; code++) {
+		classified += classCounts[code];
+	}
+	if (!landCoverJob.IsRunning() && !landCoverStale && (s.landCoverFiles.empty() || classified == 0)) {
+		ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.3f, 1.0f), "No land cover on the map: biomes from the climate");
+	}
+
+	//Classes: what each allows
+	bool classesChanged = false;
+	const std::vector<biome::Biome>& table = s.config.table;
+	const double mapPixels = std::max<double>(1.0, static_cast<double>(map.Size()));
+	if (ImGui::BeginTable("landcoverclasses", 5, ImGuiTableFlags_RowBg | ImGuiTableFlags_SizingFixedFit | ImGuiTableFlags_BordersInnerV)) {
+		ImGui::TableSetupColumn("");
+		ImGui::TableSetupColumn("Code");
+		ImGui::TableSetupColumn("Class", ImGuiTableColumnFlags_WidthStretch);
+		ImGui::TableSetupColumn("Map");
+		ImGui::TableSetupColumn("Biomes");
+		ImGui::TableHeadersRow();
+		for (mapbiomes::LandCoverClass& c : s.classes) {
+			ImGui::PushID(c.code);
+			ImGui::TableNextRow();
+			ImGui::TableNextColumn();
+			float color[3] = { c.color.r, c.color.g, c.color.b };
+			if (ImGui::ColorEdit3("##color", color, ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_NoLabel)) {
+				c.color = glm::vec3(color[0], color[1], color[2]);
+				dirty = true;
+			}
+			ImGui::TableNextColumn();
+			ImGui::Text("%d", c.code);
+			ImGui::TableNextColumn();
+			ImGui::TextUnformatted(c.name.c_str());
+			ImGui::TableNextColumn();
+			const uint64_t count = c.code >= 0 && c.code < 256 ? classCounts[c.code] : 0;
+			if (count > 0) {
+				ImGui::Text("%.1f%%", 100.0 * static_cast<double>(count) / mapPixels);
+			}
+			else {
+				ImGui::TextDisabled("-");
+			}
+			ImGui::TableNextColumn();
+			//Biomes of the class that are in the table; none = all
+			int inTable = 0;
+			for (const std::string& name : c.biomes) {
+				inTable += std::any_of(table.begin(), table.end(), [&](const biome::Biome& b) { return b.name == name; }) ? 1 : 0;
+			}
+			const std::string label = inTable == 0 ? "all###biomes" : std::to_string(inTable) + "###biomes";
+			if (ImGui::SmallButton(label.c_str())) {
+				ImGui::OpenPopup("classbiomes");
+			}
+			ImGui::SetItemTooltip(inTable == 0 ? "No biome of the table chosen: all are allowed" : "Biomes the class allows");
+			if (ImGui::BeginPopup("classbiomes")) {
+				ImGui::TextDisabled("Biomes of %s (none = all)", c.name.c_str());
+				for (const biome::Biome& b : table) {
+					auto found = std::find(c.biomes.begin(), c.biomes.end(), b.name);
+					bool on = found != c.biomes.end();
+					if (ImGui::Checkbox(b.name.c_str(), &on)) {
+						if (on) {
+							c.biomes.push_back(b.name);
+						}
+						else {
+							c.biomes.erase(found);
+						}
+						classesChanged = true;
+					}
+				}
+				ImGui::EndPopup();
+			}
+			ImGui::PopID();
+		}
+		ImGui::EndTable();
+	}
+	if (ImGui::Button("WorldCover defaults")) {
+		s.classes = mapbiomes::WorldCoverClasses();
+		mapbiomes::AddMissingClasses(s, classCounts);
+		classesChanged = true;
+	}
+	ImGui::SetItemTooltip("Names, colors and biomes of the ESA WorldCover legend for the default biome table");
+	if (classesChanged) {
+		//The class map stays; only the GPU pass again
+		biomesStale = true;
+		dirty = true;
+	}
+}
+
+void MapImportSys::UpdateLandCover()
+{
+	if (std::optional<LandCoverResult> result = landCoverJob.TryTake()) {
+		if (result->mapId != landCoverMapId || result->filesVersion != landCoverFilesVersion) {
+			//For another map, other files or another georeference: landCoverStale is already set
+		}
+		else if (!result->error.empty()) {
+			landCoverError = "Could not read the land cover: " + result->error;
+			classTexture.reset();
+			biomesStale = true;
+		}
+		else {
+			landcover::ClassMap& classes = result->map;
+			landCoverFiles = std::move(classes.files);
+			classCounts = classes.counts;
+			landCoverMs = result->ms;
+			landCoverError.clear();
+			if (!classTexture || classTexture->GetWidth() != classes.width || classTexture->GetHeight() != classes.height) {
+				classTexture = std::make_unique<TextureClass>(classes.width, classes.height, GL_R8UI);
+				//An integer texture with linear filtering is incomplete: texelFetch in the LAND COVER mode would read 0
+				glTextureParameteri(classTexture->GetID(), GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+				glTextureParameteri(classTexture->GetID(), GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+			}
+			//Rows of an odd width are not 4-byte aligned: UploadRegion sets the alignment to 1
+			classTexture->UploadRegion(0, 0, classes.width, classes.height, classes.width, classes.classes.data(), GL_RED_INTEGER, GL_UNSIGNED_BYTE);
+			//Not a change of the project: the classes come back from the files every time (opening a project asks nothing on close)
+			mapbiomes::AddMissingClasses(biomeSettings, classCounts);
+			biomesStale = true;
+		}
+	}
+	//Only with the land cover source; the files stay unread until it is chosen. A stroke changes no class
+	if (!LandCoverOn() || map.Empty() || !landCoverStale || landCoverJob.IsRunning()) {
+		return;
+	}
+	landCoverStale = false;
+	if (biomeSettings.landCoverFiles.empty()) {
+		classTexture.reset();
+		landCoverFiles.clear();
+		classCounts.fill(0);
+		landCoverError.clear();
+		biomesStale = true;
+		return;
+	}
+	std::vector<std::filesystem::path> paths;
+	for (const std::string& file : biomeSettings.landCoverFiles) {
+		paths.emplace_back(std::u8string(file.begin(), file.end()));
+	}
+	landCoverJob.Start([paths = std::move(paths), width = map.GetWidth(), height = map.GetHeight(), reference = georeference,
+		mapId = landCoverMapId, filesVersion = landCoverFilesVersion]() {
+		LandCoverResult result;
+		result.mapId = mapId;
+		result.filesVersion = filesVersion;
+		const auto start = std::chrono::steady_clock::now();
+		//An exception would come back in future.get() on the main thread and end the app
+		try {
+			result.map = landcover::Compute(paths, width, height, reference);
+		}
+		catch (const std::exception& e) {
+			result.map = landcover::ClassMap();
+			result.error = e.what();
+		}
+		result.ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count();
+		return result;
+	});
+}
+
+void MapImportSys::GeoreferenceImGui()
+{
+	if (georeference) {
+		const glm::dvec2 corner = georeference->origin;
+		ImGui::TextWrapped("Top left corner of the map: %.6f, %.6f", corner.x, corner.y);
+		int epsg = georeference->epsg;
+		if (utilities::SystemComboImGui("Map coordinate system", epsg)) {
+			geo::GeoReference changed = *georeference;
+			changed.epsg = epsg;
+			SetGeoreference(changed);
+		}
+		if (!geo::Supported(epsg)) {
+			ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.3f, 1.0f), "System not supported: land cover is stretched over the map");
+		}
+	}
+	else {
+		ImGui::TextWrapped("No georeference: land cover is stretched over the map");
+	}
+	if (ImGui::Button("Take georeference from file...")) {
+		std::string dialogError;
+		const std::optional<std::filesystem::path> file = OpenFileDialog(
+			L"Maps with coordinates (*.tif, *.tiff, *.hgt, *.asc)\0*.tif;*.tiff;*.hgt;*.asc\0", mapPath.parent_path(), dialogError);
+		heightmap::FileHeader fileHeader;
+		std::string inspectError;
+		if (!file) {
+			geoStatus = dialogError;
+			geoStatusError = !dialogError.empty();
+		}
+		else if (!heightmap::Inspect(*file, fileHeader, inspectError)) {
+			geoStatus = BiomeFileNameOf(*file) + ": " + inspectError;
+			geoStatusError = true;
+		}
+		else if (!fileHeader.info.georeference) {
+			geoStatus = BiomeFileNameOf(*file) + " has no georeference";
+			geoStatusError = true;
+		}
+		else {
+			geoFile = *file;
+			geoFileHeader = fileHeader;
+			geoCrop[0] = geoCrop[1] = 0;
+			geoDownsample = 1;
+			geoStatus.clear();
+		}
+	}
+	if (!geoFile.empty()) {
+		ImGui::Text("%s: %d x %d, %s", BiomeFileNameOf(geoFile).c_str(), geoFileHeader.width, geoFileHeader.height,
+			geo::SystemName(geoFileHeader.info.georeference->epsg).c_str());
+		ImGui::TextDisabled("The area of the file the map was made of (Load: area x, y and downsample)");
+		ImGui::InputInt2("Area x, y", geoCrop);
+		if (ImGui::InputInt("Downsample", &geoDownsample)) {
+			geoDownsample = std::clamp(geoDownsample, 1, 64);
+		}
+		//The map covers map size x downsample pixels of the file from the corner of the area
+		const long long right = geoCrop[0] + static_cast<long long>(map.GetWidth()) * geoDownsample;
+		const long long bottom = geoCrop[1] + static_cast<long long>(map.GetHeight()) * geoDownsample;
+		if (ImGui::Button("Use")) {
+			if (geoCrop[0] < 0 || geoCrop[1] < 0 || right > geoFileHeader.width || bottom > geoFileHeader.height) {
+				geoStatus = "The map (" + std::to_string(map.GetWidth()) + " x " + std::to_string(map.GetHeight()) + ", downsample "
+					+ std::to_string(geoDownsample) + ") does not fit in the file from this corner";
+				geoStatusError = true;
+			}
+			else {
+				geo::GeoReference taken = geo::Cropped(*geoFileHeader.info.georeference, geoCrop[0], geoCrop[1], geoDownsample);
+				//Coordinates without a named system keep the system chosen for the map
+				if (taken.epsg == 0 && georeference) {
+					taken.epsg = georeference->epsg;
+				}
+				SetGeoreference(taken);
+				geoStatus = "Georeference taken from " + BiomeFileNameOf(geoFile);
+				geoStatusError = false;
+				geoFile.clear();
+			}
+		}
+		ImGui::SameLine();
+		if (ImGui::Button("Cancel")) {
+			geoFile.clear();
+		}
+	}
+	if (!geoStatus.empty()) {
+		ImGui::PushStyleColor(ImGuiCol_Text, geoStatusError ? ImVec4(1.0f, 0.3f, 0.3f, 1.0f) : ImVec4(0.6f, 0.9f, 0.6f, 1.0f));
+		ImGui::TextWrapped("%s", geoStatus.c_str());
+		ImGui::PopStyleColor();
 	}
 }

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <array>
+#include <cstdint>
 #include <string>
 #include <vector>
 
@@ -85,8 +86,17 @@ namespace biome {
 		float Distance(const ParameterValues& values) const;
 	};
 
+	//Mask of allowed biomes: bit i = biome i of the table (maxBiomes = 64 bits). A mask with none of the biomes of the table allows all
+	//of them (land cover classes without biomes, or whose biomes were removed from the table)
+	inline constexpr uint64_t allBiomes = ~uint64_t(0);
+
 	//Index of the nearest biome, the first one on ties; the table must not be empty. Biome ids are indices in the table
-	int Nearest(const std::vector<Biome>& table, const ParameterValues& values);
+	//@param mask - only these biomes are chosen from
+	int Nearest(const std::vector<Biome>& table, const ParameterValues& values, uint64_t mask = allBiomes);
+
+	//Color of a point: the colors of the biomes mixed with BlendWeight(distance, nearest, blendWidth), normalized; blendWidth <= 0 = the color
+	//of the nearest biome. Only biomes of the mask (nearest included). map_biome_compute.shader does the same
+	glm::vec3 MixColor(const std::vector<Biome>& table, const ParameterValues& values, float blendWidth, uint64_t mask = allBiomes);
 
 	//Weight of a biome distance more than the nearest one: 1 at the nearest, falling smoothly to 0 at blendWidth;
 	//blendWidth <= 0 = only the nearest biome
@@ -131,8 +141,9 @@ namespace biome {
 	//@param values - after ApplyClimate
 	//@param patch - value of the patch noise of every material at this point, in [-1, 1] (the shader evaluates it)
 	//@param patchiness - in [0, 1]; 0 = no patches
+	//@param mask - only these biomes are mixed (the nearest is the nearest of them)
 	MaterialWeights MixMaterials(const std::vector<Biome>& table, const ParameterValues& values, float blendWidth, float patchiness,
-		float contrast, const MaterialWeights& patch);
+		float contrast, const MaterialWeights& patch, uint64_t mask = allBiomes);
 
 	//Biomes used by default; materials refer to the default material list (res/textures/terrain_materials.json)
 	std::vector<Biome> DefaultBiomes();

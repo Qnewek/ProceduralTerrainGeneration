@@ -58,12 +58,15 @@ ProceduralTerrainGenerator/
                                  zakładki Project (Open/Save/Save as, Ctrl+S, `*`), Edit i Load, Saving = paczka eksportu; odczyt i zapis w tle;
                                  MapImportEdit.cpp = zakładka Edit tej klasy (erozja, wygładzanie, skala wysokości, oryginał, Cofnij/Ponów, morze, rzeki i jeziora);
                                  MapImportSculpt.cpp = pędzle (punkt pod kursorem, pociągnięcie na GPU, kółko pędzla);
-                                 MapImportBiomes.cpp = zakładka Biomes (klimat z terenu w tle, przebieg GPU biomów, ustawienia projektu)
+                                 MapImportBiomes.cpp = zakładka Biomes (klimat z terenu w tle, pokrycie terenu i georeferencja, przebieg GPU biomów, ustawienia projektu)
     terrainGeneration/
       WorldConfig.h              same dane: WorldConfig (TerrainConfig + BiomeConfig), NoiseMapConfig, ErosionConfig
       Noise.h                    noise::NoiseConfigParameters (fBm, ridge, island, redistribution); sam szum jest tylko w GLSL
       MapBiomes.*                biomy mapy niegenerowanej (Imported map): `mapbiomes::Settings` (JSON w projekcie), C i M z mapy w metrach (`ComputeClimate`:
                                  odległość od brzegu, rzeźba w promieniu), wysokość dla klimatu (`ClimateHeight`) — wzorzec CPU dla `map_biome_compute.shader`
+      GeoReference.*             georeferencja map rzeczywistych (D3): stopnie (EPSG 4326) i Transverse Mercator (UTM, ETRS89, PUWG 1992/2000), piksel ↔ układ ↔ stopnie,
+                                 odczyt znaczników GeoTIFF (`FromGeoTiffTags`), wycinek i zmniejszenie (`Cropped`); TiffFile.* = wspólne otwieranie TIFF (libtiff)
+      LandCover.*                mapa klas pokrycia terenu (D3, np. ESA WorldCover) pod mapą: kilka plików GeoTIFF uint8, większość z k × k próbek, rozciągnięcie bez georeferencji
       BiomePaint.*               malowane biomy Imported map (D2): warstwa (paleta nazw + slot i siła na teksel), dab pędzla, slot → biom tabeli po nazwie,
                                  materiały teksela pomalowanego — wzorzec CPU mieszania w `map_biome_compute.shader`
       Biome.*                    biom = zakresy 6 parametrów (5 szumów + elewacja) + kolor; najbliższy biom (Nearest) i wagi przejść (BlendWeight) — opis reguł, które liczy biome_compute.shader
@@ -86,7 +89,7 @@ ProceduralTerrainGenerator/
       MapProject.*               plik projektu .ptgmap: sygnatura + długość + nagłówek JSON (rozmiar, piksel, morze, źródło, preset, przewyższenie) + bloki zlib
                                  (float32 w metrach rozdzielone na 4 płaszczyzny bajtów): kopia robocza i oryginał (tylko gdy się różni); zmiana pól = podbicie `currentVersion`
                                  (2 = ustawienia rzek jako JSON `preset::RiversJson`, 3 = ustawienia biomów `mapbiomes::ToJson`, 4 = malowane biomy: paleta
-                                 w nagłówku `biomePaint`, blok `biomePaint` = zlib uint16 LE; wersje 1–3 nadal czytane)
+                                 w nagłówku `biomePaint`, blok `biomePaint` = zlib uint16 LE; 5 = georeferencja `georeference` w nagłówku; starsze wersje nadal czytane)
       MapEdit.*                  operacje na mapie w metrach (wygładzanie pudełkowe, skala + przesunięcie, `ErosionScale`) i historia Cofnij/Ponów z limitem pamięci
       Sculpt.*                   pędzle (podnieś, obniż, wygładź, spłaszcz, szum) na CPU = wzorzec `sculpt_compute.shader`, zanik, rzut kursora na teksel mapy (głębia → teksel)
       CameraMath.*               matematyka kamery edytora: rozglądanie, orbita wokół punktu (punkt zostaje w tym samym miejscu widoku), przesuwanie, jednostki na piksel
@@ -157,7 +160,7 @@ CMakeLists.txt, CMakePresets.json, vcpkg.json   build; GLFW, GLEW, glm, ImGui, I
    `width * worldUnitsPerTexel` (= 4, `GetWorldWidth()`), rysowana `GL_PATCHES` (4 wierzchołki).
 4. TCS: w 3D poziom teselacji z długości krawędzi na ekranie (`tessPixels`, suwak „Terrain detail”, 1–64), w widoku 2D po staremu 4–64 od odległości (ma zostać ostry). Normalna i kolor biomów liczone w FS na piksel (z `surfaceMap` / `biomeMap`). TES: próbkuje `heightMap`,
    przesuwa wierzchołek o `height * heightScale`, bierze normalną z `surfaceMap`, koloruje wg `displayMode`
-   (0 grey, 1 topo, 2 mono, 3 biomy z `biomeMap`, 4 nachylenie, 5 krzywizna, 6 TEXTURED — materiały liczy FS z `splatMap`). `surfaceMap` (gradient + laplasjan surowej wysokości, `RGBA32F`)
+   (0 grey, 1 topo, 2 mono, 3 biomy z `biomeMap`, 4 nachylenie, 5 krzywizna, 6 TEXTURED — materiały liczy FS z `splatMap`, 7 LAND COVER — klasy pokrycia z `landCoverMap`, tylko Imported map). `surfaceMap` (gradient + laplasjan surowej wysokości, `RGBA32F`)
    liczy `TerrainView::Draw` przez `GpuSurfacePass`, tylko gdy warstwa wysokości zmieniła się od ostatniego razu (`LayerTexture` oznacza ją jako nieaktualną).
 5. Tryb „infinite” (TerrainGen i Noise heightmap) to `ChunkWorld`: w `Update(camera)` subsystem woła `Plan` (chunki w zasięgu „Render distance”)
    i `GenerateNext` z własną funkcją generującą (`GpuHeightGenerator` z originem chunka i `islandSize` = rozmiar mapy), a `Draw` rysuje chunki zamiast `TerrainView`.
@@ -334,7 +337,7 @@ Wartości szumów są w [-1, 1]. Konwencja indeksowania: `map[y * width + x]`.
   Klify, height blending, triplanar, specular i anti-tiling są w FS (`Terrain_fragment.shader`, `common/materials.glsl`), parametry w UBO `TerrainMaterials::Block`,
   który musi odpowiadać `TerrainMaterialBlock` (std140) pole w pole. Odczyty materiałów w FS przez `textureGrad` (pochodne z `surfaceSampling`, liczone w jednolitym
   przepływie sterowania). W FS uniform izolinii nazywa się `step` i zasłania wbudowane `step()` — nie używaj go w tym shaderze.
-  Jednostki tekstur terenu: 0–1 wysokość, 2 biomy, 3 `surfaceMap`, 4–5 materiały, 6 splat.
+  Jednostki tekstur terenu: 0–1 wysokość, 2 biomy, 3 `surfaceMap`, 4–5 materiały, 6 splat, 7 klasy pokrycia terenu (`usampler2D`, tryb LAND COVER).
 - Presety (`Preset.cpp`): nowe pole w `WorldConfig.h` trzeba dopisać do zapisu i odczytu oraz do `tests/PresetTests.cpp` (funkcje `Distinct*` / `CheckSame*`).
   Wersja 2 (2026-11-08, tabela biomów zamiast poziomów); wersja 1 nie jest już czytana (`minVersion`).
   Nowe wymaganie generacji wobec wartości configu = nowy warunek w `Check*`, bo plik można edytować ręcznie. Nie zmieniaj nazw pól
@@ -417,6 +420,14 @@ Wartości szumów są w [-1, 1]. Konwencja indeksowania: `map[y * width + x]`.
   `RunBiomePass(prostokąt)` (`MapBiomeInput::region`; świeży cel BIOMES/splat/id = cała mapa). Pociągnięcie = krok historii z warstwą sprzed niego
   (`mapedit::Step::paint`, Cofnij takiego kroku nie liczy klimatu ani jednostek), „Clear painting” też. Nowa mapa czyści warstwę, edycja terenu ją zostawia,
   reload tego samego pliku zostawia przy tym samym rozmiarze; projekt v4 trzyma ją, gdy coś jest pomalowane.
+  Pokrycie terenu (D3, sekcja „Land cover” zakładki Biomes): źródło `mapbiomes::Source::LAND_COVER` = klasy z plików (`landCoverFiles`, w projekcie też
+  `landCoverFilesRelative` względem folderu projektu) ograniczają biomy: klasa ma listę nazw biomów → maska 64 bitów (`ClassMasks`, 0 = wszystkie),
+  klimat wybiera najbliższy biom z dozwolonych, a kolor i materiały mieszają tylko dozwolone (`biome::Nearest/MixColor/MixMaterials` z maską =
+  `effectiveMask`/`nearestAllowed` w `map_biome_compute.shader`, obraz klas binding 6, SSBO masek binding 2; malowanie idzie po nich). Mapa klas
+  (`landcover::Compute`) liczona w tle (`landCoverJob`) po nowej mapie (`landCoverMapId`), zmianie plików lub georeferencji (`landCoverFilesVersion`),
+  nie po edycji terenu; wynik → `classTexture` (`GL_R8UI`, filtrowanie NEAREST — tekstura całkowita z LINEAR jest niekompletna). Georeferencja mapy
+  (`MapImportSys::georeference`, `geo::GeoReference`, z pliku mapy albo „Take georeference from file…”) w systemie spoza `geo::Supported` = rozciągnięcie
+  pierwszego pliku. Nowa mapa z pliku zachowuje źródło, pliki i klasy. Tryb LAND COVER rysuje kolory klas (`TerrainView::SetLandCover`).
 - Kamera edytora (`EditorCamera`, wszystkie tryby, tylko widok 3D i bez M): prawy przycisk = rozglądanie (z WASD lot), Alt + lewy = orbita, środkowy = przesuwanie,
   kółko = przód/tył (Shift + kółko nigdy — zostaje dla promienia pędzla). Punkt obrotu i odległość przesuwania: `AfterDraw` czyta głębię pod kursorem po `Draw`
   (macierze `camera.GetViewProjection()`), bez trafienia punkt przed kamerą. Matematyka w `CameraMath.*` (`ptg_core`, testy). Lewy przycisk bez Alt należy do pędzli.

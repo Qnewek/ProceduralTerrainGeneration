@@ -7,6 +7,7 @@
 
 #include "glm/glm.hpp"
 
+#include "GeoReference.h"
 #include "Grid.h"
 #include "HeightmapExport.h"
 
@@ -23,6 +24,9 @@ namespace heightmap {
 		bool geographic = false;		//pixels in degrees of longitude and latitude
 		double latitude = 0.0;			//of the middle of the file, geographic only
 		int noDataFilled = 0;			//missing samples filled from their neighbours (dem::FillNoData)
+		//Where the pixels lie (GeoTIFF tags, .hgt name, .asc header + .prj); after the crop and the downsample of the import,
+		//of the whole file from Inspect. epsg = 0: coordinates of a system the file does not name
+		std::optional<geo::GeoReference> georeference;
 	};
 
 	//Part of a file in its pixels
@@ -37,6 +41,8 @@ namespace heightmap {
 		std::optional<PixelRect> crop;
 		//The kept part is reduced by this factor (dem::Downsample)
 		int downsample = 1;
+		//Coordinate system of a file whose coordinates name none (georeference epsg 0); does not replace a system the file names
+		std::optional<int> epsg;
 	};
 
 	struct FileHeader {
@@ -60,4 +66,9 @@ namespace heightmap {
 
 	//@return files in folder with a supported extension, sorted by path; empty if the folder does not exist
 	std::vector<std::filesystem::path> ListImportable(const std::filesystem::path& folder);
+
+	//The coordinate system of an ESRI .prj (WKT) by its names: UTM zones (WGS84, ETRS89), PUWG 1992 (CS92) and 2000 (CS2000 zones 5–8),
+	//a GEOGCS without PROJCS = degrees
+	//@return the EPSG code; 0 = none of these
+	int SystemFromPrj(const std::string& text);
 }

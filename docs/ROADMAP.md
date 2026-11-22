@@ -700,6 +700,15 @@ oryginał tylko w pamięci i w projekcie („Wróć do oryginału”), plus Cofn
   tylko na prostokącie daba, pociągnięcie = krok historii (`mapedit::Step::paint`), „Clear painting”, `.ptgmap` wersja 4 (paleta w nagłówku, blok zlib).
   Do sprawdzenia w aplikacji: malowanie miękkie i ostre, A → B, gumka, Ctrl+Z/Y, zmiana nazwy i kolejności biomu w tabeli, Save → Open, eksport
   paczki z malowanymi biomami, płynność na 8192².
+  🟡 D3 2026-11-22 (branch `feat/map-land-cover`): biomy z pliku pokrycia terenu. `GeoReference.*` (stopnie + Transverse Mercator: UTM 326xx/327xx,
+  ETRS89 258xx, PUWG 1992 2180, PUWG 2000 2176–2179; szereg Krügera, testy), georeferencja z GeoTIFF / `.hgt` / `.asc` + `.prj`, ustawiana też po
+  imporcie („Take georeference from file…”, system w combo), `.ptgmap` wersja 5. `LandCover.*`: klasa piksela mapy = najczęstsza z k × k próbek
+  (k 1–4), kilka plików (pierwszy wygrywa), bez georeferencji / w obcym systemie rozciągnięcie pierwszego pliku. Klasa ogranicza biomy (maska),
+  klimat wybiera najbliższy z dozwolonych (`biome::Nearest/MixColor/MixMaterials` z maską = `map_biome_compute.shader`, `--gpu-check`: land cover limits
+  the biomes / empty masks / paint over land cover), malowanie na wierzchu. Sekcja „Land cover” zakładki Biomes (źródło, pliki ze stanem, tabela klas
+  WorldCover z biomami), liczenie w tle, ścieżki plików też względne do projektu, tryb wyświetlania LAND COVER.
+  Do sprawdzenia w aplikacji: WorldCover na styku dwóch kafli, NMT w PUWG 1992 z WorldCover (EPSG:4326), `.asc` bez `.prj` (system z combo), stary
+  projekt + „Take georeference from file”, tryb LAND COVER (kolory klas, zmiana koloru), eksport paczki z biomami z pokrycia, czas mapy klas na 8192².
 
 ---
 

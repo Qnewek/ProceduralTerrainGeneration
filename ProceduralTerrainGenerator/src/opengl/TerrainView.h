@@ -1,5 +1,6 @@
 #pragma once
 
+#include <array>
 #include <memory>
 #include <vector>
 
@@ -121,6 +122,12 @@ public:
 	static constexpr int surfaceUnit = 3;
 	//Texture unit of the splat map (units 4 and 5 hold the material arrays, TerrainMaterials)
 	static constexpr int splatUnit = 6;
+	//Texture unit of the land cover classes (LAND_COVER display mode, usampler2D)
+	static constexpr int landCoverUnit = 7;
+
+	//Land cover shown in the LAND_COVER display mode: GL_R8UI classes of the map size (nearest filtering) and the color of every class code;
+	//nullptr = none (the mode then shows grey). The texture must live until the next call
+	void SetLandCover(const TextureClass* classes, const std::array<glm::vec3, 256>& colors);
 
 	//The terrain shader program; ChunkWorld draws with the same shaders
 	static std::unique_ptr<Shader> CreateTerrainShader();
@@ -157,6 +164,8 @@ private:
 	std::unique_ptr<TextureClass> textures[3];
 	std::unique_ptr<TextureClass> splat;
 	bool overlaySplat = false;
+	const TextureClass* landCover = nullptr;
+	std::array<glm::vec3, 256> landCoverColors{};
 
 	GpuSurfacePass surfacePass;
 	FrameUniforms frameUniforms;
