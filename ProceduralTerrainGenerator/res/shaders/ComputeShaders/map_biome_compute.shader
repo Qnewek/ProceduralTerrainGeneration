@@ -8,6 +8,8 @@
 // Painted biomes (biomepaint, stage D2) go over the automatic ones by their strength s: color = mix(automatic, painted, s), materials = the
 // normalized automatic mix and the normalized layers of the painted biome mixed by s (biomepaint::PaintedMaterials) before the patches,
 // id = painted from s >= 128 / 255. A slot whose name is not in the table (paintBiomes = -1) stays automatic.
+// Land cover (stage D3): the class of the texel (classMap) allows some biomes (classMasks); the nearest biome, the colors and the materials
+// come only from them (biome::Nearest / MixColor / MixMaterials with the mask), the paint goes over that.
 
 layout(local_size_x = 32, local_size_y = 32) in;
 
@@ -18,6 +20,11 @@ layout(rgba8, binding = 2) uniform writeonly image2DArray splatMap;
 layout(r32f, binding = 3) uniform readonly image2D heights;		// map units
 layout(rg16f, binding = 4) uniform readonly image2D climateMap;	// continentalness, mountainousness
 layout(rg8ui, binding = 5) uniform readonly uimage2D paintMap;	// slot of the palette, strength 0-255
+layout(r8ui, binding = 6) uniform readonly uimage2D classMap;	// land cover class, 0 = none (a 1x1 texture of 0 without land cover)
+// Allowed biomes of each class code: bit i = biome i (x = biomes 0-31, y = 32-63); 0 = all (mapbiomes::ClassMasks)
+layout(std430, binding = 2) readonly buffer ClassMasks {
+	uvec2 classMasks[256];
+};
 uniform int paintBiomes[256];	// biome of each slot, -1 = automatic
 uniform ivec2 regionEnd;		// texels from here on are not generated (a pass over the region of a brush)
 uniform bool writeSplat;
@@ -48,6 +55,37 @@ float climateHeight(float metres, float continentalness)
 		return waterHeight * (1.0 - min(abs(continentalness), 1.0));
 	}
 	return (metres - baseMetres) / heightUnit;
+}
+
+// The mask limited to the biomes of the table; a mask with none of them allows all (biome::Nearest with a mask)
+uvec2 effectiveMask(uvec2 mask)
+{
+	uvec2 inTable = biomeCount >= 64 ? uvec2(0xFFFFFFFFu)
+		: biomeCount >= 32 ? uvec2(0xFFFFFFFFu, (1u << uint(biomeCount - 32)) - 1u) : uvec2((1u << uint(biomeCount)) - 1u, 0u);
+	mask &= inTable;
+	return any(notEqual(mask, uvec2(0u))) ? mask : inTable;
+}
+
+bool allowed(uvec2 mask, int b)
+{
+	return ((b < 32 ? mask.x >> uint(b) : mask.y >> uint(b - 32)) & 1u) != 0u;
+}
+
+// nearestBiome (common/biomes.glsl) among the allowed biomes; the same order and comparisons, so all biomes give the same result
+int nearestAllowed(float values[PARAMETER_COUNT], uvec2 mask, out float nearest)
+{
+	int id = -1;
+	nearest = 0.0;
+	for (int b = 0; b < biomeCount; b++) {
+		if (allowed(mask, b)) {
+			float distance = biomeDistance(b, values);
+			if (id < 0 || distance < nearest) {
+				nearest = distance;
+				id = b;
+			}
+		}
+	}
+	return id;
 }
 
 // biomepaint::PaintedMaterials; a painted biome without materials leaves the automatic ones
@@ -94,8 +132,10 @@ void main()
 	float metres = imageLoad(heights, texel).r * metresPerUnit;
 	applyClimate(values, climateHeight(metres, cm.x));
 
+	// Land cover: only the biomes its class allows are chosen and mixed
+	uvec2 mask = effectiveMask(classMasks[imageLoad(classMap, texel).r & 255u]);
 	float nearest;
-	int id = nearestBiome(values, nearest);
+	int id = nearestAllowed(values, mask, nearest);
 	bool blendColor = blendWidth > 0.0;
 
 	vec3 colorSum = vec3(0.0);
@@ -106,6 +146,9 @@ void main()
 	}
 	if (blendColor || writeSplat) {
 		for (int b = 0; b < biomeCount; b++) {
+			if (!allowed(mask, b)) {
+				continue;
+			}
 			float distance = biomeDistance(b, values);
 			if (blendColor) {
 				float weight = blendWeight(distance, nearest, blendWidth);
