@@ -129,10 +129,10 @@ namespace sculpt {
 		}
 	}
 
-	float StrokeUnit(float metresPerUnit, float largestMetres, float metresPerSecond)
+	float StrokeLimit(float metresPerUnit, float largestMetres, float metresPerSecond)
 	{
-		const float needed = (std::abs(largestMetres) + std::abs(metresPerSecond) * strokeHeadroomSeconds) / 1.5f;
-		return std::max(metresPerUnit, needed);
+		const float needed = (std::abs(largestMetres) + std::abs(metresPerSecond) * strokeHeadroomSeconds) / std::max(metresPerUnit, 1e-6f);
+		return std::max(1.5f, needed);
 	}
 
 	std::optional<glm::vec2> PickTexel(glm::vec2 windowPixel, float depth, glm::ivec4 viewport, const glm::mat4& viewProjection, float modelScale,

@@ -103,7 +103,7 @@ ProceduralTerrainGenerator/
       TerrainMaterials.*         materiały terenu (tryb TEXTURED): lista z terrain_materials.json, texture arrays (albedo+wysokość, normal+roughness+AO; jednostki 4, 5)
                                  + UBO parametrów FS (binding 0), sekcja „Terrain materials”
     utility/
-      Camera.*                   kamera FPS (WASD, Space/Ctrl, M = mysz, Esc = zwolnij mysz); EditorCamera.* = sterowanie myszą jak w edytorach (prawy, Alt + lewy, środkowy, kółko)
+      Camera.*                   kamera FPS (WASD, Space/lewy Shift, M = mysz, Esc = zwolnij mysz); EditorCamera.* = sterowanie myszą jak w edytorach (prawy, Alt + lewy, środkowy, kółko)
       LightSource.*              słońce: światło kierunkowe (azymut, pora dnia = wysokość, cykl dnia), ambient, mgła (zamglenie wysokościowe + zanikanie na granicy)
       Sky.*                      atmosfera: LUT transmitancji i widoku nieba (rozpraszanie Rayleigh/Mie/ozon, compute, co klatkę) + tło 3D (niebo, tarcza słońca, gwiazdy)
       FrameMetrics.*             pomiary w panelu Output (czas klatki/CPU/GPU, trójkąty); RollingStats.h = średnia i maks. z ostatnich próbek;
@@ -384,8 +384,9 @@ Wartości szumów są w [-1, 1]. Konwencja indeksowania: `map[y * width + x]`.
   `--gpu-check` (sekcja `sculpt:`, ≤ 1e-5). Punkt pod kursorem: `PickUnderCursor` po `view.Draw` czyta 1 piksel głębi (`glReadPixels`) i odwraca macierze
   `TerrainView::FrameBlock` (te same w 3D i 2D), `sculpt::PickTexel` zakłada mapę bez offsetu. Wejście myszy (przycisk, Shift + kółko) zapamiętuje
   `SculptInputImGui` w ramce ImGui (`io.MouseWheel` znika w `EndFrame`), `UpdateSculpt` (w `Update`, następna klatka) prowadzi pociągnięcie: w trakcie mapa
-  żyje tylko na GPU (`view.LayerTexture`, przycięta do |h| ≤ 1,5 = granica cullingu; przed pociągnięciem podnieś/obniż/szum `sculpt::StrokeUnit` powiększa
-  jednostkę mapy, żeby zostało miejsce na 30 s malowania — płaska mapa ma jednostkę 1 m), `map` na CPU = stan sprzed pociągnięcia (FLATTEN bierze z niej cel),
+  żyje tylko na GPU (`view.LayerTexture`) w niezmienionych jednostkach (kolory, „Height scale” i izolinie stoją), przycięta do `Stroke::limit`: 1,5, a dla
+  podnieś/obniż/szum `sculpt::StrokeLimit` = miejsce na 30 s malowania nad najwyższym punktem (płaska mapa ma jednostkę 1 m); tę samą granicę dostaje culling
+  patchy w TCS (`TerrainRenderSettings::heightBound`, ustawiane w `MapImportSys::Draw`), `map` na CPU = stan sprzed pociągnięcia (FLATTEN bierze z niej cel),
   `Busy()` obejmuje pociągnięcie; puszczenie przycisku (też utrata fokusu, wyjście z trybu, M) = `ReadLayer` → `ApplyEdit` jednym krokiem historii.
   Działanie na klatkę × `deltaTime` (≤ 0,1 s). Każda klatka malowania liczy całą `surfaceMap` od nowa (na 8192² to koszt pełnego przebiegu).
 - Kamera edytora (`EditorCamera`, wszystkie tryby, tylko widok 3D i bez M): prawy przycisk = rozglądanie (z WASD lot), Alt + lewy = orbita, środkowy = przesuwanie,
@@ -413,8 +414,8 @@ Wartości szumów są w [-1, 1]. Konwencja indeksowania: `map[y * width + x]`.
   dopisać do `NoiseParams` (`noise_params.glsl`), `GpuNoiseParams`/`SetNoise` (`GpuHeightGenerator.cpp`), presetów i UI, a potem uruchomić `--gpu-check`.
 - LOD chunków: poziom L bierze co 2^L-tą próbkę (`MapArea::step`, potęga dwójki, więc próbki poziomów się pokrywają). Siatka chunka jest jedna, skalowana w XZ uniformem
   `meshScale` (VS), a skirty (wierzchołki z `aPos.y = -1`) TES opuszcza o `skirtDepth`; `SetFrameUniforms` ustawia oba na neutralne (1 i 0) dla `TerrainView`.
-  Culling (chunki na CPU w `ChunkWorld`, patche w TCS) zakłada |wysokość| ≤ 1,5 (`heightBound` w `ChunkWorld.cpp` = `HEIGHT_BOUND` w TCS); mapa o większych
-  wartościach wymaga zmiany obu, inaczej teren przy krawędzi ekranu zniknie. Nie skaluj `model` niejednorodnie — `normalMatrix` i mapa pochodnych (liczona z krokiem `worldUnitsPerTexel · 2^L`) zakładają jednostki świata. Stara roślinność — w historii (`fb8b840`), opis w ROADMAP, Faza 4.
+  Culling (chunki na CPU w `ChunkWorld`, patche w TCS) zakłada |wysokość| ≤ 1,5 (`heightBound` w `ChunkWorld.cpp` = uniform `heightBound` w TCS z
+  `TerrainRenderSettings::heightBound`, domyślnie 1,5); mapa o większych wartościach wymaga zmiany obu, inaczej teren przy krawędzi ekranu zniknie. Nie skaluj `model` niejednorodnie — `normalMatrix` i mapa pochodnych (liczona z krokiem `worldUnitsPerTexel · 2^L`) zakładają jednostki świata. Stara roślinność — w historii (`fb8b840`), opis w ROADMAP, Faza 4.
 
 ## Kierunek rozwoju (skrót z ROADMAP)
 

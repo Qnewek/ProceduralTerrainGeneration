@@ -112,7 +112,8 @@ glm::vec3 Camera::SteerCamera(GLFWwindow* window, float deltaTime, bool yAxisMov
 	if (yAxisMovement) {
 		if (glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS)
 			UpdateCameraVectors(CameraMovement::UP);
-		if (glfwGetKey(window, GLFW_KEY_LEFT_CONTROL) == GLFW_PRESS)
+		//Left Shift, not Ctrl: Ctrl + S (save) and Ctrl + Z (undo) would also move the camera
+		if (glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS)
 			UpdateCameraVectors(CameraMovement::DOWN);
 	}
 	
@@ -150,13 +151,13 @@ void Camera::ImGuiDraw() {
 	ImGui::SliderFloat("Sensitivity", &sensitivity, 0.01f, 1.0f);
 	//Chunks of the infinite world get coarser with distance, so they can be seen far away
 	ImGui::SliderFloat("Render distance", &viewDist.y, 500.0f, 50000.0f, "%.0f", ImGuiSliderFlags_Logarithmic);
-	ImGui::TextDisabled("WASD, Space/Ctrl to move, M = mouse look, Esc = release the mouse");
+	ImGui::TextDisabled("WASD, Space/Left Shift to move, M = mouse look, Esc = release the mouse");
 }
 
 void Camera::ImGuiOutPut()
 {
 	ImGui::Text("Press 'm' to enable rotation of the camera using mouse, press 'ESC' to exit mouse control");
-	ImGui::Text("Press 'w', 'a', 's', 'd' to move camera, 'space' to move up, 'ctrl' to move down");
+	ImGui::Text("Press 'w', 'a', 's', 'd' to move camera, 'space' to move up, 'left shift' to move down");
 	ImGui::Text("Camera Position: (%.2f, %.2f, %.2f)", this->GetPosition().x, this->GetPosition().y, this->GetPosition().z);
 }
 

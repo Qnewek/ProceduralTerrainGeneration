@@ -15,13 +15,14 @@ uniform bool screenSpaceTess;
 uniform float tessPixels;
 uniform float viewportHeight;
 
-//Largest absolute height of a map (noises are in [-1, 1]) with a margin; heightBound in ChunkWorld.cpp
-const float HEIGHT_BOUND = 1.5;
+//Largest absolute height of a map in map units (noises are in [-1, 1]) with a margin = TerrainRenderSettings::heightBound: 1.5 (heightBound
+//in ChunkWorld.cpp), more during a sculpt stroke in Imported map
+uniform float heightBound;
 
 //true if the patch, with any height it can get in the TES, lies entirely outside one plane of the view frustum
 bool outsideFrustum()
 {
-    float top = HEIGHT_BOUND * abs(heightScale);
+    float top = heightBound * abs(heightScale);
     float bottom = -top - skirtDepth;
     mat4 clipFromModel = projection * view * model;
     //Corners of the box around the patch in clip space; a point is inside when -w <= x, y, z <= w

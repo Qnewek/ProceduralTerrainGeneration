@@ -705,6 +705,8 @@ void MapImportSys::InstallResult(LoadResult& result)
 
 void MapImportSys::Draw(Renderer& renderer, Camera& camera, LightSource& light)
 {
+	//A stroke may paint above 1.5 map units (the units change only after it); the culling has to keep those patches
+	renderSettings.heightBound = stroke ? stroke->limit : 1.5f;
 	view.Draw(renderer, camera, light, renderSettings);
 	//Before the water, which writes no depth anyway: the depth under the cursor is the terrain
 	PickUnderCursor(camera, light);
