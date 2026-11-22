@@ -231,7 +231,8 @@ bool GpuHeightGenerator::Initialize()
 {
 	heightShader = Shader::Compute("res/shaders/ComputeShaders/height_compute.shader");
 	biomeShader = Shader::Compute("res/shaders/ComputeShaders/biome_compute.shader");
-	if (!heightShader->IsValid() || !biomeShader->IsValid()) {
+	mapBiomeShader = Shader::Compute("res/shaders/ComputeShaders/map_biome_compute.shader");
+	if (!heightShader->IsValid() || !biomeShader->IsValid() || !mapBiomeShader->IsValid()) {
 		std::cout << "[ERROR] GpuHeightGenerator: a compute shader could not be built" << std::endl;
 		return false;
 	}
@@ -247,6 +248,7 @@ void GpuHeightGenerator::ReloadShaders()
 {
 	heightShader->Reload();
 	biomeShader->Reload();
+	mapBiomeShader->Reload();
 }
 
 void GpuHeightGenerator::PollMeasure(double& ms)
@@ -305,6 +307,51 @@ void GpuHeightGenerator::GenerateWorld(const TerrainConfig& terrain, const Biome
 	TextureClass& colors, TextureClass& ids, TextureClass* splat, const RiverInput* rivers)
 {
 	RunBiomeShader(biomes, terrain, area, colors, ids, splat, &height, rivers);
+}
+
+void GpuHeightGenerator::GenerateMapBiomes(const mapbiomes::Settings& settings, std::optional<float> seaLevelMetres, const MapBiomeInput& input,
+	TextureClass& colors, TextureClass& ids, TextureClass* splat)
+{
+	const BiomeConfig& biomes = settings.config;
+	//Only the noises of temperature and humidity and the table of the material patches are read
+	auto worldData = std::make_unique_for_overwrite<GpuWorldInput>();
+	SetNoise(worldData->noises, worldData->permutations, 3, biomes.temperature);
+	SetNoise(worldData->noises, worldData->permutations, 4, biomes.humidity);
+	SetPermutation(worldData->permutations, detailTable, biomes.detailSeed);
+	glNamedBufferSubData(worldInput, 0, sizeof(GpuWorldInput), worldData.get());
+	UploadBiomeTable(biomes);
+
+	Shader& shader = *mapBiomeShader;
+	shader.Bind();
+	shader.SetUniform1i("biomeCount", static_cast<int>(biomes.table.size()));
+	shader.SetUniform1f("waterHeight", mapbiomes::WaterHeight(settings, seaLevelMetres));
+	shader.SetUniform3fv("climate", glm::vec3(biomes.climate.lapseRate, biomes.climate.coastHumidity, biomes.climate.coastRange));
+	shader.SetUniform1f("blendWidth", biomes.blendWidth);
+	shader.SetUniform1f("metresPerUnit", input.metresPerUnit);
+	shader.SetUniform1i("hasSea", seaLevelMetres ? 1 : 0);
+	shader.SetUniform1f("seaLevel", seaLevelMetres.value_or(0.0f));
+	shader.SetUniform1f("heightUnit", settings.heightUnitMetres);
+	shader.SetUniform1f("baseMetres", settings.baseMetres);
+	shader.SetUniform2f("positionOrigin", settings.climateOrigin.x, settings.climateOrigin.y);
+	shader.SetUniform2f("texelMetres", input.texelMetres.x, input.texelMetres.y);
+	shader.SetUniform2f("patchOrigin", settings.climateOrigin.x / input.texelMetres.x, settings.climateOrigin.y / input.texelMetres.y);
+	shader.SetUniform2i("mapSize", colors.GetWidth(), colors.GetHeight());
+	shader.SetUniform2i("islandSize", colors.GetWidth(), colors.GetHeight());
+	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, worldInput);
+	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, biomeTable);
+	colors.BindImage(0, GL_WRITE_ONLY);
+	ids.BindImage(1, GL_WRITE_ONLY);
+	input.heights.BindImage(3, GL_READ_ONLY);
+	input.climate.BindImage(4, GL_READ_ONLY);
+	shader.SetUniform1i("writeSplat", splat ? 1 : 0);
+	if (splat) {
+		shader.SetUniform1f("materialBlendWidth", biomes.materialBlendWidth);
+		shader.SetUniform1f("materialPatchiness", biomes.materialPatchiness);
+		shader.SetUniform1f("materialPatchContrast", biomes.materialPatchContrast);
+		shader.SetUniform1f("materialPatchSize", biomes.materialPatchSize);
+		splat->BindImage(2, GL_WRITE_ONLY);
+	}
+	DispatchTiles(shader, colors.GetWidth(), colors.GetHeight());
 }
 
 void GpuHeightGenerator::RunBiomeShader(const BiomeConfig& biomes, const TerrainConfig& terrain, const MapArea& area, TextureClass& colors, TextureClass& ids,

@@ -44,6 +44,12 @@ bool MapImportSys::Initialize(int _width, int _height, float _heightScale)
 		std::cout << "[ERROR] MapImportSys: the sculpt shader could not be built\n";
 		return false;
 	}
+	if (!biomeGenerator.Initialize()) {
+		std::cout << "[ERROR] MapImportSys: the biome shaders could not be built\n";
+		return false;
+	}
+	//Terrain modifiers change generated terrain only
+	biomeEditor.ShowTerrainModifiers(false);
 	std::cout << "[LOG] MapImportSys initialized\n";
 	return true;
 }
@@ -68,6 +74,7 @@ void MapImportSys::Update(Camera& camera, bool active, float deltaTime)
 		Erode();
 	}
 	UpdateRivers();
+	UpdateBiomes();
 	//Meshes of an export are written in the background; the Saving tab may be closed
 	exporter.Update();
 	if (lookDown && active && !map.Empty()) {
@@ -196,6 +203,7 @@ void MapImportSys::StartSaving(const std::filesystem::path& path)
 	project.generation = projectGeneration;
 	project.verticalExaggeration = renderSettings.heightScale / trueHeightScale;
 	project.rivers = preset::RiversJson(riverConfig);
+	project.biomes = mapbiomes::ToJson(biomeSettings);
 	const float unit = metresPerUnit;
 	const uint64_t version = mapVersion;
 	saveJob.Start([project = std::move(project), path, unit, version]() mutable {
@@ -316,6 +324,9 @@ void MapImportSys::InstallReceived(mapproject::Project& project)
 	projectSource = project.source;
 	projectGeneration = project.generation;
 	seaLevelMetres = project.seaLevel;
+	if (const std::string biomeError = UseBiomeSettings(project.biomes); !biomeError.empty()) {
+		SetProjectStatus("Biome settings of the map ignored: " + biomeError, true);
+	}
 	//"TerrainGen map at (12, -40)" -> "terraingen_map_at_12_-40"
 	suggestedName.clear();
 	for (char c : project.source) {
@@ -503,6 +514,10 @@ void MapImportSys::InstallProject(ProjectLoad& result)
 		if (!preset::RiversFromJson(project.rivers, riverConfig, riverError)) {
 			SetProjectStatus("Opened " + FileNameOf(result.path) + "; river settings ignored: " + riverError, true);
 		}
+	}
+	//Biome settings of the project (none before version 3: biomes off)
+	if (const std::string biomeError = UseBiomeSettings(project.biomes); !biomeError.empty()) {
+		SetProjectStatus("Opened " + FileNameOf(result.path) + "; biome settings ignored: " + biomeError, true);
 	}
 }
 
@@ -698,6 +713,7 @@ void MapImportSys::InstallResult(LoadResult& result)
 		projectSource = FileNameOf(result.path);
 		projectGeneration.clear();
 		seaLevelMetres.reset();
+		UseBiomeSettings(std::string());
 		const std::u8string stem = result.path.stem().u8string();
 		suggestedName = std::string(stem.begin(), stem.end());
 	}
@@ -784,6 +800,7 @@ void MapImportSys::ImGuiRightPanel()
 	const PanelTabs::Tab tabs[] = {
 		{ "Project", [this] { ProjectImGui(); } },
 		{ "Edit", [this] { EditImGui(); } },
+		{ "Biomes", [this] { BiomesImGui(); } },
 		{ "Load", [this] { LoadImGui(); } },
 	};
 	importTabs.Draw("import", tabs);
@@ -916,9 +933,9 @@ bool MapImportSys::OptionsImGui()
 void MapImportSys::ImGuiDisplay()
 {
 	TerrainRenderSettings& s = renderSettings;
-	//No biomes to show and a file has no infinite generation
+	//Biome colors exist only with biomes on (Biomes tab); a file has no infinite generation
 	if (utilities::DisplayModeImGui(s.modelScale, s.topoStep, s.topoBandWidth, s.heightScale, s.displayMode, s.wireFrame, s.map2d, nullptr)) {
-		if (s.displayMode == utilities::heightMapMode::BIOMES) {
+		if (s.displayMode == utilities::heightMapMode::BIOMES && !BiomesOn()) {
 			s.displayMode = utilities::heightMapMode::GREYSCALE;
 		}
 	}
@@ -951,7 +968,26 @@ void MapImportSys::ImGuiSaving()
 	const std::string generation = projectGeneration;
 	pack.generation = [generation] { return generation; };
 	pack.heightmaps = { { map.GetWidth(), map.GetHeight(), "", [this] { return map; } } };
-	pack.layersMissing = "Material and biome maps: not available for imported maps.";
+	//Material and biome maps of the last GPU pass, when it was made for this map
+	const int width = map.GetWidth(), height = map.GetHeight();
+	const TextureClass* splat = view.GetSplatTexture();
+	const TextureClass* colors = view.GetLayerTexture(TerrainView::Layer::BIOMES);
+	auto sameSize = [width, height](const TextureClass* t) { return t && t->GetWidth() == width && t->GetHeight() == height; };
+	//Ids of an older table or map would not match the manifest or the heights
+	const bool biomesCurrent = !climateStale && !biomesStale && !climateJob.IsRunning() && !stroke;
+	if (BiomesOn() && biomesCurrent && sameSize(splat) && sameSize(colors) && sameSize(biomeIds.get())) {
+		pack.materials = ExportPanel::SplatSource(*splat, materialNames);
+		const TextureClass* ids = biomeIds.get();
+		pack.biomes = ExportPanel::BiomeTableSource(biomeSettings.config.table, [ids] {
+			BiomeMap read(ids->GetWidth(), ids->GetHeight());
+			ids->Read(GL_RED_INTEGER, GL_INT, static_cast<int>(read.Size() * sizeof(int)), read.Data());
+			return read;
+		}, *colors);
+	}
+	else {
+		pack.layersMissing = !BiomesOn() ? "Material and biome maps: turn on biomes in the Biomes tab."
+			: "Material and biome maps: wait until the biomes are computed.";
+	}
 	pack.vegetationMissing = "Vegetation: not available for imported maps.";
 	//Rivers and lakes of the network shown: positions in map texels, levels in metres / mapMetresPerHeight
 	if (RiversOn() && riverNetwork && !riverNetwork->water.empty()) {

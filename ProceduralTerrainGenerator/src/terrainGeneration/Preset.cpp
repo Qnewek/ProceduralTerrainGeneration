@@ -191,6 +191,32 @@ namespace preset {
 			return j;
 		}
 
+		json BiomesToJson(const BiomeConfig& c)
+		{
+			json biomes;
+			biomes["temperature"] = NoiseToJson(c.temperature);
+			biomes["humidity"] = NoiseToJson(c.humidity);
+			biomes["blendWidth"] = ReadableFloat(c.blendWidth);
+			json climate;
+			climate["lapseRate"] = ReadableFloat(c.climate.lapseRate);
+			climate["coastHumidity"] = ReadableFloat(c.climate.coastHumidity);
+			climate["coastRange"] = ReadableFloat(c.climate.coastRange);
+			biomes["climate"] = std::move(climate);
+			biomes["modifyTerrain"] = c.modifyTerrain;
+			biomes["terrainBlendWidth"] = ReadableFloat(c.terrainBlendWidth);
+			biomes["detailSeed"] = c.detailSeed;
+			biomes["materialBlendWidth"] = ReadableFloat(c.materialBlendWidth);
+			biomes["materialPatchiness"] = ReadableFloat(c.materialPatchiness);
+			biomes["materialPatchContrast"] = ReadableFloat(c.materialPatchContrast);
+			biomes["materialPatchSize"] = ReadableFloat(c.materialPatchSize);
+			json table = json::array();
+			for (const biome::Biome& b : c.table) {
+				table.push_back(BiomeToJson(b));
+			}
+			biomes["table"] = std::move(table);
+			return biomes;
+		}
+
 		json ErosionToJson(const erosion::ErosionConfig& e)
 		{
 			json j;
@@ -997,28 +1023,7 @@ namespace preset {
 		terrain["peaksSpline"] = SplineToJson(c.terrain.peaksSpline);
 		root["terrain"] = std::move(terrain);
 
-		json biomes;
-		biomes["temperature"] = NoiseToJson(c.biomes.temperature);
-		biomes["humidity"] = NoiseToJson(c.biomes.humidity);
-		biomes["blendWidth"] = ReadableFloat(c.biomes.blendWidth);
-		json climate;
-		climate["lapseRate"] = ReadableFloat(c.biomes.climate.lapseRate);
-		climate["coastHumidity"] = ReadableFloat(c.biomes.climate.coastHumidity);
-		climate["coastRange"] = ReadableFloat(c.biomes.climate.coastRange);
-		biomes["climate"] = std::move(climate);
-		biomes["modifyTerrain"] = c.biomes.modifyTerrain;
-		biomes["terrainBlendWidth"] = ReadableFloat(c.biomes.terrainBlendWidth);
-		biomes["detailSeed"] = c.biomes.detailSeed;
-		biomes["materialBlendWidth"] = ReadableFloat(c.biomes.materialBlendWidth);
-		biomes["materialPatchiness"] = ReadableFloat(c.biomes.materialPatchiness);
-		biomes["materialPatchContrast"] = ReadableFloat(c.biomes.materialPatchContrast);
-		biomes["materialPatchSize"] = ReadableFloat(c.biomes.materialPatchSize);
-		json table = json::array();
-		for (const biome::Biome& b : c.biomes.table) {
-			table.push_back(BiomeToJson(b));
-		}
-		biomes["table"] = std::move(table);
-		root["biomes"] = std::move(biomes);
+		root["biomes"] = BiomesToJson(c.biomes);
 		root["rivers"] = RiversToJson(c.rivers);
 		root["erosion"] = ErosionToJson(c.erosion);
 
@@ -1072,6 +1077,31 @@ namespace preset {
 	bool Load(const std::filesystem::path& path, NoiseMapConfig& out, std::optional<glm::ivec2>& mapOffset, std::string& error)
 	{
 		return LoadConfig(path, out, mapOffset, error);
+	}
+
+	std::string BiomesJson(const BiomeConfig& config)
+	{
+		return BiomesToJson(config).dump();
+	}
+
+	bool BiomesFromJson(const std::string& text, BiomeConfig& out, std::string& error)
+	{
+		try {
+			json root;
+			root["biomes"] = json::parse(text);
+			if (!root["biomes"].is_object()) {
+				throw std::runtime_error("Biome settings must be a JSON object");
+			}
+			BiomeConfig config = out;
+			ReadBiomes(Reader(root, "project"), "biomes", config);
+			CheckBiomes(config);
+			out = std::move(config);
+			return true;
+		}
+		catch (const std::exception& e) {
+			error = e.what();
+			return false;
+		}
 	}
 
 	std::string RiversJson(const rivers::RiverConfig& config)

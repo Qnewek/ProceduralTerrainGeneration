@@ -25,10 +25,11 @@ namespace mapproject {
 		std::string generation;			//generation parameters as preset JSON; empty = none
 		float verticalExaggeration = 1.0f;	//of the view, against the true proportions
 		std::string rivers;				//river settings as JSON (preset::RiversJson); empty = defaults, no rivers
+		std::string biomes;				//biome settings as JSON (mapbiomes::ToJson); empty = defaults, no biomes
 	};
 
-	//2 (2026-11-21): rivers; version 1 is still read
-	inline constexpr int currentVersion = 2;
+	//2 (2026-11-21): rivers; 3 (2026-11-22): biomes; versions 1 and 2 are still read
+	inline constexpr int currentVersion = 3;
 	inline constexpr const char* extension = ".ptgmap";
 
 	//@param out - the bytes of the file, replaced on success
