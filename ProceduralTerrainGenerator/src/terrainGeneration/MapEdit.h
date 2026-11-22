@@ -5,6 +5,7 @@
 #include <optional>
 #include <string>
 
+#include "BiomePaint.h"
 #include "Grid.h"
 
 //Operations on the working copy of the "Imported map" mode (heights in metres) and its undo history
@@ -28,6 +29,14 @@ namespace mapedit {
 		std::string label;
 		std::optional<HeightField> map;		//none = the operation did not change the map
 		std::optional<float> seaLevel;		//metres; none = no sea
+		std::optional<biomepaint::Layer> paint;	//none = the operation did not change the painted biomes
+	};
+
+	//What Undo / Redo changed
+	struct Restored {
+		bool map = false;		//the step held a map
+		bool seaLevel = false;	//the sea level is another one now
+		bool paint = false;		//the step held painted biomes
 	};
 
 	//Undo and redo stacks of steps, together within a memory limit (the bytes of their maps)
@@ -48,16 +57,17 @@ namespace mapedit {
 		//Label of the step Undo / Redo would restore; empty if none
 		const std::string& UndoLabel() const;
 		const std::string& RedoLabel() const;
-		//Swaps the current state with the step on top (the map only when the step holds one, the sea level always) and moves the
-		//step to the other stack
-		//@return false if there is nothing to undo / redo
-		bool Undo(HeightField& map, std::optional<float>& seaLevel);
-		bool Redo(HeightField& map, std::optional<float>& seaLevel);
+		//Swaps the current state with the step on top (the map and the painted biomes only when the step holds them, the sea level always)
+		//and moves the step to the other stack
+		//@return what changed; none if there is nothing to undo / redo
+		std::optional<Restored> Undo(HeightField& map, std::optional<float>& seaLevel, biomepaint::Layer& paint);
+		std::optional<Restored> Redo(HeightField& map, std::optional<float>& seaLevel, biomepaint::Layer& paint);
 		void Clear();
 
 	private:
 		static size_t BytesOf(const Step& step);
-		static bool Move(std::deque<Step>& from, std::deque<Step>& to, HeightField& map, std::optional<float>& seaLevel);
+		std::optional<Restored> Move(std::deque<Step>& from, std::deque<Step>& to, HeightField& map, std::optional<float>& seaLevel,
+			biomepaint::Layer& paint);
 		void Fit();
 
 		std::deque<Step> undo, redo;	//newest at the back

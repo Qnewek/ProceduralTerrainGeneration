@@ -86,9 +86,81 @@ TEST_CASE("Project round trip keeps every field")
 	CHECK(read.rivers == "{\"cellSize\":4}");
 }
 
+//A project with biomes painted over two texels
+static mapproject::Project PaintedProject()
+{
+	mapproject::Project project = FullProject();
+	project.paint = biomepaint::Make(project.working.GetWidth(), project.working.GetHeight());
+	project.paint.palette = { "A", "B" };
+	project.paint.texels[3] = static_cast<uint16_t>((255 << 8) | 1);
+	project.paint.texels[11] = static_cast<uint16_t>((40 << 8) | 2);
+	return project;
+}
+
+TEST_CASE("Project keeps its biome paint")
+{
+	CHECK(mapproject::currentVersion == 4);
+	const mapproject::Project project = PaintedProject();
+	const std::vector<uint8_t> bytes = Bytes(project);
+	mapproject::Project read;
+	std::string error;
+	REQUIRE_MESSAGE(mapproject::Deserialize(bytes.data(), bytes.size(), read, error), error);
+	CHECK(read.paint.width == project.paint.width);
+	CHECK(read.paint.height == project.paint.height);
+	CHECK(read.paint.palette == project.paint.palette);
+	CHECK(read.paint.texels == project.paint.texels);
+	CHECK(SameBits(read.working, project.working));
+}
+
+TEST_CASE("Version 3 project has no biome paint")
+{
+	mapproject::Project project;
+	project.working = SmallMap();
+	project.biomes = "{\"enabled\":true}";
+	std::vector<uint8_t> bytes = Bytes(project);
+	const std::string from = "\"version\":" + std::to_string(mapproject::currentVersion);
+	const std::string text(bytes.begin(), bytes.end());
+	const size_t at = text.find(from);
+	REQUIRE(at != std::string::npos);
+	bytes[at + from.size() - 1] = '3';
+	mapproject::Project read = PaintedProject();
+	std::string error;
+	REQUIRE_MESSAGE(mapproject::Deserialize(bytes.data(), bytes.size(), read, error), error);
+	CHECK(read.paint.Empty());
+	CHECK(read.biomes == "{\"enabled\":true}");
+}
+
+TEST_CASE("Paint of another size is not saved")
+{
+	mapproject::Project project = PaintedProject();
+	project.paint = biomepaint::Make(3, 3);
+	project.paint.palette = { "A" };
+	project.paint.texels[0] = static_cast<uint16_t>((255 << 8) | 1);
+	std::vector<uint8_t> bytes;
+	std::string error;
+	CHECK_FALSE(mapproject::Serialize(project, bytes, error));
+	CHECK_FALSE(error.empty());
+}
+
+TEST_CASE("Paint with a slot past its palette fails")
+{
+	std::vector<uint8_t> bytes = Bytes(PaintedProject());
+	//The same length, so the header length stays right: slot 2 has no name now
+	const std::string from = "[\"A\",\"B\"]", to = "[\"A\"]    ";
+	REQUIRE(from.size() == to.size());
+	const std::string text(bytes.begin(), bytes.end());
+	const size_t at = text.find(from);
+	REQUIRE(at != std::string::npos);
+	std::copy(to.begin(), to.end(), bytes.begin() + at);
+	mapproject::Project read = Marker();
+	std::string error;
+	CHECK_FALSE(mapproject::Deserialize(bytes.data(), bytes.size(), read, error));
+	CHECK_FALSE(error.empty());
+	CHECK(IsMarker(read));
+}
+
 TEST_CASE("Project keeps its biome settings")
 {
-	CHECK(mapproject::currentVersion == 3);
 	const mapproject::Project project = FullProject();
 	const std::vector<uint8_t> bytes = Bytes(project);
 	mapproject::Project read;

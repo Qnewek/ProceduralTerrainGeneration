@@ -69,11 +69,24 @@ void MapImportSys::StepHistory(bool redo)
 	const std::string label = redo ? history.RedoLabel() : history.UndoLabel();
 	HeightField metres = WorkingMetres();
 	std::optional<float> sea = seaLevelMetres;
-	if (redo ? !history.Redo(metres, sea) : !history.Undo(metres, sea)) {
+	//Moved, not copied (2 bytes a texel); back in place unless the step swapped it
+	biomepaint::Layer paint = std::move(biomePaint);
+	const std::optional<mapedit::Restored> restored = redo ? history.Redo(metres, sea, paint) : history.Undo(metres, sea, paint);
+	if (!restored || !restored->paint) {
+		biomePaint = std::move(paint);
+	}
+	if (!restored) {
 		return;
 	}
 	seaLevelMetres = sea;
-	ShowMetres(std::move(metres));
+	//A step of painted biomes leaves the map and its climate alone
+	if (restored->map || restored->seaLevel) {
+		ShowMetres(std::move(metres));
+	}
+	if (restored->paint) {
+		UsePaint(std::move(paint));
+		dirty = true;
+	}
 	SetEditStatus((redo ? "Redone: " : "Undone: ") + label, false);
 }
 

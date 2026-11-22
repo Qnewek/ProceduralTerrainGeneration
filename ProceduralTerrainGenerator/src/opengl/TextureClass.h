@@ -24,6 +24,8 @@ public:
 	//@param format - pixel format of data, e.g. GL_RED
 	//@param type - component type of data, e.g. GL_FLOAT
 	void Upload(const void* data, GLenum format, GLenum type);
+	//Replaces a rectangle of a 2D texture; rows of data have rowLength pixels (the rectangle starts at data), packed without padding
+	void UploadRegion(int x, int y, int width, int height, int rowLength, const void* data, GLenum format, GLenum type);
 
 	//Copies the whole image to data, waiting for the GPU
 	//@param size - size of data in bytes
