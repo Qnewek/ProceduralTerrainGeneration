@@ -128,15 +128,15 @@ TEST_CASE("Brush near the border touches only map texels")
 	CHECK(sculpt::Area(DabAt({ -30.0f, 5.0f }, 0.1f), 8.0f, { width, height }).z == 0);
 }
 
-TEST_CASE("Stroke unit leaves room for a long raise on a flat map")
+TEST_CASE("Stroke limit leaves room for a long raise on a flat map")
 {
-	//A flat map has 1 m units: the 1.5 unit cap would stop a raise at 1.5 m
-	const float unit = sculpt::StrokeUnit(1.0f, 0.0f, 10.0f);
-	CHECK(1.5f * unit >= 10.0f * sculpt::strokeHeadroomSeconds - 1e-3f);
-	//Enough room already: the unit stays
-	CHECK(sculpt::StrokeUnit(1000.0f, 800.0f, 10.0f) == 1000.0f);
-	//Room above the highest point, not above 0
-	CHECK(1.5f * sculpt::StrokeUnit(100.0f, 400.0f, 10.0f) >= 400.0f + 10.0f * sculpt::strokeHeadroomSeconds - 1e-2f);
+	//A flat map has 1 m units: a 1.5 unit cap would stop a raise at 1.5 m
+	const float limit = sculpt::StrokeLimit(1.0f, 0.0f, 10.0f);
+	CHECK(limit >= 10.0f * sculpt::strokeHeadroomSeconds - 1e-3f);
+	//Never below the usual bound
+	CHECK(sculpt::StrokeLimit(1000.0f, 800.0f, 10.0f) == 1.5f);
+	//Room above the highest point, not above 0, in map units
+	CHECK(100.0f * sculpt::StrokeLimit(100.0f, 400.0f, 10.0f) >= 400.0f + 10.0f * sculpt::strokeHeadroomSeconds - 1e-2f);
 }
 
 TEST_CASE("Heights are clamped to the limit")

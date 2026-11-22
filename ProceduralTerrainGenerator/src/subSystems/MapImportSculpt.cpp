@@ -51,29 +51,17 @@ void MapImportSys::UpdateSculpt(const Camera& camera, bool active, float deltaTi
 		if (!pressed || !canPaint || !hoverTexel || Busy()) {
 			return;
 		}
-		//Heights are capped at 1.5 units during a stroke: a map with small units (a flat one has 1 m) gets larger ones first, with room for a long
-		//stroke; the view keeps its vertical exaggeration, and letting go fits the units to the map again (ShowMetres)
+		//The map keeps its units during a stroke (colours, Height scale and isolines stay put); raising may go above 1.5 units, with room for a long
+		//stroke (a flat map has 1 m units), and letting go fits the units to the map again (ApplyEdit -> ShowMetres)
+		float limit = 1.5f;
 		if (!TowardsTarget(brush.brush)) {
 			const float largest = std::max(std::abs(mapMin), std::abs(mapMax)) * metresPerUnit;
-			const float unit = sculpt::StrokeUnit(metresPerUnit, largest, raiseRate);
-			if (unit > metresPerUnit) {
-				const float factor = metresPerUnit / unit;
-				HeightField units = std::move(map);
-				for (size_t i = 0; i < units.Size(); i++) {
-					units[i] *= factor;
-				}
-				for (size_t i = 0; i < original.Size(); i++) {
-					original[i] *= factor;
-				}
-				const float exaggeration = renderSettings.heightScale / trueHeightScale;
-				ShowUnits(std::move(units), unit, pixelMetres);
-				renderSettings.heightScale = trueHeightScale * exaggeration;
-			}
+			limit = sculpt::StrokeLimit(metresPerUnit, largest, raiseRate);
 		}
 		const glm::ivec2 size(map.GetWidth(), map.GetHeight());
 		const glm::ivec2 texel = glm::clamp(glm::ivec2(glm::round(*hoverTexel)), glm::ivec2(0), size - 1);
 		try {
-			stroke = Stroke{ WorkingMetres(), map.At(texel.x, texel.y), ++strokeSeed, false };
+			stroke = Stroke{ WorkingMetres(), map.At(texel.x, texel.y), ++strokeSeed, false, limit };
 		}
 		catch (const std::bad_alloc&) {
 			SetEditStatus("Sculpt: not enough memory for the history step", true);
@@ -104,8 +92,8 @@ void MapImportSys::UpdateSculpt(const Camera& camera, bool active, float deltaTi
 	}
 	dab.target = stroke->target;
 	dab.seed = stroke->seed;
-	//Culling of the terrain assumes |height| <= 1.5 map units; after the stroke the units follow the new highest point
-	dab.limit = 1.5f;
+	//Draw gives the terrain culling the same bound; after the stroke the units follow the new highest point
+	dab.limit = stroke->limit;
 	sculptor.Apply(config, dab, view.LayerTexture(TerrainView::Layer::TERRAIN, map.GetWidth(), map.GetHeight()));
 	stroke->painted = true;
 }

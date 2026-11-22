@@ -27,7 +27,7 @@ namespace sculpt {
 		float amount = 0.0f;	//RAISE, LOWER, NOISE: map units; SMOOTH, FLATTEN: part of the way, 0 to 1
 		float target = 0.0f;	//FLATTEN: height in map units
 		uint32_t seed = 0;		//NOISE
-		float limit = 1.5f;		//heights are kept within [-limit, limit] (culling of the terrain assumes |height| <= 1.5)
+		float limit = 1.5f;		//heights are kept within [-limit, limit] (the terrain culling bound, TerrainRenderSettings::heightBound)
 	};
 
 	//World units per map texel; equal to TerrainView::worldUnitsPerTexel (checked where both are seen)
@@ -46,10 +46,11 @@ namespace sculpt {
 
 	//Seconds of painting at full strength a stroke has room for before the limit stops it
 	inline constexpr float strokeHeadroomSeconds = 30.0f;
-	//Metres per map unit for a stroke of RAISE, LOWER or NOISE: heights are capped at Dab::limit (1.5) units, so a map whose unit is small
-	//(a flat map has 1 m) gets a larger one with room for strokeHeadroomSeconds above its largest |height|; never smaller than now
+	//Dab::limit (map units) for a stroke of RAISE, LOWER or NOISE: room for strokeHeadroomSeconds above the largest |height|, so a map whose unit
+	//is small (a flat map has 1 m) is not stopped at 1.5 units; never below 1.5. The map keeps its units (and colours) during the stroke,
+	//the terrain culling gets the same bound (TerrainRenderSettings::heightBound)
 	//@param largestMetres - largest |height| of the working copy in metres
-	float StrokeUnit(float metresPerUnit, float largestMetres, float metresPerSecond);
+	float StrokeLimit(float metresPerUnit, float largestMetres, float metresPerSecond);
 
 	//Map texel under a window pixel, from the depth of the drawn scene there
 	//@param windowPixel - framebuffer pixels, origin at the bottom left (as glReadPixels)

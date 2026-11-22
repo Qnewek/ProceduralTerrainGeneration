@@ -5,7 +5,7 @@
 #include "Camera.h"
 
 //Mouse steering of the camera like in game engine editors, over the 3D view and when M (mouse look) is off:
-//right button held = look around (with WASD/Space/Ctrl = fly), Alt + left button = orbit around the point under the cursor,
+//right button held = look around (with WASD/Space/Left Shift = fly), Alt + left button = orbit around the point under the cursor,
 //middle button = pan in the plane of the screen, wheel = forward / back along the view (Shift + wheel is left to the brushes).
 //The point under the cursor comes from the depth of the drawn scene. The math is in cameramath (CameraMath.h).
 class EditorCamera

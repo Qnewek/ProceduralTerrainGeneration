@@ -244,6 +244,7 @@ private:
 		float target = 0.0f;	//FLATTEN: map units under the cursor where the stroke started
 		uint32_t seed = 0;		//NOISE
 		bool painted = false;	//a dab was applied; a click without one leaves no history step
+		float limit = 1.5f;		//largest |height| in map units the stroke may paint; the terrain culling gets the same bound
 	};
 	sculpt::BrushConfig brush;
 	//BrushConfig::strength of the two kinds of brushes, kept apart (they have different units)

@@ -20,6 +20,8 @@ class ShadowMap;
 struct TerrainRenderSettings {
 	float modelScale = 1.0f;
 	float heightScale = 1.0f;
+	//Largest |height| of the map in map units the patch culling (TCS) allows for; ChunkWorld culls chunks with its own 1.5 (heightBound there)
+	float heightBound = 1.5f;
 	float topoStep = 10.0f;
 	float topoBandWidth = 0.2f;		//0 disables isolines
 	utilities::heightMapMode displayMode = utilities::heightMapMode::GREYSCALE;
