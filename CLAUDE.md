@@ -64,6 +64,8 @@ ProceduralTerrainGenerator/
       Noise.h                    noise::NoiseConfigParameters (fBm, ridge, island, redistribution); sam szum jest tylko w GLSL
       MapBiomes.*                biomy mapy niegenerowanej (Imported map): `mapbiomes::Settings` (JSON w projekcie), C i M z mapy w metrach (`ComputeClimate`:
                                  odległość od brzegu, rzeźba w promieniu), wysokość dla klimatu (`ClimateHeight`) — wzorzec CPU dla `map_biome_compute.shader`
+      BiomePaint.*               malowane biomy Imported map (D2): warstwa (paleta nazw + slot i siła na teksel), dab pędzla, slot → biom tabeli po nazwie,
+                                 materiały teksela pomalowanego — wzorzec CPU mieszania w `map_biome_compute.shader`
       Biome.*                    biom = zakresy 6 parametrów (5 szumów + elewacja) + kolor; najbliższy biom (Nearest) i wagi przejść (BlendWeight) — opis reguł, które liczy biome_compute.shader
       Grid.h                     mapy Grid<T>
       SplineSampling.*           próbkowanie splajnu do tablicy (dla GPU i wykresu w edytorze)
@@ -83,7 +85,8 @@ ProceduralTerrainGenerator/
       DemTools.*                 mapy rzeczywiste: wypełnianie NoData z sąsiadów, wycinek, zmniejszenie (średnia bloków), piksel w metrach ze stopni
       MapProject.*               plik projektu .ptgmap: sygnatura + długość + nagłówek JSON (rozmiar, piksel, morze, źródło, preset, przewyższenie) + bloki zlib
                                  (float32 w metrach rozdzielone na 4 płaszczyzny bajtów): kopia robocza i oryginał (tylko gdy się różni); zmiana pól = podbicie `currentVersion`
-                                 (2 = ustawienia rzek jako JSON `preset::RiversJson`, 3 = ustawienia biomów `mapbiomes::ToJson`; wersje 1–2 nadal czytane)
+                                 (2 = ustawienia rzek jako JSON `preset::RiversJson`, 3 = ustawienia biomów `mapbiomes::ToJson`, 4 = malowane biomy: paleta
+                                 w nagłówku `biomePaint`, blok `biomePaint` = zlib uint16 LE; wersje 1–3 nadal czytane)
       MapEdit.*                  operacje na mapie w metrach (wygładzanie pudełkowe, skala + przesunięcie, `ErosionScale`) i historia Cofnij/Ponów z limitem pamięci
       Sculpt.*                   pędzle (podnieś, obniż, wygładź, spłaszcz, szum) na CPU = wzorzec `sculpt_compute.shader`, zanik, rzut kursora na teksel mapy (głębia → teksel)
       CameraMath.*               matematyka kamery edytora: rozglądanie, orbita wokół punktu (punkt zostaje w tym samym miejscu widoku), przesuwanie, jednostki na piksel
@@ -405,6 +408,15 @@ Wartości szumów są w [-1, 1]. Konwencja indeksowania: `map[y * width + x]`.
   (+ `common/biomes.glsl`) — sprawdza `--gpu-check` (sekcja `mapbiomes:`). Modyfikatorów terenu i rzek w biomach mapy nie ma. Id czytane z GPU dopiero
   przy eksporcie (eksport map biomów zablokowany, gdy coś jest nieaktualne). Mapa wysłana z TerrainGen: `mapbiomes::FromGeneration` (tabela presetu,
   `heightUnitMetres` = metry na jednostkę, origin = `worldOrigin`), więc biomy wychodzą podobne do TerrainGen (C/M z mapy, nie z szumów).
+  Pędzel biomów (D2, sekcja „Paint” zakładki Biomes, `MapImportBiomes.cpp`; wyklucza się ze Sculpt, to samo wejście myszy co pędzle terenu):
+  `biomePaint` (`biomepaint::Layer`) = paleta nazw biomów (≤ 255, slot 0 = nic) + na teksel slot i siła 0–255; 0×0 do pierwszego pociągnięcia,
+  potem rozmiar mapy, `paintTexture` (`GL_RG8UI`) istnieje dokładnie wtedy. Shader miesza wg siły s: kolor automatu → biomu, materiały = znormalizowana
+  mieszanka automatu i znormalizowane warstwy biomu (przed plamami), id = biom od s ≥ 128/255; slot o nazwie spoza tabeli (`SlotBiomes` = -1) = automat,
+  więc zmiana kolejności tabeli nie psuje malowania. Reguły dwa razy: `BiomePaint.cpp` (`Apply`, `PaintedMaterials`) i `map_biome_compute.shader`
+  (`paintMaterials`) — sprawdza `--gpu-check` (`mapbiomes: paint…`, `region equals the whole map`). Dab: zmiana na CPU → `UploadRegion` prostokąta →
+  `RunBiomePass(prostokąt)` (`MapBiomeInput::region`; świeży cel BIOMES/splat/id = cała mapa). Pociągnięcie = krok historii z warstwą sprzed niego
+  (`mapedit::Step::paint`, Cofnij takiego kroku nie liczy klimatu ani jednostek), „Clear painting” też. Nowa mapa czyści warstwę, edycja terenu ją zostawia,
+  reload tego samego pliku zostawia przy tym samym rozmiarze; projekt v4 trzyma ją, gdy coś jest pomalowane.
 - Kamera edytora (`EditorCamera`, wszystkie tryby, tylko widok 3D i bez M): prawy przycisk = rozglądanie (z WASD lot), Alt + lewy = orbita, środkowy = przesuwanie,
   kółko = przód/tył (Shift + kółko nigdy — zostaje dla promienia pędzla). Punkt obrotu i odległość przesuwania: `AfterDraw` czyta głębię pod kursorem po `Draw`
   (macierze `camera.GetViewProjection()`), bez trafienia punkt przed kamerą. Matematyka w `CameraMath.*` (`ptg_core`, testy). Lewy przycisk bez Alt należy do pędzli.

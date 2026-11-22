@@ -151,7 +151,10 @@ private:
 	void HistoryImGui();
 	//Divides the maps by max(|height|, 1 m) over both; @return that divisor (metresPerUnit)
 	static float ToUnits(HeightField& working, HeightField& original);
-	bool Busy() const { return job.IsRunning() || projectJob.IsRunning() || saveJob.IsRunning() || editJob.IsRunning() || stroke.has_value(); }
+	bool Busy() const
+	{
+		return job.IsRunning() || projectJob.IsRunning() || saveJob.IsRunning() || editJob.IsRunning() || stroke.has_value() || paintStroke.has_value();
+	}
 
 	//Project file
 	void SaveProject();
@@ -327,6 +330,38 @@ private:
 	bool biomePresetsListed = false;
 	int biomePreset = 0;
 	bool BiomesOn() const { return biomeSettings.enabled; }
+	//Biomes painted over the automatic ones (stage D2, the Paint section of the Biomes tab, MapImportBiomes.cpp). The layer is 0x0 until
+	//the first stroke (nothing painted, no memory), then the size of the map; paintTexture (GL_RG8UI) is its copy on the GPU, present
+	//exactly when the layer has a size. A stroke changes the layer on the CPU, uploads the rectangle of each dab and runs the GPU pass
+	//over it; letting the button go is one history step with the layer from before
+	biomepaint::Layer biomePaint;
+	std::unique_ptr<TextureClass> paintTexture;
+	struct PaintStroke {
+		biomepaint::Layer before;	//for the history
+		uint8_t slot = 0;			//slot of the biome painted
+		bool painted = false;		//a dab changed a texel; a click without one leaves no history step
+	};
+	std::optional<PaintStroke> paintStroke;
+	bool biomePaintOn = false;
+	std::string paintBiome;			//name of the biome painted, from the table
+	float paintRadius = 32.0f;		//map texels
+	float paintHardness = 0.5f;
+	float paintRate = 2.0f;			//strength (0 to 1) per second at the centre
+	uint32_t paintSeed = 0;			//biomepaint::Dab::seed, another one every dab
+	//Shows another painted layer (undo, a project, 0x0 = nothing painted): the whole layer to the GPU and the biomes again
+	void UsePaint(biomepaint::Layer layer);
+	//Starts, continues or ends a stroke of the biome brush (GL thread, from UpdateSculpt)
+	void UpdateBiomePaint(const Camera& camera, bool active, float deltaTime);
+	//Ends a stroke of the biome brush: one history step
+	void FinishPaintStroke();
+	//Runs the GPU pass of the biomes over a rectangle (width < 0 = the whole map) when the climate is ready for this map
+	//@return false if it could not run
+	bool RunBiomePass(glm::ivec4 region);
+	//The Paint section of the Biomes tab
+	void PaintImGui();
+	//A brush follows the cursor: Sculpt or the biome brush
+	bool BrushOn() const { return sculptOn || (biomePaintOn && BiomesOn()); }
+	float ActiveBrushRadius() const { return biomePaintOn ? paintRadius : brush.radius; }
 	//Takes a finished climate, starts a new one, runs the GPU pass; called every frame (GL thread)
 	void UpdateBiomes();
 	//Settings of a new map: from the JSON of a project (empty = defaults for the sea level); @return why they were ignored, empty if not

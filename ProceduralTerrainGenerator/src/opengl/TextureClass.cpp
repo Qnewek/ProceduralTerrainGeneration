@@ -24,6 +24,16 @@ TextureClass::~TextureClass()
 	glDeleteTextures(1, &m_RendererID);
 }
 
+void TextureClass::UploadRegion(int x, int y, int width, int height, int rowLength, const void* data, GLenum format, GLenum type)
+{
+	//Rows of 2-byte pixels of an odd width are not 4-byte aligned
+	glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+	glPixelStorei(GL_UNPACK_ROW_LENGTH, rowLength);
+	glTextureSubImage2D(m_RendererID, 0, x, y, width, height, format, type, data);
+	glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
+	glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
+}
+
 void TextureClass::Upload(const void* data, GLenum format, GLenum type)
 {
 	if (m_Layers > 1) {

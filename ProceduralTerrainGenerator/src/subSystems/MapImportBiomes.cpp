@@ -1,9 +1,12 @@
 //Biomes of the working copy: the Biomes tab of MapImportSys and what it computes
 #include "MapImportSys.h"
 
+#include <algorithm>
 #include <chrono>
 #include <cstdio>
 #include <exception>
+#include <new>
+#include <utility>
 
 #include "imgui.h"
 
@@ -42,6 +45,200 @@ std::string MapImportSys::UseBiomeSettings(const std::string& json)
 	biomesStale = false;
 	ShowBiomesState();
 	return jsonError;
+}
+
+void MapImportSys::UsePaint(biomepaint::Layer layer)
+{
+	biomePaint = std::move(layer);
+	const bool fits = !map.Empty() && biomePaint.width == map.GetWidth() && biomePaint.height == map.GetHeight()
+		&& biomePaint.texels.size() == map.Size();
+	if (!fits) {
+		biomePaint = biomepaint::Layer();
+	}
+	if (biomePaint.texels.empty()) {
+		paintTexture.reset();
+	}
+	else {
+		if (!paintTexture || paintTexture->GetWidth() != biomePaint.width || paintTexture->GetHeight() != biomePaint.height) {
+			paintTexture = std::make_unique<TextureClass>(biomePaint.width, biomePaint.height, GL_RG8UI);
+		}
+		paintTexture->UploadRegion(0, 0, biomePaint.width, biomePaint.height, biomePaint.width, biomePaint.texels.data(), GL_RG_INTEGER, GL_UNSIGNED_BYTE);
+	}
+	biomesStale = true;
+}
+
+bool MapImportSys::RunBiomePass(glm::ivec4 region)
+{
+	const int width = map.GetWidth(), height = map.GetHeight();
+	const TextureClass* heights = view.GetLayerTexture(TerrainView::Layer::TERRAIN);
+	if (!BiomesOn() || map.Empty() || !climateTexture || !heights || climateTexture->GetWidth() != width || climateTexture->GetHeight() != height) {
+		return false;
+	}
+	auto sameSize = [width, height](const TextureClass* t) { return t && t->GetWidth() == width && t->GetHeight() == height; };
+	//A target made now holds nothing outside the rectangle: the whole map then
+	if (!sameSize(biomeIds.get()) || !sameSize(view.GetLayerTexture(TerrainView::Layer::BIOMES)) || !sameSize(view.GetSplatTexture())) {
+		region = glm::ivec4(0, 0, -1, -1);
+	}
+	if (!sameSize(biomeIds.get())) {
+		biomeIds = std::make_unique<TextureClass>(width, height, GL_R32I);
+	}
+	MapBiomeInput input{ *heights, *climateTexture, metresPerUnit, glm::vec2(pixelMetres) };
+	if (paintTexture) {
+		input.paint = paintTexture.get();
+		input.paintBiomes = biomepaint::SlotBiomes(biomePaint, biomeSettings.config.table);
+	}
+	input.region = region;
+	biomeGenerator.GenerateMapBiomes(biomeSettings, seaLevelMetres, input, view.LayerTexture(TerrainView::Layer::BIOMES, width, height), *biomeIds,
+		&view.SplatTexture(width, height));
+	return true;
+}
+
+void MapImportSys::UpdateBiomePaint(const Camera& camera, bool active, float deltaTime)
+{
+	const bool pressed = std::exchange(paintPressed, false);
+	const bool canPaint = biomePaintOn && BiomesOn() && active && !map.Empty() && !camera.MouseControl();
+	if (paintStroke) {
+		//Let go, also outside the window or after losing the focus, or the mode or the biomes left
+		if (!paintHeld || !canPaint) {
+			FinishPaintStroke();
+			return;
+		}
+	}
+	else {
+		if (!pressed || !canPaint || !hoverTexel || Busy()) {
+			return;
+		}
+		const bool erase = paintInvert;
+		if (erase && biomePaint.texels.empty()) {
+			return;
+		}
+		const std::vector<biome::Biome>& table = biomeSettings.config.table;
+		if (!erase && std::none_of(table.begin(), table.end(), [&](const biome::Biome& b) { return b.name == paintBiome; })) {
+			biomeStatus = "Paint: choose a biome in the Paint section";
+			biomeStatusIsError = true;
+			return;
+		}
+		try {
+			PaintStroke started;
+			started.before = biomePaint;
+			if (biomePaint.texels.empty()) {
+				biomePaint = biomepaint::Make(map.GetWidth(), map.GetHeight());
+			}
+			if (!erase) {
+				started.slot = biomepaint::SlotOf(biomePaint, paintBiome);
+				if (started.slot == 0) {
+					biomePaint = std::move(started.before);
+					biomeStatus = "Paint: the palette is full (" + std::to_string(biomepaint::maxPalette) + " biomes)";
+					biomeStatusIsError = true;
+					return;
+				}
+			}
+			paintStroke = std::move(started);
+		}
+		catch (const std::bad_alloc&) {
+			biomeStatus = "Paint: not enough memory for the painted biomes";
+			biomeStatusIsError = true;
+			return;
+		}
+		if (!paintTexture) {
+			UsePaint(std::move(biomePaint));
+		}
+	}
+	//Cursor over the sky or off the map: this frame paints nothing
+	if (!hoverTexel) {
+		return;
+	}
+	biomepaint::Dab dab;
+	dab.center = *hoverTexel;
+	dab.radius = paintRadius;
+	dab.hardness = paintHardness;
+	dab.amount = paintRate * std::clamp(deltaTime, 0.0f, 0.1f);
+	dab.slot = paintStroke->slot;
+	dab.erase = paintInvert;
+	dab.seed = ++paintSeed;
+	const glm::ivec4 rect = biomepaint::Apply(biomePaint, dab);
+	if (rect.z <= 0 || rect.w <= 0) {
+		return;
+	}
+	paintStroke->painted = true;
+	const size_t first = static_cast<size_t>(rect.y) * biomePaint.width + rect.x;
+	paintTexture->UploadRegion(rect.x, rect.y, rect.z, rect.w, biomePaint.width, biomePaint.texels.data() + first, GL_RG_INTEGER, GL_UNSIGNED_BYTE);
+	//Climate not ready (or of another size): the whole pass runs when it is
+	if (!RunBiomePass(rect)) {
+		biomesStale = true;
+	}
+}
+
+void MapImportSys::FinishPaintStroke()
+{
+	PaintStroke finished = std::move(*paintStroke);
+	paintStroke.reset();
+	if (!finished.painted) {
+		return;
+	}
+	const size_t stepBytes = finished.before.Bytes();
+	if (history.Push({ "Paint biomes", std::nullopt, seaLevelMetres, std::move(finished.before) })) {
+		historyNote.clear();
+	}
+	else {
+		historyNote = "History off: one step needs " + std::to_string((stepBytes + (1 << 20) - 1) >> 20) + " MB, more than the history memory";
+	}
+	dirty = true;
+	biomeStatus.clear();
+}
+
+void MapImportSys::PaintImGui()
+{
+	ImGui::SeparatorText("Paint");
+	const std::vector<biome::Biome>& table = biomeSettings.config.table;
+	if (ImGui::Checkbox("Paint biomes with the mouse", &biomePaintOn) && biomePaintOn) {
+		sculptOn = false;
+	}
+	ImGui::SetItemTooltip("Left button paints the chosen biome over the automatic ones, in 3D and on the 2D map");
+	if (biomePaintOn) {
+		if (std::none_of(table.begin(), table.end(), [&](const biome::Biome& b) { return b.name == paintBiome; }) && !table.empty()) {
+			paintBiome = table[0].name;
+		}
+		if (ImGui::BeginCombo("Biome##paint", paintBiome.c_str())) {
+			for (size_t i = 0; i < table.size(); i++) {
+				ImGui::PushID(static_cast<int>(i));
+				const glm::vec3 c = table[i].color;
+				ImGui::ColorButton("##color", ImVec4(c.r, c.g, c.b, 1.0f), ImGuiColorEditFlags_NoTooltip, ImVec2(ImGui::GetFontSize(), ImGui::GetFontSize()));
+				ImGui::SameLine();
+				if (ImGui::Selectable(table[i].name.c_str(), table[i].name == paintBiome)) {
+					paintBiome = table[i].name;
+				}
+				ImGui::PopID();
+			}
+			ImGui::EndCombo();
+		}
+		ImGui::SliderFloat("Radius (px)##paint", &paintRadius, 1.0f, 512.0f, "%.0f", ImGuiSliderFlags_Logarithmic | ImGuiSliderFlags_AlwaysClamp);
+		ImGui::SliderFloat("Hardness##paint", &paintHardness, 0.0f, 1.0f, "%.2f", ImGuiSliderFlags_AlwaysClamp);
+		ImGui::SetItemTooltip("Full strength up to this part of the radius, then a smooth fall to the edge");
+		ImGui::SliderFloat("Speed##paint", &paintRate, 0.1f, 10.0f, "%.1f /s", ImGuiSliderFlags_Logarithmic | ImGuiSliderFlags_AlwaysClamp);
+		ImGui::SetItemTooltip("Strength gained per second at the centre; full strength is 1");
+		ImGui::TextDisabled("Left button: paint, Ctrl: erase, Shift + wheel: radius");
+	}
+	ImGui::BeginDisabled(Busy() || biomePaint.texels.empty());
+	if (ImGui::Button("Clear painting")) {
+		const size_t stepBytes = biomePaint.Bytes();
+		if (history.Push({ "Clear painting", std::nullopt, seaLevelMetres, std::move(biomePaint) })) {
+			historyNote.clear();
+		}
+		else {
+			historyNote = "History off: one step needs " + std::to_string((stepBytes + (1 << 20) - 1) >> 20) + " MB, more than the history memory";
+		}
+		UsePaint(biomepaint::Layer());
+		dirty = true;
+	}
+	ImGui::EndDisabled();
+	ImGui::SetItemTooltip("All biomes automatic again (Undo brings the painting back)");
+	if (!biomePaint.palette.empty()) {
+		const int missing = static_cast<int>(std::count_if(biomePaint.palette.begin(), biomePaint.palette.end(), [&](const std::string& name) {
+			return std::none_of(table.begin(), table.end(), [&](const biome::Biome& b) { return b.name == name; });
+		}));
+		ImGui::TextDisabled("%d painted biome names, %d not in the table (automatic there)", static_cast<int>(biomePaint.palette.size()), missing);
+	}
 }
 
 void MapImportSys::ShowBiomesState()
@@ -105,18 +302,9 @@ void MapImportSys::UpdateBiomes()
 			return result;
 		});
 	}
-	const int width = map.GetWidth(), height = map.GetHeight();
-	const TextureClass* heights = view.GetLayerTexture(TerrainView::Layer::TERRAIN);
-	if (!biomesStale || !climateTexture || !heights || climateTexture->GetWidth() != width || climateTexture->GetHeight() != height) {
-		return;
+	if (biomesStale && RunBiomePass(glm::ivec4(0, 0, -1, -1))) {
+		biomesStale = false;
 	}
-	biomesStale = false;
-	if (!biomeIds || biomeIds->GetWidth() != width || biomeIds->GetHeight() != height) {
-		biomeIds = std::make_unique<TextureClass>(width, height, GL_R32I);
-	}
-	const MapBiomeInput input{ *heights, *climateTexture, metresPerUnit, glm::vec2(pixelMetres) };
-	biomeGenerator.GenerateMapBiomes(biomeSettings, seaLevelMetres, input, view.LayerTexture(TerrainView::Layer::BIOMES, width, height), *biomeIds,
-		&view.SplatTexture(width, height));
 }
 
 bool MapImportSys::ClimateSourceImGui()
@@ -167,6 +355,10 @@ void MapImportSys::BiomesImGui()
 	if (ImGui::Checkbox("Biomes", &s.enabled)) {
 		dirty = true;
 		ShowBiomesState();
+		//The biome brush ends with the biomes (a running stroke ends in the next Update)
+		if (!s.enabled) {
+			biomePaintOn = false;
+		}
 	}
 	ImGui::SetItemTooltip("Biomes and surface materials of the map from its terrain; shown in the BIOMES and TEXTURED display modes and exported");
 	if (!BiomesOn()) {
@@ -245,6 +437,7 @@ void MapImportSys::BiomesImGui()
 		biomePresetsListed = false;
 	}
 	biomesChanged |= biomeEditor.ImGuiDraw(config.table);
+	PaintImGui();
 
 	if (climateChanged || biomesChanged) {
 		dirty = true;

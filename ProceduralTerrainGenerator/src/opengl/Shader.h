@@ -39,6 +39,8 @@ public:
 	void SetUniform2i(const std::string& name, int v0, int v1);
 	void SetUniform4f(const std::string& name, float v0, float v1, float v2, float v3);
 	void SetUniform1i(const std::string& name, int value);
+	//An int array uniform (name of the array, without [0])
+	void SetUniform1iv(const std::string& name, int count, const int* values);
 	void SetUniform3fv(const std::string& name, glm::vec3 v);
 	void SetUniformMat4f(const std::string& name, const glm::mat4& matrix);
 	void SetUniformMat3f(const std::string& name, const glm::mat3& matrix);
