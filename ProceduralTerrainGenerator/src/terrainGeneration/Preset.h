@@ -56,6 +56,12 @@ namespace preset {
 	//no leading or trailing space
 	bool IsValidName(const std::string& name);
 
+	//Biome settings alone as JSON (the "biomes" object of a world preset), e.g. for a map project
+	std::string BiomesJson(const BiomeConfig& config);
+	//@param out - replaced only on success; fields missing in the text keep the values out has
+	//@param error - description of the problem on failure (not JSON, a field of a wrong type, a value generation cannot use)
+	bool BiomesFromJson(const std::string& text, BiomeConfig& out, std::string& error);
+
 	//River settings alone as JSON (the "rivers" object of a world preset), e.g. for a map project
 	std::string RiversJson(const rivers::RiverConfig& config);
 	//@param out - replaced only on success; fields missing in the text keep their default values
