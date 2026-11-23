@@ -187,6 +187,9 @@ namespace mapproject {
 		if (hasPaint) {
 			header["biomePaint"] = { { "palette", project.paint.palette } };
 		}
+		if (const std::optional<geo::GeoReference>& g = project.georeference) {
+			header["georeference"] = { { "epsg", g->epsg }, { "origin", { g->origin.x, g->origin.y } }, { "pixel", { g->pixel.x, g->pixel.y } } };
+		}
 		header["blocks"] = json::array();
 		header["blocks"].push_back({ { "name", workingBlock }, { "bytes", workingData.size() } });
 		if (hasOriginal) {
@@ -276,6 +279,20 @@ namespace mapproject {
 			project.verticalExaggeration = header.value("verticalExaggeration", 1.0f);
 			if (!(project.verticalExaggeration > 0.0f) || !std::isfinite(project.verticalExaggeration)) {
 				project.verticalExaggeration = 1.0f;
+			}
+			//Version 5: georeference
+			if (version >= 5 && header.contains("georeference")) {
+				const json& g = header.at("georeference");
+				geo::GeoReference reference;
+				reference.epsg = g.at("epsg").get<int>();
+				reference.origin = glm::dvec2(g.at("origin").at(0).get<double>(), g.at("origin").at(1).get<double>());
+				reference.pixel = glm::dvec2(g.at("pixel").at(0).get<double>(), g.at("pixel").at(1).get<double>());
+				if (!std::isfinite(reference.origin.x) || !std::isfinite(reference.origin.y) || !std::isfinite(reference.pixel.x)
+					|| !std::isfinite(reference.pixel.y) || reference.pixel.x == 0.0 || reference.pixel.y == 0.0) {
+					error = "The georeference of the project is damaged";
+					return false;
+				}
+				project.georeference = reference;
 			}
 
 			for (const json& block : header.at("blocks")) {

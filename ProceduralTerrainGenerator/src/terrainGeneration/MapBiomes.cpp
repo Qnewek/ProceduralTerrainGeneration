@@ -274,7 +274,7 @@ namespace mapbiomes {
 		return (metres - settings.baseMetres) / settings.heightUnitMetres;
 	}
 
-	std::string ToJson(const Settings& s)
+	std::string ToJson(const Settings& s, const std::filesystem::path& projectFolder)
 	{
 		Json root;
 		root["enabled"] = s.enabled;
@@ -285,10 +285,26 @@ namespace mapbiomes {
 		root["reliefMetres"] = s.reliefMetres;
 		root["climateOrigin"] = { s.climateOrigin.x, s.climateOrigin.y };
 		root["config"] = Json::parse(preset::BiomesJson(s.config));
+		root["source"] = s.source == Source::LAND_COVER ? "landCover" : "climate";
+		root["landCoverFiles"] = s.landCoverFiles;
+		if (!projectFolder.empty()) {
+			//Beside the absolute paths: a project moved together with its files finds them again
+			Json relative = Json::array();
+			for (const std::string& file : s.landCoverFiles) {
+				const std::u8string text = std::filesystem::path(std::u8string(file.begin(), file.end())).lexically_relative(projectFolder).generic_u8string();
+				relative.push_back(std::string(text.begin(), text.end()));
+			}
+			root["landCoverFilesRelative"] = std::move(relative);
+		}
+		Json classes = Json::array();
+		for (const LandCoverClass& c : s.classes) {
+			classes.push_back({ { "code", c.code }, { "name", c.name }, { "color", { c.color.r, c.color.g, c.color.b } }, { "biomes", c.biomes } });
+		}
+		root["classes"] = std::move(classes);
 		return root.dump();
 	}
 
-	bool FromJson(const std::string& text, Settings& out, std::string& error)
+	bool FromJson(const std::string& text, Settings& out, std::string& error, const std::filesystem::path& projectFolder)
 	{
 		try {
 			const Json root = Json::parse(text);
@@ -322,12 +338,121 @@ namespace mapbiomes {
 					throw std::runtime_error(configError);
 				}
 			}
+			if (auto it = root.find("source"); it != root.end()) {
+				const std::string source = it->is_string() ? it->get<std::string>() : std::string();
+				if (source == "climate") {
+					s.source = Source::CLIMATE;
+				}
+				else if (source == "landCover") {
+					s.source = Source::LAND_COVER;
+				}
+				else {
+					throw std::runtime_error("Map biomes: source must be \"climate\" or \"landCover\"");
+				}
+			}
+			if (auto it = root.find("landCoverFiles"); it != root.end()) {
+				s.landCoverFiles = it->get<std::vector<std::string>>();
+				auto relative = root.find("landCoverFilesRelative");
+				if (!projectFolder.empty() && relative != root.end() && relative->size() == s.landCoverFiles.size()) {
+					for (size_t i = 0; i < s.landCoverFiles.size(); i++) {
+						const std::string& saved = s.landCoverFiles[i];
+						const std::string beside = (*relative)[i].get<std::string>();
+						std::error_code ec;
+						const std::filesystem::path besidePath = (projectFolder / std::filesystem::path(std::u8string(beside.begin(), beside.end()))).lexically_normal();
+						if (!std::filesystem::exists(std::filesystem::path(std::u8string(saved.begin(), saved.end())), ec) && !beside.empty()
+							&& std::filesystem::exists(besidePath, ec)) {
+							const std::u8string found = besidePath.u8string();
+							s.landCoverFiles[i] = std::string(found.begin(), found.end());
+						}
+					}
+				}
+			}
+			if (auto it = root.find("classes"); it != root.end()) {
+				std::vector<LandCoverClass> classes;
+				for (const Json& c : *it) {
+					LandCoverClass read;
+					read.code = c.at("code").get<int>();
+					if (read.code < 1 || read.code > 255) {
+						throw std::runtime_error("Map biomes: a land cover class code must be 1 to 255");
+					}
+					for (const LandCoverClass& other : classes) {
+						if (other.code == read.code) {
+							throw std::runtime_error("Map biomes: land cover class " + std::to_string(read.code) + " is given twice");
+						}
+					}
+					read.name = c.value("name", std::string());
+					if (auto color = c.find("color"); color != c.end()) {
+						read.color = glm::vec3((*color).at(0).get<float>(), (*color).at(1).get<float>(), (*color).at(2).get<float>());
+					}
+					read.biomes = c.value("biomes", std::vector<std::string>());
+					classes.push_back(std::move(read));
+				}
+				std::sort(classes.begin(), classes.end(), [](const LandCoverClass& a, const LandCoverClass& b) { return a.code < b.code; });
+				s.classes = std::move(classes);
+			}
 			out = std::move(s);
 			return true;
 		}
 		catch (const std::exception& e) {
 			error = e.what();
 			return false;
+		}
+	}
+
+	std::vector<LandCoverClass> WorldCoverClasses()
+	{
+		auto rgb = [](int r, int g, int b) { return glm::vec3(r, g, b) / 255.0f; };
+		return {
+			{ 10, "Tree cover", rgb(0, 100, 0), { "Forest", "Taiga", "Jungle" } },
+			{ 20, "Shrubland", rgb(255, 187, 34), { "Steppe", "Savanna", "Tundra" } },
+			{ 30, "Grassland", rgb(255, 255, 76), { "Plains", "Steppe", "Savanna", "Tundra", "Hills" } },
+			{ 40, "Cropland", rgb(240, 150, 255), { "Plains", "Steppe", "Hills" } },
+			{ 50, "Built-up", rgb(250, 0, 0), { "Plains", "Hills" } },
+			{ 60, "Bare / sparse vegetation", rgb(180, 180, 180), { "Desert", "Mountain", "Rocky peaks", "Stony shore", "Beach", "Tundra" } },
+			{ 70, "Snow and ice", rgb(240, 240, 240), { "Snowfields", "Snowy peaks", "Snowy shore" } },
+			{ 80, "Permanent water bodies", rgb(0, 100, 200), { "Ocean", "Deep ocean" } },
+			{ 90, "Herbaceous wetland", rgb(0, 150, 160), { "Plains", "Forest", "Tundra" } },
+			{ 95, "Mangroves", rgb(0, 207, 117), { "Jungle", "Beach" } },
+			{ 100, "Moss and lichen", rgb(250, 230, 160), { "Tundra", "Snowfields" } },
+		};
+	}
+
+	std::array<uint64_t, 256> ClassMasks(const Settings& settings)
+	{
+		std::array<uint64_t, 256> masks{};
+		if (settings.source != Source::LAND_COVER) {
+			return masks;
+		}
+		const std::vector<biome::Biome>& table = settings.config.table;
+		for (const LandCoverClass& c : settings.classes) {
+			if (c.code < 1 || c.code > 255) {
+				continue;
+			}
+			uint64_t mask = 0;
+			for (const std::string& name : c.biomes) {
+				for (size_t i = 0; i < table.size() && i < 64; i++) {
+					if (table[i].name == name) {
+						mask |= uint64_t(1) << i;
+					}
+				}
+			}
+			masks[c.code] = mask;
+		}
+		return masks;
+	}
+
+	void AddMissingClasses(Settings& settings, const std::array<uint64_t, 256>& counts)
+	{
+		bool added = false;
+		for (int code = 1; code < 256; code++) {
+			const bool known = std::any_of(settings.classes.begin(), settings.classes.end(), [&](const LandCoverClass& c) { return c.code == code; });
+			if (counts[code] > 0 && !known) {
+				settings.classes.push_back({ code, "Class " + std::to_string(code), glm::vec3(0.5f), {} });
+				added = true;
+			}
+		}
+		if (added) {
+			std::sort(settings.classes.begin(), settings.classes.end(), [](const LandCoverClass& a, const LandCoverClass& b) { return a.code < b.code; });
 		}
 	}
 }

@@ -1,7 +1,11 @@
 #include "doctest/doctest.h"
 
+#include <algorithm>
+#include <array>
 #include <chrono>
 #include <cmath>
+#include <filesystem>
+#include <fstream>
 #include <string>
 
 #include "glm/gtc/packing.hpp"
@@ -221,4 +225,172 @@ TEST_CASE("Climate maps timing 8192 x 8192" * doctest::skip())
 	const double seconds = std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count();
 	MESSAGE("ComputeClimate 8192 x 8192: " << seconds << " s");
 	CHECK(maps.packed.size() == map.Size());
+}
+
+//--- Land cover settings (stage D3) ---
+
+namespace {
+	bool SameClasses(const std::vector<mapbiomes::LandCoverClass>& a, const std::vector<mapbiomes::LandCoverClass>& b)
+	{
+		if (a.size() != b.size()) {
+			return false;
+		}
+		for (size_t i = 0; i < a.size(); i++) {
+			if (a[i].code != b[i].code || a[i].name != b[i].name || a[i].color != b[i].color || a[i].biomes != b[i].biomes) {
+				return false;
+			}
+		}
+		return true;
+	}
+
+	int IndexOf(const std::vector<biome::Biome>& table, const std::string& name)
+	{
+		for (size_t i = 0; i < table.size(); i++) {
+			if (table[i].name == name) {
+				return static_cast<int>(i);
+			}
+		}
+		return -1;
+	}
+}
+
+TEST_CASE("Class masks follow biome names")
+{
+	mapbiomes::Settings s;
+	s.source = mapbiomes::Source::LAND_COVER;
+	s.classes = {
+		{ 10, "Trees", glm::vec3(0.0f, 0.4f, 0.0f), { "Forest", "Removed", "Taiga" } },
+		{ 20, "Gone", glm::vec3(0.5f), { "Removed" } },
+		{ 30, "Any", glm::vec3(0.5f), {} },
+	};
+	const uint64_t forests = (uint64_t(1) << IndexOf(s.config.table, "Forest")) | (uint64_t(1) << IndexOf(s.config.table, "Taiga"));
+	std::array<uint64_t, 256> masks = mapbiomes::ClassMasks(s);
+	CHECK(masks[10] == forests);
+	CHECK(masks[20] == 0);
+	CHECK(masks[30] == 0);
+	CHECK(masks[40] == 0);
+	CHECK(masks[0] == 0);
+
+	//Another order of the table moves the bits with the biomes
+	std::rotate(s.config.table.begin(), s.config.table.begin() + 1, s.config.table.end());
+	masks = mapbiomes::ClassMasks(s);
+	CHECK(masks[10] == ((uint64_t(1) << IndexOf(s.config.table, "Forest")) | (uint64_t(1) << IndexOf(s.config.table, "Taiga"))));
+	CHECK(masks[10] != forests);
+
+	//Biomes from the climate: no masks
+	s.source = mapbiomes::Source::CLIMATE;
+	masks = mapbiomes::ClassMasks(s);
+	CHECK(std::all_of(masks.begin(), masks.end(), [](uint64_t m) { return m == 0; }));
+}
+
+TEST_CASE("WorldCover classes name existing biomes")
+{
+	const std::vector<mapbiomes::LandCoverClass> classes = mapbiomes::WorldCoverClasses();
+	CHECK(classes.size() == 11);
+	const std::vector<biome::Biome> table = BiomeConfig::Default().table;
+	for (const mapbiomes::LandCoverClass& c : classes) {
+		CHECK_FALSE(c.biomes.empty());
+		for (const std::string& name : c.biomes) {
+			CHECK_MESSAGE(IndexOf(table, name) >= 0, name);
+		}
+	}
+	CHECK(classes.front().code == 10);
+	CHECK(classes.front().name == "Tree cover");
+	CHECK(classes.back().code == 100);
+	mapbiomes::Settings s;
+	s.source = mapbiomes::Source::LAND_COVER;
+	const std::array<uint64_t, 256> masks = mapbiomes::ClassMasks(s);
+	CHECK(masks[80] == ((uint64_t(1) << IndexOf(table, "Ocean")) | (uint64_t(1) << IndexOf(table, "Deep ocean"))));
+}
+
+TEST_CASE("Land cover settings survive JSON")
+{
+	mapbiomes::Settings s;
+	s.source = mapbiomes::Source::LAND_COVER;
+	s.landCoverFiles = { "C:/maps/ESA_WorldCover_N51E018.tif", "zakopane.tif" };
+	s.classes = mapbiomes::WorldCoverClasses();
+	s.classes[0].name = "Lasy";
+	s.classes[0].color = glm::vec3(0.25f, 0.5f, 0.125f);
+	s.classes[0].biomes = { "Jungle" };
+	s.classes.push_back({ 200, "Class 200", glm::vec3(0.5f), {} });
+	mapbiomes::Settings read;
+	std::string error;
+	REQUIRE_MESSAGE(mapbiomes::FromJson(mapbiomes::ToJson(s), read, error), error);
+	CHECK(read.source == mapbiomes::Source::LAND_COVER);
+	CHECK(read.landCoverFiles == s.landCoverFiles);
+	CHECK(SameClasses(read.classes, s.classes));
+}
+
+TEST_CASE("Old biome JSON keeps the climate source")
+{
+	mapbiomes::Settings read;
+	std::string error;
+	REQUIRE_MESSAGE(mapbiomes::FromJson("{\"enabled\":true}", read, error), error);
+	CHECK(read.source == mapbiomes::Source::CLIMATE);
+	CHECK(read.landCoverFiles.empty());
+	CHECK(SameClasses(read.classes, mapbiomes::WorldCoverClasses()));
+}
+
+TEST_CASE("Repeated class code fails")
+{
+	mapbiomes::Settings read;
+	std::string error;
+	const std::string twice = "{\"classes\":[{\"code\":10,\"name\":\"A\",\"color\":[0,0,0],\"biomes\":[]},"
+		"{\"code\":10,\"name\":\"B\",\"color\":[0,0,0],\"biomes\":[]}]}";
+	CHECK_FALSE(mapbiomes::FromJson(twice, read, error));
+	CHECK_FALSE(error.empty());
+	CHECK_FALSE(mapbiomes::FromJson("{\"classes\":[{\"code\":0,\"name\":\"A\",\"color\":[0,0,0],\"biomes\":[]}]}", read, error));
+	CHECK_FALSE(mapbiomes::FromJson("{\"classes\":[{\"code\":256,\"name\":\"A\",\"color\":[0,0,0],\"biomes\":[]}]}", read, error));
+	CHECK_FALSE(mapbiomes::FromJson("{\"source\":\"satellite\"}", read, error));
+	CHECK(SameClasses(read.classes, mapbiomes::WorldCoverClasses()));
+}
+
+TEST_CASE("Missing classes are added")
+{
+	mapbiomes::Settings s;
+	std::array<uint64_t, 256> counts{};
+	counts[0] = 100;
+	counts[10] = 3;
+	counts[42] = 5;
+	counts[250] = 1;
+	const size_t before = s.classes.size();
+	mapbiomes::AddMissingClasses(s, counts);
+	REQUIRE(s.classes.size() == before + 2);
+	CHECK(std::is_sorted(s.classes.begin(), s.classes.end(), [](const auto& a, const auto& b) { return a.code < b.code; }));
+	const auto added = std::find_if(s.classes.begin(), s.classes.end(), [](const auto& c) { return c.code == 42; });
+	REQUIRE(added != s.classes.end());
+	CHECK(added->name == "Class 42");
+	CHECK(added->biomes.empty());
+	mapbiomes::AddMissingClasses(s, counts);
+	CHECK(s.classes.size() == before + 2);
+}
+
+TEST_CASE("Land cover files follow the project folder")
+{
+	auto utf8 = [](const std::filesystem::path& p) { const std::u8string t = p.u8string(); return std::string(t.begin(), t.end()); };
+	const std::filesystem::path root = std::filesystem::temp_directory_path() / "ptg_landcover_project";
+	std::filesystem::remove_all(root);
+	const std::filesystem::path before = root / "before", after = root / "after", elsewhere = root / "elsewhere.tif";
+	std::filesystem::create_directories(before / "cover");
+	std::filesystem::create_directories(after / "cover");
+	std::ofstream(before / "cover" / "tile.tif") << "x";
+	std::ofstream(after / "cover" / "tile.tif") << "x";
+	std::ofstream(elsewhere) << "x";
+
+	mapbiomes::Settings s;
+	s.landCoverFiles = { utf8(before / "cover" / "tile.tif"), utf8(elsewhere) };
+	const std::string json = mapbiomes::ToJson(s, before);
+	//The project and its files moved together: the old path is gone, the one beside the project is taken
+	std::filesystem::remove_all(before);
+	mapbiomes::Settings read;
+	std::string error;
+	REQUIRE_MESSAGE(mapbiomes::FromJson(json, read, error, after), error);
+	REQUIRE(read.landCoverFiles.size() == 2);
+	CHECK(std::filesystem::path(std::u8string(read.landCoverFiles[0].begin(), read.landCoverFiles[0].end())) == (after / "cover" / "tile.tif").lexically_normal());
+	//A path that still exists stays as it was
+	CHECK(read.landCoverFiles[1] == utf8(elsewhere));
+	//Without a folder the paths are read as saved
+	REQUIRE_MESSAGE(mapbiomes::FromJson(json, read, error), error);
+	CHECK(read.landCoverFiles[0] == utf8(before / "cover" / "tile.tif"));
+	std::filesystem::remove_all(root);
 }

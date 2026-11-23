@@ -43,6 +43,10 @@ struct MapBiomeInput {
 	std::array<int, 256> paintBiomes{};
 	//Rectangle (x, y, width, height) to generate, the rest of the targets stays; width < 0 = the whole map
 	glm::ivec4 region = glm::ivec4(0, 0, -1, -1);
+	//Land cover class of every texel (landcover::ClassMap, GL_R8UI of the same size, 0 = none); nullptr = no land cover
+	const TextureClass* classes = nullptr;
+	//Allowed biomes of each class code (mapbiomes::ClassMasks, 0 = all); ignored without classes
+	std::array<uint64_t, 256> classMasks{};
 };
 
 //Generates all maps of the application in compute shaders (the only implementation of the generation; --gpu-check tests it).
@@ -123,6 +127,9 @@ private:
 	std::unique_ptr<Shader> heightShader, biomeShader, mapBiomeShader;
 	//Bound as the painted biomes when there are none (1x1, slot 0)
 	std::unique_ptr<TextureClass> noPaint;
-	unsigned int worldInput = 0, biomeTable = 0;
+	//Bound as the land cover when there is none (1x1, class 0; outside it imageLoad gives 0 too)
+	std::unique_ptr<TextureClass> noClasses;
+	//Masks of the class codes for map_biome_compute.shader: 256 x (low 32 bits, high 32 bits)
+	unsigned int worldInput = 0, biomeTable = 0, classMaskBuffer = 0;
 	std::unique_ptr<GpuQuery> timer;
 };

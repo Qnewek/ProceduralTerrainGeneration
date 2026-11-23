@@ -191,6 +191,14 @@ void TerrainView::SetFrameUniforms(Shader& shader, FrameUniforms& frame, const F
 	shader.SetUniform1i("materialDetail", TerrainMaterials::detailUnit);
 	shader.SetUniform1i("splatMap", splatUnit);
 	shader.SetUniform1i("useSplat", 0);
+	shader.SetUniform1i("landCoverMap", landCoverUnit);
+	shader.SetUniform1i("useLandCover", 0);
+}
+
+void TerrainView::SetLandCover(const TextureClass* classes, const std::array<glm::vec3, 256>& colors)
+{
+	landCover = classes;
+	landCoverColors = colors;
 }
 
 TextureClass& TerrainView::SplatTexture(int _width, int _height)
@@ -275,6 +283,13 @@ void TerrainView::Draw(Renderer& renderer, Camera& camera, LightSource& light, c
 	if (splat && (heightLayer == Layer::TERRAIN || (overlaySplat && heightLayer == Layer::OVERLAY))) {
 		splat->Bind(splatUnit);
 		shader->SetUniform1i("useSplat", 1);
+	}
+	//Classes of the land cover belong to the terrain like the splat map
+	const bool sameSize = landCover && textures[0] && landCover->GetWidth() == textures[0]->GetWidth() && landCover->GetHeight() == textures[0]->GetHeight();
+	if (settings.displayMode == utilities::heightMapMode::LAND_COVER && sameSize && heightLayer == Layer::TERRAIN) {
+		landCover->Bind(landCoverUnit);
+		shader->SetUniform3fvArray("landCoverColors", static_cast<int>(landCoverColors.size()), landCoverColors.data());
+		shader->SetUniform1i("useLandCover", 1);
 	}
 
 	if (settings.wireFrame) {

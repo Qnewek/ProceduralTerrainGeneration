@@ -16,6 +16,7 @@
 #include <tiffio.h>
 
 #include "DemTools.h"
+#include "TiffFile.h"
 
 namespace heightmap {
 	namespace {
@@ -218,64 +219,10 @@ namespace heightmap {
 		}
 
 		//--- GeoTIFF (libtiff) ---
+		using TiffHandle = tifffile::Handle;
+		using tifffile::GetArray;
 
-		//libtiff reports errors through a global handler: the message of the last error on this thread
-		thread_local std::string tiffError;
-
-		void TiffErrorHandler(const char* module, const char* format, va_list args)
-		{
-			char text[512];
-			std::vsnprintf(text, sizeof(text), format, args);
-			tiffError = module ? std::string(module) + ": " + text : std::string(text);
-		}
-
-		struct TiffCloser {
-			void operator()(TIFF* tif) const { TIFFClose(tif); }
-		};
-		using TiffHandle = std::unique_ptr<TIFF, TiffCloser>;
-
-		TiffHandle OpenTiff(const std::filesystem::path& path, std::string& error)
-		{
-			static const bool handlers = [] {
-				TIFFSetWarningHandler(nullptr);
-				TIFFSetErrorHandler(TiffErrorHandler);
-				return true;
-			}();
-			(void)handlers;
-			tiffError.clear();
-			TiffHandle tif(TIFFOpenW(path.wstring().c_str(), "r"));
-			if (!tif) {
-				error = "Not a valid TIFF" + (tiffError.empty() ? std::string() : ": " + tiffError);
-			}
-			return tif;
-		}
-
-		//An array tag, whose count libtiff passes as uint16 or uint32 depending on how the field is defined (GeoTIFF tags it does not know are
-		//read as anonymous fields)
-		template<typename T>
-		bool GetArray(TIFF* tif, uint32_t tag, TIFFDataType type, std::vector<T>& out)
-		{
-			const TIFFField* field = TIFFFindField(tif, tag, TIFF_ANY);
-			if (!field || TIFFFieldDataType(field) != type || !TIFFFieldPassCount(field)) {
-				return false;
-			}
-			const T* data = nullptr;
-			if (TIFFFieldReadCount(field) == TIFF_VARIABLE2) {
-				uint32_t count = 0;
-				if (!TIFFGetField(tif, tag, &count, &data) || !data) {
-					return false;
-				}
-				out.assign(data, data + count);
-			}
-			else {
-				uint16_t count = 0;
-				if (!TIFFGetField(tif, tag, &count, &data) || !data) {
-					return false;
-				}
-				out.assign(data, data + count);
-			}
-			return true;
-		}
+		TiffHandle OpenTiff(const std::filesystem::path& path, std::string& error) { return tifffile::Open(path, error); }
 
 		std::optional<double> NoDataOf(TIFF* tif)
 		{
@@ -341,11 +288,13 @@ namespace heightmap {
 			//Samples of a TIFF height map are taken as metres (GeoTIFF DEMs store them so)
 			info.metres = true;
 
-			std::vector<double> scale, tiepoint;
+			std::vector<double> scale, tiepoint, transformation;
 			std::vector<uint16_t> keys;
 			if (GetArray(tif, 33550, TIFF_DOUBLE, scale) && scale.size() >= 2 && scale[0] > 0.0 && scale[1] > 0.0) {
 				info.pixelSize = glm::dvec2(scale[0], scale[1]);
 			}
+			GetArray(tif, 33922, TIFF_DOUBLE, tiepoint);
+			GetArray(tif, 34264, TIFF_DOUBLE, transformation);
 			//GeoKeyDirectory: 4 header shorts, then {key, location, count, value}; GTModelTypeGeoKey (1024) 2 = geographic
 			if (GetArray(tif, 34735, TIFF_SHORT, keys)) {
 				for (size_t k = 4; k + 3 < keys.size(); k += 4) {
@@ -355,9 +304,10 @@ namespace heightmap {
 				}
 			}
 			//Tiepoint (I, J, K, X, Y, Z): raster point (I, J) lies at Y; rows go south
-			if (info.geographic && info.pixelSize && GetArray(tif, 33922, TIFF_DOUBLE, tiepoint) && tiepoint.size() >= 6) {
+			if (info.geographic && info.pixelSize && tiepoint.size() >= 6) {
 				info.latitude = tiepoint[4] - (header.height / 2.0 - tiepoint[1]) * info.pixelSize->y;
 			}
+			info.georeference = geo::FromGeoTiffTags(scale, tiepoint, transformation, keys);
 			return true;
 		}
 
@@ -405,7 +355,7 @@ namespace heightmap {
 				for (uint32_t ty = 0; ty < layout.height; ty += tileHeight) {
 					for (uint32_t tx = 0; tx < layout.width; tx += tileWidth) {
 						if (TIFFReadTile(tif.get(), tile.data(), tx, ty, 0, 0) < 0) {
-							error = "Cannot read a tile of the TIFF" + (tiffError.empty() ? std::string() : ": " + tiffError);
+							error = "Cannot read a tile of the TIFF" + tifffile::LastErrorSuffix();
 							return false;
 						}
 						for (uint32_t y = 0; y < tileHeight && ty + y < layout.height; y++) {
@@ -420,7 +370,7 @@ namespace heightmap {
 				std::vector<unsigned char> row(static_cast<size_t>(TIFFScanlineSize64(tif.get())));
 				for (uint32_t y = 0; y < layout.height; y++) {
 					if (TIFFReadScanline(tif.get(), row.data(), y, 0) < 0) {
-						error = "Cannot read a row of the TIFF" + (tiffError.empty() ? std::string() : ": " + tiffError);
+						error = "Cannot read a row of the TIFF" + tifffile::LastErrorSuffix();
 						return false;
 					}
 					for (uint32_t x = 0; x < layout.width; x++) {
@@ -462,7 +412,20 @@ namespace heightmap {
 				int corner = 0;
 				const std::from_chars_result r = std::from_chars(stem.data() + 1, stem.data() + stem.size(), corner);
 				if (r.ec == std::errc() && corner >= 0 && corner < 90) {
-					info.latitude = (stem[0] == 'S' || stem[0] == 's' ? -corner : corner) + 0.5;
+					const int south = stem[0] == 'S' || stem[0] == 's' ? -corner : corner;
+					info.latitude = south + 0.5;
+					//Longitude after the latitude: E019 / W020; samples lie on whole degrees, so the corner of pixel (0, 0) is half a pixel out
+					const char* rest = r.ptr;
+					const char* end = stem.data() + stem.size();
+					int lon = 0;
+					if (rest < end && (*rest == 'E' || *rest == 'e' || *rest == 'W' || *rest == 'w')) {
+						const std::from_chars_result l = std::from_chars(rest + 1, end, lon);
+						if (l.ec == std::errc() && lon >= 0 && lon <= 180) {
+							const double west = *rest == 'W' || *rest == 'w' ? -lon : lon;
+							const double pixel = 1.0 / (side - 1);
+							info.georeference = geo::GeoReference{ geo::degreesEpsg, { west - pixel / 2.0, south + 1.0 + pixel / 2.0 }, { pixel, -pixel } };
+						}
+					}
 				}
 			}
 			return true;
@@ -561,7 +524,24 @@ namespace heightmap {
 			if (info.geographic) {
 				info.latitude = cornerY + h.rows * h.cell / 2.0;
 			}
+			//The system: degrees by the rule above, otherwise unknown until a .prj beside the file names it (ApplyPrj)
+			info.georeference = geo::GeoReference{ info.geographic ? geo::degreesEpsg : 0, { cornerX, cornerY + h.rows * h.cell }, { h.cell, -h.cell } };
 			return true;
+		}
+
+		//The system of an ASCII grid from <name>.prj beside it, when there is one (it replaces the guess of AscFileHeader)
+		void ApplyPrj(const std::filesystem::path& path, ImportInfo& info)
+		{
+			std::filesystem::path prj = path;
+			prj.replace_extension(".prj");
+			std::ifstream file(prj, std::ios::binary);
+			if (!file || !info.georeference) {
+				return;
+			}
+			std::string text(64 * 1024, '\0');
+			file.read(text.data(), static_cast<std::streamsize>(text.size()));
+			text.resize(static_cast<size_t>(file.gcount()));
+			info.georeference->epsg = SystemFromPrj(text);
 		}
 
 		//@param file - gets a terminating zero, so strtod stops at its end (parsed in place, a copy of a large grid would double the memory)
@@ -636,6 +616,9 @@ namespace heightmap {
 					+ ": choose an area or a downsample";
 				return false;
 			}
+			if (info.georeference) {
+				info.georeference = geo::Cropped(*info.georeference, options.crop ? options.crop->x : 0, options.crop ? options.crop->y : 0, options.downsample);
+			}
 			return true;
 		}
 	}
@@ -676,6 +659,7 @@ namespace heightmap {
 			if (!ParseAscHeader(start.data(), start.data() + start.size(), h, error) || !AscFileHeader(h, header, error)) {
 				return false;
 			}
+			ApplyPrj(path, header.info);
 		}
 		else if (IsPng(extension)) {
 			//The signature and the IHDR chunk come first
@@ -759,6 +743,12 @@ namespace heightmap {
 		if (!ok || !Finish(map, missing, options, read, error)) {
 			return false;
 		}
+		if (IsAsc(extension)) {
+			ApplyPrj(path, read);
+		}
+		if (options.epsg && read.georeference && read.georeference->epsg == 0) {
+			read.georeference->epsg = *options.epsg;
+		}
 		info = read;
 		out = std::move(map);
 		return true;
@@ -783,5 +773,62 @@ namespace heightmap {
 		}
 		std::sort(files.begin(), files.end());
 		return files;
+	}
+}
+
+namespace heightmap {
+	int SystemFromPrj(const std::string& text)
+	{
+		std::string lower = text;
+		std::transform(lower.begin(), lower.end(), lower.begin(), [](char c) { return c >= 'A' && c <= 'Z' ? static_cast<char>(c - 'A' + 'a') : c; });
+		const size_t projcs = lower.find("projcs[");
+		if (projcs == std::string::npos) {
+			return lower.find("geogcs[") != std::string::npos ? geo::degreesEpsg : 0;
+		}
+		//The name of the projected system: the first quoted text of PROJCS
+		const size_t open = lower.find('"', projcs);
+		const size_t close = open == std::string::npos ? std::string::npos : lower.find('"', open + 1);
+		if (close == std::string::npos) {
+			return 0;
+		}
+		const std::string name = lower.substr(open + 1, close - open - 1);
+		//The first number after a position, skipping what is not a digit
+		auto numberAfter = [&](size_t from, size_t& end) {
+			while (from < name.size() && (name[from] < '0' || name[from] > '9')) {
+				from++;
+			}
+			int value = -1;
+			const std::from_chars_result r = std::from_chars(name.data() + from, name.data() + name.size(), value);
+			end = static_cast<size_t>(r.ptr - name.data());
+			return r.ec == std::errc() ? value : -1;
+		};
+		size_t end = 0;
+		if (const size_t cs2000 = name.find("cs2000"); cs2000 != std::string::npos) {
+			//Zone by its number (5–8) or by its central meridian (15, 18, 21, 24)
+			const int n = numberAfter(cs2000 + 6, end);
+			if (n >= 5 && n <= 8) {
+				return 2171 + n;
+			}
+			if (n == 15 || n == 18 || n == 21 || n == 24) {
+				return 2171 + n / 3;
+			}
+			return 0;
+		}
+		if (name.find("cs92") != std::string::npos || name.find("1992") != std::string::npos) {
+			return 2180;
+		}
+		if (const size_t utm = name.find("utm"); utm != std::string::npos) {
+			const size_t zone = name.find("zone", utm);
+			const int n = zone == std::string::npos ? -1 : numberAfter(zone + 4, end);
+			if (n < 1 || n > 60) {
+				return 0;
+			}
+			const bool south = end < name.size() && name[end] == 's';
+			if (name.find("etrs") != std::string::npos) {
+				return !south && n >= 28 && n <= 38 ? 25800 + n : 0;
+			}
+			return (south ? 32700 : 32600) + n;
+		}
+		return 0;
 	}
 }

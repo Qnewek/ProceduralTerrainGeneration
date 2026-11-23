@@ -113,6 +113,12 @@ void MapImportSys::InstallMap(HeightField units, float _metresPerUnit, glm::dvec
 	ShowUnits(std::move(units), _metresPerUnit, _pixelMetres);
 	//Painted biomes belong to the previous map (a project or a reload puts its own back after this)
 	UsePaint(biomepaint::Layer());
+	//So does the class map of the land cover: computed again for this one (a running computation is dropped)
+	classTexture.reset();
+	landCoverFiles.clear();
+	classCounts.fill(0);
+	landCoverMapId++;
+	landCoverStale = true;
 	history.Clear();
 	historyNote.clear();
 	editStatus.clear();
@@ -206,10 +212,11 @@ void MapImportSys::StartSaving(const std::filesystem::path& path)
 	project.generation = projectGeneration;
 	project.verticalExaggeration = renderSettings.heightScale / trueHeightScale;
 	project.rivers = preset::RiversJson(riverConfig);
-	project.biomes = mapbiomes::ToJson(biomeSettings);
+	project.biomes = mapbiomes::ToJson(biomeSettings, path.parent_path());
 	if (!biomePaint.texels.empty()) {
 		project.paint = biomePaint;
 	}
+	project.georeference = georeference;
 	const float unit = metresPerUnit;
 	const uint64_t version = mapVersion;
 	saveJob.Start([project = std::move(project), path, unit, version]() mutable {
@@ -330,6 +337,8 @@ void MapImportSys::InstallReceived(mapproject::Project& project)
 	projectSource = project.source;
 	projectGeneration = project.generation;
 	seaLevelMetres = project.seaLevel;
+	//A generated map lies nowhere on Earth
+	georeference.reset();
 	if (const std::string biomeError = UseBiomeSettings(project.biomes); !biomeError.empty()) {
 		SetProjectStatus("Biome settings of the map ignored: " + biomeError, true);
 	}
@@ -502,6 +511,7 @@ void MapImportSys::InstallProject(ProjectLoad& result)
 	projectSource = project.source;
 	projectGeneration = project.generation;
 	seaLevelMetres = project.seaLevel;
+	georeference = project.georeference;
 	const std::u8string stem = projectPath.stem().u8string();
 	suggestedName = std::string(stem.begin(), stem.end());
 	dirty = false;
@@ -521,8 +531,8 @@ void MapImportSys::InstallProject(ProjectLoad& result)
 			SetProjectStatus("Opened " + FileNameOf(result.path) + "; river settings ignored: " + riverError, true);
 		}
 	}
-	//Biome settings of the project (none before version 3: biomes off)
-	if (const std::string biomeError = UseBiomeSettings(project.biomes); !biomeError.empty()) {
+	//Biome settings of the project (none before version 3: biomes off); land cover files beside the project when moved with it
+	if (const std::string biomeError = UseBiomeSettings(project.biomes, projectPath.parent_path()); !biomeError.empty()) {
 		SetProjectStatus("Opened " + FileNameOf(result.path) + "; biome settings ignored: " + biomeError, true);
 	}
 	//Painted biomes of the project (version 4)
@@ -664,6 +674,7 @@ void MapImportSys::StartLoading(const std::filesystem::path& path, bool reload)
 	if (inspected && path == selected) {
 		options.crop = heightmap::PixelRect{ area[0], area[1], area[2], area[3] };
 		options.downsample = Downsample();
+		options.epsg = chosenEpsg;
 	}
 	const float rangeUnit = custom ? 0.0f : rangeMetresPerUnit[selectedRange];
 	const double pixel = static_cast<double>(pixelSize) * options.downsample;
@@ -718,6 +729,11 @@ void MapImportSys::InstallResult(LoadResult& result)
 	}
 	mapInfo = result.info;
 	mapPath = result.path;
+	//The same file again at the same size keeps the georeference the user may have set (system chosen, taken from another file)
+	const bool sameArea = result.reload && result.map.GetWidth() == map.GetWidth() && result.map.GetHeight() == map.GetHeight();
+	if (!sameArea || !georeference) {
+		georeference = result.info.georeference;
+	}
 	lastLoadMs = result.ms;
 	//The same file again (another value range): the painting stays when the size does
 	biomepaint::Layer keptPaint;
@@ -746,6 +762,25 @@ void MapImportSys::Draw(Renderer& renderer, Camera& camera, LightSource& light)
 {
 	//A stroke may paint above 1.5 map units (the units change only after it); the culling has to keep those patches
 	renderSettings.heightBound = stroke ? stroke->limit : 1.5f;
+	//LAND COVER shows the class map; without one (new map, climate source, biomes off) the mode goes back to the biomes or grey
+	if (LandCoverShown()) {
+		std::array<glm::vec3, 256> colors;
+		colors.fill(glm::vec3(0.5f));
+		for (const mapbiomes::LandCoverClass& c : biomeSettings.classes) {
+			if (c.code >= 1 && c.code <= 255) {
+				colors[c.code] = c.color;
+			}
+		}
+		view.SetLandCover(classTexture.get(), colors);
+	}
+	else {
+		view.SetLandCover(nullptr, {});
+		//While the class map is computed again (new map, other files) the mode stays, grey until it comes
+		const bool coming = LandCoverOn() && (landCoverStale || landCoverJob.IsRunning());
+		if (renderSettings.displayMode == utilities::heightMapMode::LAND_COVER && !coming) {
+			renderSettings.displayMode = BiomesOn() ? utilities::heightMapMode::BIOMES : utilities::heightMapMode::GREYSCALE;
+		}
+	}
 	view.Draw(renderer, camera, light, renderSettings);
 	//Before the water, which writes no depth anyway: the depth under the cursor is the terrain
 	PickUnderCursor(camera, light);
@@ -896,6 +931,14 @@ bool MapImportSys::OptionsImGui()
 	if (info.geographic) {
 		ImGui::TextWrapped("Geographic coordinates: no reprojection, pixels in metres at latitude %.2f", info.latitude);
 	}
+	//Where the map lies, for the land cover of the Biomes tab; coordinates without a named system get one chosen here
+	if (info.georeference && info.georeference->epsg == 0) {
+		utilities::SystemComboImGui("Coordinate system", chosenEpsg);
+		ImGui::TextDisabled("The file does not name the system of its coordinates; land cover is placed in this one.");
+	}
+	else if (info.georeference) {
+		ImGui::TextWrapped("Coordinate system: %s", geo::SystemName(info.georeference->epsg).c_str());
+	}
 	const double longer = std::max(filePixelMetres.x, filePixelMetres.y);
 	if (std::abs(filePixelMetres.x - filePixelMetres.y) > 0.01 * longer) {
 		ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.8f, 0.3f, 1.0f));
@@ -957,7 +1000,7 @@ void MapImportSys::ImGuiDisplay()
 {
 	TerrainRenderSettings& s = renderSettings;
 	//Biome colors exist only with biomes on (Biomes tab); a file has no infinite generation
-	if (utilities::DisplayModeImGui(s.modelScale, s.topoStep, s.topoBandWidth, s.heightScale, s.displayMode, s.wireFrame, s.map2d, nullptr)) {
+	if (utilities::DisplayModeImGui(s.modelScale, s.topoStep, s.topoBandWidth, s.heightScale, s.displayMode, s.wireFrame, s.map2d, nullptr, LandCoverShown())) {
 		if (s.displayMode == utilities::heightMapMode::BIOMES && !BiomesOn()) {
 			s.displayMode = utilities::heightMapMode::GREYSCALE;
 		}
@@ -997,7 +1040,8 @@ void MapImportSys::ImGuiSaving()
 	const TextureClass* colors = view.GetLayerTexture(TerrainView::Layer::BIOMES);
 	auto sameSize = [width, height](const TextureClass* t) { return t && t->GetWidth() == width && t->GetHeight() == height; };
 	//Ids of an older table or map would not match the manifest or the heights
-	const bool biomesCurrent = !climateStale && !biomesStale && !climateJob.IsRunning() && !stroke && !paintStroke;
+	const bool landCoverCurrent = !LandCoverOn() || (!landCoverStale && !landCoverJob.IsRunning());
+	const bool biomesCurrent = !climateStale && !biomesStale && !climateJob.IsRunning() && !stroke && !paintStroke && landCoverCurrent;
 	if (BiomesOn() && biomesCurrent && sameSize(splat) && sameSize(colors) && sameSize(biomeIds.get())) {
 		pack.materials = ExportPanel::SplatSource(*splat, materialNames);
 		const TextureClass* ids = biomeIds.get();

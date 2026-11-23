@@ -20,6 +20,7 @@
 #include "GpuSculpt.h"
 #include "HeightmapImport.h"
 #include "Hydrology.h"
+#include "LandCover.h"
 #include "LightSource.h"
 #include "MapBiomes.h"
 #include "MapEdit.h"
@@ -196,6 +197,8 @@ private:
 	HeightField map;
 	heightmap::ImportInfo mapInfo;
 	std::filesystem::path mapPath;
+	//Where the pixels of the map lie (from its file, its project or "Take georeference from file"); none = not known
+	std::optional<geo::GeoReference> georeference;
 	float mapMin = 0.0f, mapMax = 0.0f;
 	float metresPerUnit = 64.0f;
 	glm::dvec2 pixelMetres{ 1.0 };
@@ -330,6 +333,33 @@ private:
 	bool biomePresetsListed = false;
 	int biomePreset = 0;
 	bool BiomesOn() const { return biomeSettings.enabled; }
+	//Land cover (stage D3, the Land cover section of the Biomes tab): the class map of the files of biomeSettings, computed on a background
+	//thread after a new map, a change of the files or of the georeference; edits of the terrain keep it. classTexture (GL_R8UI) is the class
+	//map of the map shown (reset with a new map), the GPU pass uses it with the masks of mapbiomes::ClassMasks
+	struct LandCoverResult {
+		landcover::ClassMap map;
+		uint64_t mapId = 0, filesVersion = 0;	//landCoverMapId and landCoverFilesVersion when it started
+		double ms = 0.0;
+		std::string error;		//out of memory; map empty
+	};
+	GenerationJob<LandCoverResult> landCoverJob;
+	std::unique_ptr<TextureClass> classTexture;
+	std::vector<landcover::FileStatus> landCoverFiles;	//status of each file of the last class map
+	std::array<uint64_t, 256> classCounts{};			//map pixels of each class of the last class map
+	bool landCoverStale = false;
+	uint64_t landCoverMapId = 0;		//changes with every new map (not with edits)
+	uint64_t landCoverFilesVersion = 0;	//changes with the files and the georeference
+	double landCoverMs = 0.0;
+	std::string landCoverError;
+	bool LandCoverOn() const { return BiomesOn() && biomeSettings.source == mapbiomes::Source::LAND_COVER; }
+	//A class map of the map shown exists: the LAND COVER display mode can show it
+	bool LandCoverShown() const { return LandCoverOn() && classTexture && classTexture->GetWidth() == map.GetWidth() && classTexture->GetHeight() == map.GetHeight(); }
+	//The files or the georeference changed: the class map again, a running one is dropped
+	void LandCoverInputChanged() { landCoverFilesVersion++; landCoverStale = true; }
+	//Takes a finished class map, starts a new one; called every frame (GL thread)
+	void UpdateLandCover();
+	//The Biome source and Land cover sections of the Biomes tab
+	void LandCoverImGui();
 	//Biomes painted over the automatic ones (stage D2, the Paint section of the Biomes tab, MapImportBiomes.cpp). The layer is 0x0 until
 	//the first stroke (nothing painted, no memory), then the size of the map; paintTexture (GL_RG8UI) is its copy on the GPU, present
 	//exactly when the layer has a size. A stroke changes the layer on the CPU, uploads the rectangle of each dab and runs the GPU pass
@@ -364,8 +394,10 @@ private:
 	float ActiveBrushRadius() const { return biomePaintOn ? paintRadius : brush.radius; }
 	//Takes a finished climate, starts a new one, runs the GPU pass; called every frame (GL thread)
 	void UpdateBiomes();
-	//Settings of a new map: from the JSON of a project (empty = defaults for the sea level); @return why they were ignored, empty if not
-	std::string UseBiomeSettings(const std::string& json);
+	//Settings of a new map: from the JSON of a project (empty = defaults for the sea level, keeping the land cover source, files and classes
+	//of the previous settings); @return why they were ignored, empty if not
+	//@param folderOfProject - folder of the project read (land cover files moved together with it)
+	std::string UseBiomeSettings(const std::string& json, const std::filesystem::path& folderOfProject = {});
 	//Display mode and splat map after biomes were turned on or off
 	void ShowBiomesState();
 	//Content of the Biomes tab
@@ -373,6 +405,18 @@ private:
 	//The settings of the climate from the terrain; sets climateStale or biomesStale for what changed
 	//@return true if one changed
 	bool ClimateSourceImGui();
+	//A new georeference of the map (system chosen, taken from a file): the project changes, the land cover is read again
+	void SetGeoreference(std::optional<geo::GeoReference> reference);
+	//The georeference of the map: system, corner, its system to choose and "Take georeference from file..."
+	void GeoreferenceImGui();
+
+	//"Take georeference from file...": the file chosen, its header and the part of it the map was made of
+	std::filesystem::path geoFile;
+	heightmap::FileHeader geoFileHeader;
+	int geoCrop[2] = { 0, 0 };
+	int geoDownsample = 1;
+	std::string geoStatus;
+	bool geoStatusError = false;
 
 	//File selection state
 	char folder[260] = "exports";
@@ -389,5 +433,6 @@ private:
 	float pixelSize = 1.0f;		//metres, one pixel of the file
 	int area[4] = { 0, 0, 0, 0 };	//x, y, width, height in pixels of the file
 	int downsampleIndex = 0;	//index in 1, 2, 4, 8
+	int chosenEpsg = geo::degreesEpsg;	//system of a file whose coordinates name none
 	std::string error;
 };

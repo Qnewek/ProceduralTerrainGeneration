@@ -24,6 +24,10 @@ uniform bool useSplat;
 uniform sampler2D surfaceMap;
 //Biome colors per pixel too (mode 3)
 uniform sampler2D biomeMap;
+//Land cover classes (mode 7, Imported map): the class code of every texel and the color of every code (TerrainView::SetLandCover)
+uniform usampler2D landCoverMap;
+uniform bool useLandCover;
+uniform vec3 landCoverColors[256];
 uniform mat3 normalMatrix;
 uniform float heightScale;
 
@@ -35,6 +39,18 @@ uniform float heightScale;
 
 const int MODE_BIOMES = 3;
 const int MODE_TEXTURED = 6;
+const int MODE_LAND_COVER = 7;
+
+//The color of the class of the texel under the pixel (no interpolation between classes); grey without land cover
+vec3 landCoverColor()
+{
+    if (!useLandCover) {
+        return vec3(0.5);
+    }
+    ivec2 size = textureSize(landCoverMap, 0);
+    ivec2 texel = clamp(ivec2(MapCoord * vec2(size)), ivec2(0), size - 1);
+    return landCoverColors[texelFetch(landCoverMap, texel, 0).r & 255u];
+}
 //Materials with a smaller share are not sampled
 const float MIN_MATERIAL_WEIGHT = 0.01;
 //Most materials sampled per pixel
@@ -159,7 +175,7 @@ void main()
     if (depthPass) {
         return;
     }
-    vec3 baseColor = displayMode == MODE_BIOMES ? texture(biomeMap, MapCoord).rgb : aColor;
+    vec3 baseColor = displayMode == MODE_BIOMES ? texture(biomeMap, MapCoord).rgb : displayMode == MODE_LAND_COVER ? landCoverColor() : aColor;
     vec3 norm = normalize(normalMatrix * surfaceNormal(texture(surfaceMap, MapCoord), heightScale));
     vec3 geometryNormal = norm;
     float occlusion = 1.0;
