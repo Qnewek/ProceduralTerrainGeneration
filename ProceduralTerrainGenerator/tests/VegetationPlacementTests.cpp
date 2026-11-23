@@ -1,8 +1,13 @@
 #include "doctest/doctest.h"
 
 #include <algorithm>
+#include <cmath>
+#include <cstdint>
+#include <cstring>
 #include <functional>
+#include <limits>
 #include <set>
+#include <tuple>
 #include <vector>
 
 #include "Biome.h"
@@ -30,7 +35,7 @@ namespace {
 			maps.firstTexel = chunkTexel - 1;
 			for (int y = 0; y < mapSize; y++) {
 				for (int x = 0; x < mapSize; x++) {
-					height[y * mapSize + x] = heightAt(glm::vec2(maps.firstTexel + glm::ivec2(x, y)));
+					height[y * mapSize + x] = heightAt(maps.firstTexel + glm::vec2(x, y));
 				}
 			}
 			maps.height = height.data();
@@ -75,6 +80,54 @@ namespace {
 	{
 		return static_cast<int>(std::count_if(instances.begin(), instances.end(), [&](const Instance& i) { return i.layer == layer; }));
 	}
+
+	//FNV-1a 64 over every field of every instance (floats by their bits)
+	uint64_t HashOf(const std::vector<Instance>& instances)
+	{
+		uint64_t h = 0xcbf29ce484222325ULL;
+		auto add = [&h](uint32_t v) {
+			for (int b = 0; b < 4; b++) {
+				h ^= (v >> (8 * b)) & 0xFFu;
+				h *= 0x100000001b3ULL;
+			}
+		};
+		auto bits = [](float f) { uint32_t u; std::memcpy(&u, &f, sizeof(u)); return u; };
+		for (const Instance& i : instances) {
+			add(bits(i.position.x));
+			add(bits(i.position.y));
+			add(bits(i.position.z));
+			add(bits(i.scale));
+			add(bits(i.yaw));
+			add(static_cast<uint32_t>(i.model));
+			add(static_cast<uint32_t>(i.variant));
+			add(static_cast<uint32_t>(i.layer));
+		}
+		return h;
+	}
+
+	float Wavy(glm::vec2 p) { return 0.5f + 0.01f * std::sin(p.x * 0.05f) * std::cos(p.y * 0.07f); }
+}
+
+TEST_CASE("PlaceChunk: pinned output at step 1 and 2")
+{
+	//The output of the placement before cells were measured in metres: TerrainGen must keep its plants bit for bit
+	std::vector<Instance> fine;
+	PlaceChunk(TestMaps(glm::ivec2(256, -128), Wavy, glm::vec2(0.0003f, 0.0f), 0).maps, Plants(0.5f), models, Settings(glm::ivec2(256, -128)), fine);
+	REQUIRE(!fine.empty());
+	CHECK(fine.size() == 479);
+	CHECK(HashOf(fine) == 16045411382805590011ULL);
+
+	const glm::ivec2 origin(256, -512);
+	TestMaps coarse(origin, Wavy, glm::vec2(0.0003f, 0.0f), 0);
+	coarse.maps.step = 2;
+	coarse.maps.firstTexel = origin - 2;
+	PlacementSettings s = Settings(origin);
+	s.chunkTexels = 2 * chunkTexels;
+	std::vector<Instance> far;
+	PlaceChunk(coarse.maps, Plants(0.5f), models, s, far);
+	REQUIRE(!far.empty());
+	CHECK(far.size() == 1679);
+	CHECK(HashOf(far) == 2292678894679707513ULL);
 }
 
 TEST_CASE("LayerOfKind: tree, shrub and rock; other kinds are shrubs")
@@ -158,7 +211,7 @@ TEST_CASE("PlaceChunk: nothing under water, nothing beyond the slope of a plant,
 	}
 
 	out.clear();
-	PlaceChunk(TestMaps(glm::ivec2(0, 0), Flat, glm::vec2(0.0f), 0).maps, { {} }, models, Settings(glm::ivec2(0, 0)), out);
+	PlaceChunk(TestMaps(glm::ivec2(0, 0), Flat, glm::vec2(0.0f), 0).maps, std::vector<std::vector<biome::Plant>>{ {} }, models, Settings(glm::ivec2(0, 0)), out);
 	CHECK(out.empty());
 	//A biome id beyond the table
 	PlaceChunk(TestMaps(glm::ivec2(0, 0), Flat, glm::vec2(0.0f), 3).maps, rules, models, Settings(glm::ivec2(0, 0)), out);
@@ -296,6 +349,160 @@ TEST_CASE("PlaceChunk: a coarse chunk places the same trees as the fine chunks i
 		b.insert(key(i));
 	}
 	CHECK(a == b);
+}
+
+TEST_CASE("PlaceChunk: prepared plants give the same as the plain call")
+{
+	const auto plants = Plants(0.5f);
+	const TestMaps maps(glm::ivec2(0, 128), Wavy, glm::vec2(0.0f), 0);
+	std::vector<Instance> prepared, plain;
+	PlaceChunk(maps.maps, PreparePlants(plants, models), models, Settings(glm::ivec2(0, 128)), prepared);
+	PlaceChunk(maps.maps, plants, models, Settings(glm::ivec2(0, 128)), plain);
+	REQUIRE(!plain.empty());
+	CHECK(HashOf(prepared) == HashOf(plain));
+}
+
+TEST_CASE("PlaceChunk: a fractional step samples the maps in metres")
+{
+	//Height rises 0.001 per metre along x: bilinear sampling gives it exactly at any step
+	const auto heightAt = [](glm::vec2 metres) { return 0.2f + 0.001f * metres.x; };
+	constexpr int size = 12;
+	std::vector<float> height(size * size);
+	std::vector<glm::vec4> surface(height.size(), glm::vec4(0.0f));
+	std::vector<int> ids(height.size(), 0);
+	ChunkMaps maps;
+	maps.size = size;
+	maps.firstTexel = glm::vec2(-30.0f);
+	maps.step = 30.0f;
+	for (int y = 0; y < size; y++) {
+		for (int x = 0; x < size; x++) {
+			height[y * size + x] = heightAt(maps.firstTexel + glm::vec2(x, y) * maps.step);
+		}
+	}
+	maps.height = height.data();
+	maps.surface = surface.data();
+	maps.ids = ids.data();
+	PlacementSettings s = Settings(glm::ivec2(0, 0));
+	s.chunkTexels = 2 * chunkTexels;
+	s.worldUnitsPerTexel = 1.0f;
+	std::vector<Instance> coarse;
+	PlaceChunk(maps, Plants(0.5f), models, s, coarse);
+	REQUIRE(!coarse.empty());
+	for (const Instance& i : coarse) {
+		CHECK(i.position.x >= 0.0f);
+		CHECK(i.position.x < 256.0f);
+		CHECK(i.position.z >= 0.0f);
+		CHECK(i.position.z < 256.0f);
+		CHECK(i.position.y == doctest::Approx(heightAt(glm::vec2(i.position.x, i.position.z))).epsilon(1e-5));
+	}
+
+	//The four chunks of 128 m over it, maps of 1 m
+	std::vector<Instance> fine;
+	for (int y = 0; y < 2; y++) {
+		for (int x = 0; x < 2; x++) {
+			const glm::ivec2 chunk = glm::ivec2(x, y) * chunkTexels;
+			PlacementSettings f = Settings(chunk);
+			f.worldUnitsPerTexel = 1.0f;
+			PlaceChunk(TestMaps(chunk, heightAt, glm::vec2(0.0f), 0).maps, Plants(0.5f), models, f, fine);
+		}
+	}
+	using Key = std::tuple<long, long, int, int>;
+	auto keys = [](const std::vector<Instance>& list) {
+		std::set<Key> out;
+		for (const Instance& i : list) {
+			out.insert({ std::lround(i.position.x * 100.0f), std::lround(i.position.z * 100.0f), i.model, i.variant });
+		}
+		return out;
+	};
+	CHECK(keys(coarse) == keys(fine));
+}
+
+TEST_CASE("PlaceChunk: elevation seen through the height transform")
+{
+	//Height 0.5 over water at 0.1: elevation 0.44, below the range of the stone
+	const std::vector<std::vector<biome::Plant>> stone{ { { "Stone", 0.5f, 1.0f, 1.0f, 90.0f, biome::Range{ 0.6f, 1.0f }, 0.0f } } };
+	const TestMaps maps(glm::ivec2(0, 0), Flat, glm::vec2(0.0f), 0);
+	std::vector<Instance> out;
+	PlaceChunk(maps.maps, stone, models, Settings(glm::ivec2(0, 0)), out);
+	CHECK(out.empty());
+
+	//Seen as height 0.9 over water at 0.1: elevation 0.89
+	PlacementSettings s = Settings(glm::ivec2(0, 0));
+	s.elevationScale = 1.8f;
+	s.elevationOffset = 0.0f;
+	s.elevationWater = 0.1f;
+	PlaceChunk(maps.maps, stone, models, s, out);
+	REQUIRE(!out.empty());
+	//Positions and heights stay those of the maps
+	CHECK(out[0].position.y == doctest::Approx(0.5f));
+
+	//Without its own water the water height of the maps is used untransformed: biome::Elevation(0.9, 0.1) as well
+	out.clear();
+	s.elevationWater = std::numeric_limits<float>::quiet_NaN();
+	PlaceChunk(maps.maps, stone, models, s, out);
+	CHECK(!out.empty());
+	//Its own water above the transformed height: nothing has elevation in the range
+	out.clear();
+	s.elevationWater = 0.95f;
+	PlaceChunk(maps.maps, stone, models, s, out);
+	CHECK(out.empty());
+}
+
+TEST_CASE("PlaceChunk: river water through the river frame")
+{
+	//A bowl of 60 x 42 network cells holding a lake around cell (30, 21); the maps sample it every 2 m
+	constexpr int netWidth = 60, netHeight = 42;
+	auto bowlAt = [](float x, float y) {
+		const bool edge = x <= 0.0f || y <= 0.0f || x >= netWidth - 1 || y >= netHeight - 1;
+		return 0.2f + 0.0004f * ((x - 30.0f) * (x - 30.0f) + (y - 21.0f) * (y - 21.0f)) + (edge ? 1.0f : 0.0f);
+	};
+	HeightField bowl(netWidth, netHeight);
+	for (int y = 0; y < netHeight; y++) {
+		for (int x = 0; x < netWidth; x++) {
+			bowl.At(x, y) = bowlAt(static_cast<float>(x), static_cast<float>(y));
+		}
+	}
+	rivers::RiverConfig config;
+	config.sourceArea = 2000.0f;
+	config.meander = 0.0f;
+	config.smoothing = 0;
+	const hydrology::Network net = hydrology::Compute(bowl, glm::vec2(0.0f), 1.0f, 0.0f, config);
+	REQUIRE(net.lakes == 1);
+
+	//Maps of 2 m per texel over the chunk at (0, 0), heights of the bowl at map position metres / 2
+	constexpr int size = 68;
+	std::vector<float> height(size * size);
+	std::vector<glm::vec4> surface(height.size(), glm::vec4(0.0f));
+	std::vector<int> ids(height.size(), 0);
+	ChunkMaps maps;
+	maps.size = size;
+	maps.firstTexel = glm::vec2(-2.0f);
+	maps.step = 2.0f;
+	for (int y = 0; y < size; y++) {
+		for (int x = 0; x < size; x++) {
+			const glm::vec2 cell = (maps.firstTexel + glm::vec2(x, y) * maps.step) * 0.5f;
+			height[y * size + x] = bowlAt(std::clamp(cell.x, 1.0f, netWidth - 2.0f), std::clamp(cell.y, 1.0f, netHeight - 2.0f));
+		}
+	}
+	maps.height = height.data();
+	maps.surface = surface.data();
+	maps.ids = ids.data();
+	const std::vector<std::vector<biome::Plant>> stone{ { { "Stone", 1.0f, 1.0f, 1.0f, 90.0f, anywhere, 0.0f } } };
+	PlacementSettings s = Settings(glm::ivec2(0, 0));
+	s.worldUnitsPerTexel = 1.0f;
+	s.waterHeight = 0.0f;
+	auto inLake = [](const Instance& i) { return glm::length(glm::vec2(i.position.x, i.position.z) - glm::vec2(60.0f, 42.0f)) < 4.0f; };
+
+	std::vector<Instance> dry;
+	PlaceChunk(maps, stone, models, s, dry);
+	CHECK(std::any_of(dry.begin(), dry.end(), inLake));
+
+	s.rivers = &net;
+	s.riverPositionScale = 0.5f;
+	std::vector<Instance> wet;
+	PlaceChunk(maps, stone, models, s, wet);
+	REQUIRE(!wet.empty());
+	CHECK(std::none_of(wet.begin(), wet.end(), inLake));
 }
 
 TEST_CASE("Morton: aligned squares of blocks are contiguous ranges")

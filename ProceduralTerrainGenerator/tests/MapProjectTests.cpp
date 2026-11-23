@@ -99,7 +99,7 @@ static mapproject::Project PaintedProject()
 
 TEST_CASE("Project keeps its biome paint")
 {
-	CHECK(mapproject::currentVersion == 5);
+	CHECK(mapproject::currentVersion == 7);
 	const mapproject::Project project = PaintedProject();
 	const std::vector<uint8_t> bytes = Bytes(project);
 	mapproject::Project read;
@@ -384,6 +384,116 @@ TEST_CASE("Version 4 project has no georeference")
 	std::string error;
 	REQUIRE_MESSAGE(mapproject::Deserialize(bytes.data(), bytes.size(), read, error), error);
 	CHECK_FALSE(read.georeference.has_value());
+}
+
+TEST_CASE("Project keeps its vegetation settings")
+{
+	mapproject::Project project = FullProject();
+	project.vegetation.enabled = false;
+	project.vegetation.density = 2.5f;
+	const std::vector<uint8_t> bytes = Bytes(project);
+	mapproject::Project read;
+	std::string error;
+	REQUIRE_MESSAGE(mapproject::Deserialize(bytes.data(), bytes.size(), read, error), error);
+	CHECK_FALSE(read.vegetation.enabled);
+	CHECK(read.vegetation.density == 2.5f);
+}
+
+TEST_CASE("Version 5 project has default vegetation")
+{
+	mapproject::Project project = FullProject();
+	project.vegetation.enabled = false;
+	project.vegetation.density = 2.5f;
+	std::vector<uint8_t> bytes = Bytes(project);
+	const std::string from = "\"version\":" + std::to_string(mapproject::currentVersion);
+	const std::string text(bytes.begin(), bytes.end());
+	const size_t at = text.find(from);
+	REQUIRE(at != std::string::npos);
+	bytes[at + from.size() - 1] = '5';
+	mapproject::Project read;
+	std::string error;
+	REQUIRE_MESSAGE(mapproject::Deserialize(bytes.data(), bytes.size(), read, error), error);
+	CHECK(read.vegetation.enabled);
+	CHECK(read.vegetation.density == 1.0f);
+}
+
+TEST_CASE("Damaged vegetation settings fail")
+{
+	mapproject::Project project = FullProject();
+	project.vegetation.density = 2.5f;
+	std::vector<uint8_t> bytes = Bytes(project);
+	//The same length, so the header length stays right: a density above 3
+	const std::string from = "\"density\":2.5", to = "\"density\":9.5";
+	const std::string text(bytes.begin(), bytes.end());
+	const size_t at = text.find(from);
+	REQUIRE(at != std::string::npos);
+	std::copy(to.begin(), to.end(), bytes.begin() + at);
+	mapproject::Project read = Marker();
+	std::string error;
+	CHECK_FALSE(mapproject::Deserialize(bytes.data(), bytes.size(), read, error));
+	CHECK_FALSE(error.empty());
+	CHECK(IsMarker(read));
+}
+
+namespace {
+	placedplants::Layer TwoPlants()
+	{
+		placedplants::Layer layer;
+		layer.palette = { "oak", "pine" };
+		layer.plants.resize(2);
+		layer.plants[0].position = glm::vec2(1.5f, 2.5f);
+		layer.plants[0].model = 1;
+		layer.plants[0].variant = 2;
+		layer.plants[1].position = glm::vec2(30.0f, 4.0f);
+		layer.plants[1].yaw = 0.5f;
+		layer.plants[1].scale = 1.1f;
+		return layer;
+	}
+}
+
+TEST_CASE("Project keeps its placed plants")
+{
+	mapproject::Project project = FullProject();
+	project.placedPlants = TwoPlants();
+	const std::vector<uint8_t> bytes = Bytes(project);
+	mapproject::Project read;
+	std::string error;
+	REQUIRE_MESSAGE(mapproject::Deserialize(bytes.data(), bytes.size(), read, error), error);
+	CHECK(read.placedPlants == project.placedPlants);
+}
+
+TEST_CASE("Version 6 project has no placed plants")
+{
+	mapproject::Project project = FullProject();
+	std::vector<uint8_t> bytes = Bytes(project);
+	const std::string from = "\"version\":" + std::to_string(mapproject::currentVersion);
+	const std::string text(bytes.begin(), bytes.end());
+	const size_t at = text.find(from);
+	REQUIRE(at != std::string::npos);
+	bytes[at + from.size() - 1] = '6';
+	mapproject::Project read;
+	std::string error;
+	REQUIRE_MESSAGE(mapproject::Deserialize(bytes.data(), bytes.size(), read, error), error);
+	CHECK(read.placedPlants.plants.empty());
+	CHECK(read.placedPlants.palette.empty());
+}
+
+TEST_CASE("Damaged placed plants fail")
+{
+	mapproject::Project project = FullProject();
+	project.placedPlants = TwoPlants();
+	//The palette cut to one name (spaces keep the header length): the plant of model 1 names a model the project does not list
+	std::vector<uint8_t> bytes = Bytes(project);
+	const std::string from = "[\"oak\",\"pine\"]", to = "[\"oak\"]       ";
+	const std::string text(bytes.begin(), bytes.end());
+	const size_t at = text.find(from);
+	REQUIRE(at != std::string::npos);
+	std::copy(to.begin(), to.end(), bytes.begin() + at);
+	mapproject::Project read = Marker();
+	std::string error;
+	CHECK_FALSE(mapproject::Deserialize(bytes.data(), bytes.size(), read, error));
+	CHECK_FALSE(error.empty());
+	CHECK(IsMarker(read));
 }
 
 TEST_CASE("Damaged georeference fails")

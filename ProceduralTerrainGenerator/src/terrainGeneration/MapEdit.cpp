@@ -60,7 +60,7 @@ namespace mapedit {
 
 	size_t History::BytesOf(const Step& step)
 	{
-		return (step.map ? step.map->Size() * sizeof(float) : 0) + (step.paint ? step.paint->Bytes() : 0);
+		return (step.map ? step.map->Size() * sizeof(float) : 0) + (step.paint ? step.paint->Bytes() : 0) + (step.plants ? step.plants->Bytes() : 0);
 	}
 
 	void History::SetLimit(size_t _bytes)
@@ -108,7 +108,7 @@ namespace mapedit {
 	}
 
 	std::optional<Restored> History::Move(std::deque<Step>& from, std::deque<Step>& to, HeightField& map, std::optional<float>& seaLevel,
-		biomepaint::Layer& paint)
+		biomepaint::Layer& paint, placedplants::Layer& plants)
 	{
 		if (from.empty()) {
 			return std::nullopt;
@@ -126,6 +126,10 @@ namespace mapedit {
 			std::swap(*step.paint, paint);
 			restored.paint = true;
 		}
+		if (step.plants) {
+			std::swap(*step.plants, plants);
+			restored.plants = true;
+		}
 		restored.seaLevel = step.seaLevel != seaLevel;
 		std::swap(step.seaLevel, seaLevel);
 		bytes += BytesOf(step);
@@ -134,14 +138,14 @@ namespace mapedit {
 		return restored;
 	}
 
-	std::optional<Restored> History::Undo(HeightField& map, std::optional<float>& seaLevel, biomepaint::Layer& paint)
+	std::optional<Restored> History::Undo(HeightField& map, std::optional<float>& seaLevel, biomepaint::Layer& paint, placedplants::Layer& plants)
 	{
-		return Move(undo, redo, map, seaLevel, paint);
+		return Move(undo, redo, map, seaLevel, paint, plants);
 	}
 
-	std::optional<Restored> History::Redo(HeightField& map, std::optional<float>& seaLevel, biomepaint::Layer& paint)
+	std::optional<Restored> History::Redo(HeightField& map, std::optional<float>& seaLevel, biomepaint::Layer& paint, placedplants::Layer& plants)
 	{
-		return Move(redo, undo, map, seaLevel, paint);
+		return Move(redo, undo, map, seaLevel, paint, plants);
 	}
 
 	void History::Clear()

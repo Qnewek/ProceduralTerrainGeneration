@@ -21,8 +21,12 @@ static std::string BiomeFileNameOf(const std::filesystem::path& path)
 	return std::string(text.begin(), text.end());
 }
 
-void MapImportSys::SetVegetationModels(const VegetationModels* models)
+void MapImportSys::SetVegetationModels(VegetationModels* models)
 {
+	vegetationModels = models;
+	if (!models) {
+		vegetation.ClearExtraInstances();
+	}
 	std::vector<BiomeEditor::PlantModel> names;
 	if (models) {
 		for (const VegetationModels::Model& m : models->GetModels()) {
@@ -103,6 +107,9 @@ bool MapImportSys::RunBiomePass(glm::ivec4 region)
 	input.region = region;
 	biomeGenerator.GenerateMapBiomes(biomeSettings, seaLevelMetres, input, view.LayerTexture(TerrainView::Layer::BIOMES, width, height), *biomeIds,
 		&view.SplatTexture(width, height));
+	//New biome ids: the plants follow them (after a stroke, which runs this for every dab)
+	biomeIdsVersion = mapVersion;
+	PlantsChanged();
 	return true;
 }
 
@@ -206,6 +213,7 @@ void MapImportSys::PaintImGui()
 	const std::vector<biome::Biome>& table = biomeSettings.config.table;
 	if (ImGui::Checkbox("Paint biomes with the mouse", &biomePaintOn) && biomePaintOn) {
 		sculptOn = false;
+		plantBrushOn = false;
 	}
 	ImGui::SetItemTooltip("Left button paints the chosen biome over the automatic ones, in 3D and on the 2D map");
 	if (biomePaintOn) {
