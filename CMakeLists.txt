@@ -67,6 +67,7 @@ add_library(ptg_core STATIC
 	${PTG_SRC}/terrainGeneration/MeshExport.cpp
 	${PTG_SRC}/terrainGeneration/MeshFile.cpp
 	${PTG_SRC}/terrainGeneration/Places.cpp
+	${PTG_SRC}/terrainGeneration/PlacedPlants.cpp
 	${PTG_SRC}/terrainGeneration/Preset.cpp
 	${PTG_SRC}/terrainGeneration/SplineSampling.cpp
 	${PTG_SRC}/terrainGeneration/TerrainMesh.cpp
@@ -109,6 +110,7 @@ add_executable(ProceduralTerrainGenerator
 	${PTG_SRC}/opengl/VertexArray.cpp
 	${PTG_SRC}/opengl/VertexBuffer.cpp
 	${PTG_SRC}/subSystems/MapImportBiomes.cpp
+	${PTG_SRC}/subSystems/MapImportVegetation.cpp
 	${PTG_SRC}/subSystems/MapImportEdit.cpp
 	${PTG_SRC}/subSystems/MapImportSculpt.cpp
 	${PTG_SRC}/subSystems/MapImportSys.cpp
@@ -179,6 +181,7 @@ add_executable(ptg_tests
 	${PTG_DIR}/tests/MeshExportTests.cpp
 	${PTG_DIR}/tests/MeshFileTests.cpp
 	${PTG_DIR}/tests/PermutationTests.cpp
+	${PTG_DIR}/tests/PlacedPlantsTests.cpp
 	${PTG_DIR}/tests/PlacesTests.cpp
 	${PTG_DIR}/tests/PresetTests.cpp
 	${PTG_DIR}/tests/RangeAllocatorTests.cpp

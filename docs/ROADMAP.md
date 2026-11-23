@@ -709,6 +709,26 @@ oryginał tylko w pamięci i w projekcie („Wróć do oryginału”), plus Cofn
   WorldCover z biomami), liczenie w tle, ścieżki plików też względne do projektu, tryb wyświetlania LAND COVER.
   Do sprawdzenia w aplikacji: WorldCover na styku dwóch kafli, NMT w PUWG 1992 z WorldCover (EPSG:4326), `.asc` bez `.prj` (system z combo), stary
   projekt + „Take georeference from file”, tryb LAND COVER (kolory klas, zmiana koloru), eksport paczki z biomami z pokrycia, czas mapy klas na 8192².
+  🟡 D4 2026-11-23 (branch `feat/map-vegetation`): roślinność. Decyzje właściciela: prawdziwa skala piksela (komórki 8 / 4 / 8 m i rozmiar drzew
+  w metrach, na DEM 30 m drzewa małe względem piksela i liczne) i siatka komórek w metrach. Rdzeń (`VegetationPlacement`): `ChunkMaps::step` = metry
+  na teksel map (TerrainGen 1 / 2^L — bit w bit jak przedtem, testy z przypiętym wynikiem), przeliczenie wysokości dla elewacji roślin i pozycji/poziomów
+  sieci rzek, `PreparePlants` raz na mapę. `vegexport::PlaceMap`: piksel dowolny (chunki 128 · ⌊piksel⌋ m), nachylenie z wysokości bez `surfaceMap`,
+  wiersze chunków na wątkach, `PlaceMapLimited` z limitem 2 mln (najpierw drzewa; drzew więcej → brak, razem więcej → same drzewa; przerwanie po
+  progu). Imported map: własny `VegetationLayer` (zestaw „extra”, `SetUnitsPerMetre` = 4 / piksel dla LOD i zasięgów), sadzenie w tle po każdym
+  przebiegu biomów / nowej sieci rzek / zmianie roślin tabeli, Density, „Plants” (nic w trakcie pociągnięcia; wynik starszej wersji odrzucany),
+  elewacja jak w biomach mapy, miejsce komórek z „Climate origin” (mapa z TerrainGen = te same drzewa), rysowane po odczycie punktu pod kursorem;
+  sekcja „Vegetation” zakładki Biomes; `.ptgmap` wersja 6 („Plants”, Density); eksport `_vegetation.json` tym samym wejściem i limitem.
+  Bez cieni i trawy (wymagają `ChunkWorld`), nie w 2D.
+  Do sprawdzenia w aplikacji: mapa wysłana z TerrainGen (1 m) — drzewa jak w TerrainGen w tym miejscu; wycinek DEM 30 m 512² — małe drzewa w lasach
+  biomów, czas sadzenia; pełny kafel SRTM — komunikat limitu i czas do niego; Sculpt / Paint lasu → rośliny wracają po puszczeniu; Undo; morze w górę
+  → nic pod wodą; rzeki wł./wył.; Save → Open zachowuje „Plants” i Density; eksport paczki — liczba roślin jak w statusie Biomes, pozycje do (W−1)·piksel.
+  Dalej (2026-11-23, prośba właściciela): własna zakładka „Vegetation” (po Biomes) z roślinami automatycznymi, pędzlem roślin i listą modeli z podglądem
+  3D (ta sama sekcja co w lewym panelu). Pędzel: zaznaczone modele, Count 1 = jedna roślina pod kursorem, więcej = tyle prób w kole na każde
+  dotknięcie; promień i odstęp w metrach, skala min–max, Ctrl gumka, Shift + kółko promień, jedno pociągnięcie = jeden krok Undo, „Clear placed plants”.
+  Rośliny z pędzla to osobna warstwa (`placedplants::Layer`: paleta nazw modeli + pozycje w metrach), niezależna od przesadzania automatycznych,
+  bez limitu 2 mln; stoją na bieżących wysokościach (po Sculpt na nowym terenie), w historii, w `.ptgmap` wersja 7 i w eksporcie (`Input::extra`).
+  Do sprawdzenia: jedna roślina kliknięciem; rozsypanie 3 modeli; gumka; Undo/Redo pędzla między krokami Sculpt; Sculpt pod roślinami; Save → Open;
+  eksport — liczba = automatyczne + z pędzla; rośliny z pędzla przy wyłączonych „Plants” i biomach; nieznany model w projekcie nie psuje wczytania.
 
 ---
 

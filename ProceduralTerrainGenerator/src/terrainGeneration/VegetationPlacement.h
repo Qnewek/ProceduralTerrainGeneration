@@ -1,6 +1,8 @@
 #pragma once
 
+#include <array>
 #include <cstdint>
+#include <limits>
 #include <string>
 #include <vector>
 
@@ -9,15 +11,15 @@
 #include "Biome.h"
 #include "Hydrology.h"
 
-//Where vegetation and rocks stand: a jittered grid in map texels, one grid per layer, each cell holding at most one model.
-//Every cell lies wholly in one chunk (the cell sizes divide the chunk size), so chunks never share a cell: no seams and no
-//doubles. Everything random comes from a hash of the cell, so a chunk always gets the same models. What grows where are the
-//plants of the biomes (biome::Plant). No OpenGL here.
+//Where vegetation and rocks stand: a jittered grid in metres (the placement grid; a TerrainGen map texel is 1 m of it), one grid
+//per layer, each cell holding at most one model. Every cell lies wholly in one chunk (the cell sizes divide the chunk size), so
+//chunks never share a cell: no seams and no doubles. Everything random comes from a hash of the cell, so a chunk always gets the
+//same models. What grows where are the plants of the biomes (biome::Plant). No OpenGL here.
 namespace vegetation
 {
 	enum class Layer { TREES, SHRUBS, ROCKS, COUNT };
 	constexpr int layerCount = static_cast<int>(Layer::COUNT);
-	//Side of a grid cell in map texels (1 texel = 1 m), per layer; each divides the chunk size
+	//Side of a grid cell in metres of the placement grid (TerrainGen: map texels), per layer; each divides the chunk size
 	constexpr int cellTexels[layerCount] = { 8, 4, 8 };
 	//World units of one metre of a model (1 texel = 1 m = TerrainView::worldUnitsPerTexel)
 	constexpr float unitsPerMetre = 4.0f;
@@ -43,29 +45,48 @@ namespace vegetation
 		Layer layer = Layer::TREES;
 	};
 
-	//Maps of one chunk as read from the GPU: size x size texels, row-major, texel t is map texel firstTexel + t * step
-	//(a coarser chunk samples every step-th map texel)
+	//Maps of one chunk: size x size texels, row-major, texel t lies at firstTexel + t * step of the placement grid (metres). TerrainGen:
+	//step 1, or 2^L for a coarser chunk sampling every 2^L-th map texel; a map of the real world: its pixel size
 	struct ChunkMaps {
 		int size = 0;
-		glm::ivec2 firstTexel = glm::ivec2(0);
-		int step = 1;
+		glm::vec2 firstTexel = glm::vec2(0.0f);
+		float step = 1.0f;
 		const float* height = nullptr;
 		const glm::vec4* surface = nullptr;		//xy = height gradient per world unit (GpuSurfacePass)
 		const int* ids = nullptr;				//biome ids
 	};
 
 	struct PlacementSettings {
-		glm::ivec2 chunkTexel = glm::ivec2(0);	//first map texel of the chunk
-		int chunkTexels = 128;					//side of the chunk in texels
-		glm::vec2 mapOrigin = glm::vec2(0.0f);	//world XZ of map texel (0, 0)
-		float worldUnitsPerTexel = 4.0f;
-		float heightScale = 1.0f;				//world units of height 1, for slopes
+		glm::ivec2 chunkTexel = glm::ivec2(0);	//first metre of the chunk on the placement grid (TerrainGen: map texel)
+		int chunkTexels = 128;					//side of the chunk in metres of the grid
+		glm::vec2 mapOrigin = glm::vec2(0.0f);	//world XZ of grid position (0, 0)
+		float worldUnitsPerTexel = 4.0f;		//world units per metre of the grid
+		float heightScale = 1.0f;				//world units of height 1, for slopes (the surface map gradient is per world unit)
 		float waterHeight = 0.0f;				//nothing stands at or below it
 		const hydrology::Network* rivers = nullptr;	//nothing stands under the water of its rivers and lakes; nullptr = none
 		float density = 1.0f;					//multiplies every probability
 		uint32_t seed = 0;
 		unsigned layerMask = (1u << layerCount) - 1u;	//bit l = layer l is placed
+		//Height the elevation ranges of the plants see: biome::Elevation(h * elevationScale + elevationOffset, elevationWater), with
+		//waterHeight when elevationWater is NaN (the defaults: the heights of the maps as they are)
+		float elevationScale = 1.0f, elevationOffset = 0.0f;
+		float elevationWater = std::numeric_limits<float>::quiet_NaN();
+		//Where the river network lies: network position = (grid position - riverOrigin) * riverPositionScale, and its levels times
+		//riverHeightScale are heights of the maps
+		glm::vec2 riverOrigin = glm::vec2(0.0f);
+		float riverPositionScale = 1.0f, riverHeightScale = 1.0f;
 	};
+
+	//A plant of a biome with its model resolved
+	struct ResolvedPlant {
+		const biome::Plant* plant = nullptr;
+		int model = 0;
+	};
+	//Plants of every biome id, per layer, with their models; plants of unknown models are left out, while models still loading (no
+	//variants) keep their share of the cells, so the others do not move once they load
+	using PreparedPlants = std::vector<std::array<std::vector<ResolvedPlant>, layerCount>>;
+	//@param plants - must outlive the result (it points into it)
+	PreparedPlants PreparePlants(const std::vector<std::vector<biome::Plant>>& plants, const std::vector<ModelInfo>& models);
 
 	//Places the plants of the biomes on a chunk. In each cell of a layer at most one plant stands: of the plants of the cell's biome
 	//in this layer that can grow there (its elevation range and slope), each takes its density (times the settings density and
@@ -75,6 +96,9 @@ namespace vegetation
 	//@param out - instances of the chunk are appended
 	void PlaceChunk(const ChunkMaps& maps, const std::vector<std::vector<biome::Plant>>& plants, const std::vector<ModelInfo>& models,
 		const PlacementSettings& settings, std::vector<Instance>& out);
+	//The same with the plants prepared once for many chunks
+	void PlaceChunk(const ChunkMaps& maps, const PreparedPlants& plants, const std::vector<ModelInfo>& models, const PlacementSettings& settings,
+		std::vector<Instance>& out);
 
 	//Z-order (Morton) index of a block in a square of blocks: every aligned power-of-two square of blocks is a contiguous range
 	inline uint32_t Morton(uint32_t x, uint32_t y)

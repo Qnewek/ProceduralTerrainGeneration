@@ -54,12 +54,6 @@ namespace vegetation
 			const float c = Unit(Hash(x, y + 1, seed)), d = Unit(Hash(x + 1, y + 1, seed));
 			return (a * (1.0f - s.x) + b * s.x) * (1.0f - s.y) + (c * (1.0f - s.x) + d * s.x) * s.y;
 		}
-
-		//A plant of a biome with its model resolved
-		struct ResolvedPlant {
-			const biome::Plant* plant = nullptr;
-			int model = 0;
-		};
 	}
 
 	std::vector<uint32_t> SortByBlock(std::vector<Instance>& instances, glm::vec2 mapOrigin, float worldUnitsPerTexel, glm::ivec2 chunkTexel,
@@ -106,19 +100,13 @@ namespace vegetation
 		return Layer::SHRUBS;
 	}
 
-	void PlaceChunk(const ChunkMaps& maps, const std::vector<std::vector<biome::Plant>>& plants, const std::vector<ModelInfo>& models,
-		const PlacementSettings& settings, std::vector<Instance>& out)
+	PreparedPlants PreparePlants(const std::vector<std::vector<biome::Plant>>& plants, const std::vector<ModelInfo>& models)
 	{
-		if (!maps.height || !maps.surface || !maps.ids || maps.size < 2) {
-			return;
-		}
 		std::unordered_map<std::string, int> modelOfName;
 		for (int i = 0; i < static_cast<int>(models.size()); i++) {
 			modelOfName.emplace(models[i].name, i);
 		}
-		//Plants of every biome and layer with their models; plants of unknown models are left out, while models still loading
-		//(no variants) keep their share of the cells, so the others do not move once they load
-		std::vector<std::array<std::vector<ResolvedPlant>, layerCount>> plantsOf(plants.size());
+		PreparedPlants plantsOf(plants.size());
 		for (size_t id = 0; id < plants.size(); id++) {
 			for (const biome::Plant& plant : plants[id]) {
 				const auto found = modelOfName.find(plant.model);
@@ -127,8 +115,23 @@ namespace vegetation
 				}
 			}
 		}
+		return plantsOf;
+	}
 
-		const float step = static_cast<float>(std::max(maps.step, 1));
+	void PlaceChunk(const ChunkMaps& maps, const std::vector<std::vector<biome::Plant>>& plants, const std::vector<ModelInfo>& models,
+		const PlacementSettings& settings, std::vector<Instance>& out)
+	{
+		PlaceChunk(maps, PreparePlants(plants, models), models, settings, out);
+	}
+
+	void PlaceChunk(const ChunkMaps& maps, const PreparedPlants& plantsOf, const std::vector<ModelInfo>& models, const PlacementSettings& settings,
+		std::vector<Instance>& out)
+	{
+		if (!maps.height || !maps.surface || !maps.ids || maps.size < 2 || !(maps.step > 0.0f)) {
+			return;
+		}
+		const float step = maps.step;
+		const float elevationWater = std::isnan(settings.elevationWater) ? settings.waterHeight : settings.elevationWater;
 		for (int layer = 0; layer < layerCount; layer++) {
 			if (!(settings.layerMask & (1u << layer))) {
 				continue;
@@ -143,7 +146,7 @@ namespace vegetation
 					uint32_t h = Hash(cellTexel.x, cellTexel.y, salt);
 					const float jitterX = Unit(h = Hash(h)), jitterY = Unit(h = Hash(h));
 					const glm::vec2 texel = glm::vec2(cellTexel) + glm::vec2(jitterX, jitterY) * static_cast<float>(cell);
-					const glm::vec2 local = (texel - glm::vec2(maps.firstTexel)) / step;
+					const glm::vec2 local = (texel - maps.firstTexel) / step;
 					const glm::ivec2 nearest = glm::clamp(glm::ivec2(glm::floor(local + 0.5f)), glm::ivec2(0), glm::ivec2(maps.size - 1));
 					const size_t index = static_cast<size_t>(nearest.y) * maps.size + nearest.x;
 					const int id = maps.ids[index];
@@ -154,10 +157,11 @@ namespace vegetation
 					if (height <= settings.waterHeight) {
 						continue;
 					}
-					if (settings.rivers && hydrology::WaterLevelAt(*settings.rivers, texel) >= height) {
+					if (settings.rivers && hydrology::WaterLevelAt(*settings.rivers, (texel - settings.riverOrigin) * settings.riverPositionScale)
+						* settings.riverHeightScale >= height) {
 						continue;
 					}
-					const float elevation = biome::Elevation(height, settings.waterHeight);
+					const float elevation = biome::Elevation(height * settings.elevationScale + settings.elevationOffset, elevationWater);
 					const glm::vec4 surface = maps.surface[index];
 					const float slope = std::atan(glm::length(glm::vec2(surface)) * settings.heightScale) * 180.0f / pi;
 

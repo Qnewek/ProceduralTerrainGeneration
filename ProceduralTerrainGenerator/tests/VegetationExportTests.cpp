@@ -1,7 +1,11 @@
 #include "doctest/doctest.h"
 
 #include <algorithm>
+#include <atomic>
 #include <chrono>
+#include <cmath>
+#include <cstdint>
+#include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <set>
@@ -52,6 +56,30 @@ namespace {
 			infos.push_back({ m.name, m.variants, vegetation::LayerOfKind(m.kind) });
 		}
 		return infos;
+	}
+
+	//FNV-1a 64 over every field of every plant (floats by their bits)
+	uint64_t HashOf(const std::vector<vegexport::Placed>& placed)
+	{
+		uint64_t h = 0xcbf29ce484222325ULL;
+		auto add = [&h](uint32_t v) {
+			for (int b = 0; b < 4; b++) {
+				h ^= (v >> (8 * b)) & 0xFFu;
+				h *= 0x100000001b3ULL;
+			}
+		};
+		auto bits = [](float f) { uint32_t u; std::memcpy(&u, &f, sizeof(u)); return u; };
+		for (const vegexport::Placed& p : placed) {
+			add(bits(p.position.x));
+			add(bits(p.position.y));
+			add(bits(p.position.z));
+			add(bits(p.yaw));
+			add(bits(p.scale));
+			add(static_cast<uint32_t>(p.model));
+			add(static_cast<uint32_t>(p.variant));
+			add(static_cast<uint32_t>(p.layer));
+		}
+		return h;
 	}
 
 	std::filesystem::path TempFolder(const char* name)
@@ -124,6 +152,23 @@ TEST_CASE("PlaceMap places the plants of the app: the same cells as a chunk of t
 	}));
 }
 
+TEST_CASE("PlaceMap: pinned output of a map of 1 m pixels")
+{
+	//The plants TerrainGen exported before pixels other than 1 m: they must stay bit for bit
+	TestWorld world(300, 170);
+	world.input.mapTexel = glm::ivec2(37, -50);
+	for (int y = 0; y < 170; y++) {
+		for (int x = 0; x < 300; x++) {
+			world.height.At(x, y) = 0.5f + 0.01f * std::sin(x * 0.05f) * std::cos(y * 0.07f);
+			world.surface[static_cast<size_t>(y) * 300 + x] = glm::vec4(0.0002f * std::cos(x * 0.1f), 0.0f, 0.0f, 0.0f);
+		}
+	}
+	const std::vector<vegexport::Placed> placed = vegexport::PlaceMap(world.height, world.surface, world.ids, world.input);
+	REQUIRE(!placed.empty());
+	CHECK(placed.size() == 1336);
+	CHECK(HashOf(placed) == 1798676657785315399ULL);
+}
+
 TEST_CASE("PlaceMap of a map moved over the world gives the plants of the world there")
 {
 	TestWorld at0(300, 170);
@@ -166,6 +211,192 @@ TEST_CASE("PlaceMap with only trees in the layer mask places nothing else")
 	const std::vector<vegexport::Placed> trees = vegexport::PlaceMap(world.height, world.surface, world.ids, world.input);
 	REQUIRE(!trees.empty());
 	CHECK(std::all_of(trees.begin(), trees.end(), [](const vegexport::Placed& p) { return p.layer == vegetation::Layer::TREES; }));
+}
+
+namespace {
+	//Plants of one layer in a result
+	size_t CountLayer(const std::vector<vegexport::Placed>& placed, vegetation::Layer layer)
+	{
+		return static_cast<size_t>(std::count_if(placed.begin(), placed.end(), [&](const vegexport::Placed& p) { return p.layer == layer; }));
+	}
+
+	bool SamePlants(const std::vector<vegexport::Placed>& a, const std::vector<vegexport::Placed>& b)
+	{
+		return a.size() == b.size() && std::equal(a.begin(), a.end(), b.begin(), [](const vegexport::Placed& x, const vegexport::Placed& y) {
+			return x.position == y.position && x.yaw == y.yaw && x.scale == y.scale && x.model == y.model && x.variant == y.variant && x.layer == y.layer;
+		});
+	}
+}
+
+TEST_CASE("PlaceMap without a surface map takes the slope from the heights")
+{
+	//0.9 m per metre along x = 42 degrees: beyond the tree (30) and the bush (40), not the stone (70); heights stay below 1
+	TestWorld world(200, 170);
+	world.surface.clear();
+	for (int y = 0; y < 170; y++) {
+		for (int x = 0; x < 200; x++) {
+			world.height.At(x, y) = 0.15f + static_cast<float>(x) * 0.9f / 256.0f;
+		}
+	}
+	const std::vector<vegexport::Placed> placed = vegexport::PlaceMap(world.height, world.surface, world.ids, world.input);
+	REQUIRE(!placed.empty());
+	CHECK(CountLayer(placed, vegetation::Layer::TREES) == 0);
+	CHECK(CountLayer(placed, vegetation::Layer::SHRUBS) == 0);
+	CHECK(CountLayer(placed, vegetation::Layer::ROCKS) > 0);
+
+	//Pixels of 2 m with the same slope in metres: the same layers
+	TestWorld coarse(100, 85);
+	coarse.surface.clear();
+	coarse.input.metresPerTexel = 2.0f;
+	for (int y = 0; y < 85; y++) {
+		for (int x = 0; x < 100; x++) {
+			coarse.height.At(x, y) = 0.15f + static_cast<float>(x) * 1.8f / 256.0f;
+		}
+	}
+	const std::vector<vegexport::Placed> second = vegexport::PlaceMap(coarse.height, coarse.surface, coarse.ids, coarse.input);
+	REQUIRE(!second.empty());
+	CHECK(CountLayer(second, vegetation::Layer::TREES) == 0);
+	CHECK(CountLayer(second, vegetation::Layer::SHRUBS) == 0);
+	CHECK(CountLayer(second, vegetation::Layer::ROCKS) > 0);
+
+	//A gentle slope keeps the trees
+	for (int y = 0; y < 170; y++) {
+		for (int x = 0; x < 200; x++) {
+			world.height.At(x, y) = 0.3f + static_cast<float>(x) * 0.1f / 256.0f;
+		}
+	}
+	CHECK(CountLayer(vegexport::PlaceMap(world.height, world.surface, world.ids, world.input), vegetation::Layer::TREES) > 0);
+}
+
+TEST_CASE("PlaceMap with 30 m pixels")
+{
+	TestWorld world(120, 90);
+	world.surface.clear();
+	world.input.metresPerTexel = 30.0f;
+	const std::vector<vegexport::Placed> placed = vegexport::PlaceMap(world.height, world.surface, world.ids, world.input);
+	REQUIRE(!placed.empty());
+	int outside = 0;
+	for (const vegexport::Placed& p : placed) {
+		outside += p.position.x < 0.0f || p.position.z < 0.0f || p.position.x > 119.0f * 30.0f || p.position.z > 89.0f * 30.0f;
+	}
+	CHECK(outside == 0);
+
+	//Trees per square kilometre as on a map of 1 m pixels
+	TestWorld metre(512, 512);
+	const double perKm30 = CountLayer(placed, vegetation::Layer::TREES) / (119.0 * 30.0 * 89.0 * 30.0 / 1e6);
+	const double perKm1 = CountLayer(vegexport::PlaceMap(metre.height, metre.surface, metre.ids, metre.input), vegetation::Layer::TREES) / (511.0 * 511.0 / 1e6);
+	CHECK(perKm30 == doctest::Approx(perKm1).epsilon(0.25));
+
+	//The app draws them 4 / 30 world units per metre
+	const std::vector<vegetation::Instance> app = vegexport::ToAppInstances({ placed[0] }, glm::vec2(-100.0f, 40.0f), 256.0f, 30.0f);
+	REQUIRE(app.size() == 1);
+	CHECK(app[0].position.x == doctest::Approx(-100.0f + placed[0].position.x * 4.0f / 30.0f));
+	CHECK(app[0].position.z == doctest::Approx(40.0f + placed[0].position.z * 4.0f / 30.0f));
+	CHECK(app[0].scale == doctest::Approx(placed[0].scale * 4.0f / 30.0f));
+}
+
+TEST_CASE("PlaceMap with half-metre pixels")
+{
+	TestWorld world(301, 171);
+	world.surface.clear();
+	world.input.metresPerTexel = 0.5f;
+	const std::vector<vegexport::Placed> placed = vegexport::PlaceMap(world.height, world.surface, world.ids, world.input);
+	REQUIRE(placed.size() > 50);
+	int outside = 0;
+	for (const vegexport::Placed& p : placed) {
+		outside += p.position.x < 0.0f || p.position.z < 0.0f || p.position.x > 150.0f || p.position.z > 85.0f;
+	}
+	CHECK(outside == 0);
+	CHECK(SamePlants(placed, vegexport::PlaceMap(world.height, world.surface, world.ids, world.input)));
+}
+
+TEST_CASE("PlaceMap on threads is deterministic")
+{
+	TestWorld world(700, 500);
+	const std::vector<vegexport::Placed> a = vegexport::PlaceMap(world.height, world.surface, world.ids, world.input);
+	REQUIRE(a.size() > 1000);
+	CHECK(SamePlants(a, vegexport::PlaceMap(world.height, world.surface, world.ids, world.input)));
+}
+
+TEST_CASE("PlaceMapLimited: under the limit keeps all")
+{
+	TestWorld world(300, 170);
+	const std::vector<vegexport::Placed> all = vegexport::PlaceMap(world.height, world.surface, world.ids, world.input);
+	world.input.limit = 1000000;
+	const vegexport::Limited limited = vegexport::PlaceMapLimited(world.height, world.surface, world.ids, world.input);
+	CHECK(limited.kept == vegexport::Kept::ALL);
+	CHECK(limited.placed.size() == all.size());
+}
+
+TEST_CASE("Write adds the extra plants")
+{
+	TestWorld world(64, 48);
+	world.input.layerMask = 0;
+	REQUIRE_FALSE(world.input.models.empty());
+	vegexport::Placed a, b;
+	a.position = glm::vec3(3.25f, 10.0f, 7.5f);
+	a.model = 0;
+	b.position = glm::vec3(20.0f, 11.0f, 30.0f);
+	b.model = 0;
+	b.yaw = 1.0f;
+	world.input.extra = { a, b };
+	const std::filesystem::path folder = TempFolder("extra");
+	const vegexport::Result result = vegexport::Write(world.height, world.surface, world.ids, world.input, "map", false, folder);
+	REQUIRE_MESSAGE(result.ok, result.error);
+	CHECK(result.instances == 2);
+	nlohmann::json j;
+	{
+		std::ifstream file(folder / "map_vegetation.json");
+		j = nlohmann::json::parse(file);
+	}
+	REQUIRE(j.at("instances").size() == 2);
+	CHECK(j.at("instances")[0][0].get<float>() == doctest::Approx(3.25f));
+	CHECK(j.at("instances")[1][2].get<float>() == doctest::Approx(30.0f));
+	CHECK(j.at("models")[0].at("count").get<int>() == 2);
+	std::filesystem::remove_all(folder);
+}
+
+TEST_CASE("PlaceMap stops when cancelled")
+{
+	TestWorld world(300, 170);
+	auto cancel = std::make_shared<std::atomic<bool>>(false);
+	world.input.cancel = cancel;
+	CHECK_FALSE(vegexport::PlaceMap(world.height, world.surface, world.ids, world.input).empty());
+	*cancel = true;
+	CHECK(vegexport::PlaceMap(world.height, world.surface, world.ids, world.input).empty());
+	world.input.limit = 1000000;
+	CHECK(vegexport::PlaceMapLimited(world.height, world.surface, world.ids, world.input).placed.empty());
+}
+
+TEST_CASE("PlaceMapLimited: too many plants give trees only")
+{
+	TestWorld world(300, 170);
+	world.input.layerMask = 1u << static_cast<int>(vegetation::Layer::TREES);
+	const size_t trees = vegexport::PlaceMap(world.height, world.surface, world.ids, world.input).size();
+	REQUIRE(trees > 0);
+	world.input.layerMask = (1u << vegetation::layerCount) - 1u;
+	world.input.limit = trees + 1;
+	const vegexport::Limited limited = vegexport::PlaceMapLimited(world.height, world.surface, world.ids, world.input);
+	CHECK(limited.kept == vegexport::Kept::TREES_ONLY);
+	CHECK(limited.placed.size() == trees);
+	CHECK(CountLayer(limited.placed, vegetation::Layer::TREES) == trees);
+}
+
+TEST_CASE("PlaceMapLimited: trees over the limit give nothing, quickly")
+{
+	//123 km of forest at 30 m: placing all of it would take tens of seconds
+	TestWorld world(4096, 4096);
+	world.surface.clear();
+	world.input.metresPerTexel = 30.0f;
+	world.input.plants[0][0].density = 1.0f;
+	world.input.plants[0][0].clustering = 0.0f;
+	world.input.limit = 1000;
+	const auto start = std::chrono::steady_clock::now();
+	const vegexport::Limited limited = vegexport::PlaceMapLimited(world.height, world.surface, world.ids, world.input);
+	const double seconds = std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count();
+	CHECK(limited.kept == vegexport::Kept::NONE);
+	CHECK(limited.placed.empty());
+	CHECK(seconds < 1.0);
 }
 
 TEST_CASE("App instances stand where the pack places them")

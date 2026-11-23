@@ -27,6 +27,8 @@
 #include "MapProject.h"
 #include "RiverMap.h"
 #include "TerrainView.h"
+#include "VegetationExport.h"
+#include "VegetationLayer.h"
 #include "WaterSurface.h"
 #include "utilities.h"
 #include "PanelTabs.h"
@@ -59,7 +61,11 @@ public:
 	void Draw(Renderer& renderer, Camera& camera, LightSource& light);
 	//true while the 2D map is shown instead of the 3D view
 	bool FlatView() const { return renderSettings.map2d; }
-	void ReloadShaders() { view.ReloadShader(); erosion.ReloadShaders(); water.ReloadShader(); sculptor.ReloadShaders(); biomeGenerator.ReloadShaders(); biomesStale = true; }
+	void ReloadShaders()
+	{
+		view.ReloadShader(); erosion.ReloadShaders(); water.ReloadShader(); sculptor.ReloadShaders(); biomeGenerator.ReloadShaders(); vegetation.ReloadShader(); placedLayer.ReloadShader();
+		biomesStale = true;
+	}
 	//Right panel: the Project, Edit and Load tabs; also the mouse input of the brushes and their outline on the terrain
 	void ImGuiRightPanel();
 	//Content of the Display tab of the left panel
@@ -70,8 +76,8 @@ public:
 
 	//Names of the surface materials in the order of their ids, for the biome editor
 	void SetMaterialNames(std::vector<std::string> names) { materialNames = names; biomeEditor.SetMaterialNames(std::move(names)); }
-	//Models the plants of the biome editor can name; nullptr = none (the models are being released)
-	void SetVegetationModels(const VegetationModels* models);
+	//Models the plants of the biome editor can name and the map grows; nullptr = none (the models are being released)
+	void SetVegetationModels(VegetationModels* models);
 
 private:
 	struct LoadResult {
@@ -145,7 +151,8 @@ private:
 	void StartEdit(const std::string& label, std::function<void(HeightField&)> operation);
 	void FinishEdit(EditResult& result);
 	//The map or the sea level changed: what is computed from them (rivers) is out of date
-	void OnMapChanged() { mapChanged = true; climateStale = true; }
+	//The plants of the old heights are not shown on the new ones (a placement still running is dropped)
+	void OnMapChanged() { mapChanged = true; climateStale = true; PlantsChanged(); }
 	void SetEditStatus(const std::string& text, bool isError);
 	//Content of the Edit tab
 	void EditImGui();
@@ -154,7 +161,8 @@ private:
 	static float ToUnits(HeightField& working, HeightField& original);
 	bool Busy() const
 	{
-		return job.IsRunning() || projectJob.IsRunning() || saveJob.IsRunning() || editJob.IsRunning() || stroke.has_value() || paintStroke.has_value();
+		return job.IsRunning() || projectJob.IsRunning() || saveJob.IsRunning() || editJob.IsRunning() || stroke.has_value() || paintStroke.has_value()
+			|| plantStroke.has_value();
 	}
 
 	//Project file
@@ -297,7 +305,8 @@ private:
 	};
 	rivers::RiverConfig riverConfig;	//method NONE = off, REGION = on
 	GenerationJob<RiverResult> riverJob;
-	std::optional<hydrology::MapRivers> riverNetwork;	//heights in metres / hydrology::mapMetresPerHeight
+	//Heights in metres / hydrology::mapMetresPerHeight; shared (never changed in place) so the placement of plants reads it without a copy
+	std::shared_ptr<const hydrology::MapRivers> riverNetwork;
 	double riverMs = 0.0;
 	RiverMap riverMap;
 	WaterSurface water;
@@ -389,9 +398,12 @@ private:
 	bool RunBiomePass(glm::ivec4 region);
 	//The Paint section of the Biomes tab
 	void PaintImGui();
-	//A brush follows the cursor: Sculpt or the biome brush
-	bool BrushOn() const { return sculptOn || (biomePaintOn && BiomesOn()); }
-	float ActiveBrushRadius() const { return biomePaintOn ? paintRadius : brush.radius; }
+	//A brush follows the cursor: Sculpt, the biome brush or the plant brush
+	bool BrushOn() const { return sculptOn || (biomePaintOn && BiomesOn()) || plantBrushOn; }
+	float ActiveBrushRadius() const
+	{
+		return plantBrushOn ? plantRadius / static_cast<float>(pixelMetres.x) : biomePaintOn ? paintRadius : brush.radius;
+	}
 	//Takes a finished climate, starts a new one, runs the GPU pass; called every frame (GL thread)
 	void UpdateBiomes();
 	//Settings of a new map: from the JSON of a project (empty = defaults for the sea level, keeping the land cover source, files and classes
@@ -409,6 +421,89 @@ private:
 	void SetGeoreference(std::optional<geo::GeoReference> reference);
 	//The georeference of the map: system, corner, its system to choose and "Take georeference from file..."
 	void GeoreferenceImGui();
+
+	//Plants of the biomes (stage D4, MapImportVegetation.cpp): placed on a background thread in metres of the map pixel
+	//(vegexport::PlaceMapLimited, at most vegexport::maxMapInstances) after every pass of the biomes and every change of what they
+	//depend on, never during a stroke; drawn as the extra set of their own VegetationLayer
+	struct PlantResult {
+		std::vector<vegetation::Instance> instances;
+		vegexport::Kept kept = vegexport::Kept::ALL;
+		size_t count = 0;
+		uint64_t version = 0;	//plantVersion when it started
+		double ms = 0.0;
+		std::string error;		//out of memory; instances empty
+	};
+	VegetationModels* vegetationModels = nullptr;
+	VegetationLayer vegetation;
+	mapproject::VegetationSettings plantSettings;
+	GenerationJob<PlantResult> plantJob;
+	bool plantsStale = false;
+	uint64_t plantVersion = 0;		//grows with every change; a placement started with an older one is dropped
+	std::shared_ptr<std::atomic<bool>> plantCancel;	//of the running placement; set by a change so it stops early
+	uint64_t biomeIdsVersion = 0;	//mapVersion of the last pass of the biomes: ids of another map are never planted
+	//Plants of the biome table and ready models the last placement started with; a change places again
+	std::vector<std::vector<biome::Plant>> placedTablePlants;
+	int placedReadyModels = -1;
+	vegexport::Kept plantKept = vegexport::Kept::ALL;
+	size_t plantCount = 0;
+	double plantMs = 0.0;
+	std::string plantStatus;
+	bool plantStatusIsError = false;
+	bool PlantsOn() const { return BiomesOn() && plantSettings.enabled; }
+	void PlantsChanged()
+	{
+		plantsStale = true;
+		plantVersion++;
+		if (plantCancel) {
+			*plantCancel = true;
+		}
+	}
+	//Plants put by hand (the plant brush of the Vegetation tab, MapImportVegetation.cpp): their own layer, in the history and the project,
+	//never placed again by a biome change; drawn by placedLayer after the upload in UpdatePlants
+	placedplants::Layer placedPlants;
+	VegetationLayer placedLayer;
+	bool placedUploadStale = true;
+	int placedUploadModels = -1;		//ready models of the last upload; more loaded = upload again
+	void PlacedPlantsChanged() { placedUploadStale = true; dirty = true; }
+	//The plant brush: a dab where the stroke starts and then every max(spacing, radius / 2, pixel) metres of the cursor; Ctrl erases.
+	//Letting the button go is one history step with the layer from before
+	struct PlantStroke {
+		placedplants::Layer before;
+		placedplants::Brush brush;				//models, count, spacing and scale of the stroke; centre and seed set per dab
+		glm::vec2 lastDab = glm::vec2(0.0f);	//metres
+		bool dabbed = false;
+		bool changed = false;
+		bool erase = false;
+	};
+	std::optional<PlantStroke> plantStroke;
+	bool plantBrushOn = false;
+	std::vector<std::string> brushModels;	//names of the models the brush picks from
+	float plantRadius = 10.0f;				//metres
+	int plantBrushCount = 1;
+	float plantSpacing = 2.0f;				//metres
+	float plantScaleMin = 0.8f, plantScaleMax = 1.2f;
+	uint32_t plantSeed = 0;
+	const LightSource* lastLight = nullptr;	//of the last Draw, for the model preview of the Vegetation tab
+	std::string plantBrushStatus;			//why the brush placed nothing
+	//Every model of the list with its loaded variants (0 = not loaded), as placement and export name them
+	std::vector<vegexport::Model> PlantModels() const;
+	//World XZ (before modelScale) of the centre of texel (0, 0), where the plants of map metre (0, 0) are drawn
+	glm::vec2 PlantTexelZero() const;
+	//Starts, continues or ends a stroke of the plant brush (GL thread, from UpdateSculpt)
+	void UpdatePlantBrush(const Camera& camera, bool active);
+	void FinishPlantStroke();
+	//Puts the placed plants on the GPU (standing on the current heights); from UpdatePlants when stale
+	void UploadPlacedPlants();
+	//The Vegetation tab: automatic plants, the plant brush, the models with their preview
+	void VegetationImGui();
+	//Number of models loaded with variants
+	int ReadyModels() const;
+	//What placement needs, for the plants shown and for the export (the same plants)
+	vegexport::Input PlantInput() const;
+	//Takes a finished placement, starts a new one when the plants are out of date; called every frame (GL thread)
+	void UpdatePlants();
+	//The Automatic plants section of the Vegetation tab
+	void PlantsImGui();
 
 	//"Take georeference from file...": the file chosen, its header and the part of it the map was made of
 	std::filesystem::path geoFile;

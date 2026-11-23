@@ -12,12 +12,20 @@
 #include "BiomePaint.h"
 #include "GeoReference.h"
 #include "Grid.h"
+#include "PlacedPlants.h"
 
 //Project file of the "Imported map" mode (.ptgmap): the working copy of a map and its original, in metres, with what the
 //mode needs to show them again. Layout: 8 bytes of signature, uint32 (little-endian) length of a JSON header, the header,
 //then the blocks it lists. A block is a zlib stream of the floats of a map split into 4 byte planes (plane k = byte k of
 //every float), which compresses height maps much better than the floats as they are.
 namespace mapproject {
+	//Plants of the map (stage D4): shown or not, and the multiplier of every density
+	struct VegetationSettings {
+		bool enabled = true;
+		float density = 1.0f;
+	};
+	inline constexpr float maxVegetationDensity = 3.0f;
+
 	struct Project {
 		HeightField working;			//metres
 		HeightField original;			//metres; empty = the same as working
@@ -30,12 +38,15 @@ namespace mapproject {
 		std::string biomes;				//biome settings as JSON (mapbiomes::ToJson); empty = defaults, no biomes
 		biomepaint::Layer paint;		//biomes painted over the automatic ones, the size of working; Empty() = none (not saved)
 		std::optional<geo::GeoReference> georeference;	//where the pixels of working lie; none = not known
+		VegetationSettings vegetation;
+		placedplants::Layer placedPlants;		//plants put by hand; empty = none
 	};
 
 	//2 (2026-11-21): rivers; 3 (2026-11-22): biomes; 4 (2026-11-22): painted biomes (header "biomePaint": palette, block "biomePaint":
 	//zlib of the uint16 texels, little-endian); 5 (2026-11-22): georeference (header "georeference": {"epsg", "origin": [x, y],
-	//"pixel": [x, y]}); versions 1 to 4 are still read
-	inline constexpr int currentVersion = 5;
+	//"pixel": [x, y]}); 6 (2026-11-23): vegetation (header "vegetation": {"enabled", "density" 0 to 3}); 7 (2026-11-23): placed plants
+	//(header "placedPlants": {"palette", "count"}, block "placedPlants": zlib of placedplants::Pack); versions 1 to 6 are still read
+	inline constexpr int currentVersion = 7;
 	inline constexpr const char* extension = ".ptgmap";
 
 	//@param out - the bytes of the file, replaced on success

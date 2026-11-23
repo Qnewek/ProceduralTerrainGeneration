@@ -1,10 +1,15 @@
 #include "VegetationExport.h"
 
 #include <algorithm>
+#include <atomic>
 #include <charconv>
 #include <chrono>
+#include <cmath>
 #include <cstdint>
+#include <exception>
+#include <mutex>
 #include <system_error>
+#include <thread>
 
 #include <lodepng.h>
 #include <nlohmann/json.hpp>
@@ -18,95 +23,216 @@
 
 namespace vegexport {
 	using Json = nlohmann::ordered_json;
-	//Vegetation grows only on generated maps, where a texel is 1 m (as the app places it: TerrainView::worldUnitsPerTexel world units)
-	constexpr float metresPerTexel = 1.0f;
 
 	std::vector<Placed> PlaceMap(const HeightField& height, const std::vector<glm::vec4>& surface, const BiomeMap& ids, const Input& input)
 	{
-		std::vector<Placed> placed;
 		const int width = height.GetWidth(), mapHeight = height.GetHeight();
-		if (width < 2 || mapHeight < 2 || surface.size() != height.Size() || ids.GetWidth() != width || ids.GetHeight() != mapHeight) {
-			return placed;
+		const bool slopeFromHeights = surface.empty();
+		const float pixel = input.metresPerTexel;
+		if (width < 2 || mapHeight < 2 || (!slopeFromHeights && surface.size() != height.Size()) || ids.GetWidth() != width || ids.GetHeight() != mapHeight
+			|| !(pixel > 0.0f) || !std::isfinite(pixel)) {
+			return {};
 		}
 		std::vector<vegetation::ModelInfo> infos;
 		for (const Model& m : input.models) {
 			infos.push_back({ m.name, m.variants, vegetation::LayerOfKind(m.kind) });
 		}
+		const vegetation::PreparedPlants plants = vegetation::PreparePlants(input.plants, infos);
 
-		//Maps of a chunk with a margin of one texel, as ChunkWorld reads them back (bilinear heights near the edge)
-		constexpr int size = chunkTexels + 3;
-		std::vector<float> chunkHeight(static_cast<size_t>(size) * size);
-		std::vector<glm::vec4> chunkSurface(chunkHeight.size());
-		std::vector<int> chunkIds(chunkHeight.size());
-		std::vector<vegetation::Instance> instances;
-		//Chunks of the world grid (cells are aligned to it), map texel t = world map position mapTexel + t
+		//Chunks of the metre grid (cells are aligned to it); map texel t lies at mapTexel + t * pixel. Coarse pixels get larger chunks
+		//(any multiple of the cells gives the same plants), so a chunk still spans many pixels
+		const int chunk = chunkTexels * std::max(1, static_cast<int>(std::floor(pixel)));
 		auto floorDiv = [](int a, int b) { return a >= 0 ? a / b : -((-a + b - 1) / b); };
-		const glm::ivec2 offset = input.mapTexel;
-		const glm::ivec2 firstChunk(floorDiv(offset.x, chunkTexels), floorDiv(offset.y, chunkTexels));
-		const glm::ivec2 lastChunk(floorDiv(offset.x + width - 1, chunkTexels), floorDiv(offset.y + mapHeight - 1, chunkTexels));
-		for (int cy = firstChunk.y; cy <= lastChunk.y; cy++) {
-			for (int cx = firstChunk.x; cx <= lastChunk.x; cx++) {
-				const glm::ivec2 chunkTexel(cx * chunkTexels, cy * chunkTexels);
-				const glm::ivec2 first = chunkTexel - 1;
+		const glm::ivec2 origin = input.mapTexel;
+		const glm::vec2 extent = glm::vec2(width - 1, mapHeight - 1) * pixel;
+		const glm::ivec2 firstChunk(floorDiv(origin.x, chunk), floorDiv(origin.y, chunk));
+		const glm::ivec2 lastChunk(floorDiv(origin.x + static_cast<int>(std::floor(extent.x)), chunk), floorDiv(origin.y + static_cast<int>(std::floor(extent.y)), chunk));
+		const int rows = lastChunk.y - firstChunk.y + 1;
+		std::vector<std::vector<Placed>> placedRows(static_cast<size_t>(rows));
+		std::atomic<int> nextRow{ 0 };
+		std::atomic<size_t> total{ 0 };
+		std::atomic<bool> stop{ false };
+		const std::atomic<bool>* cancel = input.cancel.get();
+		auto cancelled = [cancel]() { return cancel && cancel->load(std::memory_order_relaxed); };
+
+		auto placeRow = [&](int row) {
+			std::vector<Placed>& out = placedRows[static_cast<size_t>(row)];
+			std::vector<float> chunkHeight;
+			std::vector<glm::vec4> chunkSurface;
+			std::vector<int> chunkIds;
+			std::vector<vegetation::Instance> instances;
+			const int cy = firstChunk.y + row;
+			for (int cx = firstChunk.x; cx <= lastChunk.x && !stop.load(std::memory_order_relaxed) && !cancelled(); cx++) {
+				const glm::ivec2 chunkTexel(cx * chunk, cy * chunk);
+				//Pixels covering the chunk with one to spare on each side (bilinear heights near the edge); at 1 m the 131 texels ChunkWorld reads
+				const glm::ivec2 first(static_cast<int>(std::floor(static_cast<float>(chunkTexel.x - origin.x) / pixel)) - 1,
+					static_cast<int>(std::floor(static_cast<float>(chunkTexel.y - origin.y) / pixel)) - 1);
+				const glm::ivec2 last(static_cast<int>(std::floor(static_cast<float>(chunkTexel.x + chunk - origin.x) / pixel)) + 1,
+					static_cast<int>(std::floor(static_cast<float>(chunkTexel.y + chunk - origin.y) / pixel)) + 1);
+				const int size = std::max(last.x - first.x, last.y - first.y) + 1;
+				chunkHeight.resize(static_cast<size_t>(size) * size);
+				chunkSurface.resize(chunkHeight.size());
+				chunkIds.resize(chunkHeight.size());
 				for (int y = 0; y < size; y++) {
-					const int my = std::clamp(first.y + y - offset.y, 0, mapHeight - 1);
+					const int my = std::clamp(first.y + y, 0, mapHeight - 1);
 					for (int x = 0; x < size; x++) {
-						const int mx = std::clamp(first.x + x - offset.x, 0, width - 1);
+						const int mx = std::clamp(first.x + x, 0, width - 1);
 						const size_t from = static_cast<size_t>(my) * width + mx;
 						const size_t to = static_cast<size_t>(y) * size + x;
 						chunkHeight[to] = height[from];
-						chunkSurface[to] = surface[from];
 						chunkIds[to] = ids[from];
+						if (slopeFromHeights) {
+							//Height units per metre; times metresPerUnit (heightScale below) = metres per metre
+							const int x0 = std::max(mx - 1, 0), x1 = std::min(mx + 1, width - 1);
+							const int y0 = std::max(my - 1, 0), y1 = std::min(my + 1, mapHeight - 1);
+							const float gx = (height.At(x1, my) - height.At(x0, my)) / (static_cast<float>(x1 - x0) * pixel);
+							const float gy = (height.At(mx, y1) - height.At(mx, y0)) / (static_cast<float>(y1 - y0) * pixel);
+							chunkSurface[to] = glm::vec4(gx, gy, 0.0f, 0.0f);
+						}
+						else {
+							chunkSurface[to] = surface[from];
+						}
 					}
 				}
 				vegetation::ChunkMaps maps;
 				maps.size = size;
-				maps.firstTexel = first;
-				maps.step = 1;
+				maps.firstTexel = glm::vec2(origin) + glm::vec2(first) * pixel;
+				maps.step = pixel;
 				maps.height = chunkHeight.data();
 				maps.surface = chunkSurface.data();
 				maps.ids = chunkIds.data();
 
 				vegetation::PlacementSettings settings = input.settings;
 				settings.chunkTexel = chunkTexel;
-				settings.chunkTexels = chunkTexels;
-				//Positions straight in map texels (= metres); the slope comes from the surface map, not from these
+				settings.chunkTexels = chunk;
+				//Positions straight in metres of the grid; the slope comes from the surface map, not from these
 				settings.mapOrigin = glm::vec2(0.0f);
 				settings.worldUnitsPerTexel = 1.0f;
+				if (slopeFromHeights) {
+					settings.heightScale = input.metresPerUnit;
+				}
 				settings.rivers = input.rivers.get();
 				settings.layerMask = input.layerMask;
 				instances.clear();
-				vegetation::PlaceChunk(maps, input.plants, infos, settings, instances);
+				vegetation::PlaceChunk(maps, plants, infos, settings, instances);
+				size_t added = 0;
 				for (const vegetation::Instance& in : instances) {
-					//Map texels, between the centres of the edge texels
-					const float x = in.position.x - static_cast<float>(offset.x), z = in.position.z - static_cast<float>(offset.y);
-					if (x < 0.0f || z < 0.0f || x > static_cast<float>(width - 1) || z > static_cast<float>(mapHeight - 1)) {
+					//Metres from map texel (0, 0), between the centres of the edge texels
+					const float x = in.position.x - static_cast<float>(origin.x), z = in.position.z - static_cast<float>(origin.y);
+					if (x < 0.0f || z < 0.0f || x > extent.x || z > extent.y) {
 						continue;
 					}
 					Placed p;
-					p.position = glm::vec3(x * metresPerTexel, in.position.y * input.metresPerUnit, z * metresPerTexel);
+					p.position = glm::vec3(x, in.position.y * input.metresPerUnit, z);
 					p.yaw = in.yaw;
 					p.scale = in.scale / vegetation::unitsPerMetre;
 					p.model = in.model;
 					p.variant = in.variant;
 					p.layer = in.layer;
-					placed.push_back(p);
+					out.push_back(p);
+					added++;
+				}
+				if (input.limit > 0 && total.fetch_add(added) + added > input.limit) {
+					stop = true;
 				}
 			}
+		};
+
+		//Rows on worker threads; an exception (out of memory) comes back to the caller after all of them stopped
+		std::exception_ptr failure;
+		std::mutex failureMutex;
+		auto worker = [&]() {
+			try {
+				for (int row = nextRow++; row < rows && !stop.load(std::memory_order_relaxed) && !cancelled(); row = nextRow++) {
+					placeRow(row);
+				}
+			}
+			catch (...) {
+				std::lock_guard<std::mutex> lock(failureMutex);
+				failure = std::current_exception();
+				stop = true;
+			}
+		};
+		//One core left for the window (the placement of the Imported map runs while it draws)
+		const int threadCount = std::clamp(static_cast<int>(std::thread::hardware_concurrency()) - 1, 1, std::max(rows, 1));
+		std::vector<std::thread> threads;
+		try {
+			for (int t = 1; t < threadCount; t++) {
+				threads.emplace_back(worker);
+			}
+		}
+		catch (...) {
+			//No thread for the rest: fewer threads do the same rows
+		}
+		worker();
+		for (std::thread& t : threads) {
+			t.join();
+		}
+		if (failure) {
+			std::rethrow_exception(failure);
+		}
+		if (cancelled()) {
+			return {};
+		}
+
+		std::vector<Placed> placed;
+		size_t count = 0;
+		for (const std::vector<Placed>& row : placedRows) {
+			count += row.size();
+		}
+		placed.reserve(count);
+		for (const std::vector<Placed>& row : placedRows) {
+			placed.insert(placed.end(), row.begin(), row.end());
 		}
 		return placed;
 	}
 
-	std::vector<vegetation::Instance> ToAppInstances(const std::vector<Placed>& placed, glm::vec2 texelZeroWorld, float metresPerUnit)
+	Limited PlaceMapLimited(const HeightField& height, const std::vector<glm::vec4>& surface, const BiomeMap& ids, const Input& input)
+	{
+		Limited result;
+		if (input.limit == 0) {
+			result.placed = PlaceMap(height, surface, ids, input);
+			return result;
+		}
+		const uint32_t trees = 1u << static_cast<int>(vegetation::Layer::TREES);
+		Input part = input;
+		if (input.layerMask & trees) {
+			part.layerMask = trees;
+			result.placed = PlaceMap(height, surface, ids, part);
+			if (result.placed.size() > input.limit) {
+				result.placed.clear();
+				result.placed.shrink_to_fit();
+				result.kept = Kept::NONE;
+				return result;
+			}
+		}
+		const uint32_t others = input.layerMask & ~trees;
+		if (others) {
+			const size_t room = input.limit - result.placed.size();
+			part.layerMask = others;
+			//Limit 0 would mean none; stopping after one plant is enough to see that there is no room
+			part.limit = std::max<size_t>(room, 1);
+			std::vector<Placed> rest = PlaceMap(height, surface, ids, part);
+			if (rest.size() > room) {
+				result.kept = Kept::TREES_ONLY;
+			}
+			else {
+				result.placed.insert(result.placed.end(), rest.begin(), rest.end());
+			}
+		}
+		return result;
+	}
+
+	std::vector<vegetation::Instance> ToAppInstances(const std::vector<Placed>& placed, glm::vec2 texelZeroWorld, float metresPerUnit, float metresPerTexel)
 	{
 		std::vector<vegetation::Instance> instances;
 		instances.reserve(placed.size());
-		//1 texel = 1 m = vegetation::unitsPerMetre world units
+		//A texel = metresPerTexel metres is drawn TerrainView::worldUnitsPerTexel (= vegetation::unitsPerMetre) world units wide
 		const float unitsPerMetre = vegetation::unitsPerMetre / metresPerTexel;
 		for (const Placed& p : placed) {
 			vegetation::Instance in;
 			in.position = glm::vec3(texelZeroWorld.x + p.position.x * unitsPerMetre, p.position.y / metresPerUnit, texelZeroWorld.y + p.position.z * unitsPerMetre);
-			in.scale = p.scale * vegetation::unitsPerMetre;
+			in.scale = p.scale * unitsPerMetre;
 			in.yaw = p.yaw;
 			in.model = p.model;
 			in.variant = p.variant;
@@ -359,7 +485,14 @@ namespace vegexport {
 	{
 		const auto start = std::chrono::steady_clock::now();
 		Result result;
-		const std::vector<Placed> placed = PlaceMap(height, surface, ids, input);
+		Limited limited = PlaceMapLimited(height, surface, ids, input);
+		std::vector<Placed> placed = std::move(limited.placed);
+		result.kept = limited.kept;
+		for (const Placed& p : input.extra) {
+			if (p.model >= 0 && p.model < static_cast<int>(input.models.size())) {
+				placed.push_back(p);
+			}
+		}
 		result.instances = placed.size();
 
 		std::vector<ModelFile> files(input.models.size());
