@@ -3,6 +3,7 @@
 #include <iostream>
 #include "glm/glm.hpp"
 #include "imgui.h"
+#include "GeoReference.h"
 
 namespace utilities
 {
@@ -150,7 +151,8 @@ namespace utilities
 		ImGui::InputInt("Height", &height);
 		return ImGui::Button("Resize");
 	}
-	bool DisplayModeImGui(float& modelScale, float& topoStep, float& topoBandWidth, float& heightScale, heightMapMode& m, bool& wireFrame, bool& map2d, bool* infGen)
+	bool DisplayModeImGui(float& modelScale, float& topoStep, float& topoBandWidth, float& heightScale, heightMapMode& m, bool& wireFrame, bool& map2d, bool* infGen,
+		bool landCover)
 	{
 		if (infGen) {
 			if (ImGuiButtonWrapper("Partial generation", !*infGen)) {
@@ -162,13 +164,15 @@ namespace utilities
 			}
 		}
 
-		static const char* displayOptions[] = { "GREYSCALE", "TOPOGRAPHICAL", "MONOCOLOR", "BIOMES", "SLOPE", "CURVATURE", "TEXTURED" };
+		static const char* displayOptions[] = { "GREYSCALE", "TOPOGRAPHICAL", "MONOCOLOR", "BIOMES", "SLOPE", "CURVATURE", "TEXTURED", "LAND COVER" };
 		int currentDisplayOption = static_cast<int>(m);
 		bool change = false;
+		//LAND COVER only where there is a class map to show
+		const int optionCount = IM_ARRAYSIZE(displayOptions) - (landCover ? 0 : 1);
 
 		if (ImGui::BeginCombo("Mode", displayOptions[currentDisplayOption]))
 		{
-			for (int n = 0; n < IM_ARRAYSIZE(displayOptions); n++)
+			for (int n = 0; n < optionCount; n++)
 			{
 				bool is_selected = (currentDisplayOption == n);
 				if (ImGui::Selectable(displayOptions[n], is_selected)) {
@@ -215,5 +219,25 @@ namespace utilities
 			ImGui::EndDisabled();
 		}
 		return clicked;
+	}
+
+	bool SystemComboImGui(const char* label, int& epsg)
+	{
+		static const std::vector<int> systems = geo::ChoosableSystems();
+		bool changed = false;
+		if (ImGui::BeginCombo(label, geo::SystemName(epsg).c_str())) {
+			for (int system : systems) {
+				const bool chosen = system == epsg;
+				if (ImGui::Selectable(geo::SystemName(system).c_str(), chosen)) {
+					changed = system != epsg;
+					epsg = system;
+				}
+				if (chosen) {
+					ImGui::SetItemDefaultFocus();
+				}
+			}
+			ImGui::EndCombo();
+		}
+		return changed;
 	}
 }

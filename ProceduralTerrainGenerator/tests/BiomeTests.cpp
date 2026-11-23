@@ -389,3 +389,63 @@ TEST_CASE("Default biomes do not overlap")
 	}
 	CHECK(overlapping == 0);
 }
+
+//--- Masks of allowed biomes (land cover, stage D3) ---
+
+TEST_CASE("Masked nearest picks only allowed biomes")
+{
+	const std::vector<biome::Biome> table = biome::DefaultBiomes();
+	const biome::ParameterValues plains = Values(0.0f, -0.5f, 0.0f, 0.0f, 0.0f, 0.1f);
+	REQUIRE(biome::Nearest(table, plains) == PLAINS);
+	const uint64_t forests = (uint64_t(1) << FOREST) | (uint64_t(1) << TAIGA);
+	const float forest = table[FOREST].Distance(plains), taiga = table[TAIGA].Distance(plains);
+	CHECK(biome::Nearest(table, plains, forests) == (forest < taiga ? FOREST : TAIGA));
+	CHECK(biome::Nearest(table, plains, uint64_t(1) << DESERT) == DESERT);
+	CHECK(biome::Nearest(table, plains, biome::allBiomes) == PLAINS);
+}
+
+TEST_CASE("Mask without biomes of the table means all")
+{
+	const std::vector<biome::Biome> table = biome::DefaultBiomes();
+	const biome::ParameterValues plains = Values(0.0f, -0.5f, 0.0f, 0.0f, 0.0f, 0.1f);
+	CHECK(biome::Nearest(table, plains, 0) == PLAINS);
+	CHECK(biome::Nearest(table, plains, uint64_t(1) << 40) == PLAINS);
+}
+
+TEST_CASE("Masked materials mix only allowed biomes")
+{
+	const std::vector<biome::Biome> table = TwoMaterialBiomes();
+	const biome::MaterialWeights noPatches{};
+	const biome::ParameterValues border = Values(0.0f, 0.0f, 0.0f, 0.0f, 0.0f);
+	const biome::MaterialWeights both = biome::MixMaterials(table, border, 0.5f, 0.0f, 4.0f, noPatches);
+	CHECK(both[2] > 0.0f);
+	CHECK(both[5] > 0.0f);
+	const biome::MaterialWeights warm = biome::MixMaterials(table, border, 0.5f, 0.0f, 4.0f, noPatches, uint64_t(1) << 1);
+	CHECK(warm[2] == 0.0f);
+	CHECK(warm[5] == doctest::Approx(0.7f));
+	CHECK(warm[9] == doctest::Approx(0.3f));
+	float sum = 0.0f;
+	for (float w : warm) {
+		sum += w;
+	}
+	CHECK(sum == doctest::Approx(1.0f));
+	//A mask without biomes of the table mixes all of them
+	const biome::MaterialWeights none = biome::MixMaterials(table, border, 0.5f, 0.0f, 4.0f, noPatches, uint64_t(1) << 5);
+	CHECK(none == both);
+}
+
+TEST_CASE("Masked color mixes only allowed biomes")
+{
+	std::vector<biome::Biome> table = TwoMaterialBiomes();
+	table[0].color = glm::vec3(0.0f, 0.0f, 1.0f);
+	table[1].color = glm::vec3(1.0f, 0.0f, 0.0f);
+	const biome::ParameterValues border = Values(0.0f, 0.0f, 0.0f, 0.0f, 0.0f);
+	const glm::vec3 mixed = biome::MixColor(table, border, 0.5f, biome::allBiomes);
+	CHECK(mixed.x == doctest::Approx(0.5f));
+	CHECK(mixed.z == doctest::Approx(0.5f));
+	const glm::vec3 warm = biome::MixColor(table, border, 0.5f, uint64_t(1) << 1);
+	CHECK(warm == glm::vec3(1.0f, 0.0f, 0.0f));
+	//No blending: the color of the nearest allowed biome
+	CHECK(biome::MixColor(table, Values(0.0f, 0.0f, 0.0f, -0.5f, 0.0f), 0.0f, uint64_t(1) << 1) == glm::vec3(1.0f, 0.0f, 0.0f));
+	CHECK(biome::MixColor(table, Values(0.0f, 0.0f, 0.0f, -0.5f, 0.0f), 0.0f, biome::allBiomes) == glm::vec3(0.0f, 0.0f, 1.0f));
+}

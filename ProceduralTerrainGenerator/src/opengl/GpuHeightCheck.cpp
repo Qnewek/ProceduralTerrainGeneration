@@ -27,6 +27,7 @@
 #include "MapBiomes.h"
 #include "glm/gtc/packing.hpp"
 #include "RiverMap.h"
+#include "TerrainView.h"
 
 namespace {
 	//Not square, so swapped axes are detected; larger than one part of a dispatch along X
@@ -1310,7 +1311,9 @@ namespace {
 			size_t idMismatch = 0, ambiguous = 0, kinds = 0;
 			float colorError = 0.0f, splatError = 0.0f;
 		};
-		auto compare = [&](const MapBiomesRun& gpuRun, const mapbiomes::Settings& s, const biomepaint::Layer* paint) {
+		//classes, masks: the land cover of every texel and the allowed biomes of every class (nullptr = none)
+		auto compare = [&](const MapBiomesRun& gpuRun, const mapbiomes::Settings& s, const biomepaint::Layer* paint,
+			const std::vector<uint8_t>* classes = nullptr, const std::array<uint64_t, 256>* masks = nullptr) {
 			Comparison result;
 			const BiomeConfig& config = s.config;
 			const float water = mapbiomes::WaterHeight(s, sea);
@@ -1327,24 +1330,20 @@ namespace {
 					const glm::vec2 cm = glm::unpackHalf2x16(climate.packed[i]);
 					const float h = mapbiomes::ClimateHeight(metres[i], cm.x, sea, s);
 					const biome::ParameterValues values = biome::ApplyClimate({ cm.x, cm.y, 0.0f, 0.0f, 0.0f, 0.0f }, h, water, config.climate);
-					int id = biome::Nearest(config.table, values);
+					const uint64_t mask = classes && (*masks)[(*classes)[i]] != 0 ? (*masks)[(*classes)[i]] : biome::allBiomes;
+					int id = biome::Nearest(config.table, values, mask);
 					const float nearest = config.table[id].Distance(values);
-					//A texel where two biomes are almost equally near may go either way on the GPU
+					//A texel where two allowed biomes are almost equally near may go either way on the GPU
 					float second = 1e30f;
-					glm::vec3 colorSum(0.0f);
-					float colorTotal = 0.0f;
 					for (size_t b = 0; b < config.table.size(); b++) {
-						const float d = config.table[b].Distance(values);
-						if (static_cast<int>(b) != id) {
-							second = std::min(second, d);
+						if (static_cast<int>(b) != id && ((mask >> b) & 1) != 0) {
+							second = std::min(second, config.table[b].Distance(values));
 						}
-						const float w = biome::BlendWeight(d, nearest, config.blendWidth);
-						colorSum += w * config.table[b].color;
-						colorTotal += w;
 					}
 					const bool tie = second - nearest < 1e-4f;
-					glm::vec3 color = config.blendWidth > 0.0f ? colorSum / colorTotal : config.table[id].color;
-					biome::MaterialWeights mix = biome::MixMaterials(config.table, values, config.materialBlendWidth, 0.0f, config.materialPatchContrast, noPatch);
+					glm::vec3 color = biome::MixColor(config.table, values, config.blendWidth, mask);
+					biome::MaterialWeights mix = biome::MixMaterials(config.table, values, config.materialBlendWidth, 0.0f, config.materialPatchContrast, noPatch,
+						mask);
 					bool paintedId = false;
 					if (paint) {
 						const int slot = paint->texels[i] & 0xFF, strength = paint->texels[i] >> 8;
@@ -1442,6 +1441,56 @@ namespace {
 		const bool namesOk = matches(byName);
 		Report("mapbiomes: paint follows names", details(byName), namesOk);
 
+		//Land cover (stage D3): bands of WorldCover classes across the map (and no data), the masks of mapbiomes::ClassMasks
+		std::vector<uint8_t> classes(texels);
+		for (int y = 0; y < height; y++) {
+			for (int x = 0; x < width; x++) {
+				const uint8_t bands[4] = { 10, 30, 60, 0 };
+				classes[static_cast<size_t>(y) * width + x] = bands[std::min(3, 4 * x / width)];
+			}
+		}
+		TextureClass classTexture(width, height, GL_R8UI);
+		classTexture.UploadRegion(0, 0, width, height, width, classes.data(), GL_RED_INTEGER, GL_UNSIGNED_BYTE);
+		mapbiomes::Settings covered = settings;
+		covered.source = mapbiomes::Source::LAND_COVER;
+		const std::array<uint64_t, 256> classMasks = mapbiomes::ClassMasks(covered);
+		auto coveredInput = [&](MapBiomeInput in, const std::array<uint64_t, 256>& masks) {
+			in.classes = &classTexture;
+			in.classMasks = masks;
+			return in;
+		};
+		Targets coverTargets;
+		const MapBiomesRun coverRun = runWith(settings, coveredInput(input(glm::vec2(pixel)), classMasks), coverTargets);
+		const Comparison cover = compare(coverRun, settings, nullptr, &classes, &classMasks);
+		size_t coverChanged = 0;
+		for (size_t i = 0; i < texels; i++) {
+			coverChanged += coverRun.ids[i] != gpuRun.ids[i] ? 1 : 0;
+		}
+		const bool coverOk = matches(cover) && coverChanged > 0;
+		Report("mapbiomes: land cover limits the biomes", details(cover) + ", " + std::to_string(coverChanged) + " ids changed", coverOk);
+
+		//Masks of 0 (classes without biomes): bit for bit the biomes without land cover
+		Targets emptyTargets;
+		const MapBiomesRun emptyRun = runWith(settings, coveredInput(input(glm::vec2(pixel)), std::array<uint64_t, 256>{}), emptyTargets);
+		const bool emptySame = emptyRun.ids == gpuRun.ids && emptyRun.colors == gpuRun.colors && emptyRun.splat == gpuRun.splat;
+		Report("mapbiomes: empty masks equal no land cover", emptySame ? "bit for bit" : "results differ", emptySame);
+
+		//Painting goes over the land cover
+		Targets paintCoverTargets;
+		const MapBiomesRun paintCoverRun = runWith(settings, coveredInput(paintedInput(paint, table), classMasks), paintCoverTargets);
+		const Comparison paintCover = compare(paintCoverRun, settings, &paint, &classes, &classMasks);
+		const bool paintCoverOk = matches(paintCover);
+		Report("mapbiomes: paint over land cover", details(paintCover), paintCoverOk);
+
+		//The LAND COVER display mode: the terrain program links and keeps the class map and its colors (TerrainView::Draw sets them)
+		const std::unique_ptr<Shader> terrainShader = TerrainView::CreateTerrainShader();
+		const bool terrainLinked = terrainShader && terrainShader->IsValid();
+		const bool landCoverUniforms = terrainLinked && glGetUniformLocation(terrainShader->GetRendererID(), "landCoverMap") >= 0
+			&& glGetUniformLocation(terrainShader->GetRendererID(), "landCoverColors") >= 0;
+		const bool displayOk = terrainLinked && landCoverUniforms;
+		Report("mapbiomes: LAND COVER display mode", !terrainLinked ? "terrain shader does not link" : landCoverUniforms ? "uniforms present"
+			: "class map uniforms missing", displayOk);
+
 		//A pass over a rectangle after a pass over the whole map: inside it the result of the whole map with the new paint, outside the old one
 		biomepaint::Layer more = paint;
 		biomepaint::Apply(more, paintDab({ 790.0f, 110.0f }, 70.0f, 0.5f, 1.0f, strongSlot));
@@ -1506,7 +1555,8 @@ namespace {
 		}
 		const bool patchesOk = fine.ids == coarse.ids && patchDiffer == 0;
 		Report("mapbiomes: patches in texels", std::to_string(patchDiffer) + " splat bytes differ at 15x larger pixels", patchesOk);
-		return idsOk && colorsOk && splatOk && deterministic && noiseOk && patchesOk && paintOk && namesOk && regionOk;
+		return idsOk && colorsOk && splatOk && deterministic && noiseOk && patchesOk && paintOk && namesOk && regionOk && coverOk && emptySame && displayOk
+			&& paintCoverOk;
 	}
 
 	//@return median time of finishing the work given by fn, in ms. The first run is skipped: drivers finish compiling shaders then

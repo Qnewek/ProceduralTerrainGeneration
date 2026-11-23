@@ -1,6 +1,7 @@
 #include "doctest/doctest.h"
 
 #include <algorithm>
+#include <cmath>
 #include <cstring>
 #include <filesystem>
 #include <fstream>
@@ -227,119 +228,9 @@ TEST_CASE("Importing height maps")
 	std::filesystem::remove_all(folder);
 }
 
-namespace {
-	//Georeferencing of a test GeoTIFF; pixel = 0 writes none
-	struct Geo {
-		double pixel = 0.0;
-		bool geographic = false;
-		double topY = 0.0;		//Y (latitude for geographic) of the top edge
-		std::string noData;		//GDAL_NODATA, empty = none
-	};
+#include "TiffWriter.h"
 
-	struct TiffSpec {
-		int width = 0, height = 0;
-		uint16_t sampleFormat = SAMPLEFORMAT_INT;
-		uint16_t bits = 16;
-		uint16_t compression = COMPRESSION_NONE;
-		uint32_t tile = 0;			//0 = strips
-		uint16_t samplesPerPixel = 1;
-		Geo geo;
-	};
-
-	//Sets an array tag whose count libtiff passes as uint16 (TIFF_VARIABLE) or uint32 (TIFF_VARIABLE2)
-	template<typename T>
-	void SetArray(TIFF* tif, uint32_t tag, uint32_t count, const T* values)
-	{
-		const TIFFField* field = TIFFFindField(tif, tag, TIFF_ANY);
-		if (field && TIFFFieldReadCount(field) == TIFF_VARIABLE2) {
-			TIFFSetField(tif, tag, count, values);
-		}
-		else {
-			TIFFSetField(tif, tag, static_cast<uint16_t>(count), values);
-		}
-	}
-
-	void WriteTiff(const std::filesystem::path& path, const TiffSpec& spec, const std::vector<double>& values)
-	{
-		TIFF* tif = TIFFOpenW(path.wstring().c_str(), "w");
-		REQUIRE(tif);
-		static const TIFFFieldInfo geoFields[] = {
-			{ 33550, TIFF_VARIABLE, TIFF_VARIABLE, TIFF_DOUBLE, FIELD_CUSTOM, 1, 1, const_cast<char*>("ModelPixelScaleTag") },
-			{ 33922, TIFF_VARIABLE, TIFF_VARIABLE, TIFF_DOUBLE, FIELD_CUSTOM, 1, 1, const_cast<char*>("ModelTiepointTag") },
-			{ 34735, TIFF_VARIABLE, TIFF_VARIABLE, TIFF_SHORT, FIELD_CUSTOM, 1, 1, const_cast<char*>("GeoKeyDirectoryTag") },
-			{ TIFFTAG_GDAL_NODATA, TIFF_VARIABLE, TIFF_VARIABLE, TIFF_ASCII, FIELD_CUSTOM, 1, 0, const_cast<char*>("GDAL_NODATA") },
-		};
-		for (const TIFFFieldInfo& info : geoFields) {
-			if (!TIFFFindField(tif, info.field_tag, TIFF_ANY)) {
-				TIFFMergeFieldInfo(tif, &info, 1);
-			}
-		}
-		TIFFSetField(tif, TIFFTAG_IMAGEWIDTH, static_cast<uint32_t>(spec.width));
-		TIFFSetField(tif, TIFFTAG_IMAGELENGTH, static_cast<uint32_t>(spec.height));
-		TIFFSetField(tif, TIFFTAG_SAMPLESPERPIXEL, spec.samplesPerPixel);
-		TIFFSetField(tif, TIFFTAG_BITSPERSAMPLE, spec.bits);
-		TIFFSetField(tif, TIFFTAG_SAMPLEFORMAT, spec.sampleFormat);
-		TIFFSetField(tif, TIFFTAG_COMPRESSION, spec.compression);
-		TIFFSetField(tif, TIFFTAG_PHOTOMETRIC, spec.samplesPerPixel == 3 ? PHOTOMETRIC_RGB : PHOTOMETRIC_MINISBLACK);
-		TIFFSetField(tif, TIFFTAG_PLANARCONFIG, PLANARCONFIG_CONTIG);
-		if (spec.geo.pixel > 0.0) {
-			const double scale[3] = { spec.geo.pixel, spec.geo.pixel, 0.0 };
-			const double tiepoint[6] = { 0.0, 0.0, 0.0, 0.0, spec.geo.topY, 0.0 };
-			const uint16_t keys[8] = { 1, 1, 0, 1, 1024, 0, 1, static_cast<uint16_t>(spec.geo.geographic ? 2 : 1) };
-			SetArray(tif, 33550, 3, scale);
-			SetArray(tif, 33922, 6, tiepoint);
-			SetArray(tif, 34735, 8, keys);
-		}
-		if (!spec.geo.noData.empty()) {
-			TIFFSetField(tif, TIFFTAG_GDAL_NODATA, spec.geo.noData.c_str());
-		}
-
-		const int bytes = spec.bits / 8;
-		auto put = [&](unsigned char* to, double v) {
-			if (spec.sampleFormat == SAMPLEFORMAT_IEEEFP && spec.bits == 32) { const float f = static_cast<float>(v); std::memcpy(to, &f, 4); }
-			else if (spec.sampleFormat == SAMPLEFORMAT_IEEEFP) { std::memcpy(to, &v, 8); }
-			else if (spec.bits == 16) { const int16_t s = static_cast<int16_t>(v); std::memcpy(to, &s, 2); }
-			else { const int32_t s = static_cast<int32_t>(v); std::memcpy(to, &s, 4); }
-		};
-		const int pixelBytes = bytes * spec.samplesPerPixel;
-		if (spec.tile == 0) {
-			TIFFSetField(tif, TIFFTAG_ROWSPERSTRIP, 2u);
-			std::vector<unsigned char> row(static_cast<size_t>(spec.width) * pixelBytes);
-			for (int y = 0; y < spec.height; y++) {
-				for (int x = 0; x < spec.width; x++) {
-					for (int s = 0; s < spec.samplesPerPixel; s++) {
-						put(&row[static_cast<size_t>(x) * pixelBytes + s * bytes], values[static_cast<size_t>(y) * spec.width + x]);
-					}
-				}
-				REQUIRE(TIFFWriteScanline(tif, row.data(), static_cast<uint32_t>(y), 0) == 1);
-			}
-		}
-		else {
-			TIFFSetField(tif, TIFFTAG_TILEWIDTH, spec.tile);
-			TIFFSetField(tif, TIFFTAG_TILELENGTH, spec.tile);
-			std::vector<unsigned char> tile(static_cast<size_t>(spec.tile) * spec.tile * pixelBytes, 0);
-			for (uint32_t ty = 0; ty < static_cast<uint32_t>(spec.height); ty += spec.tile) {
-				for (uint32_t tx = 0; tx < static_cast<uint32_t>(spec.width); tx += spec.tile) {
-					std::fill(tile.begin(), tile.end(), static_cast<unsigned char>(0));
-					for (uint32_t y = 0; y < spec.tile && ty + y < static_cast<uint32_t>(spec.height); y++) {
-						for (uint32_t x = 0; x < spec.tile && tx + x < static_cast<uint32_t>(spec.width); x++) {
-							put(&tile[(static_cast<size_t>(y) * spec.tile + x) * pixelBytes], values[static_cast<size_t>(ty + y) * spec.width + tx + x]);
-						}
-					}
-					REQUIRE(TIFFWriteTile(tif, tile.data(), tx, ty, 0, 0) > 0);
-				}
-			}
-		}
-		TIFFClose(tif);
-	}
-
-	std::filesystem::path TiffFolder()
-	{
-		const std::filesystem::path folder = std::filesystem::temp_directory_path() / "ptg_import_tiff_tests";
-		std::filesystem::create_directories(folder);
-		return folder;
-	}
-}
+using namespace testtiff;
 
 TEST_CASE("GeoTIFF int16 with Deflate in metres")
 {
@@ -755,4 +646,153 @@ TEST_CASE("A map larger than 8192 needs a crop or downsample")
 	REQUIRE_MESSAGE(heightmap::Import(path, options, map, info, error), error);
 	CHECK(map.GetWidth() == 4100);
 	CHECK(map.GetHeight() == 2);
+}
+
+//--- Georeference (stage D3) ---
+
+namespace {
+	void CheckGeo(const std::optional<geo::GeoReference>& g, int epsg, glm::dvec2 origin, glm::dvec2 pixel, double tolerance = 1e-9)
+	{
+		REQUIRE(g.has_value());
+		CHECK(g->epsg == epsg);
+		CHECK(std::abs(g->origin.x - origin.x) <= tolerance);
+		CHECK(std::abs(g->origin.y - origin.y) <= tolerance);
+		CHECK(std::abs(g->pixel.x - pixel.x) <= tolerance);
+		CHECK(std::abs(g->pixel.y - pixel.y) <= tolerance);
+	}
+
+	std::filesystem::path WriteUtmTiff(const std::string& name, bool pixelIsPoint)
+	{
+		TiffSpec spec;
+		spec.width = 6;
+		spec.height = 10;
+		spec.geo.pixel = 30.0;
+		spec.geo.epsg = 32634;
+		spec.geo.leftX = 400000.0;
+		spec.geo.topY = 5800000.0;
+		spec.geo.pixelIsPoint = pixelIsPoint;
+		const std::filesystem::path path = TiffFolder() / name;
+		WriteTiff(path, spec, std::vector<double>(60, 100.0));
+		return path;
+	}
+}
+
+TEST_CASE("GeoTIFF georeference in UTM")
+{
+	const std::filesystem::path path = WriteUtmTiff("utm.tif", false);
+	HeightField map;
+	heightmap::ImportInfo info;
+	std::string error;
+	REQUIRE_MESSAGE(heightmap::Import(path, heightmap::ImportOptions{}, map, info, error), error);
+	CheckGeo(info.georeference, 32634, { 400000.0, 5800000.0 }, { 30.0, -30.0 });
+
+	heightmap::FileHeader header;
+	REQUIRE_MESSAGE(heightmap::Inspect(path, header, error), error);
+	CheckGeo(header.info.georeference, 32634, { 400000.0, 5800000.0 }, { 30.0, -30.0 });
+}
+
+TEST_CASE("Pixel is point moves the corner by half a pixel")
+{
+	const std::filesystem::path path = WriteUtmTiff("utm_point.tif", true);
+	HeightField map;
+	heightmap::ImportInfo info;
+	std::string error;
+	REQUIRE_MESSAGE(heightmap::Import(path, heightmap::ImportOptions{}, map, info, error), error);
+	CheckGeo(info.georeference, 32634, { 399985.0, 5800015.0 }, { 30.0, -30.0 });
+}
+
+TEST_CASE("Crop and downsample move the georeference")
+{
+	const std::filesystem::path path = WriteUtmTiff("utm_crop.tif", false);
+	heightmap::ImportOptions options;
+	options.crop = heightmap::PixelRect{ 2, 4, 4, 6 };
+	options.downsample = 2;
+	HeightField map;
+	heightmap::ImportInfo info;
+	std::string error;
+	REQUIRE_MESSAGE(heightmap::Import(path, options, map, info, error), error);
+	CHECK(map.GetWidth() == 2);
+	CHECK(map.GetHeight() == 3);
+	CheckGeo(info.georeference, 32634, { 400060.0, 5799880.0 }, { 60.0, -60.0 });
+}
+
+TEST_CASE("HGT georeference from its name")
+{
+	constexpr int side = 1201;
+	const std::filesystem::path path = TiffFolder() / "N50E019.hgt";
+	WriteHgt(path, side, std::vector<int>(static_cast<size_t>(side) * side, 200));
+	HeightField map;
+	heightmap::ImportInfo info;
+	std::string error;
+	REQUIRE_MESSAGE(heightmap::Import(path, heightmap::ImportOptions{}, map, info, error), error);
+	CheckGeo(info.georeference, 4326, { 19.0 - 1.0 / 2400.0, 51.0 + 1.0 / 2400.0 }, { 1.0 / 1200.0, -1.0 / 1200.0 }, 1e-12);
+
+	const std::filesystem::path west = TiffFolder() / "S10W020.hgt";
+	WriteHgt(west, side, std::vector<int>(static_cast<size_t>(side) * side, 7));
+	REQUIRE_MESSAGE(heightmap::Import(west, heightmap::ImportOptions{}, map, info, error), error);
+	CheckGeo(info.georeference, 4326, { -20.0 - 1.0 / 2400.0, -9.0 + 1.0 / 2400.0 }, { 1.0 / 1200.0, -1.0 / 1200.0 }, 1e-12);
+}
+
+TEST_CASE("ASC with a prj in PUWG 1992")
+{
+	const std::filesystem::path path = TiffFolder() / "puwg.asc";
+	WriteText(path, "ncols 4\nnrows 3\nxllcorner 500000\nyllcorner 300000\ncellsize 1\n1 2 3 4\n5 6 7 8\n9 10 11 12\n");
+	WriteText(TiffFolder() / "puwg.prj", "PROJCS[\"ETRF2000-PL / CS92\",GEOGCS[\"ETRF2000-PL\",DATUM[\"ETRF2000_Poland\"]],PROJECTION[\"Transverse_Mercator\"]]");
+	HeightField map;
+	heightmap::ImportInfo info;
+	std::string error;
+	REQUIRE_MESSAGE(heightmap::Import(path, heightmap::ImportOptions{}, map, info, error), error);
+	CheckGeo(info.georeference, 2180, { 500000.0, 300003.0 }, { 1.0, -1.0 });
+}
+
+TEST_CASE("Coordinate system from a prj")
+{
+	CHECK(heightmap::SystemFromPrj("PROJCS[\"WGS_1984_UTM_Zone_34N\",GEOGCS[\"GCS_WGS_1984\"]]") == 32634);
+	CHECK(heightmap::SystemFromPrj("PROJCS[\"WGS 84 / UTM zone 23S\",GEOGCS[\"WGS 84\"]]") == 32723);
+	CHECK(heightmap::SystemFromPrj("PROJCS[\"ETRS89 / UTM zone 33N\",GEOGCS[\"ETRS89\"]]") == 25833);
+	CHECK(heightmap::SystemFromPrj("PROJCS[\"ETRS_1989_Poland_CS92\",GEOGCS[\"GCS_ETRS_1989\"]]") == 2180);
+	CHECK(heightmap::SystemFromPrj("PROJCS[\"ETRF2000-PL / CS2000/21\",GEOGCS[\"ETRF2000-PL\"]]") == 2178);
+	CHECK(heightmap::SystemFromPrj("PROJCS[\"ETRS_1989_Poland_CS2000_Zone_6\",GEOGCS[\"GCS_ETRS_1989\"]]") == 2177);
+	CHECK(heightmap::SystemFromPrj("GEOGCS[\"GCS_WGS_1984\",DATUM[\"D_WGS_1984\"]]") == 4326);
+	CHECK(heightmap::SystemFromPrj("PROJCS[\"ETRS89 / LAEA Europe\",GEOGCS[\"ETRS89\"]]") == 0);
+	CHECK(heightmap::SystemFromPrj("") == 0);
+}
+
+TEST_CASE("ASC without a prj in metres has no system")
+{
+	const std::filesystem::path path = TiffFolder() / "noprj.asc";
+	std::filesystem::remove(TiffFolder() / "noprj.prj");
+	WriteText(path, "ncols 3\nnrows 2\nxllcenter 1000.0\nyllcenter 2000.0\ncellsize 25\n1 2 3\n4 5 6\n");
+	HeightField map;
+	heightmap::ImportInfo info;
+	std::string error;
+	REQUIRE_MESSAGE(heightmap::Import(path, heightmap::ImportOptions{}, map, info, error), error);
+	CheckGeo(info.georeference, 0, { 987.5, 2037.5 }, { 25.0, -25.0 });
+
+	heightmap::FileHeader header;
+	REQUIRE_MESSAGE(heightmap::Inspect(path, header, error), error);
+	CheckGeo(header.info.georeference, 0, { 987.5, 2037.5 }, { 25.0, -25.0 });
+
+	heightmap::ImportOptions options;
+	options.epsg = 2180;
+	REQUIRE_MESSAGE(heightmap::Import(path, options, map, info, error), error);
+	CheckGeo(info.georeference, 2180, { 987.5, 2037.5 }, { 25.0, -25.0 });
+
+	//The choice does not replace a system the file names
+	const std::filesystem::path utm = WriteUtmTiff("utm_choice.tif", false);
+	REQUIRE_MESSAGE(heightmap::Import(utm, options, map, info, error), error);
+	CHECK(info.georeference->epsg == 32634);
+}
+
+TEST_CASE("PNG has no georeference")
+{
+	const std::filesystem::path path = TiffFolder() / "nogeo.png";
+	std::vector<unsigned char> png;
+	REQUIRE(lodepng::encode(png, std::vector<unsigned char>{ 0, 255, 50, 200 }, 2, 2, LCT_GREY, 8) == 0);
+	WriteBytes(path, png);
+	HeightField map;
+	heightmap::ImportInfo info;
+	std::string error;
+	REQUIRE_MESSAGE(heightmap::Import(path, heightmap::ImportOptions{}, map, info, error), error);
+	CHECK_FALSE(info.georeference.has_value());
 }

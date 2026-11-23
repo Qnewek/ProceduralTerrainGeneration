@@ -1,6 +1,8 @@
 #pragma once
 
+#include <array>
 #include <cstdint>
+#include <filesystem>
 #include <optional>
 #include <string>
 #include <vector>
@@ -13,6 +15,20 @@
 //Biomes of a map that was not generated (the "Imported map" mode): the biome table and climate of TerrainGen, with the parameters the
 //noises would give computed from the map instead. Settings are saved in the map project (.ptgmap) as JSON
 namespace mapbiomes {
+	//Where the biomes come from: the climate of the terrain alone, or the climate within the biomes the land cover allows (stage D3)
+	enum class Source { CLIMATE, LAND_COVER };
+
+	//A class of the land cover files: its code, how it is shown and the biomes it allows (names of the biome table; none = all)
+	struct LandCoverClass {
+		int code = 0;				//1 to 255
+		std::string name;
+		glm::vec3 color{ 0.5f };	//LAND COVER display mode
+		std::vector<std::string> biomes;
+	};
+
+	//The ESA WorldCover legend (codes 10 to 100, its colors) with the biomes of the default table each class allows
+	std::vector<LandCoverClass> WorldCoverClasses();
+
 	struct Settings {
 		bool enabled = false;
 		//Metres of terrain height 1 (TerrainGen heights are in [0, 1]; its default shows 1 as 256 m): the climate and the ELEVATION
@@ -25,7 +41,16 @@ namespace mapbiomes {
 		glm::vec2 climateOrigin = glm::vec2(0.0f);	//noise position of texel (0, 0) in metres (TerrainGen map texels are 1 m)
 		//Table, climate, temperature and humidity noises, blending and materials; the terrain modifiers are not used
 		BiomeConfig config = BiomeConfig::Default();
+		Source source = Source::CLIMATE;
+		std::vector<std::string> landCoverFiles;		//UTF-8 paths, absolute
+		std::vector<LandCoverClass> classes = WorldCoverClasses();	//sorted by code, codes unique
 	};
+
+	//The mask of allowed biomes (biome::Nearest) of every class code: the biomes of the class found by name in the table. Codes without
+	//a class, classes with no biome of the table and every code with the CLIMATE source get 0 (= all biomes)
+	std::array<uint64_t, 256> ClassMasks(const Settings& settings);
+	//Classes for the codes on the map (counts > 0, code 0 = no data skipped) the table has no entry for: "Class N", grey, all biomes
+	void AddMissingClasses(Settings& settings, const std::array<uint64_t, 256>& counts);
 
 	//Defaults for a map; with a sea, height 0 lies so that the sea surface is at the water height of the default TerrainGen world
 	Settings Default(std::optional<float> seaLevelMetres);
@@ -58,8 +83,10 @@ namespace mapbiomes {
 	//instead of a beach everywhere. map_biome_compute.shader does the same
 	float ClimateHeight(float metres, float continentalness, std::optional<float> seaLevelMetres, const Settings& settings);
 
-	std::string ToJson(const Settings& settings);
+	//@param projectFolder - folder of the project the settings go to: the land cover files are also saved relative to it; empty = not
+	std::string ToJson(const Settings& settings, const std::filesystem::path& projectFolder = {});
 	//@param out - replaced only on success; fields missing in the text keep their default values
 	//@param error - description of the problem on failure (not JSON, a distance or height that is not above 0, a biome config presets reject)
-	bool FromJson(const std::string& text, Settings& out, std::string& error);
+	//@param projectFolder - folder of the project read: a land cover file whose saved path is gone is taken relative to it, when it is there
+	bool FromJson(const std::string& text, Settings& out, std::string& error, const std::filesystem::path& projectFolder = {});
 }
