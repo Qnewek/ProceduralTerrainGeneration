@@ -58,7 +58,8 @@ ProceduralTerrainGenerator/
                                  zakładki Project (Open/Save/Save as, Ctrl+S, `*`), Edit i Load, Saving = paczka eksportu; odczyt i zapis w tle;
                                  MapImportEdit.cpp = zakładka Edit tej klasy (erozja, wygładzanie, skala wysokości, oryginał, Cofnij/Ponów, morze, rzeki i jeziora);
                                  MapImportSculpt.cpp = pędzle (punkt pod kursorem, pociągnięcie na GPU, kółko pędzla);
-                                 MapImportBiomes.cpp = zakładka Biomes (klimat z terenu w tle, pokrycie terenu i georeferencja, przebieg GPU biomów, ustawienia projektu)
+                                 MapImportBiomes.cpp = zakładka Biomes (klimat z terenu w tle, pokrycie terenu i georeferencja, przebieg GPU biomów, ustawienia projektu);
+                                 MapImportVegetation.cpp = zakładka „Vegetation” (rośliny automatyczne w tle, pędzel roślin, lista modeli z podglądem)
     terrainGeneration/
       WorldConfig.h              same dane: WorldConfig (TerrainConfig + BiomeConfig), NoiseMapConfig, ErosionConfig
       Noise.h                    noise::NoiseConfigParameters (fBm, ridge, island, redistribution); sam szum jest tylko w GLSL
@@ -89,7 +90,9 @@ ProceduralTerrainGenerator/
       MapProject.*               plik projektu .ptgmap: sygnatura + długość + nagłówek JSON (rozmiar, piksel, morze, źródło, preset, przewyższenie) + bloki zlib
                                  (float32 w metrach rozdzielone na 4 płaszczyzny bajtów): kopia robocza i oryginał (tylko gdy się różni); zmiana pól = podbicie `currentVersion`
                                  (2 = ustawienia rzek jako JSON `preset::RiversJson`, 3 = ustawienia biomów `mapbiomes::ToJson`, 4 = malowane biomy: paleta
-                                 w nagłówku `biomePaint`, blok `biomePaint` = zlib uint16 LE; 5 = georeferencja `georeference` w nagłówku; starsze wersje nadal czytane)
+                                 w nagłówku `biomePaint`, blok `biomePaint` = zlib uint16 LE; 5 = georeferencja `georeference` w nagłówku; 6 = rośliny `vegetation`
+                                 {enabled, density 0–3}; 7 = rośliny z pędzla: `placedPlants` {palette, count} w nagłówku, blok `placedPlants` =
+                                 zlib `placedplants::Pack`; starsze wersje nadal czytane)
       MapEdit.*                  operacje na mapie w metrach (wygładzanie pudełkowe, skala + przesunięcie, `ErosionScale`) i historia Cofnij/Ponów z limitem pamięci
       Sculpt.*                   pędzle (podnieś, obniż, wygładź, spłaszcz, szum) na CPU = wzorzec `sculpt_compute.shader`, zanik, rzut kursora na teksel mapy (głębia → teksel)
       CameraMath.*               matematyka kamery edytora: rozglądanie, orbita wokół punktu (punkt zostaje w tym samym miejscu widoku), przesuwanie, jednostki na piksel
@@ -291,7 +294,10 @@ Wartości szumów są w [-1, 1]. Konwencja indeksowania: `map[y * width + x]`.
   w `res/vegetation/cache/` — zmiana algorytmu LOD-ów lub formatu wymaga podbicia `cacheVersion` w `VegetationMesh.cpp`, inaczej zostaną stare. Modele są w metrach
   (1 m = 4 jednostki świata), podstawa w początku układu; jeden plik = kilka wariantów. Jakość LOD-ów sprawdza `--vegetation-preview [folder]` (PNG).
   Rozmieszczenie (`VegetationPlacement.*`, CPU, testy): siatka komórek z jitterem na warstwę (drzewa/krzewy/skały), komórki w całości w jednym chunku, wszystko
-  z hasha pozycji komórki → deterministyczne i bez szwów. Co rośnie, mówią rośliny biomu (`biome::Plant` w `Biome::plants`, ≤ 16: model po nazwie, gęstość, skala,
+  z hasha pozycji komórki → deterministyczne i bez szwów. Siatka jest w metrach (teksel TerrainGen = 1 m): `ChunkMaps::step` = metry na teksel map
+  (1, 2^L dla grubszych chunków, piksel mapy rzeczywistej), `PlacementSettings::elevation*` / `river*` przeliczają wysokość dla elewacji roślin i pozycje
+  oraz poziomy sieci rzek (domyślne = bez zmian). Testy „pinned output” trzymają wynik TerrainGen bit w bit — zmiana, która go zmienia, zmienia
+  rośliny każdego świata. Co rośnie, mówią rośliny biomu (`biome::Plant` w `Biome::plants`, ≤ 16: model po nazwie, gęstość, skala,
   maks. nachylenie, zakres elewacji, klastrowanie), edytowane w edytorze biomów i zapisywane w presetach; warstwę (komórki 8 / 4 m) wyznacza `kind` modelu w JSON
   (`vegetation::LayerOfKind`). Domyślne rośliny: `biome::DefaultPlants(nazwa)`; biom z presetu bez pola `plants` dostaje je po nazwie. Zmiana roślin nie regeneruje
   terenu (edytor nie zgłasza jej jako zmiany biomów) — `VegetationLayer` porównuje rośliny sam i rozmieszcza chunki od nowa, rysując stare instancje do czasu podmiany.
@@ -349,7 +355,7 @@ Wartości szumów są w [-1, 1]. Konwencja indeksowania: `map[y * width + x]`.
   Miejsca (`places/`, poza gitem) nie trzymają parametrów generacji.
 - Eksport map: zakres wartości plików 16-bit jest stały (`heightmap::terrainRange`, `noiseRange`), nie min–max mapy. Zmiana zakresu generacji wymaga zmiany
   tych stałych, inaczej wartości zostaną przycięte. Eksport czyta mapę z tekstury w chwili zapisu, w wątku głównym.
-  Paczka (`exports/<nazwa>/`): pliki `<nazwa>_height*.{png,r16,exr}` + `<nazwa>.json` (`exportpack::ToJson`). Metry: 1 teksel = `Pack::metresPerTexel` (mapy generowane 1 m, Imported map = piksel mapy; roślinność tylko 1 m),
+  Paczka (`exports/<nazwa>/`): pliki `<nazwa>_height*.{png,r16,exr}` + `<nazwa>.json` (`exportpack::ToJson`). Metry: 1 teksel = `Pack::metresPerTexel` (mapy generowane 1 m, Imported map = piksel mapy, roślinność też: `vegexport::Input::metresPerTexel`),
   wysokość 1 = `heightScale / worldUnitsPerTexel` m z bieżącego „Height scale” (TerrainGen domyślnie 256 m). EXR trzyma metry, 16-bit — wartości z zakresu.
   Kolejne części eksportu (siatki, roślinność) dopisują swoje pliki do `Manifest::files`; zmiana nazw pól JSON = podbicie `manifestVersion`.
   Mapy materiałów i biomów (tylko TerrainGen z biomami): splat czytany z GPU (`TextureClass::Read` tablicy = warstwa po warstwie, materiał m = warstwa m/4,
@@ -428,6 +434,20 @@ Wartości szumów są w [-1, 1]. Konwencja indeksowania: `map[y * width + x]`.
   nie po edycji terenu; wynik → `classTexture` (`GL_R8UI`, filtrowanie NEAREST — tekstura całkowita z LINEAR jest niekompletna). Georeferencja mapy
   (`MapImportSys::georeference`, `geo::GeoReference`, z pliku mapy albo „Take georeference from file…”) w systemie spoza `geo::Supported` = rozciągnięcie
   pierwszego pliku. Nowa mapa z pliku zachowuje źródło, pliki i klasy. Tryb LAND COVER rysuje kolory klas (`TerrainView::SetLandCover`).
+  Rośliny z pędzla (zakładka „Vegetation”): `PlacedPlants.*` (rdzeń, testy) — warstwa = paleta nazw modeli + rośliny w metrach od środka teksela
+  (0, 0); `Scatter` (Count 1 = pod kursorem, więcej = próby w kole z odstępem), `Erase`, `ToPlaced` (wysokość z mapy przy wgraniu, nieznane / poza
+  mapą pomijane, ale zostają w warstwie), `Pack/Unpack`. Osobny `placedLayer` (zestaw „extra”), w `mapedit::Step::plants`, w projekcie i w eksporcie
+  (`vegexport::Input::extra`, poza limitem); przesadzanie roślin automatycznych ich nie rusza.
+  Rośliny automatyczne (D4, sekcja „Automatic plants” zakładki „Vegetation”, `MapImportVegetation.cpp`): prawdziwa skala piksela — `vegexport::PlaceMapLimited` (chunki
+  128 · ⌊piksel⌋ m, nachylenie z wysokości mapy, bez `surfaceMap`; wiersze na wątkach) na kopii mapy i id biomów odczytanych z GPU, w tle (`plantJob`),
+  limit `vegexport::maxMapInstances` (2 mln: najpierw drzewa, drzew więcej → brak, razem więcej → same drzewa, przerwanie po progu). `PlantsChanged()`
+  po każdym udanym `RunBiomePass`, nowej / usuniętej sieci rzek, zmianie roślin tabeli lub gotowych modeli, Density, „Plants”, nowej mapie (czyści od razu);
+  start dopiero bez pociągnięcia i bez nieaktualnego klimatu / biomów / pokrycia / rzek i z id biomów tej samej `mapVersion`, wynik starszej
+  `plantVersion` odrzucany, a każda zmiana przerywa trwające sadzenie (`vegexport::Input::cancel`); sieć rzek dzielona bez kopii (`shared_ptr`). `PlantInput()` (ekran
+  i eksport, te same rośliny): elewacja jak w biomach mapy (`elevationScale/Offset` z „Height of terrain 1” / „Height 0 at”, woda `mapbiomes::WaterHeight`),
+  bez morza nic nie jest wodą, komórki od `round(climateOrigin)` (mapa z TerrainGen = te same drzewa), rzeki przez `river*`. Rysuje własny
+  `VegetationLayer` (tylko zestaw „extra”, `SetUnitsPerMetre(4 / piksel)` w `ShowUnits` — LOD i zasięgi w metrach) po `PickUnderCursor`, więc pędzel
+  i orbita czytają głębię terenu. Cieni i trawy nie ma (wymagają `ChunkWorld`).
 - Kamera edytora (`EditorCamera`, wszystkie tryby, tylko widok 3D i bez M): prawy przycisk = rozglądanie (z WASD lot), Alt + lewy = orbita, środkowy = przesuwanie,
   kółko = przód/tył (Shift + kółko nigdy — zostaje dla promienia pędzla). Punkt obrotu i odległość przesuwania: `AfterDraw` czyta głębię pod kursorem po `Draw`
   (macierze `camera.GetViewProjection()`), bez trafienia punkt przed kamerą. Matematyka w `CameraMath.*` (`ptg_core`, testy). Lewy przycisk bez Alt należy do pędzli.

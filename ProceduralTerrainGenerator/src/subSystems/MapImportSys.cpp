@@ -75,6 +75,7 @@ void MapImportSys::Update(Camera& camera, bool active, float deltaTime)
 	}
 	UpdateRivers();
 	UpdateBiomes();
+	UpdatePlants();
 	//Meshes of an export are written in the background; the Saving tab may be closed
 	exporter.Update();
 	if (lookDown && active && !map.Empty()) {
@@ -119,6 +120,16 @@ void MapImportSys::InstallMap(HeightField units, float _metresPerUnit, glm::dvec
 	classCounts.fill(0);
 	landCoverMapId++;
 	landCoverStale = true;
+	//So do the plants: none until this map has its own
+	vegetation.ClearExtraInstances();
+	plantCount = 0;
+	plantKept = vegexport::Kept::ALL;
+	PlantsChanged();
+	//And the plants put by hand (a project puts its own back after this)
+	plantStroke.reset();
+	placedPlants = placedplants::Layer();
+	placedLayer.ClearExtraInstances();
+	placedUploadStale = true;
 	history.Clear();
 	historyNote.clear();
 	editStatus.clear();
@@ -136,6 +147,12 @@ void MapImportSys::ShowUnits(HeightField units, float _metresPerUnit, glm::dvec2
 	//Height 1 = metresPerUnit metres; a texel = worldUnitsPerTexel world units = pixelMetres metres
 	trueHeightScale = static_cast<float>(metresPerUnit * TerrainView::worldUnitsPerTexel / pixelMetres.x);
 	renderSettings.heightScale = trueHeightScale;
+	//Plants in the true size of a pixel: it is drawn worldUnitsPerTexel wide
+	vegetation.SetUnitsPerMetre(static_cast<float>(TerrainView::worldUnitsPerTexel / pixelMetres.x));
+	placedLayer.SetUnitsPerMetre(vegetation.GetUnitsPerMetre());
+	PlantsChanged();
+	//The placed plants stand on the new heights
+	placedUploadStale = true;
 
 	view.Resize(map.GetWidth(), map.GetHeight());
 	view.SetLayer(TerrainView::Layer::TERRAIN, map);
@@ -217,6 +234,8 @@ void MapImportSys::StartSaving(const std::filesystem::path& path)
 		project.paint = biomePaint;
 	}
 	project.georeference = georeference;
+	project.vegetation = plantSettings;
+	project.placedPlants = placedPlants;
 	const float unit = metresPerUnit;
 	const uint64_t version = mapVersion;
 	saveJob.Start([project = std::move(project), path, unit, version]() mutable {
@@ -512,6 +531,9 @@ void MapImportSys::InstallProject(ProjectLoad& result)
 	projectGeneration = project.generation;
 	seaLevelMetres = project.seaLevel;
 	georeference = project.georeference;
+	plantSettings = project.vegetation;
+	placedPlants = std::move(project.placedPlants);
+	placedUploadStale = true;
 	const std::u8string stem = projectPath.stem().u8string();
 	suggestedName = std::string(stem.begin(), stem.end());
 	dirty = false;
@@ -782,8 +804,13 @@ void MapImportSys::Draw(Renderer& renderer, Camera& camera, LightSource& light)
 		}
 	}
 	view.Draw(renderer, camera, light, renderSettings);
-	//Before the water, which writes no depth anyway: the depth under the cursor is the terrain
+	//Before the water, which writes no depth anyway, and before the plants: the depth under the cursor is the terrain
 	PickUnderCursor(camera, light);
+	vegetation.Draw(camera, light, renderSettings, vegetationModels);
+	//The plants put by hand are drawn with the settings of the "Drawing" node of the Vegetation tab
+	placedLayer.CopyViewSettings(vegetation);
+	placedLayer.Draw(camera, light, renderSettings, vegetationModels);
+	lastLight = &light;
 	const bool rivers = RiversOn() && riverMap.Ready();
 	const TextureClass* height = view.GetLayerTexture(TerrainView::Layer::TERRAIN);
 	if (map.Empty() || !height || (!seaLevelMetres && !rivers)) {
@@ -859,6 +886,7 @@ void MapImportSys::ImGuiRightPanel()
 		{ "Project", [this] { ProjectImGui(); } },
 		{ "Edit", [this] { EditImGui(); } },
 		{ "Biomes", [this] { BiomesImGui(); } },
+		{ "Vegetation", [this] { VegetationImGui(); } },
 		{ "Load", [this] { LoadImGui(); } },
 	};
 	importTabs.Draw("import", tabs);
@@ -1055,7 +1083,40 @@ void MapImportSys::ImGuiSaving()
 		pack.layersMissing = !BiomesOn() ? "Material and biome maps: turn on biomes in the Biomes tab."
 			: "Material and biome maps: wait until the biomes are computed.";
 	}
-	pack.vegetationMissing = "Vegetation: not available for imported maps.";
+	//Plants as shown: the automatic ones with the same input and limit, the ids of the same pass, slopes from the heights; then the placed ones
+	const bool automatic = PlantsOn();
+	const bool hasPlaced = !placedPlants.plants.empty();
+	if (ReadyModels() == 0) {
+		pack.vegetationMissing = "Vegetation: no models loaded.";
+	}
+	else if (!automatic && !hasPlaced) {
+		pack.vegetationMissing = "Vegetation: turn on Plants or place plants in the Vegetation tab.";
+	}
+	else if (automatic && (!biomesCurrent || !sameSize(biomeIds.get()))) {
+		pack.vegetationMissing = "Vegetation: wait until the biomes are computed.";
+	}
+	else if (automatic && !hasPlaced && plantKept == vegexport::Kept::NONE && !plantsStale && !plantJob.IsRunning()) {
+		pack.vegetationMissing = "Vegetation: over 2 million trees on this map.";
+	}
+	else {
+		const TextureClass* ids = automatic ? biomeIds.get() : nullptr;
+		pack.vegetation = ExportPanel::VegetationSource{ [this, automatic] {
+			vegexport::Input input = PlantInput();
+			if (!automatic) {
+				input.layerMask = 0;
+			}
+			input.extra = placedplants::ToPlaced(placedPlants, map, metresPerUnit, static_cast<float>(pixelMetres.x), input.models);
+			return input;
+		}, [] { return std::vector<glm::vec4>(); }, [this, ids] {
+			//Without automatic plants no ids are read: zeros of the map size place nothing (layer mask 0)
+			if (!ids) {
+				return BiomeMap(map.GetWidth(), map.GetHeight());
+			}
+			BiomeMap read(ids->GetWidth(), ids->GetHeight());
+			ids->Read(GL_RED_INTEGER, GL_INT, static_cast<int>(read.Size() * sizeof(int)), read.Data());
+			return read;
+		} };
+	}
 	//Rivers and lakes of the network shown: positions in map texels, levels in metres / mapMetresPerHeight
 	if (RiversOn() && riverNetwork && !riverNetwork->water.empty()) {
 		const float pixel = static_cast<float>(pixelMetres.x);

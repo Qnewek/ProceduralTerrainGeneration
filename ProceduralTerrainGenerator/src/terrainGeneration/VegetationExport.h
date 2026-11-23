@@ -1,5 +1,6 @@
 #pragma once
 
+#include <atomic>
 #include <filesystem>
 #include <memory>
 #include <string>
@@ -17,8 +18,11 @@
 //settings, vegetation::PlaceChunk), written as <name>_vegetation.json, and optionally the models they use as glTF files with their
 //variants as nodes. No OpenGL here: works on maps read beforehand, so it can run on a background thread.
 namespace vegexport {
-	//Chunk the map is placed in; any multiple of every vegetation::cellTexels gives the same plants
+	//Chunk the map is placed in, in metres of the placement grid; any multiple of every vegetation::cellTexels gives the same plants
+	//(maps of pixels of p >= 2 m are placed in chunks of chunkTexels * floor(p))
 	inline constexpr int chunkTexels = 128;
+	//Plants a map of the "Imported map" mode may have (stage D4): above it only trees, and with more trees than this none
+	inline constexpr size_t maxMapInstances = 2'000'000;
 
 	//A model the plants may name
 	struct Model {
@@ -46,19 +50,41 @@ namespace vegexport {
 		vegetation::PlacementSettings settings;
 		std::shared_ptr<const hydrology::Network> rivers;	//nothing stands in their water; nullptr = none
 		float metresPerUnit = 1.0f;		//metres of height value 1
-		glm::ivec2 mapTexel = glm::ivec2(0);	//world map position of map texel (0, 0) (a partial map moved over the world)
+		float metresPerTexel = 1.0f;	//size of a map pixel (generated maps: 1)
+		//Position of map texel (0, 0) on the placement grid in whole metres (TerrainGen: world map position of a partial map moved over the world)
+		glm::ivec2 mapTexel = glm::ivec2(0);
 		uint32_t layerMask = (1u << vegetation::layerCount) - 1u;	//bit i = vegetation::Layer i is placed
+		size_t limit = 0;				//PlaceMapLimited: plants at most (maxMapInstances); 0 = no limit
+		//Set (from another thread) = stop as soon as possible; what was placed until then is incomplete. nullptr = never
+		std::shared_ptr<const std::atomic<bool>> cancel;
+		//Write: plants put by hand (model = index into models), written after the placed ones; never limited, also when kept is NONE
+		std::vector<Placed> extra;
 	};
 
-	//Places the plants of a finite map in the chunks of chunkTexels of the world grid it lies on; plants beyond its edge texels are left
-	//out. Positions are relative to its texel (0, 0)
-	//@param surface - surface map of the height map (GpuSurfacePass: xy = gradient per world unit), as the chunks have it
+	//Places the plants of a finite map in the chunks of the metre grid it lies on; plants beyond its edge texels are left out. Positions are
+	//relative to its texel (0, 0). Chunk rows are placed on worker threads; the result is the same in any case. With Input::limit > 0 it stops
+	//once it has more than that many plants (the result then has more than limit, but not all of them)
+	//@param surface - surface map of the height map (GpuSurfacePass: xy = gradient per world unit), as the chunks have it; empty = slopes
+	//from the heights (metres over metres, Input::metresPerUnit), as for the maps of the real world
 	//@param ids - biome ids
 	std::vector<Placed> PlaceMap(const HeightField& height, const std::vector<glm::vec4>& surface, const BiomeMap& ids, const Input& input);
+
+	//What PlaceMapLimited kept of the plants
+	enum class Kept { ALL, TREES_ONLY, NONE };
+	struct Limited {
+		std::vector<Placed> placed;
+		Kept kept = Kept::ALL;
+	};
+	//PlaceMap within Input::limit: the trees first, none at all when they are more than the limit; then the other layers of the mask, only
+	//the trees when all together are more. Limit 0 = PlaceMap
+	Limited PlaceMapLimited(const HeightField& height, const std::vector<glm::vec4>& surface, const BiomeMap& ids, const Input& input);
+
 	//The plants of PlaceMap as the app draws them (VegetationLayer): XZ in world units before modelScale, Y = height value, scale in world units per metre
 	//@param texelZeroWorld - world XZ where the centre of map texel (0, 0) is drawn
 	//@param metresPerUnit - as Input::metresPerUnit
-	std::vector<vegetation::Instance> ToAppInstances(const std::vector<Placed>& placed, glm::vec2 texelZeroWorld, float metresPerUnit);
+	//@param metresPerTexel - as Input::metresPerTexel: a texel is drawn TerrainView::worldUnitsPerTexel wide
+	std::vector<vegetation::Instance> ToAppInstances(const std::vector<Placed>& placed, glm::vec2 texelZeroWorld, float metresPerUnit,
+		float metresPerTexel = 1.0f);
 
 	//The variants of a model as written to its file
 	struct ModelFile {
@@ -83,10 +109,11 @@ namespace vegexport {
 		std::vector<exportpack::File> files;
 		size_t instances = 0;
 		std::vector<std::string> modelErrors;	//models that could not be written ("name: why")
+		Kept kept = Kept::ALL;	//what the limit left (Input::limit)
 		double ms = 0.0;
 	};
 
-	//Places the plants and writes <name>_vegetation.json and, if writeModels, the models used by at least one plant
+	//Places the plants (PlaceMapLimited) and writes <name>_vegetation.json and, if writeModels, the models used by at least one plant
 	Result Write(const HeightField& height, const std::vector<glm::vec4>& surface, const BiomeMap& ids, const Input& input, const std::string& name,
 		bool writeModels, const std::filesystem::path& folder);
 }

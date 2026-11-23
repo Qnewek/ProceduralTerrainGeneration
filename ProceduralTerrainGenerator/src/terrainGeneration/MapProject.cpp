@@ -23,6 +23,37 @@ namespace mapproject {
 		constexpr const char* workingBlock = "working";
 		constexpr const char* originalBlock = "original";
 		constexpr const char* paintBlock = "biomePaint";
+		constexpr const char* plantsBlock = "placedPlants";
+		constexpr const char* plantsDamaged = "The placed plants of the project are damaged";
+
+		bool CompressBytes(const std::vector<uint8_t>& bytes, std::vector<uint8_t>& out, std::string& error)
+		{
+			uLongf size = compressBound(static_cast<uLong>(bytes.size()));
+			out.resize(size);
+			if (compress2(out.data(), &size, bytes.data(), static_cast<uLong>(bytes.size()), compressionLevel) != Z_OK) {
+				error = "Compression failed";
+				return false;
+			}
+			out.resize(size);
+			return true;
+		}
+
+		//Plants of placedplants::Pack; layer.palette and the plant count come from the header
+		bool DecompressPlants(const uint8_t* data, size_t size, size_t count, placedplants::Layer& layer, std::string& error)
+		{
+			std::vector<uint8_t> bytes(count * placedplants::plantBytes);
+			uLongf unpacked = static_cast<uLongf>(bytes.size());
+			if (uncompress(bytes.data(), &unpacked, data, static_cast<uLong>(size)) != Z_OK || unpacked != bytes.size()) {
+				error = plantsDamaged;
+				return false;
+			}
+			std::string why;
+			if (!placedplants::Unpack(bytes.data(), bytes.size(), layer, why)) {
+				error = std::string(plantsDamaged) + ": " + why;
+				return false;
+			}
+			return true;
+		}
 
 		bool AllFinite(const HeightField& map)
 		{
@@ -161,9 +192,17 @@ namespace mapproject {
 			return false;
 		}
 
-		std::vector<uint8_t> workingData, originalData, paintData;
+		const placedplants::Layer& plants = project.placedPlants;
+		const bool hasPlants = !plants.plants.empty();
+		if (hasPlants && (static_cast<int>(plants.palette.size()) > placedplants::maxPalette
+			|| std::any_of(plants.plants.begin(), plants.plants.end(), [&](const placedplants::Plant& p) { return p.model >= plants.palette.size(); }))) {
+			error = "A placed plant names a model the project does not list";
+			return false;
+		}
+
+		std::vector<uint8_t> workingData, originalData, paintData, plantsData;
 		if (!Compress(working, workingData, error) || (hasOriginal && !Compress(project.original, originalData, error))
-			|| (hasPaint && !CompressPaint(project.paint, paintData, error))) {
+			|| (hasPaint && !CompressPaint(project.paint, paintData, error)) || (hasPlants && !CompressBytes(placedplants::Pack(plants), plantsData, error))) {
 			return false;
 		}
 
@@ -190,6 +229,10 @@ namespace mapproject {
 		if (const std::optional<geo::GeoReference>& g = project.georeference) {
 			header["georeference"] = { { "epsg", g->epsg }, { "origin", { g->origin.x, g->origin.y } }, { "pixel", { g->pixel.x, g->pixel.y } } };
 		}
+		header["vegetation"] = { { "enabled", project.vegetation.enabled }, { "density", project.vegetation.density } };
+		if (hasPlants) {
+			header["placedPlants"] = { { "palette", plants.palette }, { "count", plants.plants.size() } };
+		}
 		header["blocks"] = json::array();
 		header["blocks"].push_back({ { "name", workingBlock }, { "bytes", workingData.size() } });
 		if (hasOriginal) {
@@ -198,11 +241,14 @@ namespace mapproject {
 		if (hasPaint) {
 			header["blocks"].push_back({ { "name", paintBlock }, { "bytes", paintData.size() } });
 		}
+		if (hasPlants) {
+			header["blocks"].push_back({ { "name", plantsBlock }, { "bytes", plantsData.size() } });
+		}
 		//Text that is not valid UTF-8 (a file name in the system code page) is kept with replaced characters
 		const std::string text = header.dump(-1, ' ', false, json::error_handler_t::replace);
 
 		out.clear();
-		out.reserve(sizeof(signature) + lengthBytes + text.size() + workingData.size() + originalData.size() + paintData.size());
+		out.reserve(sizeof(signature) + lengthBytes + text.size() + workingData.size() + originalData.size() + paintData.size() + plantsData.size());
 		out.insert(out.end(), std::begin(signature), std::end(signature));
 		const uint32_t length = static_cast<uint32_t>(text.size());
 		for (size_t i = 0; i < lengthBytes; i++) {
@@ -212,6 +258,7 @@ namespace mapproject {
 		out.insert(out.end(), workingData.begin(), workingData.end());
 		out.insert(out.end(), originalData.begin(), originalData.end());
 		out.insert(out.end(), paintData.begin(), paintData.end());
+		out.insert(out.end(), plantsData.begin(), plantsData.end());
 		return true;
 	}
 
@@ -232,9 +279,11 @@ namespace mapproject {
 		}
 
 		Project project;
-		//map = nullptr: the block of painted biomes
-		struct Block { HeightField* map; size_t bytes; };
+		//map = nullptr: the block of painted biomes, or of the placed plants when plants is set
+		struct Block { HeightField* map; size_t bytes; bool plants = false; };
 		std::vector<Block> blocks;
+		size_t plantCount = 0;
+		bool hasPlantsBlock = false;
 		try {
 			const json header = json::parse(data + prefix, data + prefix + length);
 			const int version = header.at("version").get<int>();
@@ -294,10 +343,40 @@ namespace mapproject {
 				}
 				project.georeference = reference;
 			}
+			//Version 6: vegetation settings; older versions get the defaults (plants on, density 1)
+			if (version >= 6 && header.contains("vegetation")) {
+				const json& v = header.at("vegetation");
+				project.vegetation.enabled = v.at("enabled").get<bool>();
+				project.vegetation.density = v.at("density").get<float>();
+				if (!std::isfinite(project.vegetation.density) || project.vegetation.density < 0.0f || project.vegetation.density > maxVegetationDensity) {
+					error = "The vegetation settings of the project are damaged";
+					return false;
+				}
+			}
+
+			//Version 7: plants placed by hand; the palette and the count here, the plants in their block
+			if (version >= 7 && header.contains("placedPlants")) {
+				const json& p = header.at("placedPlants");
+				project.placedPlants.palette = p.at("palette").get<std::vector<std::string>>();
+				plantCount = p.at("count").get<size_t>();
+				if (static_cast<int>(project.placedPlants.palette.size()) > placedplants::maxPalette || plantCount > (size_t(1) << 28)) {
+					error = plantsDamaged;
+					return false;
+				}
+			}
 
 			for (const json& block : header.at("blocks")) {
 				const std::string name = block.at("name").get<std::string>();
 				const size_t bytes = block.at("bytes").get<size_t>();
+				if (name == plantsBlock && version >= 7) {
+					if (hasPlantsBlock) {
+						error = "Repeated block \"" + name + "\" in the project";
+						return false;
+					}
+					hasPlantsBlock = true;
+					blocks.push_back({ nullptr, bytes, true });
+					continue;
+				}
 				if (name == paintBlock && version >= 4) {
 					if (!project.paint.texels.empty()) {
 						error = "Repeated block \"" + name + "\" in the project";
@@ -325,6 +404,10 @@ namespace mapproject {
 			error = "The project has no map";
 			return false;
 		}
+		if (plantCount > 0 && !hasPlantsBlock) {
+			error = plantsDamaged;
+			return false;
+		}
 
 		size_t offset = prefix + length;
 		for (const Block& block : blocks) {
@@ -332,7 +415,10 @@ namespace mapproject {
 				error = "The project file is cut short";
 				return false;
 			}
-			if (block.map ? !Decompress(data + offset, block.bytes, *block.map, error) : !DecompressPaint(data + offset, block.bytes, project.paint, error)) {
+			const bool read = block.map ? Decompress(data + offset, block.bytes, *block.map, error)
+				: block.plants ? DecompressPlants(data + offset, block.bytes, plantCount, project.placedPlants, error)
+				: DecompressPaint(data + offset, block.bytes, project.paint, error);
+			if (!read) {
 				return false;
 			}
 			offset += block.bytes;
