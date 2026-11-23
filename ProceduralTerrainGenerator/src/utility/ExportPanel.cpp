@@ -286,6 +286,12 @@ void ExportPanel::PollBackground()
 		std::snprintf(line, sizeof(line), "\nVegetation: %zu plants, %zu model files in %.1f s", vegetation.instances, manifest.vegetationModels.size(),
 			vegetation.ms / 1000.0);
 		times += line;
+		if (vegetation.kept == vegexport::Kept::TREES_ONLY) {
+			times += " (over the limit: trees only)";
+		}
+		else if (vegetation.kept == vegexport::Kept::NONE) {
+			times += " (over the limit: none)";
+		}
 		for (const std::string& error : vegetation.modelErrors) {
 			times += "\nModel not written: " + error;
 		}

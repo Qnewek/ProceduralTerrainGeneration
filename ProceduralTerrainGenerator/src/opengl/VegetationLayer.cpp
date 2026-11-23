@@ -292,8 +292,8 @@ void VegetationLayer::StartPlacement(const ChunkWorld& chunks, const ChunkWorld:
 		settings.rivers = rivers.get();
 		vegetation::ChunkMaps maps;
 		maps.size = ChunkWorld::textureSize;
-		maps.firstTexel = firstTexel;
-		maps.step = step;
+		maps.firstTexel = glm::vec2(firstTexel);
+		maps.step = static_cast<float>(step);
 		maps.height = height.data();
 		maps.surface = surface.data();
 		maps.ids = ids.data();
@@ -544,7 +544,7 @@ bool VegetationLayer::Cull(const glm::vec3& eye, const glm::mat4& viewProjection
 
 	//Ranges of chunks in the frustum and in range
 	const Frustum frustum(viewProjection * glm::scale(glm::mat4(1.0f), glm::vec3(settings.modelScale)));
-	const float units = vegetation::unitsPerMetre;
+	const float units = unitsPerMetre;
 	float maxRange = 0.0f;
 	for (const LayerRange& r : ranges) {
 		maxRange = std::max(maxRange, r.max * units);
@@ -671,13 +671,19 @@ void VegetationLayer::ImGuiDraw()
 	ImGui::SetItemTooltip("Trees, shrubs and rocks on the ground near the camera, trees also far away; needs biomes (species are picked per biome)");
 	ImGui::SliderFloat("Density", &density, 0.0f, 3.0f);
 	ImGui::SetItemTooltip("Multiplies the chance of every species; a change places everything again");
+	ImGui::Checkbox("Plant shadows", &shadows);
+	ImGui::SetItemTooltip("Plants cast sun shadows (Display > Shadows); every cascade draws them again");
+	ImGuiViewSettings();
+	ImGui::Text("Placed: %zu on %zu chunks (last placement %.2f ms)", PlacedCount(), placed.size(), placementMs);
+}
+
+void VegetationLayer::ImGuiViewSettings()
+{
 	ImGui::SliderFloat("Detail distance", &detailScale, 0.25f, 5.0f, "%.2fx", ImGuiSliderFlags_Logarithmic);
 	ImGui::SetItemTooltip("Multiplies the distances below (LOD 1, LOD 2, impostors) of all layers; trees get full models up to %.0f m.\n"
 		"Full tree models have about 150k triangles each, so larger values cost GPU time quickly", ranges[0].lod1 * detailScale);
 	ImGui::Checkbox("Impostors", &impostors);
 	ImGui::SetItemTooltip("Distant trees as camera-facing pictures baked from 64 directions; off = LOD 2 meshes up to the range");
-	ImGui::Checkbox("Plant shadows", &shadows);
-	ImGui::SetItemTooltip("Plants cast sun shadows (Display > Shadows); every cascade draws them again");
 	if (ImGui::TreeNode("Distances (m)")) {
 		for (int l = 0; l < vegetation::layerCount; l++) {
 			ImGui::PushID(l);
@@ -695,7 +701,6 @@ void VegetationLayer::ImGuiDraw()
 		}
 		ImGui::TreePop();
 	}
-	ImGui::Text("Placed: %zu on %zu chunks (last placement %.2f ms)", PlacedCount(), placed.size(), placementMs);
 	ImGui::Text("Drawn: %d (LOD 0/1/2: %d / %d / %d, impostors %d)", drawnInstances, drawnPerLod[0], drawnPerLod[1], drawnPerLod[2],
 		drawnPerLod[impostorLod]);
 	ImGui::Text("Triangles: %.2f M", static_cast<double>(drawnTriangles) / 1e6);

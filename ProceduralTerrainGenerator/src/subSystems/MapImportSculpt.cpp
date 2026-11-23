@@ -38,7 +38,11 @@ static_assert(sculpt::worldUnitsPerTexel == TerrainView::worldUnitsPerTexel, "sc
 
 void MapImportSys::UpdateSculpt(const Camera& camera, bool active, float deltaTime)
 {
-	//The biome brush shares the mouse input; a sculpt stroke still running ends below first
+	//The biome and plant brushes share the mouse input; a sculpt stroke still running ends below first
+	if ((plantBrushOn || plantStroke) && !stroke && !paintStroke) {
+		UpdatePlantBrush(camera, active);
+		return;
+	}
 	if ((biomePaintOn || paintStroke) && !stroke) {
 		UpdateBiomePaint(camera, active, deltaTime);
 		return;
@@ -189,12 +193,21 @@ void MapImportSys::SculptInputImGui()
 		return;
 	}
 	if (!io.WantCaptureMouse && io.KeyShift && io.MouseWheel != 0.0f) {
-		float& radius = biomePaintOn ? paintRadius : brush.radius;
-		radius = std::clamp(radius * std::pow(1.1f, io.MouseWheel), 1.0f, largestRadius);
+		if (plantBrushOn) {
+			plantRadius = std::clamp(plantRadius * std::pow(1.1f, io.MouseWheel), 0.5f, 500.0f);
+		}
+		else {
+			float& radius = biomePaintOn ? paintRadius : brush.radius;
+			radius = std::clamp(radius * std::pow(1.1f, io.MouseWheel), 1.0f, largestRadius);
+		}
 	}
 	//The biome brush in the colour of its biome, grey while erasing
 	ImU32 outlineColor = OutlineColor(brush.brush);
-	if (biomePaintOn) {
+	if (plantBrushOn) {
+		//Green while placing, grey while erasing
+		outlineColor = paintInvert ? IM_COL32(200, 200, 200, 230) : IM_COL32(90, 220, 90, 230);
+	}
+	else if (biomePaintOn) {
 		outlineColor = IM_COL32(200, 200, 200, 230);
 		const std::vector<biome::Biome>& table = biomeSettings.config.table;
 		const auto painted = std::find_if(table.begin(), table.end(), [&](const biome::Biome& b) { return b.name == paintBiome; });
@@ -218,6 +231,7 @@ void MapImportSys::SculptImGui()
 	ImGui::SeparatorText("Sculpt");
 	if (ImGui::Checkbox("Sculpt with the mouse", &sculptOn) && sculptOn) {
 		biomePaintOn = false;
+		plantBrushOn = false;
 	}
 	ImGui::SetItemTooltip("Left button paints on the terrain, in 3D and on the 2D map");
 	if (!sculptOn) {

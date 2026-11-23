@@ -71,9 +71,12 @@ void MapImportSys::StepHistory(bool redo)
 	std::optional<float> sea = seaLevelMetres;
 	//Moved, not copied (2 bytes a texel); back in place unless the step swapped it
 	biomepaint::Layer paint = std::move(biomePaint);
-	const std::optional<mapedit::Restored> restored = redo ? history.Redo(metres, sea, paint) : history.Undo(metres, sea, paint);
+	const std::optional<mapedit::Restored> restored = redo ? history.Redo(metres, sea, paint, placedPlants) : history.Undo(metres, sea, paint, placedPlants);
 	if (!restored || !restored->paint) {
 		biomePaint = std::move(paint);
+	}
+	if (restored && restored->plants) {
+		PlacedPlantsChanged();
 	}
 	if (!restored) {
 		return;
@@ -308,9 +311,11 @@ void MapImportSys::UpdateRivers()
 	if (std::optional<RiverResult> result = riverJob.TryTake()) {
 		//A network of an older map is dropped; mapChanged is set then, so a new one starts below
 		if (result->version == mapVersion && RiversOn()) {
-			riverNetwork = std::move(result->rivers);
+			riverNetwork = std::make_shared<const hydrology::MapRivers>(std::move(result->rivers));
 			riverMs = result->ms;
 			UploadRiverWater();
+			//Nothing stands in the new water
+			PlantsChanged();
 		}
 	}
 	if (!mapChanged || riverJob.IsRunning()) {
@@ -319,6 +324,9 @@ void MapImportSys::UpdateRivers()
 	mapChanged = false;
 	if (!RiversOn() || map.Empty()) {
 		riverMap.Clear();
+		if (riverNetwork) {
+			PlantsChanged();
+		}
 		riverNetwork.reset();
 		return;
 	}

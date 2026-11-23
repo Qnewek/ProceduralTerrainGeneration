@@ -65,6 +65,19 @@ public:
 	void ForgetChunks();
 	//Settings and statistics, in the Vegetation tab
 	void ImGuiDraw();
+	//How the plants are drawn (detail distances, impostors) and what was drawn; part of ImGuiDraw, also for the extra set alone (Imported map)
+	void ImGuiViewSettings();
+	//World units of one metre of the models and of the distances (TerrainGen: vegetation::unitsPerMetre; a map of real pixels:
+	//TerrainView::worldUnitsPerTexel / pixel size). Culling and levels of detail only; the chunks are placed at vegetation::unitsPerMetre
+	void SetUnitsPerMetre(float units) { unitsPerMetre = units; }
+	//Draws as another layer does: its detail distance, impostors and distances (not its plants or statistics)
+	void CopyViewSettings(const VegetationLayer& from)
+	{
+		detailScale = from.detailScale;
+		impostors = from.impostors;
+		std::copy(std::begin(from.ranges), std::end(from.ranges), std::begin(ranges));
+	}
+	float GetUnitsPerMetre() const { return unitsPerMetre; }
 	bool ReloadShader();
 
 	//Multiplies the density of every plant (the Density slider); a change places everything again
@@ -176,6 +189,7 @@ private:
 	static constexpr float shadowDetail = 0.3f;	//detail distances of the shadow casters, times detailScale
 	static constexpr float shadowSmallRange = 30.0f;	//metres up to which shrubs and rocks cast shadows
 	float density = 1.0f;
+	float unitsPerMetre = vegetation::unitsPerMetre;
 	//Multiplies the distances of the levels of detail and impostors of every layer (not the ranges)
 	float detailScale = 1.0f;
 	LayerRange ranges[vegetation::layerCount] = { { 40.0f, 100.0f, 150.0f, 3000.0f }, { 15.0f, 40.0f, 120.0f, 120.0f }, { 20.0f, 60.0f, 200.0f, 200.0f } };
