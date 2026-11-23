@@ -729,6 +729,14 @@ oryginał tylko w pamięci i w projekcie („Wróć do oryginału”), plus Cofn
   bez limitu 2 mln; stoją na bieżących wysokościach (po Sculpt na nowym terenie), w historii, w `.ptgmap` wersja 7 i w eksporcie (`Input::extra`).
   Do sprawdzenia: jedna roślina kliknięciem; rozsypanie 3 modeli; gumka; Undo/Redo pędzla między krokami Sculpt; Sculpt pod roślinami; Save → Open;
   eksport — liczba = automatyczne + z pędzla; rośliny z pędzla przy wyłączonych „Plants” i biomach; nieznany model w projekcie nie psuje wczytania.
+  Poprawki drobnych usterek D4 i pędzla (2026-11-23): pociągnięcie pędzla roślin nad panelem nie przerywa sadzenia; reload tego samego pliku (zakres
+  wartości) zostawia rośliny z pędzla; w widoku 2D rośliny z pędzla jako zielone kropki; uszkodzona liczba roślin w nagłówku projektu odrzucana przed
+  alokacją (zlib ≤ ~1032 : 1); zamknięcie okna przerywa sadzenie automatyczne; sortowanie 2 mln roślin w zadaniu w tle, nie w klatce; chunki
+  `ChunkMetres` ≈ 128 pikseli także przy pikselu < 1 m (zdjęcia z drona); pozycje względem teksela (0, 0) mapy (`PlacementSettings::gridOrigin`) — centymetry
+  także tysiące km od początku świata. Hash bitowy „pinned output of a map of 1 m pixels” przypięty od nowa (ostatnie bity floatów), hash pozycji zaokrąglonych
+  do cm (jak w pliku) bez zmian; rośliny TerrainGen bit w bit bez zmian.
+  Do sprawdzenia: przeciągnięcie pędzla roślin przez prawy panel; zmiana zakresu wartości PNG przy roślinach z pędzla i pustej historii; kropki w 2D
+  (przesuwanie, zoom, Undo); zamknięcie okna w trakcie sadzenia na 8192²; płynność klatki, gdy kończy się sadzenie na 8192².
 
 ---
 

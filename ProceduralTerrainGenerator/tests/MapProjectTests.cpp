@@ -1,5 +1,6 @@
 #include "doctest/doctest.h"
 
+#include <chrono>
 #include <cmath>
 #include <cstring>
 #include <filesystem>
@@ -492,6 +493,27 @@ TEST_CASE("Damaged placed plants fail")
 	mapproject::Project read = Marker();
 	std::string error;
 	CHECK_FALSE(mapproject::Deserialize(bytes.data(), bytes.size(), read, error));
+	CHECK_FALSE(error.empty());
+	CHECK(IsMarker(read));
+}
+
+TEST_CASE("Placed plant count far above the block fails at once")
+{
+	mapproject::Project project = FullProject();
+	project.placedPlants = TwoPlants();
+	//99999999 plants (1.9 GB unpacked) said by the header of a block of a few bytes; the palette shortened to keep the header length
+	std::vector<uint8_t> bytes = Bytes(project);
+	const std::string from = "\"count\":2,\"palette\":[\"oak\",\"pine\"]", to = "\"count\":99999999,\"palette\":[\"\",\"\"]";
+	REQUIRE(from.size() == to.size());
+	const std::string text(bytes.begin(), bytes.end());
+	const size_t at = text.find(from);
+	REQUIRE(at != std::string::npos);
+	std::copy(to.begin(), to.end(), bytes.begin() + at);
+	mapproject::Project read = Marker();
+	std::string error;
+	const auto start = std::chrono::steady_clock::now();
+	CHECK_FALSE(mapproject::Deserialize(bytes.data(), bytes.size(), read, error));
+	CHECK(std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count() < 0.1);
 	CHECK_FALSE(error.empty());
 	CHECK(IsMarker(read));
 }

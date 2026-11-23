@@ -58,6 +58,8 @@ public:
 	//A set of plants besides the chunks (the eroded copy of the partial map), XZ in world units before modelScale: replaces the previous set.
 	//Culled, drawn and shadowed with the plants of the chunks; kept by Update and ForgetChunks
 	void SetExtraInstances(const std::vector<vegetation::Instance>& instances);
+	//World units of a side of the squares the extra set is culled by; a set already in vegetation::SortIntoSquares order of these is not sorted again
+	static float ExtraSquare();
 	void ClearExtraInstances();
 	bool HasExtraInstances() const { return extraCount > 0; }
 	size_t ExtraCount() const { return extraCount; }
