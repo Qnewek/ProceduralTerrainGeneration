@@ -41,6 +41,12 @@ namespace mapproject {
 		//Plants of placedplants::Pack; layer.palette and the plant count come from the header
 		bool DecompressPlants(const uint8_t* data, size_t size, size_t count, placedplants::Layer& layer, std::string& error)
 		{
+			//zlib packs at most about 1032 to 1: a count the block cannot hold is damage, found before allocating for it
+			constexpr size_t zlibMaxRatio = 1032;
+			if (count * placedplants::plantBytes > size * zlibMaxRatio + 64) {
+				error = plantsDamaged;
+				return false;
+			}
 			std::vector<uint8_t> bytes(count * placedplants::plantBytes);
 			uLongf unpacked = static_cast<uLongf>(bytes.size());
 			if (uncompress(bytes.data(), &unpacked, data, static_cast<uLong>(size)) != Z_OK || unpacked != bytes.size()) {

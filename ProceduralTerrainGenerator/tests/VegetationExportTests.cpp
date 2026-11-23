@@ -82,6 +82,30 @@ namespace {
 		return h;
 	}
 
+	//The same over what the export file keeps: positions in centimetres, turn and size to 1e-4
+	uint64_t HashOfWritten(const std::vector<vegexport::Placed>& placed)
+	{
+		uint64_t h = 0xcbf29ce484222325ULL;
+		auto add = [&h](int64_t v) {
+			for (int b = 0; b < 8; b++) {
+				h ^= static_cast<uint64_t>(v >> (8 * b)) & 0xFFu;
+				h *= 0x100000001b3ULL;
+			}
+		};
+		auto round = [](float f, double unit) { return static_cast<int64_t>(std::llround(static_cast<double>(f) / unit)); };
+		for (const vegexport::Placed& p : placed) {
+			add(round(p.position.x, 0.01));
+			add(round(p.position.y, 0.01));
+			add(round(p.position.z, 0.01));
+			add(round(p.yaw, 1e-4));
+			add(round(p.scale, 1e-4));
+			add(p.model);
+			add(p.variant);
+			add(static_cast<int64_t>(p.layer));
+		}
+		return h;
+	}
+
 	std::filesystem::path TempFolder(const char* name)
 	{
 		const std::filesystem::path folder = std::filesystem::temp_directory_path() / ("ptg_vegexport_test_" + std::string(name));
@@ -154,7 +178,9 @@ TEST_CASE("PlaceMap places the plants of the app: the same cells as a chunk of t
 
 TEST_CASE("PlaceMap: pinned output of a map of 1 m pixels")
 {
-	//The plants TerrainGen exported before pixels other than 1 m: they must stay bit for bit
+	//The plants TerrainGen exports. Bits pinned again 2026-11-23 when positions became relative to the map (gridOrigin: the last bits of
+	//the floats moved). HashOfWritten (pinned before that change, unchanged by it) guards against changes larger than float steps; a value
+	//right at a centimetre boundary could still round the other way in a file, which is harmless
 	TestWorld world(300, 170);
 	world.input.mapTexel = glm::ivec2(37, -50);
 	for (int y = 0; y < 170; y++) {
@@ -166,7 +192,9 @@ TEST_CASE("PlaceMap: pinned output of a map of 1 m pixels")
 	const std::vector<vegexport::Placed> placed = vegexport::PlaceMap(world.height, world.surface, world.ids, world.input);
 	REQUIRE(!placed.empty());
 	CHECK(placed.size() == 1336);
-	CHECK(HashOf(placed) == 1798676657785315399ULL);
+	CHECK(HashOf(placed) == 10705518421995842840ULL);
+	//What the export file keeps of them, so that a change of the float rounding alone cannot change a written pack
+	CHECK(HashOfWritten(placed) == 5360461575058882599ULL);
 }
 
 TEST_CASE("PlaceMap of a map moved over the world gives the plants of the world there")
@@ -326,6 +354,55 @@ TEST_CASE("PlaceMapLimited: under the limit keeps all")
 	const vegexport::Limited limited = vegexport::PlaceMapLimited(world.height, world.surface, world.ids, world.input);
 	CHECK(limited.kept == vegexport::Kept::ALL);
 	CHECK(limited.placed.size() == all.size());
+}
+
+TEST_CASE("PlaceMap far from the world origin keeps fine positions")
+{
+	//5000 km from the origin a float has steps of 0.5 m; positions relative to the map keep their centimetres
+	TestWorld world(300, 170);
+	world.input.mapTexel = glm::ivec2(5'000'000, -4'000'000);
+	const std::vector<vegexport::Placed> placed = vegexport::PlaceMap(world.height, world.surface, world.ids, world.input);
+	REQUIRE(placed.size() > 100);
+	size_t fine = 0;
+	for (const vegexport::Placed& p : placed) {
+		const float fx = p.position.x * 2.0f, fz = p.position.z * 2.0f;
+		fine += (fx != std::floor(fx) || fz != std::floor(fz)) ? 1 : 0;
+	}
+	CHECK(fine > placed.size() * 9 / 10);
+}
+
+TEST_CASE("Chunks of PlaceMap keep about 128 pixels a side")
+{
+	//A multiple of every cell (8 m), and the window of a chunk (chunk / pixel + 3 pixels a side) small also for drone surveys
+	for (float pixel : { 0.01f, 0.02f, 0.05f, 0.1f, 0.25f, 0.5f, 0.9f, 1.0f, 2.0f, 30.0f, 90.0f }) {
+		CAPTURE(pixel);
+		const int chunk = vegexport::ChunkMetres(pixel);
+		CHECK(chunk % 8 == 0);
+		CHECK(chunk >= 8);
+		CHECK(static_cast<float>(chunk) / pixel <= 1000.0f);
+	}
+	CHECK(vegexport::ChunkMetres(1.0f) == vegexport::chunkTexels);
+	CHECK(vegexport::ChunkMetres(30.0f) == 30 * vegexport::chunkTexels);
+}
+
+TEST_CASE("PlaceMap with 2 cm pixels is quick and as dense")
+{
+	//A drone survey: small chunks keep the window of a chunk small
+	TestWorld reference(512, 512);
+	const double referenceDensity = static_cast<double>(CountLayer(vegexport::PlaceMap(reference.height, reference.surface, reference.ids,
+		reference.input), vegetation::Layer::TREES)) / (511.0 * 511.0);
+	TestWorld fine(3001, 3001);
+	fine.input.metresPerTexel = 0.02f;
+	const auto start = std::chrono::steady_clock::now();
+	const std::vector<vegexport::Placed> placed = vegexport::PlaceMap(fine.height, {}, fine.ids, fine.input);
+	const double seconds = std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count();
+	CHECK(seconds < 1.5);
+	const double density = static_cast<double>(CountLayer(placed, vegetation::Layer::TREES)) / (60.0 * 60.0);
+	CHECK(density == doctest::Approx(referenceDensity).epsilon(0.35));
+	for (const vegexport::Placed& p : placed) {
+		CHECK(p.position.x <= 60.0f);
+		CHECK(p.position.z <= 60.0f);
+	}
 }
 
 TEST_CASE("Write adds the extra plants")

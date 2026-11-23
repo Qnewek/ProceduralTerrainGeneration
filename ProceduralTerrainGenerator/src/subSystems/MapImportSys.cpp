@@ -759,12 +759,19 @@ void MapImportSys::InstallResult(LoadResult& result)
 	lastLoadMs = result.ms;
 	//The same file again (another value range): the painting stays when the size does
 	biomepaint::Layer keptPaint;
+	//The plants put by hand too: in metres, they stay where they stood (ones off a smaller map are kept, not drawn)
+	placedplants::Layer keptPlants;
 	if (result.reload) {
 		keptPaint = std::move(biomePaint);
+		keptPlants = std::move(placedPlants);
 	}
 	InstallMap(std::move(result.map), result.metresPerUnit, result.pixelMetres);
 	if (!keptPaint.texels.empty() && keptPaint.width == map.GetWidth() && keptPaint.height == map.GetHeight()) {
 		UsePaint(std::move(keptPaint));
+	}
+	if (!keptPlants.plants.empty()) {
+		placedPlants = std::move(keptPlants);
+		placedUploadStale = true;
 	}
 	original = HeightField();
 	dirty = true;
@@ -810,6 +817,7 @@ void MapImportSys::Draw(Renderer& renderer, Camera& camera, LightSource& light)
 	//The plants put by hand are drawn with the settings of the "Drawing" node of the Vegetation tab
 	placedLayer.CopyViewSettings(vegetation);
 	placedLayer.Draw(camera, light, renderSettings, vegetationModels);
+	ProjectPlacedDots(camera, light);
 	lastLight = &light;
 	const bool rivers = RiversOn() && riverMap.Ready();
 	const TextureClass* height = view.GetLayerTexture(TerrainView::Layer::TERRAIN);

@@ -24,6 +24,15 @@
 namespace vegexport {
 	using Json = nlohmann::ordered_json;
 
+	int ChunkMetres(float pixel)
+	{
+		if (pixel >= 1.0f) {
+			return chunkTexels * static_cast<int>(std::floor(pixel));
+		}
+		constexpr int largestCell = 8;
+		return std::max(largestCell, largestCell * static_cast<int>(std::floor(16.0f * pixel)));
+	}
+
 	std::vector<Placed> PlaceMap(const HeightField& height, const std::vector<glm::vec4>& surface, const BiomeMap& ids, const Input& input)
 	{
 		const int width = height.GetWidth(), mapHeight = height.GetHeight();
@@ -39,9 +48,9 @@ namespace vegexport {
 		}
 		const vegetation::PreparedPlants plants = vegetation::PreparePlants(input.plants, infos);
 
-		//Chunks of the metre grid (cells are aligned to it); map texel t lies at mapTexel + t * pixel. Coarse pixels get larger chunks
-		//(any multiple of the cells gives the same plants), so a chunk still spans many pixels
-		const int chunk = chunkTexels * std::max(1, static_cast<int>(std::floor(pixel)));
+		//Chunks of the metre grid (cells are aligned to it); map texel t lies at mapTexel + t * pixel. Chunks follow the pixel (any multiple
+		//of the cells gives the same plants), so a chunk spans about 128 pixels
+		const int chunk = ChunkMetres(pixel);
 		auto floorDiv = [](int a, int b) { return a >= 0 ? a / b : -((-a + b - 1) / b); };
 		const glm::ivec2 origin = input.mapTexel;
 		const glm::vec2 extent = glm::vec2(width - 1, mapHeight - 1) * pixel;
@@ -96,7 +105,8 @@ namespace vegexport {
 				}
 				vegetation::ChunkMaps maps;
 				maps.size = size;
-				maps.firstTexel = glm::vec2(origin) + glm::vec2(first) * pixel;
+				//In metres from map texel (0, 0) (gridOrigin below): floats keep centimetres however far the map lies
+				maps.firstTexel = glm::vec2(first) * pixel;
 				maps.step = pixel;
 				maps.height = chunkHeight.data();
 				maps.surface = chunkSurface.data();
@@ -105,9 +115,11 @@ namespace vegexport {
 				vegetation::PlacementSettings settings = input.settings;
 				settings.chunkTexel = chunkTexel;
 				settings.chunkTexels = chunk;
-				//Positions straight in metres of the grid; the slope comes from the surface map, not from these
+				//Positions straight in metres from map texel (0, 0); the slope comes from the surface map, not from these
 				settings.mapOrigin = glm::vec2(0.0f);
 				settings.worldUnitsPerTexel = 1.0f;
+				settings.gridOrigin = origin;
+				settings.riverOrigin = input.settings.riverOrigin - glm::vec2(origin);
 				if (slopeFromHeights) {
 					settings.heightScale = input.metresPerUnit;
 				}
@@ -118,7 +130,7 @@ namespace vegexport {
 				size_t added = 0;
 				for (const vegetation::Instance& in : instances) {
 					//Metres from map texel (0, 0), between the centres of the edge texels
-					const float x = in.position.x - static_cast<float>(origin.x), z = in.position.z - static_cast<float>(origin.y);
+					const float x = in.position.x, z = in.position.z;
 					if (x < 0.0f || z < 0.0f || x > extent.x || z > extent.y) {
 						continue;
 					}

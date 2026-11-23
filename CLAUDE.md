@@ -437,9 +437,12 @@ Wartości szumów są w [-1, 1]. Konwencja indeksowania: `map[y * width + x]`.
   Rośliny z pędzla (zakładka „Vegetation”): `PlacedPlants.*` (rdzeń, testy) — warstwa = paleta nazw modeli + rośliny w metrach od środka teksela
   (0, 0); `Scatter` (Count 1 = pod kursorem, więcej = próby w kole z odstępem), `Erase`, `ToPlaced` (wysokość z mapy przy wgraniu, nieznane / poza
   mapą pomijane, ale zostają w warstwie), `Pack/Unpack`. Osobny `placedLayer` (zestaw „extra”), w `mapedit::Step::plants`, w projekcie i w eksporcie
-  (`vegexport::Input::extra`, poza limitem); przesadzanie roślin automatycznych ich nie rusza.
+  (`vegexport::Input::extra`, poza limitem); przesadzanie roślin automatycznych ich nie rusza. Reload tego samego pliku (zakres wartości) je zostawia.
+  Widok 2D roślin nie rysuje: rośliny z pędzla jako kropki (`ProjectPlacedDots` po `Draw`, rysowane w `SculptInputImGui`, ≤ 50 tys.).
   Rośliny automatyczne (D4, sekcja „Automatic plants” zakładki „Vegetation”, `MapImportVegetation.cpp`): prawdziwa skala piksela — `vegexport::PlaceMapLimited` (chunki
-  128 · ⌊piksel⌋ m, nachylenie z wysokości mapy, bez `surfaceMap`; wiersze na wątkach) na kopii mapy i id biomów odczytanych z GPU, w tle (`plantJob`),
+  `vegexport::ChunkMetres(piksel)` ≈ 128 pikseli, wielokrotność 8 m; pozycje względem teksela (0, 0) przez `PlacementSettings::gridOrigin`, więc
+  floaty trzymają centymetry daleko od początku świata, a komórki i hashe zostają na siatce; nachylenie z wysokości mapy, bez `surfaceMap`; wiersze na wątkach) na kopii mapy i id biomów odczytanych z GPU, w tle (`plantJob`),
+  wynik sortowany w zadaniu (`vegetation::SortIntoSquares`, `SetExtraInstances` tylko sprawdza kolejność),
   limit `vegexport::maxMapInstances` (2 mln: najpierw drzewa, drzew więcej → brak, razem więcej → same drzewa, przerwanie po progu). `PlantsChanged()`
   po każdym udanym `RunBiomePass`, nowej / usuniętej sieci rzek, zmianie roślin tabeli lub gotowych modeli, Density, „Plants”, nowej mapie (czyści od razu);
   start dopiero bez pociągnięcia i bez nieaktualnego klimatu / biomów / pokrycia / rzek i z id biomów tej samej `mapVersion`, wynik starszej
