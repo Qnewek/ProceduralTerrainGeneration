@@ -13,6 +13,7 @@
 #include "ErosionPanel.h"
 #include "Preset.h"
 #include "SplineSampling.h"
+#include "TerrainMaterials.h"
 #include "VegetationModels.h"
 
 TerrainGenerationSys::TerrainGenerationSys() {
@@ -397,6 +398,7 @@ vegexport::Input TerrainGenerationSys::VegetationExportInput() const
 	}
 	input.mapTexel = view.GetMapOffset();
 	input.metresPerUnit = renderSettings.heightScale / TerrainView::worldUnitsPerTexel;
+	input.lodRanges = vegetationLayer.LodRanges();
 	return input;
 }
 
@@ -859,6 +861,9 @@ void TerrainGenerationSys::ImGuiSaving()
 		&& biomeMap.GetWidth() == view.GetMapWidth() && biomeMap.GetHeight() == view.GetMapHeight();
 	if (biomesGeneration && sameSize) {
 		pack.materials = ExportPanel::SplatSource(*splat, materialNames);
+		if (terrainMaterials) {
+			pack.materials->textures = [materials = terrainMaterials](float metresPerTexel) { return materials->ExportTextures(metresPerTexel); };
+		}
 		pack.biomes = ExportPanel::BiomeTableSource(world.biomes.table, [this] { return biomeMap; }, *colors);
 	}
 	else {

@@ -152,8 +152,24 @@ TerrainMaterials::~TerrainMaterials()
 	glDeleteBuffers(1, &blockBuffer);
 }
 
+std::vector<engineexport::MaterialTextures> TerrainMaterials::ExportTextures(float metresPerTexel) const
+{
+	std::vector<engineexport::MaterialTextures> list;
+	for (const TerrainMaterial& m : materials) {
+		engineexport::MaterialTextures t;
+		t.folder = std::filesystem::path(textureFolder) / m.asset;
+		t.tileMetres = engineexport::TileMetres(m.tileSize, textureScale, metresPerTexel);
+		for (int c = 0; c < 3; c++) {
+			t.fallbackColor[c] = m.fallbackColor[c];
+		}
+		list.push_back(std::move(t));
+	}
+	return list;
+}
+
 bool TerrainMaterials::Initialize(const std::string& manifestPath, const std::string& textureDir)
 {
+	textureFolder = textureDir;
 	//Cliff materials by name, resolved once the whole list is read
 	std::vector<std::string> cliffNames;
 	try {

@@ -118,6 +118,7 @@ bool TerrainGenApp::Initialize()
 	}
 	mapImportSys.SetMaterialNames(std::move(materialNames));
 	mapImportSys.SetVegetationModels(vegetation.get());
+	mapImportSys.SetTerrainMaterials(materials.get());
     if (!sky.Initialize() || !clouds.Initialize()) {
         return false;
     }
