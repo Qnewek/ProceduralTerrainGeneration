@@ -101,9 +101,12 @@ namespace Ptg
 				AssetDatabase.DeleteAsset(assetFolder);
 			Directory.CreateDirectory(DiskPath(assetFolder));
 			AssetDatabase.Refresh();
-			GameObject old = GameObject.Find("/" + name);
-			if (old != null)
-				UnityEngine.Object.DestroyImmediate(old);
+			// GameObject.Find skips inactive objects: a root switched off would stay and the import would add a second one
+			foreach (GameObject old in EditorSceneManager.GetActiveScene().GetRootGameObjects())
+			{
+				if (old.name == name)
+					UnityEngine.Object.DestroyImmediate(old);
+			}
 
 			EditorUtility.DisplayProgressBar(DialogTitle, "Reading heights", 0.05f);
 			Layout layout = MakeLayout(manifest, heightFile);
