@@ -43,14 +43,27 @@ void MapImportSys::ApplyEdit(HeightField metres, std::optional<float> seaLevel, 
 		original = map;
 	}
 	const size_t stepBytes = before.map ? before.map->Size() * sizeof(float) : 0;
-	if (history.Push(std::move(before))) {
+	const bool pushed = history.Push(std::move(before));
+	if (pushed) {
 		historyNote.clear();
 	}
 	else {
 		historyNote = "History off: one step needs " + std::to_string((stepBytes + (1 << 20) - 1) >> 20) + " MB, more than the history memory";
 	}
+	const std::optional<float> seaKept = seaLevelMetres;
 	seaLevelMetres = seaLevel;
-	ShowMetres(std::move(metres));
+	try {
+		ShowMetres(std::move(metres));
+	}
+	catch (const std::bad_alloc&) {
+		//ShowMetres allocates only before it replaces the map (an edit keeps the map size, so no new textures; the river water upload
+		//catches its own failure), so the map did not change: a step undoing it would undo nothing. Callers restore the GPU layer and report
+		seaLevelMetres = seaKept;
+		if (pushed) {
+			history.DropLast();
+		}
+		throw;
+	}
 }
 
 void MapImportSys::SetSeaLevel(std::optional<float> metres, std::optional<float> before)
@@ -131,8 +144,15 @@ void MapImportSys::FinishEdit(EditResult& result)
 		SetEditStatus("Dropped " + result.label + ": the map changed while it ran", true);
 		return;
 	}
-	mapedit::Step before{ result.label, WorkingMetres(), seaLevelMetres };
-	ApplyEdit(std::move(result.metres), seaLevelMetres, std::move(before));
+	try {
+		mapedit::Step before{ result.label, WorkingMetres(), seaLevelMetres };
+		ApplyEdit(std::move(result.metres), seaLevelMetres, std::move(before));
+	}
+	catch (const std::bad_alloc&) {
+		//ApplyEdit leaves the map, the sea level and the history as they were
+		SetEditStatus(result.label + " failed: not enough memory", true);
+		return;
+	}
 	char text[64];
 	std::snprintf(text, sizeof(text), " done in %.0f ms", result.ms);
 	SetEditStatus(result.label + text, false);
@@ -140,7 +160,12 @@ void MapImportSys::FinishEdit(EditResult& result)
 
 void MapImportSys::Erode()
 {
-	if (Busy() || map.Empty()) {
+	if (map.Empty()) {
+		return;
+	}
+	if (Busy()) {
+		//Replaces "Eroding...": the button was pressed in the frame the other operation started
+		SetEditStatus("Erosion: wait until the current operation finishes", true);
 		return;
 	}
 	const char* method = ErosionMethodName(erosionConfig.method);
@@ -263,12 +288,17 @@ void MapImportSys::EditImGui()
 	ImGui::SeparatorText("Original");
 	ImGui::BeginDisabled(original.Empty());
 	if (ImGui::Button("Revert to original")) {
-		HeightField metres = original;
-		for (size_t i = 0; i < metres.Size(); i++) {
-			metres[i] *= metresPerUnit;
+		try {
+			HeightField metres = original;
+			for (size_t i = 0; i < metres.Size(); i++) {
+				metres[i] *= metresPerUnit;
+			}
+			ApplyEdit(std::move(metres), seaLevelMetres, { "Revert to original", WorkingMetres(), seaLevelMetres });
+			SetEditStatus("Reverted to the original", false);
 		}
-		ApplyEdit(std::move(metres), seaLevelMetres, { "Revert to original", WorkingMetres(), seaLevelMetres });
-		SetEditStatus("Reverted to the original", false);
+		catch (const std::bad_alloc&) {
+			SetEditStatus("Revert to original failed: not enough memory", true);
+		}
 	}
 	ImGui::EndDisabled();
 	if (original.Empty()) {

@@ -337,6 +337,11 @@ void TerrainGenerationSys::UpdateErosion()
 			eroded.plantsMs = result->ms;
 		}
 	}
+	//Density, models or plants changed: the plants of the copy follow, as the map's do
+	if (eroded.shown && biomesGeneration && vegetationLayer.SettingsVersion() != eroded.plantSettings) {
+		eroded.plantSettings = vegetationLayer.SettingsVersion();
+		eroded.plantsWanted = true;
+	}
 	//One placement at a time: a newer copy waits for the running one
 	if (eroded.plantsWanted && !erodedPlantsJob.IsRunning()) {
 		eroded.plantsWanted = false;
@@ -346,6 +351,7 @@ void TerrainGenerationSys::UpdateErosion()
 
 void TerrainGenerationSys::StartErodedPlants()
 {
+	eroded.plantSettings = vegetationLayer.SettingsVersion();
 	const int width = view.GetMapWidth(), height = view.GetMapHeight();
 	if (!eroded.shown || !biomesGeneration || !AnyVegetationModel() || biomeMap.GetWidth() != width || biomeMap.GetHeight() != height) {
 		vegetationLayer.ClearExtraInstances();

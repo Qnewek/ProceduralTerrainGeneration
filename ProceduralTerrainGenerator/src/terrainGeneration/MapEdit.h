@@ -66,6 +66,8 @@ namespace mapedit {
 		std::optional<Restored> Undo(HeightField& map, std::optional<float>& seaLevel, biomepaint::Layer& paint, placedplants::Layer& plants);
 		std::optional<Restored> Redo(HeightField& map, std::optional<float>& seaLevel, biomepaint::Layer& paint, placedplants::Layer& plants);
 		void Clear();
+		//Removes the step pushed last (the undo step on top), for an operation that failed after pushing it; nothing to undo = no-op
+		void DropLast();
 
 	private:
 		static size_t BytesOf(const Step& step);

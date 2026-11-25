@@ -158,9 +158,15 @@ void MapImportSys::ShowUnits(HeightField units, float _metresPerUnit, glm::dvec2
 	view.Resize(map.GetWidth(), map.GetHeight());
 	view.SetLayer(TerrainView::Layer::TERRAIN, map);
 	mapVersion++;
-	//The water of the network shown until the new one comes keeps its metres in the new map units
+	//The water of the network shown until the new one comes keeps its metres in the new map units. The map is already replaced here:
+	//nothing after that may throw (an edit would report failure for a map it changed), so no water until the new network comes
 	if (riverNetwork) {
-		UploadRiverWater();
+		try {
+			UploadRiverWater();
+		}
+		catch (const std::bad_alloc&) {
+			riverMap.Clear();
+		}
 	}
 }
 
@@ -762,11 +768,16 @@ void MapImportSys::InstallResult(LoadResult& result)
 	biomepaint::Layer keptPaint;
 	//The plants put by hand too: in metres, they stay where they stood (ones off a smaller map are kept, not drawn)
 	placedplants::Layer keptPlants;
+	//And the vertical exaggeration: InstallMap shows the new map in its true proportions
+	const float keptExaggeration = renderSettings.heightScale / trueHeightScale;
 	if (result.reload) {
 		keptPaint = std::move(biomePaint);
 		keptPlants = std::move(placedPlants);
 	}
 	InstallMap(std::move(result.map), result.metresPerUnit, result.pixelMetres);
+	if (result.reload && std::isfinite(keptExaggeration) && keptExaggeration > 0.0f) {
+		renderSettings.heightScale = trueHeightScale * keptExaggeration;
+	}
 	if (!keptPaint.texels.empty() && keptPaint.width == map.GetWidth() && keptPaint.height == map.GetHeight()) {
 		UsePaint(std::move(keptPaint));
 	}
@@ -1107,6 +1118,10 @@ void MapImportSys::ImGuiSaving()
 	else if (automatic && (!biomesCurrent || !sameSize(biomeIds.get()))) {
 		pack.vegetationMissing = "Vegetation: wait until the biomes are computed.";
 	}
+	else if (automatic && !RiversCurrent()) {
+		//The plants keep out of the water of the network, which belongs to the previous map until the new one comes
+		pack.vegetationMissing = "Vegetation: wait until the rivers are computed.";
+	}
 	else if (automatic && !hasPlaced && plantKept == vegexport::Kept::NONE && !plantsStale && !plantJob.IsRunning()) {
 		pack.vegetationMissing = "Vegetation: over 2 million trees on this map.";
 	}
@@ -1130,7 +1145,10 @@ void MapImportSys::ImGuiSaving()
 		} };
 	}
 	//Rivers and lakes of the network shown: positions in map texels, levels in metres / mapMetresPerHeight
-	if (RiversOn() && riverNetwork && !riverNetwork->water.empty()) {
+	if (!RiversCurrent()) {
+		pack.riverWaterMissing = "Rivers and lakes: wait until the river network is computed.";
+	}
+	else if (RiversOn() && riverNetwork && !riverNetwork->water.empty()) {
 		const float pixel = static_cast<float>(pixelMetres.x);
 		pack.riverWater = [this, pixel] {
 			std::vector<glm::vec3> triangles;

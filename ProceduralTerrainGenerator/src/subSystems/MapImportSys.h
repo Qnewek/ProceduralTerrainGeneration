@@ -293,6 +293,7 @@ private:
 	uint32_t strokeSeed = 0;
 	//Mouse input of the last ImGui frame (Update runs before the next one): the left button went down over the scene, is held
 	bool paintPressed = false, paintHeld = false, paintInvert = false;
+	bool strokeCancelPressed = false;	//Esc during a sculpt stroke: back to the map before it
 	//Outline of the brush on the terrain, ImGui coordinates, and the viewport it is clipped to
 	std::vector<ImVec2> brushOutline;
 	ImVec2 outlineClipMin, outlineClipMax;
@@ -300,6 +301,7 @@ private:
 	void UpdateSculpt(const Camera& camera, bool active, float deltaTime);
 	//Ends a stroke: the layer read back becomes a history step
 	void FinishStroke();
+	void CancelStroke();
 	//After the terrain is drawn: the texel under the cursor and the outline of the brush around it
 	void PickUnderCursor(Camera& camera, LightSource& light);
 	//Mouse input and the outline; every frame of the mode, inside the ImGui frame
@@ -321,6 +323,8 @@ private:
 	RiverMap riverMap;
 	WaterSurface water;
 	bool RiversOn() const { return riverConfig.method == rivers::Method::REGION; }
+	//The river network shown belongs to the map as it is now (none wanted, or computed after its last change)
+	bool RiversCurrent() const { return !RiversOn() || (!mapChanged && !riverJob.IsRunning()); }
 	//Takes a finished network and starts a new one when the map changed; called every frame
 	void UpdateRivers();
 	//Water of the network to the GPU, levels in map units
