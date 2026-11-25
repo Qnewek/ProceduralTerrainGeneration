@@ -21,6 +21,9 @@ namespace vegexport {
 	//Chunk the map is placed in, in metres of the placement grid; any multiple of every vegetation::cellTexels gives the same plants
 	//(maps of pixels of p >= 2 m are placed in chunks of chunkTexels * floor(p))
 	inline constexpr int chunkTexels = 128;
+	//Side in metres of the chunks PlaceMap places a map of pixels of p metres in: chunkTexels * floor(p) from 1 m, below it 8 * floor(16 p)
+	//(at least 8): always a multiple of every cell, so the plants do not depend on it, and about 128 pixels a side
+	int ChunkMetres(float pixel);
 	//Plants a map of the "Imported map" mode may have (stage D4): above it only trees, and with more trees than this none
 	inline constexpr size_t maxMapInstances = 2'000'000;
 

@@ -108,6 +108,25 @@ namespace {
 	float Wavy(glm::vec2 p) { return 0.5f + 0.01f * std::sin(p.x * 0.05f) * std::cos(p.y * 0.07f); }
 }
 
+TEST_CASE("SortIntoSquares orders the instances by squares, rows first, keeping their order inside one")
+{
+	auto at = [](float x, float z, int model) {
+		vegetation::Instance in;
+		in.position = glm::vec3(x, 0.0f, z);
+		in.model = model;
+		return in;
+	};
+	std::vector<vegetation::Instance> instances = { at(150.0f, 10.0f, 0), at(10.0f, 150.0f, 1), at(-5.0f, 10.0f, 2), at(20.0f, 30.0f, 3),
+		at(10.0f, 20.0f, 4) };
+	vegetation::SortIntoSquares(instances, 100.0f);
+	std::vector<int> order;
+	for (const vegetation::Instance& in : instances) {
+		order.push_back(in.model);
+	}
+	//Row z 0: squares x -1 (2), 0 (3, 4), 1 (0); row z 1: square x 0 (1)
+	CHECK(order == std::vector<int>{ 2, 3, 4, 0, 1 });
+}
+
 TEST_CASE("PlaceChunk: pinned output at step 1 and 2")
 {
 	//The output of the placement before cells were measured in metres: TerrainGen must keep its plants bit for bit
