@@ -114,6 +114,8 @@ namespace exportpack {
 		if (!m.materials.empty()) {
 			Json materials;
 			materials["encoding"] = "share of the material per texel, 0 - 255; the shares of a texel sum to 255";
+			materials["texturesNote"] = "textures of the materials on the map, repeated every tileMetres in world X and Z; normal maps in the OpenGL "
+				"convention (+Y up); a material without textures is drawn in its fallbackColor (linear 0 - 1)";
 			Json list = Json::array();
 			for (const Material& mat : m.materials) {
 				Json entry;
@@ -122,6 +124,15 @@ namespace exportpack {
 				entry["splat"] = { { "file", mat.splatFile }, { "channel", std::string(1, "RGBA"[mat.splatChannel & 3]) } };
 				entry["weightFile"] = mat.weightFile.empty() ? Json(nullptr) : Json(mat.weightFile);
 				entry["coverage"] = mat.coverage;
+				entry["fallbackColor"] = { mat.fallbackColor[0], mat.fallbackColor[1], mat.fallbackColor[2] };
+				if (mat.albedo.empty()) {
+					entry["textures"] = nullptr;
+				}
+				else {
+					const auto pathOrNull = [](const std::string& path) { return path.empty() ? Json(nullptr) : Json(path); };
+					entry["textures"] = { { "albedo", mat.albedo }, { "normal", pathOrNull(mat.normal) }, { "roughness", pathOrNull(mat.roughness) },
+						{ "tileMetres", mat.tileMetres } };
+				}
 				list.push_back(entry);
 			}
 			materials["list"] = list;

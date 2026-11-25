@@ -9,6 +9,7 @@
 #include "glm/glm.hpp"
 
 #include "Biome.h"
+#include "EngineExport.h"
 #include "ExportManifest.h"
 #include "GenerationJob.h"
 #include "HeightmapExport.h"
@@ -35,6 +36,8 @@ public:
 	struct MaterialSource {
 		std::vector<std::string> names;		//every material in the order of their ids
 		std::function<splatmap::Shares()> read;	//called only when exporting; one channel per name
+		//Textures of every material (id order) for a map of the given pixel size; empty function = none ("Material textures" disabled)
+		std::function<std::vector<engineexport::MaterialTextures>(float metresPerTexel)> textures;
 	};
 
 	//Biome ids and colors of the main map
@@ -127,6 +130,10 @@ private:
 	bool exportWater = true;
 	bool exportVegetation = false;
 	bool exportModels = true;
+	bool exportTextures = true;		//material textures of the materials on the map (with the material maps)
+	bool exportScripts = true;		//engine importers (res/engine) and an R16 copy of the main map they read
+	//Folder of the importer scripts, relative to the working directory (the resource folder)
+	static constexpr const char* engineScriptsFolder = "res/engine";
 	//Side of a mesh tile in map texels (metres = texels * Pack::metresPerTexel); 0 = whole map
 	static constexpr float tileTexels[] = { 128.0f, 256.0f, 512.0f, 1024.0f, 0.0f };
 	std::string status;

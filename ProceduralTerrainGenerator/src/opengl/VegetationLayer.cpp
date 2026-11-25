@@ -540,6 +540,16 @@ void VegetationLayer::DrawShadow(const FrameUniforms::Block& block, Camera& came
 	DrawCulled(block, eye, settings, models, false);
 }
 
+vegexport::LodRanges VegetationLayer::LodRanges() const
+{
+	vegexport::LodRanges out;
+	for (int l = 0; l < vegetation::layerCount; l++) {
+		const LayerRange& r = ranges[l];
+		out[l] = { std::min(r.lod1 * detailScale, r.max), std::min(r.lod2 * detailScale, r.max), r.max };
+	}
+	return out;
+}
+
 bool VegetationLayer::Cull(const glm::vec3& eye, const glm::mat4& viewProjection, const TerrainRenderSettings& settings, float lodScale, float smallRange, bool stats)
 {
 	if (!cullShader) {

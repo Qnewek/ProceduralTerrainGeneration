@@ -550,6 +550,19 @@ TEST_CASE("InstancesJson lists the models and one row per plant")
 	CHECK(none["instances"].empty());
 }
 
+TEST_CASE("Instances JSON has the LOD ranges")
+{
+	TestWorld world(64, 64);
+	const vegexport::Input input = world.input;
+	const nlohmann::json j = nlohmann::json::parse(vegexport::InstancesJson({}, input.models, {}, input.lodRanges));
+	REQUIRE(j.contains("lodRanges"));
+	CHECK(j["lodRanges"]["Trees"]["lod1"].get<float>() == doctest::Approx(40.0f));
+	CHECK(j["lodRanges"]["Trees"]["lod2"].get<float>() == doctest::Approx(100.0f));
+	CHECK(j["lodRanges"]["Trees"]["max"].get<float>() == doctest::Approx(3000.0f));
+	CHECK(j["lodRanges"]["Shrubs"]["max"].get<float>() == doctest::Approx(120.0f));
+	CHECK(j["lodRanges"]["Rocks"]["lod1"].get<float>() == doctest::Approx(20.0f));
+}
+
 TEST_CASE("WriteModel writes every variant as a node with the materials and their textures")
 {
 	const std::filesystem::path source = TempFolder("source");

@@ -169,9 +169,39 @@ void ExportPanel::ExportAll(const Pack& pack)
 		saved += (saved.empty() ? "" : ", ") + fileName;
 		clipped += mapClipped;
 	}
+	//The engine importers read the main map from R16 (Godot turns 16-bit PNG into 8 bits, Unity reads raw heights)
+	if (exportScripts && format != heightmap::Format::R16 && !pack.heightmaps.empty()) {
+		const Target& target = pack.heightmaps[0];
+		const std::string fileName = heightmap::FileName(std::string(name) + "_height" + target.suffix, heightmap::Format::R16, target.width,
+			target.height);
+		size_t mapClipped = 0;
+		std::string error;
+		if (!heightmap::Export(packFolder / fileName, mainMap, heightmap::Format::R16, pack.range, mapClipped, error, pack.metresPerUnit)) {
+			SetError(fileName, error, saved);
+			return;
+		}
+		manifest.files.push_back(exportpack::HeightFile(fileName, "height", heightmap::Format::R16));
+		saved += ", " + fileName;
+	}
 
 	if (exportMaterials && pack.materials && !ExportMaterials(*pack.materials, packFolder, manifest, saved)) {
 		return;
+	}
+	if (exportMaterials && exportTextures && pack.materials && pack.materials->textures) {
+		std::string error;
+		if (!engineexport::CopyMaterialTextures(pack.materials->textures(pack.metresPerTexel), manifest.materials, packFolder, manifest.files, error)) {
+			SetError("material textures", error, saved);
+			return;
+		}
+		saved += ", material textures";
+	}
+	if (exportScripts) {
+		std::string error;
+		if (!engineexport::CopyEngineScripts(engineScriptsFolder, packFolder, manifest.files, error)) {
+			SetError("engine scripts", error, saved);
+			return;
+		}
+		saved += ", engine/";
 	}
 	if (exportBiomes && pack.biomes && !ExportBiomes(*pack.biomes, packFolder, manifest, saved)) {
 		return;
@@ -344,6 +374,11 @@ void ExportPanel::ImGuiDraw(const Pack& pack)
 		ImGui::SetItemTooltip("Shares of the surface materials, 8-bit PNG:\n"
 			"_splat_N: 4 materials per RGBA file (Unity alphamaps)\n"
 			"_weight_ID_name: one greyscale map per material on the map (Unreal layers, Godot)");
+		ImGui::BeginDisabled(!pack.materials || !exportMaterials || !pack.materials->textures);
+		ImGui::Checkbox("Material textures", &exportTextures);
+		ImGui::EndDisabled();
+		ImGui::SetItemTooltip("materials/<asset>/: albedo, normal (OpenGL) and roughness of every material on the map,\n"
+			"for the engine importers (materials without downloaded textures get their color)");
 		ImGui::BeginDisabled(!pack.biomes);
 		ImGui::Checkbox("Biome maps", &exportBiomes);
 		ImGui::EndDisabled();
@@ -399,6 +434,14 @@ void ExportPanel::ImGuiDraw(const Pack& pack)
 		ImGui::SetItemTooltip("%s", pack.vegetationMissing ? pack.vegetationMissing : "No vegetation in this mode");
 	}
 
+	ImGui::Checkbox("Engine import scripts", &exportScripts);
+	ImGui::SetItemTooltip("engine/: importers that build the terrain from this pack, with an R16 copy of the height map they read\n"
+		"engine/unity: Unity Terrain, layers, trees and water (models need the glTFast package)\n"
+		"engine/godot: Godot 4 editor plugin (needs Terrain mesh = glTF)\nengine/README.md: how to run them");
+	if (exportScripts && meshFormat != 1) {
+		ImGui::TextDisabled("Godot needs Terrain mesh = glTF");
+	}
+
 	ImGui::InputText("Pack name", name, sizeof(name));
 
 	const bool validName = preset::IsValidName(name);
@@ -414,6 +457,9 @@ void ExportPanel::ImGuiDraw(const Pack& pack)
 		}
 		if (exportMaterials && pack.materials) {
 			files += ", material maps";
+			if (exportTextures && pack.materials->textures) {
+				files += ", material textures";
+			}
 		}
 		if (exportBiomes && pack.biomes) {
 			files += ", biome maps";
@@ -423,6 +469,9 @@ void ExportPanel::ImGuiDraw(const Pack& pack)
 		}
 		if (exportVegetation && pack.vegetation) {
 			files += std::string(", ") + name + "_vegetation.json" + (exportModels ? " and its models" : "");
+		}
+		if (exportScripts) {
+			files += ", engine scripts";
 		}
 		const std::string manifestName = exportpack::ManifestName(name);
 		exists |= std::filesystem::exists(packFolder / manifestName, ec);

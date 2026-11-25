@@ -72,6 +72,7 @@ vegexport::Input MapImportSys::PlantInput() const
 	input.settings.elevationWater = mapbiomes::WaterHeight(s, seaLevelMetres);
 	input.settings.density = plantSettings.density;
 	input.settings.seed = static_cast<uint32_t>(s.config.detailSeed);
+	input.lodRanges = vegetation.LodRanges();
 	//Rivers and lakes: network positions are map texels, levels metres / mapMetresPerHeight
 	if (RiversOn() && riverNetwork && riverNetwork->error.empty()) {
 		//Shares the network (aliasing pointer): an 8192² map has a network of gigabytes

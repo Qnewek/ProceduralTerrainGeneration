@@ -13,6 +13,7 @@
 #include "DemTools.h"
 #include "FileDialog.h"
 #include "Preset.h"
+#include "TerrainMaterials.h"
 
 //What the lowest and the highest sample of a file without units (PNG, R16) mean, in the order shown in the UI.
 //Files do not store this; a map exported by this app needs the range of the mode it came from. The last entry, "Custom (metres)", is not in the table
@@ -1080,6 +1081,9 @@ void MapImportSys::ImGuiSaving()
 	const bool biomesCurrent = !climateStale && !biomesStale && !climateJob.IsRunning() && !stroke && !paintStroke && landCoverCurrent;
 	if (BiomesOn() && biomesCurrent && sameSize(splat) && sameSize(colors) && sameSize(biomeIds.get())) {
 		pack.materials = ExportPanel::SplatSource(*splat, materialNames);
+		if (terrainMaterials) {
+			pack.materials->textures = [materials = terrainMaterials](float metresPerTexel) { return materials->ExportTextures(metresPerTexel); };
+		}
 		const TextureClass* ids = biomeIds.get();
 		pack.biomes = ExportPanel::BiomeTableSource(biomeSettings.config.table, [ids] {
 			BiomeMap read(ids->GetWidth(), ids->GetHeight());
