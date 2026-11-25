@@ -138,6 +138,44 @@ TEST_CASE("Manifest lists the materials with their splat channel and weight map,
 	CHECK(j["import"]["unity"].contains("layers"));
 }
 
+TEST_CASE("Manifest writes material textures and fallback color")
+{
+	exportpack::Manifest m = SampleManifest();
+	exportpack::Material grass;
+	grass.id = 0;
+	grass.name = "Grass";
+	grass.splatFile = "alps_splat_0.png";
+	grass.coverage = 0.6f;
+	grass.albedo = "materials/Grass004/albedo.jpg";
+	grass.normal = "materials/Grass004/normal.jpg";
+	grass.roughness = "materials/Grass004/roughness.jpg";
+	grass.tileMetres = 1.0f;
+	grass.fallbackColor[0] = 0.3f;
+	grass.fallbackColor[1] = 0.4f;
+	grass.fallbackColor[2] = 0.15f;
+	exportpack::Material snow;
+	snow.id = 1;
+	snow.name = "Snow";
+	snow.splatFile = "alps_splat_0.png";
+	snow.splatChannel = 1;
+	snow.tileMetres = 1.0f;
+	snow.fallbackColor[0] = 0.9f;
+	m.materials = { grass, snow };
+	const Json j = Json::parse(exportpack::ToJson(m));
+	const Json& list = j["materials"]["list"];
+	REQUIRE(list.size() == 2);
+	CHECK(list[0]["textures"]["albedo"] == "materials/Grass004/albedo.jpg");
+	CHECK(list[0]["textures"]["normal"] == "materials/Grass004/normal.jpg");
+	CHECK(list[0]["textures"]["roughness"] == "materials/Grass004/roughness.jpg");
+	CHECK(list[0]["textures"]["tileMetres"].get<float>() == doctest::Approx(1.0f));
+	REQUIRE(list[0]["fallbackColor"].size() == 3);
+	CHECK(list[0]["fallbackColor"][2].get<float>() == doctest::Approx(0.15f));
+	//No albedo: no textures, the fallback color is still there
+	CHECK(list[1]["textures"].is_null());
+	CHECK(list[1]["fallbackColor"][0].get<float>() == doctest::Approx(0.9f));
+	CHECK(j["materials"].contains("texturesNote"));
+}
+
 TEST_CASE("Manifest embeds the generation parameters as JSON, or as text if they are not JSON")
 {
 	exportpack::Manifest m = SampleManifest();

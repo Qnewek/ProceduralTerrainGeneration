@@ -13,6 +13,7 @@
 #include "ChunkWorld.h"
 #include "GenerationJob.h"
 #include "RangeAllocator.h"
+#include "VegetationExport.h"
 #include "VegetationPlacement.h"
 
 class Camera;
@@ -80,6 +81,8 @@ public:
 		std::copy(std::begin(from.ranges), std::end(from.ranges), std::begin(ranges));
 	}
 	float GetUnitsPerMetre() const { return unitsPerMetre; }
+	//The detail distances as the camera uses them (scaled by "Detail distance", within the range), for the engine importers of the export pack
+	vegexport::LodRanges LodRanges() const;
 	bool ReloadShader();
 
 	//Multiplies the density of every plant (the Density slider); a change places everything again

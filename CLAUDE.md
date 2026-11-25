@@ -82,6 +82,7 @@ ProceduralTerrainGenerator/
       MaterialExport.*           mapy materiałów i biomów paczki (8-bit PNG): splat RGBA po 4 materiały, mapa wag na materiał, id i kolory biomów; Normalize = suma 255 na teksel
       TerrainMesh.*              siatki eksportu (metry, Y w górę): pełna siatka mapy, LOD-y (meshopt_simplify bez fałd), błąd wysokości, kafle, woda (quad, zupa trójkątów → siatka)
       MeshFile.*                 zapis GLB (glTF 2.0, ręcznie: JSON + bufor; węzeł = prymityw na materiał) i OBJ; MeshExport.* = pliki siatek paczki (LOD-y z kaflami + woda), bez GL — w tle
+      EngineExport.*             paczka dla silników: kopie tekstur materiałów obecnych na mapie (`materials/<asset>/`, `TileMetres`) i skryptów importu (`res/engine` → `engine/`)
       VegetationExport.*         roślinność paczki: PlaceChunk na chunkach skończonej mapy (jak świat nieskończony) → _vegetation.json, modele z LOD-ami aplikacji → vegetation/*.glb
       HeightmapImport.*          odczyt mapy z PNG, R16/RAW, GeoTIFF (libtiff), SRTM .hgt, ESRI .asc; format po rozszerzeniu, nowy = czytnik i rozszerzenie w tym pliku;
                                  `Inspect` = sam nagłówek, `Import(ImportOptions)` = odczyt → wycinek → NoData (tylko w wycinku) → zmniejszenie → wynik ≤ 8192²;
@@ -143,6 +144,9 @@ ProceduralTerrainGenerator/
     common/materials.glsl        próbkowanie materiałów w trybie TEXTURED (triplanar, anti-tiling), blok TerrainMaterialBlock = TerrainMaterials::Block
     sky_vertex/fragment.shader   niebo; kolory nieba i światła w common/sky.glsl (z LUT), mgła w common/fog.glsl; model atmosfery common/atmosphere_model.glsl, LUT-y w AtmosphereShaders/;
                                  chmury: CloudShaders/ + common/clouds.glsl (gęstość, mapa pogody, cień chmur w sunShadow)
+  res/engine/                    importery paczki eksportu kopiowane do niej („Engine import scripts”): unity/Editor/PtgPackImporter.cs (Unity Terrain),
+                                 godot/addons/ptg_import (wtyczka Godot 4: kafle siatki glTF, shader materiałów, kolizja, woda, MultiMesh roślin), README.md;
+                                 sprawdzenie Godota: tools/check_godot_import.bat na paczkach z testu „Engine sample packs” (tests/engine/godot_import_check.gd)
   res/textures/terrain_materials.json   lista materiałów (kolejność = id); same tekstury w res/textures/terrain/ (poza gitem)
 tools/fetch_textures.py          pobiera tekstury materiałów (CC0, Poly Haven / ambientCG), tylko biblioteka standardowa Pythona
 tools/fetch_models.py            pobiera modele roślinności i kamieni (CC0 glTF, Poly Haven) z mapami alpha liści
@@ -377,6 +381,11 @@ Wartości szumów są w [-1, 1]. Konwencja indeksowania: `map[y * width + x]`.
   `PlacementSettings` wymaga tej samej zmiany w `vegexport::Input` budowanym w `TerrainGenerationSys::ImGuiSaving`. Modele: LOD-y z cache aplikacji
   (`vegetation::CacheKey` w `VegetationMesh`, wspólny z `VegetationModels`), węzły `<nazwa>_<wariant>_LOD<n>`; id wariantu w JSON = kolejność wariantów
   `LoadGltf`, więc liczba wariantów pliku musi zgadzać się z aplikacją (`Result::modelErrors`, jeśli nie).
+  Dla silników (krok 5): „Engine import scripts” kopiuje `res/engine` do `engine/` paczki i zawsze dopisuje R16 mapy głównej (importery czytają tylko R16:
+  Godot zamienia PNG 16-bit na 8 bitów); „Material textures” kopiuje tekstury materiałów z udziałem > 0 (`engineexport::CopyMaterialTextures`, ścieżki
+  w `exportpack::Material`), `_vegetation.json` ma `lodRanges` z `VegetationLayer::LodRanges`. Osie importerów: Godot = osie paczki, Unity = (x, y, rozmiarZ − z),
+  obrót π − yaw (glTFast odwraca X). Zmiana pól manifestu lub `_vegetation.json`, które czytają importery, wymaga zmiany `PtgPackImporter.cs`, `ptg_pack.gd` /
+  `ptg_builder.gd` i ponownego `tools\check_godot_import.bat`.
 - Import map: PNG/R16 nie przechowują zakresu wartości, więc wybiera go użytkownik (`valueRanges` w `MapImportSys.cpp`, albo „Custom (metres)”). `lodepng` nie zamienia koloru na szary
   ani niższej głębi na 16 bitów (błąd 56), dlatego PNG dekodujemy do RGBA o głębi pliku. Mapa żyje w `MapImportSys::map`, stąd pójdą przyszłe operacje na niej
   (Faza 6: jedna widoczna kopia robocza). Jednostki: mapa = metry / `metresPerUnit` (DEM i „Custom”: max(|min|, |max|, 1 m); zakres TerrainGen = 256, Noise = 64),

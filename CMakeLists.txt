@@ -49,6 +49,7 @@ add_library(ptg_core STATIC
 	${PTG_SRC}/terrainGeneration/Biome.cpp
 	${PTG_SRC}/terrainGeneration/CameraMath.cpp
 	${PTG_SRC}/terrainGeneration/DemTools.cpp
+	${PTG_SRC}/terrainGeneration/EngineExport.cpp
 	${PTG_SRC}/terrainGeneration/ExportManifest.cpp
 	${PTG_SRC}/terrainGeneration/FileIO.cpp
 	${PTG_SRC}/terrainGeneration/HeightmapExport.cpp
@@ -162,6 +163,8 @@ add_executable(ptg_tests
 	${PTG_DIR}/tests/BiomeTests.cpp
 	${PTG_DIR}/tests/CameraMathTests.cpp
 	${PTG_DIR}/tests/DemToolsTests.cpp
+	${PTG_DIR}/tests/EngineExportTests.cpp
+	${PTG_DIR}/tests/EnginePackTests.cpp
 	${PTG_DIR}/tests/ExportManifestTests.cpp
 	${PTG_DIR}/tests/FlightRecordTests.cpp
 	${PTG_DIR}/tests/FrustumTests.cpp

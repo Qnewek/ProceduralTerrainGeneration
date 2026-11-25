@@ -33,6 +33,7 @@
 #include "utilities.h"
 #include "PanelTabs.h"
 
+class TerrainMaterials;
 class VegetationModels;
 
 //"Imported map" mode: a terrain project (mapproject::Project, .ptgmap) holding one working copy of a map, shown on screen,
@@ -84,8 +85,11 @@ public:
 	void SetMaterialNames(std::vector<std::string> names) { materialNames = names; biomeEditor.SetMaterialNames(std::move(names)); }
 	//Models the plants of the biome editor can name and the map grows; nullptr = none (the models are being released)
 	void SetVegetationModels(VegetationModels* models);
+	//Material list whose textures the export pack copies; nullptr = none
+	void SetTerrainMaterials(const TerrainMaterials* materials) { terrainMaterials = materials; }
 
 private:
+	const TerrainMaterials* terrainMaterials = nullptr;
 	struct LoadResult {
 		HeightField map;		//metres / metresPerUnit
 		heightmap::ImportInfo info;

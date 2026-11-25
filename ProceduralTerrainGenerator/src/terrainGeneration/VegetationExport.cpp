@@ -431,7 +431,8 @@ namespace vegexport {
 		return file;
 	}
 
-	std::string InstancesJson(const std::vector<Placed>& placed, const std::vector<Model>& models, const std::vector<ModelFile>& files)
+	std::string InstancesJson(const std::vector<Placed>& placed, const std::vector<Model>& models, const std::vector<ModelFile>& files,
+		const LodRanges& lodRanges)
 	{
 		std::vector<size_t> counts(models.size(), 0);
 		for (const Placed& p : placed) {
@@ -464,6 +465,12 @@ namespace vegexport {
 			list.push_back(entry);
 		}
 		j["models"] = list;
+		Json ranges;
+		for (int l = 0; l < vegetation::layerCount; l++) {
+			ranges[vegetation::layerNames[l]] = { { "lod1", lodRanges[l].lod1 }, { "lod2", lodRanges[l].lod2 }, { "max", lodRanges[l].max } };
+		}
+		j["lodRanges"] = ranges;
+		j["lodRangesNote"] = "metres from the camera per layer of the models: LOD 0 below lod1, LOD 1 below lod2, the last level up to max";
 		j["columns"] = { "x", "y", "z", "yaw", "scale", "model", "variant" };
 		j["instances"] = Json::array();
 
@@ -531,7 +538,7 @@ namespace vegexport {
 			}
 		}
 
-		const std::string json = InstancesJson(placed, input.models, files);
+		const std::string json = InstancesJson(placed, input.models, files, input.lodRanges);
 		const std::string path = name + "_vegetation.json";
 		if (!WriteFileAtomic(folder / path, json.data(), json.size(), result.error)) {
 			result.error = path + ": " + result.error;
