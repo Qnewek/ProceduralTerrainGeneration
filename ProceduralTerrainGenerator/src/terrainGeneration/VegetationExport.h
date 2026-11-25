@@ -1,5 +1,6 @@
 #pragma once
 
+#include <array>
 #include <atomic>
 #include <filesystem>
 #include <memory>
@@ -46,6 +47,15 @@ namespace vegexport {
 		vegetation::Layer layer = vegetation::Layer::TREES;
 	};
 
+	//Distances in metres at which the app switches the levels of detail of a layer: LOD 0 below lod1, LOD 1 below lod2, the last mesh
+	//level up to max (the app's impostors are not exported)
+	struct LodRange {
+		float lod1 = 0.0f, lod2 = 0.0f, max = 0.0f;
+	};
+	using LodRanges = std::array<LodRange, vegetation::layerCount>;
+	//The app's defaults (VegetationLayer), in vegetation::Layer order
+	inline constexpr LodRanges defaultLodRanges = { { { 40.0f, 100.0f, 3000.0f }, { 15.0f, 40.0f, 120.0f }, { 20.0f, 60.0f, 200.0f } } };
+
 	struct Input {
 		std::vector<std::vector<biome::Plant>> plants;	//plants of every biome id
 		std::vector<Model> models;
@@ -62,6 +72,7 @@ namespace vegexport {
 		std::shared_ptr<const std::atomic<bool>> cancel;
 		//Write: plants put by hand (model = index into models), written after the placed ones; never limited, also when kept is NONE
 		std::vector<Placed> extra;
+		LodRanges lodRanges = defaultLodRanges;	//written to the instance file for the engine importers
 	};
 
 	//Places the plants of a finite map in the chunks of the metre grid it lies on; plants beyond its edge texels are left out. Positions are
@@ -103,8 +114,9 @@ namespace vegexport {
 	//@param folder - folder of the pack; the model goes to vegetation/<asset>.glb, its textures to vegetation/textures/
 	ModelFile WriteModel(const Model& model, const std::filesystem::path& folder);
 
-	//<name>_vegetation.json: the models (with their files and variant nodes, if written) and the instances as rows
-	std::string InstancesJson(const std::vector<Placed>& placed, const std::vector<Model>& models, const std::vector<ModelFile>& files);
+	//<name>_vegetation.json: the models (with their files and variant nodes, if written), the LOD distances of every layer and the instances as rows
+	std::string InstancesJson(const std::vector<Placed>& placed, const std::vector<Model>& models, const std::vector<ModelFile>& files,
+		const LodRanges& lodRanges = defaultLodRanges);
 
 	struct Result {
 		bool ok = false;

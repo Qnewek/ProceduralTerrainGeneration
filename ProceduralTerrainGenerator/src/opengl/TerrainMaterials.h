@@ -6,6 +6,8 @@
 #include <GL/glew.h>
 #include "glm/glm.hpp"
 
+#include "EngineExport.h"
+
 //One surface material of the terrain, as listed in res/textures/terrain_materials.json
 struct TerrainMaterial {
 	std::string name;
@@ -44,6 +46,9 @@ public:
 	void ImGuiDraw();
 
 	const std::vector<TerrainMaterial>& GetMaterials() const { return materials; }
+	//Texture folders, repeats (with the current "Texture scale") and fallback colors of every material, for the export pack
+	//@param metresPerTexel - pixel size of the exported map
+	std::vector<engineexport::MaterialTextures> ExportTextures(float metresPerTexel) const;
 	//Slopes in radians over which materials give way to their cliff materials (no grass grows on cliffs either)
 	glm::vec2 CliffSlopes() const { return glm::radians(glm::vec2(cliffSlopeStart, cliffSlopeEnd)); }
 
@@ -74,6 +79,7 @@ private:
 	void UploadBlock();
 
 	std::vector<TerrainMaterial> materials;
+	std::string textureFolder;		//Initialize textureDir
 	GLuint albedoArray = 0, detailArray = 0, blockBuffer = 0;
 	int layerSize = 0;
 

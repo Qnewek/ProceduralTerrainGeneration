@@ -598,6 +598,39 @@ Kroki:
   363 MB; z LOD-ami aplikacji 29 MB (LOD0 150 tys. trójkątów). Wszystkie 14 modeli: test „downloaded models” (`--no-skip`), z cache jodła 0,6 s
   (bez cache 13 s), krzewy ~0,3 s (kodowanie PNG z alfą). Mapa pochodnych skończonej mapy różni się od chunków tylko na samej krawędzi mapy (nachylenie
   z obciętej różnicy), więc tam pojedyncze rośliny mogą się różnić.
+  🟡 2026-11-25 krok 5 (decyzja właściciela: „założenie narzędzia, które pozwoli na opracowanie terenu i wykorzystanie go w zewnętrznym silniku,
+  ma być spełnione”; plan docs/superpowers/plans/2026-11-25-engine-import-scripts.md): paczka dostaje to, czego potrzebują silniki — „Material
+  textures” (`EngineExport.*`: albedo, normal w konwencji OpenGL, roughness materiałów obecnych na mapie → `materials/<asset>/`; w manifeście
+  `materials.list[].textures` z `tileMetres` = tileSize · Texture scale / 4 · piksel i zawsze `fallbackColor`), w `_vegetation.json` `lodRanges`
+  warstw (odległości LOD aplikacji ze „Detail distance”), „Engine import scripts” (kopia `res/engine/` do `engine/` + zawsze plik R16 mapy głównej,
+  bo oba importery czytają wysokości z niego). Importery:
+  **Unity** (`engine/unity/Editor/PtgPackImporter.cs`, menu Tools → PTG → Import pack…, 2022.3 / 6): Unity Terrain w kaflach ≤ 4097 (rozdzielczość
+  przeliczana dwuliniowo do 2^n + 1, sąsiedzi połączeni), warstwy z tekstur (brak tekstury = kolor zastępczy), alphamapy z `_splat_N.png`,
+  Terrain Trees z prefabów z LODGroup (węzły `<nazwa>_<wariant>_LOD<n>`, wysokości ekranowe z `lodRanges`), morze jako płaszczyzna, rzeki
+  i jeziora z `_water.glb`. GLB wymaga pakietu glTFast (`com.unity.cloud.gltfast`) — bez niego teren, warstwy i morze są, reszta z ostrzeżeniem.
+  Osie: Unity jest lewoskrętne, więc pozycja (x, y, z) paczki trafia w (x, y, rozmiarZ − z) — z góry mapa wygląda jak w aplikacji; obrót roślin
+  π − yaw i woda glTF obrócona o 180° zakładają, że glTFast odwraca X.
+  **Godot 4.3+** (`engine/godot/addons/ptg_import`, Project → Tools → Import PTG pack…): wymaga siatki terenu glTF; kopiuje do `res://ptg/<nazwa>/`
+  tylko pliki do importu (GLB, `vegetation/`, kolory biomów), buduje scenę `<nazwa>.scn`: kafle wszystkich LOD z `visibility_range` (LOD n od
+  błędu · 500 m), shader `ptg_terrain.gdshader` (do 16 materiałów z map splat, tablice tekstur 1024² zapisane jako `.res`), kolizja
+  `HeightMapShape3D` z R16 (wysokości w tekselach, węzeł skalowany jednolicie pikselem), woda z `_water.glb` (albo płaszczyzna) z
+  `ptg_water.gdshader`, rośliny jako `MultiMeshInstance3D` na model, wariant, LOD i kwadrat (Godot liczy zasięg widoczności do węzła, nie do
+  rośliny, więc każdy LOD ma własną siatkę kwadratów ≤ połowy odległości, gdzie się kończy; na mapach > ~4 km kwadraty rosną do mapa/64),
+  transformacje wpisywane jednym buforem (`MultiMesh.buffer`). Unity: alphamapa ≤ 2048² na kafel, liczona blokami po 256 wierszy.
+  Sprawdzenie: `ptg_tests --no-skip -tc="Engine sample packs"` pisze 3 paczki (`out/engine_samples`: full 257 × 193 z morzem, materiałami
+  i roślinami, dem 301 × 211 po 30 m bez modeli roślin, minimal 129² same wysokości), `tools\check_godot_import.bat <Godot console exe>`
+  importuje je w Godocie bez okna i sprawdza rozmiar terenu, LOD-y, kolizję, wodę, liczbę roślin i powtórny import (zielone na Godot 4.7.2;
+  bez okna Godot zgłasza `img.is_null()` przy tablicach tekstur — atrapa renderera nie trzyma danych, uruchomienie z oknem jest czyste).
+  Skryptu Unity nie dało się tu uruchomić (brak Unity; Roslyn: bez błędów składni).
+  Do sprawdzenia w aplikacji: eksport z TerrainGen (biomy, siatka glTF, rośliny + modele, wszystkie opcje) — w paczce `materials/`, `engine/`,
+  `_height*.r16`, w manifeście `textures`, w `_vegetation.json` `lodRanges`; to samo z Imported map (piksel 30 m).
+  Do sprawdzenia w Unity (2022.3 lub 6): import paczki z TerrainGen bez glTFast (teren, warstwy, morze, ostrzeżenie) i z glTFast (drzewa, rzeki);
+  mapa nie jest lustrzana (linia brzegu jak w widoku 2D aplikacji); drzewa asymetryczne obrócone jak w aplikacji; rzeki leżą w korytach;
+  mapa Imported map 8192² → kafle 2 × 2 bez szwów, czas i pamięć importu; powtórny import zastępuje obiekt i zasoby; LOD-y drzew przełączają się
+  w odległościach jak w aplikacji, drzewa nie znikają w oddali (ustawienia Terrain: Tree Distance, Max Mesh Trees).
+  Do sprawdzenia w Godocie: Project Settings → Plugins → włączenie, import przez menu (czekanie na import GLB, otwarcie sceny — sprawdzenie bez okna
+  tego nie przechodzi), przełączanie LOD przy oddalaniu (też rośliny na granicy kwadratów), kolizja z CharacterBody3D,
+  powtarzanie tekstur jak w aplikacji, czas importu dużej paczki (2 mln roślin parsowanych w GDScript).
 - **Mapa częściowa jako wycinek świata:** 🟡 2026-11-20. Stan przed: woda (morze, rzeki, jeziora) była na mapie częściowej, roślinności, trawy i cieni
   nie było (tylko na chunkach), a mapa zawsze leżała w początku świata (teksele 0..W). Teraz: `mapOffset` (oba tryby z „Infinite generation”) — wyjście
   ze świata nieskończonego centruje mapę pod kamerą, Display → „Partial map”: offset ręcznie, „Centre on camera”, „World origin”, „Follow camera”

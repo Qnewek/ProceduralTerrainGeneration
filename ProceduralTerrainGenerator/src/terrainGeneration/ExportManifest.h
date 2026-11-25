@@ -32,6 +32,10 @@ namespace exportpack {
 		int splatChannel = 0;		//0 - 3 = R, G, B, A
 		std::string weightFile;		//its own greyscale map; empty = it covers nothing, no file
 		float coverage = 0.0f;		//mean share over the map
+		float fallbackColor[3] = { 0.5f, 0.5f, 0.5f };	//color of the material when there are no textures
+		//Its textures copied into the pack (engineexport::CopyMaterialTextures), relative to the manifest; empty = none
+		std::string albedo, normal, roughness;
+		float tileMetres = 0.0f;	//metres covered by one repeat of the textures; 0 = unknown
 	};
 
 	//One level of detail of the terrain mesh, a file with its tiles as nodes
