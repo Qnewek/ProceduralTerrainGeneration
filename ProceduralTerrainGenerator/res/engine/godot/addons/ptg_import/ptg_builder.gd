@@ -126,7 +126,8 @@ static func _material_array(pack, key: String, fill: Callable) -> Texture2DArray
 	for material in pack.manifest["materials"]["list"]:
 		var image: Image = null
 		var textures = material.get("textures")
-		if typeof(textures) == TYPE_DICTIONARY and textures.get(key) != null:
+		# A texture file deleted from the pack: the fallback fill, without an engine error per file
+		if typeof(textures) == TYPE_DICTIONARY and textures.get(key) != null and FileAccess.file_exists(pack.folder.path_join(str(textures[key]))):
 			image = Image.load_from_file(pack.folder.path_join(str(textures[key])))
 		if image == null or image.is_empty():
 			image = Image.create_empty(4, 4, false, Image.FORMAT_RGBA8)
@@ -163,9 +164,15 @@ static func _terrain_material(pack, target: String) -> ShaderMaterial:
 	material.set_shader_parameter("material_count", mini(list.size(), MAX_MATERIALS))
 	# Splat files in material order: materials 4k..4k+3 are in the RGBA file of material 4k
 	for k in range(0, mini(list.size(), MAX_MATERIALS), 4):
-		var image := Image.load_from_file(pack.folder.path_join(str(list[k]["splat"]["file"])))
+		var splat_file := str(list[k]["splat"]["file"])
+		var image: Image = null
+		if FileAccess.file_exists(pack.folder.path_join(splat_file)):
+			image = Image.load_from_file(pack.folder.path_join(splat_file))
 		if image != null and not image.is_empty():
 			material.set_shader_parameter("splat_%d" % (k / 4), _save_resource(ImageTexture.create_from_image(image), target + "splat_%d.res" % (k / 4)))
+		else:
+			material.set_shader_parameter("splat_missing", true)
+			last_warnings.append("%s: %s could not be read, its materials are mixed evenly" % [pack.name, splat_file])
 	var tiles := PackedFloat32Array()
 	tiles.resize(MAX_MATERIALS)
 	for m in mini(list.size(), MAX_MATERIALS):
@@ -265,7 +272,7 @@ static func _build_vegetation(pack, target: String) -> Node3D:
 		elif int(model["count"]) > 0:
 			missing += 1
 		model_meshes.append(per_variant)
-	if missing == models.filter(func(m): return int(m["count"]) > 0).size():
+	if missing > 0 and missing == models.filter(func(m): return int(m["count"]) > 0).size():
 		last_warnings.append("%s: vegetation models were not exported (Vegetation models off), no vegetation" % pack.name)
 		return null
 	if missing > 0:

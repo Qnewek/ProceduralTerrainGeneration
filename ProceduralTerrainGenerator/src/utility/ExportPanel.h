@@ -69,6 +69,7 @@ public:
 		const char* layersMissing = nullptr;		//why the material and biome maps are missing, shown instead of their checkboxes
 		//Water surface of rivers and lakes as triangles (3 vertices each, metres, axes of terrainmesh); empty function = none
 		std::function<std::vector<glm::vec3>()> riverWater;
+		const char* riverWaterMissing = nullptr;	//why rivers and lakes are left out of the water file now (still being computed)
 		std::optional<VegetationSource> vegetation;	//none = no vegetation now
 		const char* vegetationMissing = nullptr;	//why, shown on the disabled checkbox
 	};

@@ -67,6 +67,7 @@ func _check_build(pack, target: String) -> void:
 	if pack.name == "full":
 		_check_water(pack, root)
 		_check_vegetation(pack, root)
+		_check_missing_splat(pack, target)
 	else:
 		_expect(root.get_node_or_null("Vegetation") == null, "no vegetation without model files")
 		_expect(Array(PtgBuilder.last_warnings).any(func(w): return w.contains("vegetation models were not exported")),
@@ -138,6 +139,23 @@ func _check_collision(pack, root: Node) -> void:
 	# Texel (0, 0) of the shape in metres = the first height of the file
 	var heights: PackedFloat32Array = pack.read_heights_metres()
 	_expect(_near(shape.map_data[0] * m, heights[0], 0.01), "first height %f m, file %f m" % [shape.map_data[0] * m, heights[0]])
+
+
+# The pack without its first splat file: a warning names it and the shader is told, so the terrain is not drawn black
+func _check_missing_splat(pack, target: String) -> void:
+	var copy := ProjectSettings.globalize_path("user://ptg_no_splat")
+	DirAccess.make_dir_recursive_absolute(copy)
+	var splat: String = str(pack.manifest["materials"]["list"][0]["splat"]["file"])
+	for file in DirAccess.get_files_at(pack.folder):
+		if file != splat:
+			DirAccess.copy_absolute(pack.folder.path_join(file), copy.path_join(file))
+	DirAccess.remove_absolute(copy.path_join(splat))
+	var damaged = PtgPack.new()
+	_expect(damaged.open(copy.path_join(pack.name + ".json")), "open the pack without %s" % splat)
+	PtgBuilder.last_warnings = PackedStringArray()
+	var material: ShaderMaterial = PtgBuilder._terrain_material(damaged, target)
+	_expect(Array(PtgBuilder.last_warnings).any(func(w): return w.contains(splat)), "warning about %s: %s" % [splat, PtgBuilder.last_warnings])
+	_expect(material.get_shader_parameter("splat_missing") == true, "shader told the splat is missing")
 
 
 func _check_water(pack, root: Node) -> void:

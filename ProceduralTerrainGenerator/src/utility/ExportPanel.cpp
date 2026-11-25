@@ -414,6 +414,9 @@ void ExportPanel::ImGuiDraw(const Pack& pack)
 		ImGui::Checkbox("Water", &exportWater);
 		ImGui::EndDisabled();
 		ImGui::SetItemTooltip(anyWater ? "_water file: the sea surface over the map, rivers and lakes (Region method)" : "This map has no sea, rivers or lakes");
+		if (pack.riverWaterMissing) {
+			ImGui::TextDisabled("%s", pack.riverWaterMissing);
+		}
 	}
 
 	ImGui::BeginDisabled(!pack.vegetation);

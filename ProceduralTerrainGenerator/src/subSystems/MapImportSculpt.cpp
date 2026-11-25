@@ -38,6 +38,8 @@ static_assert(sculpt::worldUnitsPerTexel == TerrainView::worldUnitsPerTexel, "sc
 
 void MapImportSys::UpdateSculpt(const Camera& camera, bool active, float deltaTime)
 {
+	//Taken every frame, so an Esc pressed with another brush does not cancel a later sculpt stroke
+	const bool cancel = std::exchange(strokeCancelPressed, false);
 	//The biome and plant brushes share the mouse input; a sculpt stroke still running ends below first
 	if ((plantBrushOn || plantStroke) && !stroke && !paintStroke) {
 		UpdatePlantBrush(camera, active);
@@ -49,6 +51,10 @@ void MapImportSys::UpdateSculpt(const Camera& camera, bool active, float deltaTi
 	}
 	const bool pressed = std::exchange(paintPressed, false);
 	const bool canPaint = sculptOn && active && !map.Empty() && !camera.MouseControl();
+	if (stroke && cancel) {
+		CancelStroke();
+		return;
+	}
 	if (stroke) {
 		//Let go, also outside the window or after losing the focus (ImGui releases the buttons then), or the mode left
 		if (!paintHeld || !canPaint) {
@@ -128,6 +134,14 @@ void MapImportSys::FinishStroke()
 		view.SetLayer(TerrainView::Layer::TERRAIN, map);
 		SetEditStatus(label + " failed: not enough memory", true);
 	}
+}
+
+void MapImportSys::CancelStroke()
+{
+	//The CPU map is the state before the stroke: the GPU layer goes back to it, no history step
+	stroke.reset();
+	view.SetLayer(TerrainView::Layer::TERRAIN, map);
+	SetEditStatus("Sculpt stroke cancelled", false);
 }
 
 void MapImportSys::PickUnderCursor(Camera& camera, LightSource& light)
@@ -234,7 +248,10 @@ void MapImportSys::SculptInputImGui()
 	}
 	//Kept for Update, which runs before the next ImGui frame. Alt + left button is left to the camera
 	paintHeld = ImGui::IsMouseDown(ImGuiMouseButton_Left);
-	paintPressed = paintPressed || (ImGui::IsMouseClicked(ImGuiMouseButton_Left) && !io.WantCaptureMouse && !io.KeyAlt);
+	//Not while the right or middle button drives the editor camera
+	const bool cameraDrag = ImGui::IsMouseDown(ImGuiMouseButton_Right) || ImGui::IsMouseDown(ImGuiMouseButton_Middle);
+	paintPressed = paintPressed || (ImGui::IsMouseClicked(ImGuiMouseButton_Left) && !io.WantCaptureMouse && !io.KeyAlt && !cameraDrag);
+	strokeCancelPressed = strokeCancelPressed || ImGui::IsKeyPressed(ImGuiKey_Escape, false);
 	paintInvert = io.KeyCtrl;
 	if (!BrushOn()) {
 		return;

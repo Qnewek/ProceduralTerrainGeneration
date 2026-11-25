@@ -153,6 +153,7 @@ private:
 		erosion::Method method = erosion::Method::DROPLETS;	//of the last erosion (label, export)
 		double ms = 0.0, plantsMs = 0.0;
 		bool treesOnly = false;		//the plants of the last placement are trees only (a large map)
+		uint64_t plantSettings = 0;	//VegetationLayer::SettingsVersion the plants of the copy were placed with
 	} eroded;
 	struct ErodedPlants {
 		std::vector<vegetation::Instance> instances;

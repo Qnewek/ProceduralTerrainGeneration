@@ -339,3 +339,19 @@ TEST_CASE("Paint step of another size keeps the history memory right")
 	CHECK(history.CanUndo());
 	CHECK(history.UndoLabel() == "Sea level");
 }
+
+TEST_CASE("History: dropping the last step")
+{
+	mapedit::History history(1 << 20);
+	REQUIRE(history.Push(MapStep("A", 1.0f)));
+	const size_t bytesOfA = history.Bytes();
+	REQUIRE(history.Push(MapStep("B", 2.0f)));
+	history.DropLast();
+	CHECK(history.CanUndo());
+	CHECK(history.UndoLabel() == "A");
+	CHECK(history.Bytes() == bytesOfA);
+	history.DropLast();
+	history.DropLast();
+	CHECK_FALSE(history.CanUndo());
+	CHECK(history.Bytes() == 0);
+}
