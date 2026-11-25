@@ -136,7 +136,7 @@ void MapImportSys::PickUnderCursor(Camera& camera, LightSource& light)
 	brushOutline.clear();
 	const ImGuiIO& io = ImGui::GetIO();
 	//Over a panel only while no stroke runs: a stroke dragged over a panel goes on (ImGui does not take a button pressed over the scene)
-	if (!BrushOn() || map.Empty() || camera.MouseControl() || !ImGui::IsMousePosValid() || (io.WantCaptureMouse && !stroke && !paintStroke)) {
+	if (!BrushOn() || map.Empty() || camera.MouseControl() || !ImGui::IsMousePosValid() || (io.WantCaptureMouse && !stroke && !paintStroke && !plantStroke)) {
 		return;
 	}
 	//Viewport in framebuffer pixels, origin at the bottom left; ImGui counts window points from the top left
@@ -182,9 +182,56 @@ void MapImportSys::PickUnderCursor(Camera& camera, LightSource& light)
 	outlineClipMax = ImVec2((viewport[0] + viewport[2]) / scale.x, (framebufferHeight - viewport[1]) / scale.y);
 }
 
+void MapImportSys::ProjectPlacedDots(Camera& camera, const LightSource& light)
+{
+	placedDots.clear();
+	if (!FlatView() || placedPlants.plants.empty() || map.Empty()) {
+		return;
+	}
+	const ImGuiIO& io = ImGui::GetIO();
+	GLint viewport[4];
+	glGetIntegerv(GL_VIEWPORT, viewport);
+	const glm::vec2 scale(io.DisplayFramebufferScale.x, io.DisplayFramebufferScale.y);
+	const float framebufferHeight = io.DisplaySize.y * scale.y;
+	const FrameUniforms::Block block = TerrainView::FrameBlock(camera, light, renderSettings, view.GetFlatViewMin(), view.GetFlatViewMax());
+	const glm::mat4 viewProjection = block.projection * block.view;
+	const glm::ivec2 size(map.GetWidth(), map.GetHeight());
+	const float pixel = static_cast<float>(pixelMetres.x);
+	const size_t stride = (placedPlants.plants.size() + maxPlacedDots - 1) / maxPlacedDots;
+	placedDots.reserve(placedPlants.plants.size() / stride + 1);
+	for (size_t i = 0; i < placedPlants.plants.size(); i += stride) {
+		const glm::vec2 texel = placedPlants.plants[i].position / pixel;
+		const glm::ivec2 nearest = glm::clamp(glm::ivec2(glm::round(texel)), glm::ivec2(0), size - 1);
+		//Off a smaller map (kept, not drawn)
+		if (texel.x > static_cast<float>(size.x - 1) || texel.y > static_cast<float>(size.y - 1)) {
+			continue;
+		}
+		const glm::vec3 world = sculpt::TexelToWorld(texel, map.At(nearest.x, nearest.y), renderSettings.heightScale, renderSettings.modelScale, size);
+		const glm::vec4 clip = viewProjection * glm::vec4(world, 1.0f);
+		if (clip.w <= 1e-4f) {
+			continue;
+		}
+		const glm::vec2 ndc = glm::vec2(clip) / clip.w;
+		const float x = viewport[0] + (ndc.x * 0.5f + 0.5f) * viewport[2];
+		const float y = framebufferHeight - (viewport[1] + (ndc.y * 0.5f + 0.5f) * viewport[3]);
+		placedDots.push_back(ImVec2(x / scale.x, y / scale.y));
+	}
+	dotsClipMin = ImVec2(viewport[0] / scale.x, (framebufferHeight - viewport[1] - viewport[3]) / scale.y);
+	dotsClipMax = ImVec2((viewport[0] + viewport[2]) / scale.x, (framebufferHeight - viewport[1]) / scale.y);
+}
+
 void MapImportSys::SculptInputImGui()
 {
 	const ImGuiIO& io = ImGui::GetIO();
+	if (!placedDots.empty() && FlatView()) {
+		ImDrawList* drawList = ImGui::GetBackgroundDrawList();
+		drawList->PushClipRect(dotsClipMin, dotsClipMax, true);
+		for (const ImVec2& dot : placedDots) {
+			drawList->AddCircleFilled(dot, 3.0f, IM_COL32(0, 0, 0, 160), 8);
+			drawList->AddCircleFilled(dot, 2.0f, IM_COL32(90, 220, 90, 255), 8);
+		}
+		drawList->PopClipRect();
+	}
 	//Kept for Update, which runs before the next ImGui frame. Alt + left button is left to the camera
 	paintHeld = ImGui::IsMouseDown(ImGuiMouseButton_Left);
 	paintPressed = paintPressed || (ImGui::IsMouseClicked(ImGuiMouseButton_Left) && !io.WantCaptureMouse && !io.KeyAlt);

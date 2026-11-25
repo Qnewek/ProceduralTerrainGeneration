@@ -165,6 +165,11 @@ void VegetationLayer::EnsureTables(const VegetationModels& models)
 	}
 }
 
+float VegetationLayer::ExtraSquare()
+{
+	return static_cast<float>(ChunkWorld::chunkSize) * TerrainView::worldUnitsPerTexel;
+}
+
 void VegetationLayer::SetExtraInstances(const std::vector<vegetation::Instance>& instances)
 {
 	ClearExtraInstances();
@@ -172,7 +177,7 @@ void VegetationLayer::SetExtraInstances(const std::vector<vegetation::Instance>&
 		return;
 	}
 	//Sorted into squares of a level 0 chunk, so that culling drops the squares out of view or out of range
-	const float square = static_cast<float>(ChunkWorld::chunkSize) * TerrainView::worldUnitsPerTexel;
+	const float square = ExtraSquare();
 	auto squareOf = [square](const vegetation::Instance& in) {
 		return glm::ivec2(static_cast<int>(std::floor(in.position.x / square)), static_cast<int>(std::floor(in.position.z / square)));
 	};
@@ -184,9 +189,11 @@ void VegetationLayer::SetExtraInstances(const std::vector<vegetation::Instance>&
 	for (size_t i = 0; i < instances.size(); i++) {
 		squares[i] = squareOf(instances[i]);
 	}
-	std::sort(order.begin(), order.end(), [&](uint32_t a, uint32_t b) {
-		return squares[a].y != squares[b].y ? squares[a].y < squares[b].y : squares[a].x < squares[b].x;
-	});
+	auto before = [&](uint32_t a, uint32_t b) { return squares[a].y != squares[b].y ? squares[a].y < squares[b].y : squares[a].x < squares[b].x; };
+	//A set sorted off the GL thread (vegetation::SortIntoSquares) keeps its order: only checked here
+	if (!std::is_sorted(order.begin(), order.end(), before)) {
+		std::sort(order.begin(), order.end(), before);
+	}
 
 	std::vector<GpuInstance> gpu(instances.size());
 	extraCount = static_cast<uint32_t>(gpu.size());

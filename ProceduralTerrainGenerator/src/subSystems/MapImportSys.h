@@ -41,6 +41,12 @@ class VegetationModels;
 class MapImportSys
 {
 public:
+	MapImportSys() = default;
+	//Stops a running placement of plants early, so closing the app does not wait for all of it
+	~MapImportSys();
+	MapImportSys(const MapImportSys&) = delete;
+	MapImportSys& operator=(const MapImportSys&) = delete;
+
 	bool Initialize(int _width, int _height, float _heightScale);
 	//Called every frame before Draw: installs a map or a project that finished loading, finishes a save
 	//@param camera - moved to look down at a project that was opened or a map that was received
@@ -494,6 +500,11 @@ private:
 	void FinishPlantStroke();
 	//Puts the placed plants on the GPU (standing on the current heights); from UpdatePlants when stale
 	void UploadPlacedPlants();
+	//The 2D map draws no plants: the placed ones are shown as dots, projected after each Draw (window points) and drawn by SculptInputImGui
+	std::vector<ImVec2> placedDots;
+	ImVec2 dotsClipMin, dotsClipMax;
+	static constexpr size_t maxPlacedDots = 50000;	//above it every n-th plant
+	void ProjectPlacedDots(Camera& camera, const LightSource& light);
 	//The Vegetation tab: automatic plants, the plant brush, the models with their preview
 	void VegetationImGui();
 	//Number of models loaded with variants

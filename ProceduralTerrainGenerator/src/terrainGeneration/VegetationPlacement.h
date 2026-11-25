@@ -74,6 +74,10 @@ namespace vegetation
 		//Where the river network lies: network position = (grid position - riverOrigin) * riverPositionScale, and its levels times
 		//riverHeightScale are heights of the maps
 		glm::vec2 riverOrigin = glm::vec2(0.0f);
+		//Metres of the grid taken away (as integers) before a position becomes a float: maps.firstTexel, riverOrigin and the positions
+		//placed are relative to it, so they keep centimetres far from the grid origin (riverOrigin then too: grid origin of the network
+		//minus gridOrigin). Cells, their hashes and the clustering stay on the grid
+		glm::ivec2 gridOrigin = glm::ivec2(0);
 		float riverPositionScale = 1.0f, riverHeightScale = 1.0f;
 	};
 
@@ -87,6 +91,9 @@ namespace vegetation
 	using PreparedPlants = std::vector<std::array<std::vector<ResolvedPlant>, layerCount>>;
 	//@param plants - must outlive the result (it points into it)
 	PreparedPlants PreparePlants(const std::vector<std::vector<biome::Plant>>& plants, const std::vector<ModelInfo>& models);
+	//Orders instances by squares of the given side over XZ, rows (z) first, then x; stable inside a square. A set given in this order
+	//is culled square by square (VegetationLayer::SetExtraInstances), so sorting it off the GL thread saves that frame the work
+	void SortIntoSquares(std::vector<Instance>& instances, float square);
 
 	//Places the plants of the biomes on a chunk. In each cell of a layer at most one plant stands: of the plants of the cell's biome
 	//in this layer that can grow there (its elevation range and slope), each takes its density (times the settings density and

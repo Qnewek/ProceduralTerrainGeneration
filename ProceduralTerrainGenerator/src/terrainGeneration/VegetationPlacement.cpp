@@ -100,6 +100,17 @@ namespace vegetation
 		return Layer::SHRUBS;
 	}
 
+	void SortIntoSquares(std::vector<Instance>& instances, float square)
+	{
+		auto squareOf = [square](const Instance& in) {
+			return glm::ivec2(static_cast<int>(std::floor(in.position.x / square)), static_cast<int>(std::floor(in.position.z / square)));
+		};
+		std::stable_sort(instances.begin(), instances.end(), [&](const Instance& a, const Instance& b) {
+			const glm::ivec2 sa = squareOf(a), sb = squareOf(b);
+			return sa.y != sb.y ? sa.y < sb.y : sa.x < sb.x;
+		});
+	}
+
 	PreparedPlants PreparePlants(const std::vector<std::vector<biome::Plant>>& plants, const std::vector<ModelInfo>& models)
 	{
 		std::unordered_map<std::string, int> modelOfName;
@@ -145,7 +156,9 @@ namespace vegetation
 					const glm::ivec2 cellTexel = settings.chunkTexel + glm::ivec2(cx, cy) * cell;
 					uint32_t h = Hash(cellTexel.x, cellTexel.y, salt);
 					const float jitterX = Unit(h = Hash(h)), jitterY = Unit(h = Hash(h));
-					const glm::vec2 texel = glm::vec2(cellTexel) + glm::vec2(jitterX, jitterY) * static_cast<float>(cell);
+					const glm::vec2 jitter = glm::vec2(jitterX, jitterY) * static_cast<float>(cell);
+					//Relative to gridOrigin; with the default 0 the same floats as ever
+					const glm::vec2 texel = glm::vec2(cellTexel - settings.gridOrigin) + jitter;
 					const glm::vec2 local = (texel - maps.firstTexel) / step;
 					const glm::ivec2 nearest = glm::clamp(glm::ivec2(glm::floor(local + 0.5f)), glm::ivec2(0), glm::ivec2(maps.size - 1));
 					const size_t index = static_cast<size_t>(nearest.y) * maps.size + nearest.x;
@@ -178,7 +191,8 @@ namespace vegetation
 						float factor = 1.0f;
 						if (plant.clustering != 0.0f) {
 							if (cluster < 0.0f) {
-								cluster = ClusterFactor(texel, settings.seed);
+								//On the grid itself: the forests do not move with gridOrigin
+								cluster = ClusterFactor(glm::vec2(cellTexel) + jitter, settings.seed);
 							}
 							factor = PlantCluster(cluster, plant.clustering);
 						}

@@ -11,6 +11,14 @@
 
 #include "VegetationModels.h"
 
+MapImportSys::~MapImportSys()
+{
+	//The members (plantJob among them) are destroyed after this; its future waits only until the placement sees the flag
+	if (plantCancel) {
+		*plantCancel = true;
+	}
+}
+
 int MapImportSys::ReadyModels() const
 {
 	if (!vegetationModels) {
@@ -160,6 +168,8 @@ void MapImportSys::UpdatePlants()
 			result.kept = limited.kept;
 			result.count = limited.placed.size();
 			result.instances = vegexport::ToAppInstances(limited.placed, texelZero, input.metresPerUnit, input.metresPerTexel);
+			//In the order SetExtraInstances culls them by, so the frame taking the result skips sorting 2 million plants
+			vegetation::SortIntoSquares(result.instances, VegetationLayer::ExtraSquare());
 		}
 		catch (const std::bad_alloc&) {
 			result.instances.clear();
