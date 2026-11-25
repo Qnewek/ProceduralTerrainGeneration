@@ -25,6 +25,13 @@ namespace mapproject {
 		constexpr const char* paintBlock = "biomePaint";
 		constexpr const char* plantsBlock = "placedPlants";
 		constexpr const char* plantsDamaged = "The placed plants of the project are damaged";
+		//zlib packs at most about 1032 to 1: a block too small for what it should hold is damage, found before allocating for it
+		constexpr size_t zlibMaxRatio = 1032;
+
+		bool CanHold(size_t blockBytes, size_t unpackedBytes)
+		{
+			return unpackedBytes <= blockBytes * zlibMaxRatio + 64;
+		}
 
 		bool CompressBytes(const std::vector<uint8_t>& bytes, std::vector<uint8_t>& out, std::string& error)
 		{
@@ -41,9 +48,7 @@ namespace mapproject {
 		//Plants of placedplants::Pack; layer.palette and the plant count come from the header
 		bool DecompressPlants(const uint8_t* data, size_t size, size_t count, placedplants::Layer& layer, std::string& error)
 		{
-			//zlib packs at most about 1032 to 1: a count the block cannot hold is damage, found before allocating for it
-			constexpr size_t zlibMaxRatio = 1032;
-			if (count * placedplants::plantBytes > size * zlibMaxRatio + 64) {
+			if (!CanHold(size, count * placedplants::plantBytes)) {
 				error = plantsDamaged;
 				return false;
 			}
@@ -315,6 +320,10 @@ namespace mapproject {
 			}
 			if (header.contains("seaLevel")) {
 				project.seaLevel = header.at("seaLevel").get<float>();
+				if (!std::isfinite(*project.seaLevel)) {
+					error = "The sea level of the project is damaged";
+					return false;
+				}
 			}
 			project.source = header.value("source", std::string());
 			project.generation = header.value("generation", std::string());
@@ -371,6 +380,23 @@ namespace mapproject {
 				}
 			}
 
+			//Every block in the file and able to hold its map, checked before anything of the map size is allocated
+			size_t blockTotal = 0;
+			const size_t texels = static_cast<size_t>(width) * height;
+			for (const json& block : header.at("blocks")) {
+				const std::string name = block.at("name").get<std::string>();
+				const size_t bytes = block.at("bytes").get<size_t>();
+				if (bytes > size - prefix - length - blockTotal) {
+					error = "The project file is cut short";
+					return false;
+				}
+				blockTotal += bytes;
+				const size_t needed = name == paintBlock ? texels * 2 : name == workingBlock || name == originalBlock ? texels * sizeof(float) : 0;
+				if (!CanHold(bytes, needed)) {
+					error = "The project block \"" + name + "\" is too small for a " + std::to_string(width) + " x " + std::to_string(height) + " map";
+					return false;
+				}
+			}
 			for (const json& block : header.at("blocks")) {
 				const std::string name = block.at("name").get<std::string>();
 				const size_t bytes = block.at("bytes").get<size_t>();
@@ -406,6 +432,10 @@ namespace mapproject {
 			error = std::string("The project header is damaged: ") + e.what();
 			return false;
 		}
+		catch (const std::bad_alloc&) {
+			error = "Not enough memory for the project";
+			return false;
+		}
 		if (project.working.Empty()) {
 			error = "The project has no map";
 			return false;
@@ -421,9 +451,15 @@ namespace mapproject {
 				error = "The project file is cut short";
 				return false;
 			}
-			const bool read = block.map ? Decompress(data + offset, block.bytes, *block.map, error)
-				: block.plants ? DecompressPlants(data + offset, block.bytes, plantCount, project.placedPlants, error)
-				: DecompressPaint(data + offset, block.bytes, project.paint, error);
+			bool read = false;
+			try {
+				read = block.map ? Decompress(data + offset, block.bytes, *block.map, error)
+					: block.plants ? DecompressPlants(data + offset, block.bytes, plantCount, project.placedPlants, error)
+					: DecompressPaint(data + offset, block.bytes, project.paint, error);
+			}
+			catch (const std::bad_alloc&) {
+				error = "Not enough memory for the project";
+			}
 			if (!read) {
 				return false;
 			}

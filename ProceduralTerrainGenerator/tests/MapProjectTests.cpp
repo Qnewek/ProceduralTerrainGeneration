@@ -9,6 +9,8 @@
 #include <string>
 #include <vector>
 
+#include <nlohmann/json.hpp>
+
 #include "MapProject.h"
 
 //Non-square map with fractional values, so swapped axes and lost precision are detected
@@ -531,5 +533,70 @@ TEST_CASE("Damaged georeference fails")
 	std::string error;
 	CHECK_FALSE(mapproject::Deserialize(bytes.data(), bytes.size(), read, error));
 	CHECK_FALSE(error.empty());
+	CHECK(IsMarker(read));
+}
+
+//The file with its JSON header changed by edit; the blocks stay as they were
+template <typename Edit>
+static std::vector<uint8_t> WithHeader(const std::vector<uint8_t>& bytes, Edit edit)
+{
+	const size_t prefix = 12;
+	uint32_t length = 0;
+	for (size_t i = 0; i < 4; i++) {
+		length |= static_cast<uint32_t>(bytes[8 + i]) << (8 * i);
+	}
+	nlohmann::json header = nlohmann::json::parse(bytes.begin() + prefix, bytes.begin() + prefix + length);
+	edit(header);
+	const std::string text = header.dump();
+	std::vector<uint8_t> out(bytes.begin(), bytes.begin() + 8);
+	for (size_t i = 0; i < 4; i++) {
+		out.push_back(static_cast<uint8_t>(text.size() >> (8 * i)));
+	}
+	out.insert(out.end(), text.begin(), text.end());
+	out.insert(out.end(), bytes.begin() + prefix + length, bytes.end());
+	return out;
+}
+
+TEST_CASE("Project: a block too small for its map is damage, found before reading it")
+{
+	//A few hundred bytes cannot hold 8192 x 8192 floats: no 256 MB per map is allocated for them
+	const std::vector<uint8_t> bytes = WithHeader(Bytes(FullProject()), [](nlohmann::json& h) { h["width"] = 8192; h["height"] = 8192; });
+	mapproject::Project read = Marker();
+	std::string error;
+	CHECK_FALSE(mapproject::Deserialize(bytes.data(), bytes.size(), read, error));
+	CHECK_MESSAGE(error.find("too small for") != std::string::npos, error);
+	CHECK(IsMarker(read));
+}
+
+TEST_CASE("Project: a block too small for its painted biomes is damage")
+{
+	//Big enough that 2 compressed bytes cannot hold its paint (2 bytes per texel)
+	mapproject::Project project;
+	project.working = HeightField(300, 200);
+	project.paint = biomepaint::Make(300, 200);
+	project.paint.palette = { "A" };
+	project.paint.texels[5] = static_cast<uint16_t>((255 << 8) | 1);
+	const std::vector<uint8_t> bytes = WithHeader(Bytes(project), [](nlohmann::json& h) {
+		//The paint block claims 2 bytes; the map blocks keep their sizes, so the file still holds all of them
+		for (nlohmann::json& block : h["blocks"]) {
+			if (block["name"] == "biomePaint") {
+				block["bytes"] = 2;
+			}
+		}
+	});
+	mapproject::Project read = Marker();
+	std::string error;
+	CHECK_FALSE(mapproject::Deserialize(bytes.data(), bytes.size(), read, error));
+	CHECK_MESSAGE(error.find("too small for") != std::string::npos, error);
+	CHECK(IsMarker(read));
+}
+
+TEST_CASE("Project: a sea level that is not finite is damage")
+{
+	const std::vector<uint8_t> bytes = WithHeader(Bytes(FullProject()), [](nlohmann::json& h) { h["seaLevel"] = 1e39; });
+	mapproject::Project read = Marker();
+	std::string error;
+	CHECK_FALSE(mapproject::Deserialize(bytes.data(), bytes.size(), read, error));
+	CHECK_MESSAGE(error.find("sea level") != std::string::npos, error);
 	CHECK(IsMarker(read));
 }

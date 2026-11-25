@@ -184,6 +184,10 @@ void TerrainGenApp::Start()
         if (glfwWindowShouldClose(window) && mapImportSys.HasUnsavedChanges()) {
             glfwSetWindowShouldClose(window, GLFW_FALSE);
             mapImportSys.RequestQuit();
+            //Closed from the taskbar while minimized: the "Unsaved changes" question is drawn only in a visible window
+            if (glfwGetWindowAttrib(window, GLFW_ICONIFIED) != 0) {
+                glfwRestoreWindow(window);
+            }
         }
         if (mapImportSys.TakeQuit()) {
             glfwSetWindowShouldClose(window, GLFW_TRUE);
@@ -196,6 +200,8 @@ void TerrainGenApp::Start()
         glfwSwapBuffers(window);
     }
 
+    //Background jobs and model loading finish while the subsystems are destroyed: behind a hidden window, not a frozen one
+    glfwHideWindow(window);
     metrics.reset();
     materials.reset();
     terrainGenSys.SetVegetationModels(nullptr);

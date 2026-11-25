@@ -99,6 +99,8 @@ public:
 	//Drawn by the frame before the last Draw (counts come back from the GPU a frame late)
 	int DrawnInstances() const { return drawnInstances; }
 	uint64_t DrawnTriangles() const { return drawnTriangles; }
+	//Grows with every change of what placement depends on (density, models, plants, water, seed, rivers, bounds)
+	uint64_t SettingsVersion() const { return settingsVersion; }
 	//@param lod - 0 to 2, or impostorLod
 	int DrawnInLod(int lod) const { return drawnPerLod[lod]; }
 	static constexpr int impostorLod = 3;

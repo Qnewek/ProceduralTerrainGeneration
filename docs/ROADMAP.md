@@ -770,6 +770,19 @@ oryginał tylko w pamięci i w projekcie („Wróć do oryginału”), plus Cofn
   do cm (jak w pliku) bez zmian; rośliny TerrainGen bit w bit bez zmian.
   Do sprawdzenia: przeciągnięcie pędzla roślin przez prawy panel; zmiana zakresu wartości PNG przy roślinach z pędzla i pustej historii; kropki w 2D
   (przesuwanie, zoom, Undo); zamknięcie okna w trakcie sadzenia na 8192²; płynność klatki, gdy kończy się sadzenie na 8192².
+  Odłożone drobne usterki, paczka A (2026-11-25, branch `fix/deferred-minors`, plan docs/superpowers/plans/2026-11-25-deferred-minors-a.md):
+  projekt `.ptgmap` — blok za mały na mapę / malowane biomy i suma bloków większa niż plik odrzucane przed alokacją, brak pamięci = komunikat,
+  niesprawdzony `seaLevel` (inf) odrzucany; edycja, która nie powiedzie się w połowie (brak pamięci), nie zostawia pustego kroku Cofnij
+  (`mapedit::History::DropLast`), wygładzanie / skala / „Revert to original” bez pamięci już nie zamykają aplikacji; eksport z Imported map czeka na aktualną
+  sieć rzek (woda rzek i rośliny automatyczne); przeładowanie tego samego pliku (zakres wartości) zachowuje przewyższenie; „Eroding…” nie wisi, gdy erozja
+  trafi na trwającą operację; pędzle: lewy przycisk przy wciśniętym prawym / środkowym (kamera edytora) nie maluje, Esc przerywa pociągnięcie rzeźby
+  (mapa sprzed niego, bez kroku historii); TerrainGen: rośliny kopii po erozji przesadzane po zmianie gęstości / modeli / roślin (`VegetationLayer::SettingsVersion`);
+  zamknięcie okna chowa je od razu, zamknięcie zminimalizowanego z niezapisanym projektem przywraca okno z pytaniem; Godot: brak pliku splat = ostrzeżenie
+  i równa mieszanka materiałów zamiast czarnego terenu, brakujące tekstury bez błędów silnika, ostrzeżenie o modelach tylko, gdy jakichś brakuje; Unity:
+  powtórny import znajduje też wyłączony obiekt główny.
+  Do sprawdzenia: Esc w trakcie rzeźbienia i następne pociągnięcie; lewy przycisk podczas rozglądania prawym; eksport zaraz po edycji z rzekami (notka pod
+  „Water”, potem woda w paczce); zmiana zakresu PNG przy przewyższeniu ≠ 1; suwak Density przy pokazanej kopii po erozji; zamknięcie z paska zadań
+  zminimalizowanego okna z niezapisanym projektem; zamknięcie w trakcie wczytywania modeli.
 
 ---
 

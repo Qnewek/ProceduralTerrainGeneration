@@ -95,6 +95,7 @@ ProceduralTerrainGenerator/
                                  {enabled, density 0–3}; 7 = rośliny z pędzla: `placedPlants` {palette, count} w nagłówku, blok `placedPlants` =
                                  zlib `placedplants::Pack`; starsze wersje nadal czytane)
       MapEdit.*                  operacje na mapie w metrach (wygładzanie pudełkowe, skala + przesunięcie, `ErosionScale`) i historia Cofnij/Ponów z limitem pamięci
+                                 (`DropLast` = cofnięcie wpisu operacji, która nie powiodła się po `Push`)
       Sculpt.*                   pędzle (podnieś, obniż, wygładź, spłaszcz, szum) na CPU = wzorzec `sculpt_compute.shader`, zanik, rzut kursora na teksel mapy (głębia → teksel)
       CameraMath.*               matematyka kamery edytora: rozglądanie, orbita wokół punktu (punkt zostaje w tym samym miejscu widoku), przesuwanie, jednostki na piksel
       GenerationJob.h            jedno zadanie generacji w tle (std::async + TryTake)

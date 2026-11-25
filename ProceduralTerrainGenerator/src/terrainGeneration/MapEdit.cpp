@@ -154,4 +154,13 @@ namespace mapedit {
 		redo.clear();
 		bytes = 0;
 	}
+
+	void History::DropLast()
+	{
+		if (undo.empty()) {
+			return;
+		}
+		bytes -= BytesOf(undo.back());
+		undo.pop_back();
+	}
 }
