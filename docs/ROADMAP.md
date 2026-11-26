@@ -797,6 +797,21 @@ oryginał tylko w pamięci i w projekcie („Wróć do oryginału”), plus Cofn
   skok regionu rzek przy latającej kamerze (bez szarpnięcia, potem nowa sieć); rośliny kopii po erozji omijają strome zbocza jak wcześniej;
   pokrycie terenu z dużego pliku GeoTIFF bez kafli.
 
+  Odłożone drobne usterki, paczka C (2026-11-26, branch `fix/deferred-minors-c`): Cofnij / Ponów kroku samego morza (i malowania) nie kopiuje
+  mapy w metrach ani nie wgrywa jej na GPU (`mapedit::History::UndoHoldsMap/RedoHoldsMap`; morze = jak `SetSeaLevel`); rośliny automatyczne
+  nie rosną na pikselach < 1 cm (`vegexport::minPlantPixelMetres`, komunikat w zakładce Vegetation — okno chunka miało ponad 800 pikseli na wątek);
+  tekstury materiałów dzielących folder kopiowane do paczki i wpisywane do manifestu raz; obrócony / pochylony GeoTIFF (ModelTransformation)
+  mówi, czemu nie ma georeferencji (zakładka Load, plik pokrycia terenu: „rotated or sheared GeoTIFF”); F5 w TerrainGen przeładowuje shadery
+  erozji; „Region centre” w Rivers pokazuje sieć na ekranie, a liczona sieć osobno („Computing the network at…”); mapa wysłana z TerrainGen/Noise
+  przełącza tryb dopiero po przyjęciu (Cancel w pytaniu o niezapisane zmiany zostawia w bieżącym trybie); suwak „Height scale” w Imported map
+  obejmuje prawdziwą skalę mapy (płaski DEM 90 m ma ok. 2); „WorldCover defaults” pyta przed zastąpieniem zmienionych klas; kropki roślin
+  z pędzla w 2D przerzedzane tylko spośród widocznych (przybliżony widok pokazuje wszystkie); importer Unity ustawia `treeDistance` z `lodRanges`.
+  Odrzucone po przeczytaniu: slot palety pędzla biomów po kliknięciu bez zmiany i paleta, która nie maleje (tabela ma ≤ 64 biomy, paleta 255
+  nazw); stare pliki `.res` Godota z poprzedniego importu (nic ich nie używa, a kasowanie plików w projekcie użytkownika jest groźniejsze).
+  Do sprawdzenia: Cofnij zmiany morza na dużej mapie (bez przycięcia, rzeki i klimat od nowa); F5 przy kopii po erozji; skok regionu rzek
+  (etykieta); „Send map” z niezapisanym projektem — Cancel / Discard / Save; płaski DEM 90 m i suwak Height scale; WorldCover defaults po
+  edycji klasy; przybliżony widok 2D wielu roślin z pędzla; import paczki w Unity (rośliny znikają na odległości z aplikacji).
+
 ---
 
 ## 5. Kolejność i priorytety

@@ -21,6 +21,7 @@ namespace testtiff {
 		int epsg = 0;				//4326 = degrees with GeographicTypeGeoKey, other = ProjectedCSTypeGeoKey; 0 = no system code
 		bool pixelIsPoint = false;	//GTRasterTypeGeoKey = PixelIsPoint (leftX, topY = centre of the first pixel); only with epsg
 		std::string noData;			//GDAL_NODATA, empty = none
+		double rotation = 0.0;		//≠ 0: ModelTransformationTag with this term of X per row (a rotated raster) instead of scale + tiepoint
 	};
 
 	struct TiffSpec {
@@ -68,6 +69,7 @@ namespace testtiff {
 		static const TIFFFieldInfo geoFields[] = {
 			{ 33550, TIFF_VARIABLE, TIFF_VARIABLE, TIFF_DOUBLE, FIELD_CUSTOM, 1, 1, const_cast<char*>("ModelPixelScaleTag") },
 			{ 33922, TIFF_VARIABLE, TIFF_VARIABLE, TIFF_DOUBLE, FIELD_CUSTOM, 1, 1, const_cast<char*>("ModelTiepointTag") },
+			{ 34264, TIFF_VARIABLE, TIFF_VARIABLE, TIFF_DOUBLE, FIELD_CUSTOM, 1, 1, const_cast<char*>("ModelTransformationTag") },
 			{ 34735, TIFF_VARIABLE, TIFF_VARIABLE, TIFF_SHORT, FIELD_CUSTOM, 1, 1, const_cast<char*>("GeoKeyDirectoryTag") },
 			{ TIFFTAG_GDAL_NODATA, TIFF_VARIABLE, TIFF_VARIABLE, TIFF_ASCII, FIELD_CUSTOM, 1, 0, const_cast<char*>("GDAL_NODATA") },
 		};
@@ -87,8 +89,15 @@ namespace testtiff {
 		if (spec.geo.pixel > 0.0) {
 			const double scale[3] = { spec.geo.pixel, spec.geo.pixel, 0.0 };
 			const double tiepoint[6] = { 0.0, 0.0, 0.0, spec.geo.leftX, spec.geo.topY, 0.0 };
-			SetArray(tif, 33550, 3, scale);
-			SetArray(tif, 33922, 6, tiepoint);
+			if (spec.geo.rotation != 0.0) {
+				const double matrix[16] = { spec.geo.pixel, spec.geo.rotation, 0.0, spec.geo.leftX, 0.0, -spec.geo.pixel, 0.0, spec.geo.topY,
+					0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0 };
+				SetArray(tif, 34264, 16, matrix);
+			}
+			else {
+				SetArray(tif, 33550, 3, scale);
+				SetArray(tif, 33922, 6, tiepoint);
+			}
 			if (spec.geo.epsg == 0) {
 				const uint16_t keys[8] = { 1, 1, 0, 1, 1024, 0, 1, static_cast<uint16_t>(spec.geo.geographic ? 2 : 1) };
 				SetArray(tif, 34735, 8, keys);

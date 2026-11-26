@@ -6,6 +6,7 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "glm/glm.hpp"
@@ -65,6 +66,8 @@ public:
 	bool TakeQuit();
 	//A map sent from another mode (heights in metres) becomes a new project, not saved yet; asks first about unsaved changes
 	void Receive(mapproject::Project project);
+	//@return true once, when a received map was installed (at once, or after the "Unsaved changes" question): the app shows this mode then
+	bool TakeReceived() { return std::exchange(receivedInstalled, false); }
 
 	void Draw(Renderer& renderer, Camera& camera, LightSource& light);
 	//true while the 2D map is shown instead of the 3D view
@@ -250,6 +253,7 @@ private:
 	bool openQuestion = false;
 	std::string questionError;	//why the save asked for by the question did not happen, shown when it is asked again
 	bool quitApproved = false;
+	bool receivedInstalled = false;	//TakeReceived
 	ExportPanel exporter{ "exports" };
 
 	//Edit state

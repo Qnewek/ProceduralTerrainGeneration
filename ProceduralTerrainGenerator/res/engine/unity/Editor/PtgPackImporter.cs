@@ -420,6 +420,7 @@ namespace Ptg
 			AssetDatabase.Refresh();
 			var prototypes = new List<TreePrototype>();
 			var prototypeOf = new Dictionary<long, int>();		// model * 65536 + variant
+			float treeDistance = 0f;							// the farthest a plant is drawn in the app
 			for (int mi = 0; mi < file.models.Length; mi++)
 			{
 				VegetationModel model = file.models[mi];
@@ -433,6 +434,7 @@ namespace Ptg
 					return;
 				}
 				LodRange range = ReadLodRange(text, model.layer);
+				treeDistance = Mathf.Max(treeDistance, range.max);
 				for (int v = 0; v < model.variants; v++)
 				{
 					GameObject prefab = MakeTreePrefab(asset, model.name, v, range, prefabFolder);
@@ -478,6 +480,8 @@ namespace Ptg
 			{
 				for (int tx = 0; tx < l.tilesX; tx++)
 				{
+					// Plants vanish where they do in the app, not at Unity's default 5000 m
+					terrains[tx, tz].treeDistance = treeDistance > 0f ? treeDistance : 1000f;
 					TerrainData data = terrains[tx, tz].terrainData;
 					data.treePrototypes = prototypes.ToArray();
 					data.SetTreeInstances(instances[tx, tz].ToArray(), true);

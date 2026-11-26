@@ -53,4 +53,6 @@ namespace tifffile {
 
 	//The georeference from the GeoTIFF tags of the file (geo::FromGeoTiffTags); none without them
 	std::optional<geo::GeoReference> Georeference(TIFF* tif);
+	//Whether the ModelTransformation of the file rotates or shears it (geo::RotatedTransformation): its georeference is then refused
+	bool Rotated(TIFF* tif);
 }

@@ -138,6 +138,7 @@ namespace landcover {
 			tifffile::Handle tif;
 			int width = 0, height = 0;					//of the file
 			std::optional<geo::GeoReference> reference;
+			bool rotated = false;						//a rotated or sheared GeoTIFF: no reference
 			int x0 = 0, y0 = 0, x1 = 0, y1 = 0;			//part read, in pixels of the file
 			int stride = 1;								//file pixels per raster pixel
 			int rasterWidth = 0, rasterHeight = 0;
@@ -174,7 +175,8 @@ namespace landcover {
 			source.width = static_cast<int>(width);
 			source.height = static_cast<int>(height);
 			source.reference = tifffile::Georeference(tif);
-			status.system = source.reference ? geo::SystemName(source.reference->epsg) : "no georeference";
+			source.rotated = !source.reference && tifffile::Rotated(tif);
+			status.system = source.reference ? geo::SystemName(source.reference->epsg) : source.rotated ? "rotated" : "no georeference";
 			return true;
 		}
 
@@ -274,7 +276,7 @@ namespace landcover {
 			source.nodes.resize(static_cast<size_t>(nodeColumns) * nodeRows);
 			if (placed) {
 				if (!source.reference) {
-					status.skipped = "no georeference";
+					status.skipped = source.rotated ? "rotated or sheared GeoTIFF (not supported)" : "no georeference";
 					continue;
 				}
 				if (!geo::Supported(source.reference->epsg)) {

@@ -649,11 +649,33 @@ void MapImportSys::LandCoverImGui()
 		ImGui::EndTable();
 	}
 	if (ImGui::Button("WorldCover defaults")) {
-		s.classes = mapbiomes::WorldCoverClasses();
-		mapbiomes::AddMissingClasses(s, classCounts);
-		classesChanged = true;
+		mapbiomes::Settings defaults = s;
+		defaults.classes = mapbiomes::WorldCoverClasses();
+		mapbiomes::AddMissingClasses(defaults, classCounts);
+		//Classes edited by hand are not thrown away without asking
+		if (s.classes.empty() || s.classes == defaults.classes) {
+			classesChanged = s.classes != defaults.classes;
+			s.classes = std::move(defaults.classes);
+		}
+		else {
+			ImGui::OpenPopup("Replace classes");
+		}
 	}
 	ImGui::SetItemTooltip("Names, colors and biomes of the ESA WorldCover legend for the default biome table");
+	if (ImGui::BeginPopup("Replace classes")) {
+		ImGui::TextUnformatted("Replace the classes with the WorldCover defaults?");
+		if (ImGui::Button("Replace")) {
+			s.classes = mapbiomes::WorldCoverClasses();
+			mapbiomes::AddMissingClasses(s, classCounts);
+			classesChanged = true;
+			ImGui::CloseCurrentPopup();
+		}
+		ImGui::SameLine();
+		if (ImGui::Button("Cancel")) {
+			ImGui::CloseCurrentPopup();
+		}
+		ImGui::EndPopup();
+	}
 	if (classesChanged) {
 		//The class map stays; only the GPU pass again
 		biomesStale = true;

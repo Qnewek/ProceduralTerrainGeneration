@@ -308,6 +308,7 @@ namespace heightmap {
 				info.latitude = tiepoint[4] - (header.height / 2.0 - tiepoint[1]) * info.pixelSize->y;
 			}
 			info.georeference = geo::FromGeoTiffTags(scale, tiepoint, transformation, keys);
+			info.rotated = geo::RotatedTransformation(transformation);
 			return true;
 		}
 

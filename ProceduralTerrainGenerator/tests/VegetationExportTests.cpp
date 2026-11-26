@@ -704,3 +704,15 @@ TEST_CASE("Vegetation export of the downloaded models" * doctest::skip())
 	}
 	std::filesystem::remove_all(pack);
 }
+
+TEST_CASE("Plants: none on a map with pixels below 1 cm")
+{
+	//A chunk of 8 m would be a window of more than 800 pixels a side on every thread
+	TestWorld world(2001, 2001);
+	world.input.metresPerTexel = vegexport::minPlantPixelMetres;
+	CHECK_FALSE(vegexport::PlaceMap(world.height, {}, world.ids, world.input).empty());
+	world.input.metresPerTexel = 0.0099f;
+	CHECK(vegexport::PlaceMap(world.height, {}, world.ids, world.input).empty());
+	world.input.limit = vegexport::maxMapInstances;
+	CHECK(vegexport::PlaceMapLimited(world.height, {}, world.ids, world.input).placed.empty());
+}

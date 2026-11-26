@@ -211,13 +211,19 @@ namespace geo {
 		return cropped;
 	}
 
+	bool RotatedTransformation(const std::vector<double>& transformation)
+	{
+		//Row-major 4x4: x = [0] i + [1] j + [3], y = [4] i + [5] j + [7]
+		return transformation.size() >= 16 && (transformation[1] != 0.0 || transformation[4] != 0.0);
+	}
+
 	std::optional<GeoReference> FromGeoTiffTags(const std::vector<double>& scale, const std::vector<double>& tiepoint,
 		const std::vector<double>& transformation, const std::vector<uint16_t>& keys)
 	{
 		GeoReference reference;
 		if (transformation.size() >= 16) {
 			//Row-major 4x4: x = [0] i + [1] j + [3], y = [4] i + [5] j + [7]
-			if (transformation[1] != 0.0 || transformation[4] != 0.0 || transformation[0] == 0.0 || transformation[5] == 0.0) {
+			if (RotatedTransformation(transformation) || transformation[0] == 0.0 || transformation[5] == 0.0) {
 				return std::nullopt;
 			}
 			reference.origin = glm::dvec2(transformation[3], transformation[7]);

@@ -355,3 +355,29 @@ TEST_CASE("History: dropping the last step")
 	CHECK_FALSE(history.CanUndo());
 	CHECK(history.Bytes() == 0);
 }
+
+TEST_CASE("History: whether the next step holds a map")
+{
+	mapedit::History history(1 << 20);
+	CHECK_FALSE(history.UndoHoldsMap());
+	CHECK_FALSE(history.RedoHoldsMap());
+	HeightField current = Filled(4, 4, 2.0f);
+	std::optional<float> sea = 12.0f;
+	biomepaint::Layer paint;
+	placedplants::Layer plants;
+	REQUIRE(history.Push(MapStep("A", 1.0f)));
+	CHECK(history.UndoHoldsMap());
+	mapedit::Step seaStep;
+	seaStep.label = "Sea";
+	seaStep.seaLevel = 3.0f;
+	REQUIRE(history.Push(std::move(seaStep)));
+	CHECK_FALSE(history.UndoHoldsMap());
+	//The sea step with an empty map: a step without a map never touches it
+	HeightField none;
+	REQUIRE(history.Undo(none, sea, paint, plants).has_value());
+	CHECK(none.Empty());
+	CHECK(history.UndoHoldsMap());
+	CHECK_FALSE(history.RedoHoldsMap());
+	REQUIRE(history.Undo(current, sea, paint, plants).has_value());
+	CHECK(history.RedoHoldsMap());
+}

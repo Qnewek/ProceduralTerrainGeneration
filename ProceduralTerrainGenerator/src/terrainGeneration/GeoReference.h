@@ -56,4 +56,7 @@ namespace geo {
 	//@return none without a pixel size or with a rotation
 	std::optional<GeoReference> FromGeoTiffTags(const std::vector<double>& scale, const std::vector<double>& tiepoint,
 		const std::vector<double>& transformation, const std::vector<uint16_t>& keys);
+
+	//@return true when a ModelTransformation (34264) rotates or shears the raster, which FromGeoTiffTags refuses
+	bool RotatedTransformation(const std::vector<double>& transformation);
 }

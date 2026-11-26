@@ -165,13 +165,16 @@ void TerrainGenApp::Start()
         //The depth of the scene is still there: the point a drag started this frame turns around
         editorCamera.AfterDraw(camera, ViewportRect());
         ImGuiRender();
-        //"Send map" pressed in a Saving tab this frame: the map opens in the Imported map mode
+        //"Send map" pressed in a Saving tab this frame: the map opens in the Imported map mode once it is installed (with unsaved
+        //changes after the question, drawn in every mode; Cancel leaves the user where they were)
         std::optional<mapproject::Project> sent = noiseGenSys.TakeSentMap();
         if (!sent) {
             sent = terrainGenSys.TakeSentMap();
         }
         if (sent) {
             mapImportSys.Receive(std::move(*sent));
+        }
+        if (mapImportSys.TakeReceived()) {
             currentMode = mode::MAP_IMPORT;
         }
         const bool holeInView = (currentMode == mode::NOISE_HEIGHTMAP && noiseGenSys.HoleInView()) || (currentMode == mode::TERRAIN_GEN && terrainGenSys.HoleInView());
