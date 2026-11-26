@@ -784,6 +784,19 @@ oryginał tylko w pamięci i w projekcie („Wróć do oryginału”), plus Cofn
   „Water”, potem woda w paczce); zmiana zakresu PNG przy przewyższeniu ≠ 1; suwak Density przy pokazanej kopii po erozji; zamknięcie z paska zadań
   zminimalizowanego okna z niezapisanym projektem; zamknięcie w trakcie wczytywania modeli.
 
+  Odłożone drobne usterki, paczka B — duże mapy (2026-11-25, branch `fix/big-map-perf`, plan docs/superpowers/plans/2026-11-25-big-map-perf-b.md):
+  rośliny kopii po erozji biorą nachylenie z wysokości zamiast odczytu mapy pochodnych (16 B/teksel = 1 GB przy 8192²); odczyty z GPU bez czekania
+  (`AsyncRead`: bufor pikseli + fence) — próbka terenu rzek REGION przy skoku regionu (2048²: 12,1 ms w klatce → 1,8 ms na samo wysłanie) i głębia
+  pod kursorem pędzli Imported map (wcześniej co klatkę `glReadPixels` czekał na narysowanie klatki; teraz teksel z odczytu sprzed 1–2 klatek);
+  mapa pochodnych przy rzeźbieniu liczona tylko w kwadracie dabu poszerzonym o 2 (`GpuSurfacePass::RunRegion`, `TerrainView::LayerTextureRegion`):
+  4096² cała 1,40 ms, dab 257² 0,04 ms; wciśnięcie pędzla rzeźby nie kopiuje mapy (stan sprzed pociągnięcia = mapa CPU, `Busy()` jej nie zmienia);
+  pokrycie terenu z pliku zapisanego jednym wielkim pasem (> 16 MB) czytane wierszami zamiast dekodowania całego pasa.
+  Bez zmian (świadomie): chunki przy skoku regionu rzek (zasięg widoku < region, więc w widoku i tak wszystko się zmienia), szczyt pamięci erozji
+  w Imported map (wymaga przebudowy historii), odczyt głębi kamery edytora (tylko przy wciśnięciu przycisku).
+  Do sprawdzenia: rzeźbienie dużej mapy (płynność, obrys pędzla nadąża, krawędź mapy bez artefaktów cieniowania), Cofnij po pociągnięciu, Esc w trakcie;
+  skok regionu rzek przy latającej kamerze (bez szarpnięcia, potem nowa sieć); rośliny kopii po erozji omijają strome zbocza jak wcześniej;
+  pokrycie terenu z dużego pliku GeoTIFF bez kafli.
+
 ---
 
 ## 5. Kolejność i priorytety

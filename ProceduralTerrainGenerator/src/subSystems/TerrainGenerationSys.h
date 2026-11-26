@@ -13,6 +13,7 @@
 #include "NoisePreview.h"
 #include "Grid.h"
 #include "GpuHeightGenerator.h"
+#include "AsyncRead.h"
 #include "GenerationJob.h"
 #include "Hydrology.h"
 #include "LandStats.h"
@@ -120,6 +121,14 @@ private:
 	//The network whose water WaterSurface draws: only while the REGION method is chosen
 	const RiverMap* RiverWater() const { return world.rivers.method == rivers::Method::REGION && riverMap.Ready() ? &riverMap : nullptr; }
 	GenerationJob<RiverResult> riverJob;
+	//The terrain sample of the next network, read back without stalling the frame, and what the network needs with it
+	AsyncRead riverSample;
+	struct RiverSampleInput {
+		int cells = 0;
+		float cellSize = 1.0f, waterHeight = 0.0f, texelsPerHeight = 1.0f;
+		glm::vec2 origin = glm::vec2(0.0f);
+		rivers::RiverConfig config;
+	} riverSampleInput;
 	RiverMap riverMap;
 	//The uploaded network on the CPU, for the vegetation (nothing grows in rivers and lakes); shared with its placement threads
 	std::shared_ptr<const hydrology::Network> riverNetwork;

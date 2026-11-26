@@ -9,6 +9,8 @@ layout(rgba32f, binding = 0) uniform writeonly image2D surfaceMap;
 
 uniform sampler2D heightMap;
 uniform float texelSize;	// distance between neighbouring texels in world units
+uniform ivec2 regionOrigin;	// the texels written: regionOrigin up to regionOrigin + regionSize (the whole map outside sculpting)
+uniform ivec2 regionSize;
 
 float heightAt(int x, int y)
 {
@@ -18,8 +20,8 @@ float heightAt(int x, int y)
 void main()
 {
 	ivec2 size = textureSize(heightMap, 0);
-	ivec2 p = ivec2(gl_GlobalInvocationID.xy);
-	if (any(greaterThanEqual(p, size))) {
+	ivec2 p = regionOrigin + ivec2(gl_GlobalInvocationID.xy);
+	if (any(greaterThanEqual(p, size)) || any(greaterThanEqual(p, regionOrigin + regionSize))) {
 		return;
 	}
 

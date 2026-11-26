@@ -53,6 +53,9 @@ namespace landcover {
 					TIFFGetFieldDefaulted(tif, TIFFTAG_ROWSPERSTRIP, &rows);
 					tileWidth = width;
 					tileHeight = std::clamp(rows, 1u, height);
+					//A file saved as one strip (or a few huge ones) would be decoded whole: a 40000² file is 1.6 GB. Such strips are read a row
+					//at a time instead (libtiff decodes forward through the strip as the rows go down)
+					byRow = static_cast<uint64_t>(tileWidth) * tileHeight > largestStrip;
 				}
 			}
 
@@ -61,6 +64,22 @@ namespace landcover {
 			{
 				if (tileWidth == 0 || tileHeight == 0) {
 					return false;
+				}
+				if (byRow) {
+					//Compressed strips have no random access: rows are decoded in order from the start of the strip (or from the last row read)
+					if (line.empty() || y < nextRow || y / tileHeight != (nextRow - 1) / tileHeight) {
+						line.assign(static_cast<size_t>(std::max<tmsize_t>(TIFFScanlineSize(tif), width)), 0);
+						nextRow = y / tileHeight * tileHeight;
+					}
+					while (nextRow <= y) {
+						if (TIFFReadScanline(tif, line.data(), nextRow, 0) < 0) {
+							line.clear();
+							return false;
+						}
+						nextRow++;
+					}
+					std::copy(line.begin() + x0, line.begin() + x1, out);
+					return true;
 				}
 				const uint32_t band = y / tileHeight;
 				if (band != cachedBand || buffers.empty()) {
@@ -101,9 +120,14 @@ namespace landcover {
 				return true;
 			}
 
+			//Bytes of a strip above which it is read by rows
+			static constexpr uint64_t largestStrip = 16u << 20;
+
 			TIFF* tif;
 			uint32_t width, height;
-			bool tiled = false;
+			bool tiled = false, byRow = false;
+			uint32_t nextRow = 0;			//by rows: the row after the one in line
+			std::vector<uint8_t> line;
 			uint32_t tileWidth = 0, tileHeight = 0;
 			uint32_t cachedBand = 0, firstColumn = 0;
 			std::vector<std::vector<uint8_t>> buffers;

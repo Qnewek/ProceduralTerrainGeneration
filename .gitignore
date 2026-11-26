@@ -418,3 +418,6 @@ FodyWeavers.xsd
 *.sln.iml
 /ProceduralTerrainGenerator/Debug/ProceduralTerrainGenerator.pdb
 /ProceduralTerrainGenerator/Debug/ProceduralTerrainGenerator.exe
+
+# Superpowers plans and specs (local only)
+docs/superpowers/

@@ -1,5 +1,7 @@
 #pragma once
 
+class AsyncRead;
+
 #include <array>
 #include <memory>
 #include <optional>
@@ -106,6 +108,9 @@ public:
 	//@param islandSize - as in MapArea; the size of the finite map
 	//@param biomes - as in GenerateTerrain
 	HeightField SampleTerrain(const TerrainConfig& config, glm::vec2 center, int size, float step, glm::ivec2 islandSize, const BiomeConfig* biomes);
+	//SampleTerrain without waiting for the GPU: the size x size floats arrive in read (AsyncRead::Ready, then Take)
+	void StartSampleTerrain(const TerrainConfig& config, glm::vec2 center, int size, float step, glm::ivec2 islandSize, const BiomeConfig* biomes,
+		AsyncRead& read);
 
 	//Layers of a splat map: 4 materials per RGBA layer
 	static constexpr int splatLayers = biome::maxMaterials / 4;

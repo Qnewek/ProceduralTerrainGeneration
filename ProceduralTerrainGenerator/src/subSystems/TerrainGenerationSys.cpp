@@ -181,9 +181,31 @@ void TerrainGenerationSys::UpdateRivers(const Camera& camera)
 		}
 	}
 	const rivers::RiverConfig& config = world.rivers;
+	//The sample arrived: the network is computed from it, unless something asked for a newer one meanwhile (a newer sample starts below)
+	if (riverSample.Pending() && (riversStale || config.method != rivers::Method::REGION)) {
+		riverSample.Cancel();
+	}
+	if (riverSample.Pending() && riverSample.Ready() && !riverJob.IsRunning()) {
+		const RiverSampleInput in = riverSampleInput;
+		HeightField sample(in.cells, in.cells);
+		if (riverSample.Take(sample.Data(), sample.Size() * sizeof(float))) {
+			riverJob.Start([sample = std::move(sample), in]() {
+				const auto start = std::chrono::steady_clock::now();
+				RiverResult result;
+				result.network = hydrology::Compute(sample, in.origin, in.cellSize, in.waterHeight, in.config);
+				result.water = hydrology::BuildWaterMesh(result.network, in.waterHeight, in.texelsPerHeight);
+				result.ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count();
+				return result;
+			});
+		}
+		else {
+			//The read failed: a new sample starts below instead of leaving the region without a network
+			riversStale = true;
+		}
+	}
 	//The terrain did not change, so not RequestRivers / RequestTerrain: the arriving network replaces the chunks.
 	//The step of the region shown, not of the edited size: dragging "Region size" applies on release
-	if (config.method == rivers::Method::REGION && infiniteGeneration && riversFollowCamera && !riverJob.IsRunning() && riverRegion
+	if (config.method == rivers::Method::REGION && infiniteGeneration && riversFollowCamera && !riverJob.IsRunning() && !riverSample.Pending() && riverRegion
 		&& hydrology::LeftRegion(*riverRegion, MapPositionUnder(camera))) {
 		riversStale = true;
 	}
@@ -201,19 +223,11 @@ void TerrainGenerationSys::UpdateRivers(const Camera& camera)
 	riverRegion = hydrology::PlaceRegion(infiniteGeneration, riversFollowCamera, riverRegion, MapPositionUnder(camera), MapCenter(),
 		config.regionSize, config.cellSize);
 	const glm::vec2 center = riverRegion->center;
-	HeightField sample = gpu.SampleTerrain(world.terrain, center, cells, cellSize, glm::ivec2(world.width, world.height),
-		biomesGeneration ? &world.biomes : nullptr);
-	const glm::vec2 origin = center - glm::vec2(static_cast<float>(cells) * cellSize * 0.5f);
-	const float waterHeight = world.terrain.WaterHeight();
-	const float texelsPerHeight = renderSettings.heightScale / TerrainView::worldUnitsPerTexel;
-	riverJob.Start([sample = std::move(sample), origin, cellSize, waterHeight, texelsPerHeight, config]() {
-		const auto start = std::chrono::steady_clock::now();
-		RiverResult result;
-		result.network = hydrology::Compute(sample, origin, cellSize, waterHeight, config);
-		result.water = hydrology::BuildWaterMesh(result.network, waterHeight, texelsPerHeight);
-		result.ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count();
-		return result;
-	});
+	//Read back in a later frame (up to 2048² floats: a synchronous read stalled the frame at every region jump)
+	gpu.StartSampleTerrain(world.terrain, center, cells, cellSize, glm::ivec2(world.width, world.height), biomesGeneration ? &world.biomes : nullptr,
+		riverSample);
+	riverSampleInput = { cells, cellSize, world.terrain.WaterHeight(), renderSettings.heightScale / TerrainView::worldUnitsPerTexel,
+		center - glm::vec2(static_cast<float>(cells) * cellSize * 0.5f), config };
 }
 
 void TerrainGenerationSys::UpdateChunks(const Camera& camera)
@@ -363,7 +377,8 @@ void TerrainGenerationSys::StartErodedPlants()
 		input.layerMask = 1u << static_cast<int>(vegetation::Layer::TREES);
 	}
 	HeightField copy = view.ReadLayer(TerrainView::Layer::OVERLAY);
-	std::vector<glm::vec4> surface = view.ReadSurface(TerrainView::Layer::OVERLAY);
+	//Slopes from the heights (as on the maps of the real world), not the surface map: that is 16 bytes per texel, 1 GB to read back at 8192²
+	std::vector<glm::vec4> surface;
 	//Where the centre of texel (0, 0) of the copy is drawn: that of the map, shifted along X
 	const glm::vec2 texelZero = view.GetWorldCorner() + glm::vec2(ErodedShift(), 0.0f) + 0.5f * TerrainView::worldUnitsPerTexel;
 	const float metresPerUnit = input.metresPerUnit;
@@ -1181,7 +1196,7 @@ void TerrainGenerationSys::RiversEditor()
 		ImGui::SetItemTooltip("A filled depression deeper than this is a lake; rivers cross lakes without a channel");
 
 		ImGui::SeparatorText("Network");
-		if (riverJob.IsRunning()) {
+		if (riverJob.IsRunning() || riverSample.Pending()) {
 			ImGui::TextDisabled("Computing...");
 		}
 		else if (!riverMap.Ready()) {
