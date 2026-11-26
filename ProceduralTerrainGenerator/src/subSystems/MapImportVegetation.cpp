@@ -111,7 +111,8 @@ void MapImportSys::UpdatePlants()
 	if (placedUploadStale || ready != placedUploadModels) {
 		UploadPlacedPlants();
 	}
-	if (!PlantsOn() || map.Empty() || ready == 0) {
+	//Pixels below 1 cm get no plants (vegexport::minPlantPixelMetres): the Vegetation tab says so
+	if (!PlantsOn() || map.Empty() || ready == 0 || pixelMetres.x < vegexport::minPlantPixelMetres) {
 		if (vegetation.HasExtraInstances()) {
 			vegetation.ClearExtraInstances();
 		}
@@ -397,6 +398,10 @@ void MapImportSys::PlantsImGui()
 		static_cast<double>(vegexport::maxMapInstances) / 1e6);
 	if (ReadyModels() == 0) {
 		ImGui::TextDisabled("No vegetation models loaded (python tools/fetch_models.py).");
+		return;
+	}
+	if (!map.Empty() && pixelMetres.x < vegexport::minPlantPixelMetres) {
+		ImGui::TextColored(ImVec4(1.0f, 0.6f, 0.2f, 1.0f), "No automatic plants: pixels below 1 cm");
 		return;
 	}
 	if (!plantStatus.empty()) {

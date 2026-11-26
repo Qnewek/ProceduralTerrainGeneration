@@ -361,6 +361,7 @@ void MapImportSys::InstallReceived(mapproject::Project& project)
 	HeightField noOriginal;
 	const float unit = ToUnits(project.working, noOriginal);
 	InstallMap(std::move(project.working), unit, project.pixelMetres);
+	receivedInstalled = true;
 	original = HeightField();
 	projectPath.clear();
 	projectSource = project.source;
@@ -979,6 +980,9 @@ bool MapImportSys::OptionsImGui()
 	}
 	const heightmap::ImportInfo& info = header.info;
 	ImGui::Text("%d x %d, %d-bit%s", header.width, header.height, info.bitsPerSample, info.floatingPoint ? " float" : "");
+	if (info.rotated) {
+		ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.3f, 1.0f), "Rotated GeoTIFF: its georeference is not supported and is ignored");
+	}
 	if (info.geographic) {
 		ImGui::TextWrapped("Geographic coordinates: no reprojection, pixels in metres at latitude %.2f", info.latitude);
 	}
@@ -1051,7 +1055,11 @@ void MapImportSys::ImGuiDisplay()
 {
 	TerrainRenderSettings& s = renderSettings;
 	//Biome colors exist only with biomes on (Biomes tab); a file has no infinite generation
-	if (utilities::DisplayModeImGui(s.modelScale, s.topoStep, s.topoBandWidth, s.heightScale, s.displayMode, s.wireFrame, s.map2d, nullptr, LandCoverShown())) {
+	//Around the true proportions of the map too (a flat DEM of 90 m pixels has a true scale of about 2)
+	const glm::vec2 heightScaleRange = map.Empty() ? glm::vec2(16.0f, 4096.0f)
+		: glm::vec2(std::min(16.0f, trueHeightScale / 16.0f), std::max(4096.0f, trueHeightScale * 16.0f));
+	if (utilities::DisplayModeImGui(s.modelScale, s.topoStep, s.topoBandWidth, s.heightScale, s.displayMode, s.wireFrame, s.map2d, nullptr, LandCoverShown(),
+		heightScaleRange)) {
 		if (s.displayMode == utilities::heightMapMode::BIOMES && !BiomesOn()) {
 			s.displayMode = utilities::heightMapMode::GREYSCALE;
 		}

@@ -457,7 +457,8 @@ Wartości szumów są w [-1, 1]. Konwencja indeksowania: `map[y * width + x]`.
   `vegexport::ChunkMetres(piksel)` ≈ 128 pikseli, wielokrotność 8 m; pozycje względem teksela (0, 0) przez `PlacementSettings::gridOrigin`, więc
   floaty trzymają centymetry daleko od początku świata, a komórki i hashe zostają na siatce; nachylenie z wysokości mapy, bez `surfaceMap`; wiersze na wątkach) na kopii mapy i id biomów odczytanych z GPU, w tle (`plantJob`),
   wynik sortowany w zadaniu (`vegetation::SortIntoSquares`, `SetExtraInstances` tylko sprawdza kolejność),
-  limit `vegexport::maxMapInstances` (2 mln: najpierw drzewa, drzew więcej → brak, razem więcej → same drzewa, przerwanie po progu). `PlantsChanged()`
+  limit `vegexport::maxMapInstances` (2 mln: najpierw drzewa, drzew więcej → brak, razem więcej → same drzewa, przerwanie po progu), piksel < 1 cm = bez roślin
+  (`vegexport::minPlantPixelMetres`). `PlantsChanged()`
   po każdym udanym `RunBiomePass`, nowej / usuniętej sieci rzek, zmianie roślin tabeli lub gotowych modeli, Density, „Plants”, nowej mapie (czyści od razu);
   start dopiero bez pociągnięcia i bez nieaktualnego klimatu / biomów / pokrycia / rzek i z id biomów tej samej `mapVersion`, wynik starszej
   `plantVersion` odrzucany, a każda zmiana przerywa trwające sadzenie (`vegexport::Input::cancel`); sieć rzek dzielona bez kopii (`shared_ptr`). `PlantInput()` (ekran

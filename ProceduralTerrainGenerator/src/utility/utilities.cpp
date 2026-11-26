@@ -152,7 +152,7 @@ namespace utilities
 		return ImGui::Button("Resize");
 	}
 	bool DisplayModeImGui(float& modelScale, float& topoStep, float& topoBandWidth, float& heightScale, heightMapMode& m, bool& wireFrame, bool& map2d, bool* infGen,
-		bool landCover)
+		bool landCover, glm::vec2 heightScaleRange)
 	{
 		if (infGen) {
 			if (ImGuiButtonWrapper("Partial generation", !*infGen)) {
@@ -190,7 +190,8 @@ namespace utilities
 		ImGui::Checkbox("2D map", &map2d);
 		ImGui::SliderFloat("Model scale", &modelScale, 0.1f, 5.0f);
 		//Only the view: the maps stay in [0, 1], so nothing has to be generated again
-		ImGui::SliderFloat("Height scale", &heightScale, 16.0f, 4096.0f, "%.0f", ImGuiSliderFlags_Logarithmic);
+		ImGui::SliderFloat("Height scale", &heightScale, heightScaleRange.x, heightScaleRange.y, heightScaleRange.x < 10.0f ? "%.2f" : "%.0f",
+			ImGuiSliderFlags_Logarithmic);
 		ImGui::SetItemTooltip("World units of height 1 (a texel is 4 units wide)");
 
 		ImGui::SeparatorText("Isopleth");
