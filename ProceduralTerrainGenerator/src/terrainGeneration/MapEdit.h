@@ -60,6 +60,9 @@ namespace mapedit {
 		//Label of the step Undo / Redo would restore; empty if none
 		const std::string& UndoLabel() const;
 		const std::string& RedoLabel() const;
+		//Whether the step Undo / Redo would restore holds a map (only then does it touch the map passed in); false if none
+		bool UndoHoldsMap() const { return !undo.empty() && undo.back().map.has_value(); }
+		bool RedoHoldsMap() const { return !redo.empty() && redo.back().map.has_value(); }
 		//Swaps the current state with the step on top (the map, the painted biomes and the placed plants only when the step holds them,
 		//the sea level always) and moves the step to the other stack
 		//@return what changed; none if there is nothing to undo / redo

@@ -117,6 +117,7 @@ private:
 		hydrology::Network network;
 		std::vector<hydrology::WaterVertex> water;
 		double ms = 0.0;
+		glm::vec2 center = glm::vec2(0.0f);		//of the region, map texels
 	};
 	//The network whose water WaterSurface draws: only while the REGION method is chosen
 	const RiverMap* RiverWater() const { return world.rivers.method == rivers::Method::REGION && riverMap.Ready() ? &riverMap : nullptr; }
@@ -127,8 +128,11 @@ private:
 		int cells = 0;
 		float cellSize = 1.0f, waterHeight = 0.0f, texelsPerHeight = 1.0f;
 		glm::vec2 origin = glm::vec2(0.0f);
+		glm::vec2 center = glm::vec2(0.0f);		//of the region, map texels
 		rivers::RiverConfig config;
 	} riverSampleInput;
+	//Centre of the region of the network on screen (riverRegion is where the next one is computed); none before the first
+	std::optional<glm::vec2> shownRiverCenter;
 	RiverMap riverMap;
 	//The uploaded network on the CPU, for the vegetation (nothing grows in rivers and lakes); shared with its placement threads
 	std::shared_ptr<const hydrology::Network> riverNetwork;
@@ -268,7 +272,11 @@ public:
 	bool FlatView() const { return renderSettings.map2d; }
 	//Infinite generation shows chunks with part of the view not generated yet
 	bool HoleInView() const { return chunksShown && chunks.HasHoleInView(); }
-	void ReloadShaders() { view.ReloadShader(); chunks.ReloadShader(); gpu.ReloadShaders(); noisePreview.ReloadShader(); vegetationLayer.ReloadShader(); grass.ReloadShader(); water.ReloadShader(); }
+	void ReloadShaders()
+	{
+		view.ReloadShader(); chunks.ReloadShader(); gpu.ReloadShaders(); noisePreview.ReloadShader(); vegetationLayer.ReloadShader(); grass.ReloadShader(); water.ReloadShader();
+		gpuErosion.ReloadShaders();
+	}
 	//Names of the surface materials for the biome editor, in the order of their ids
 	void SetMaterialNames(std::vector<std::string> names) { materialNames = names; biomeEditor.SetMaterialNames(std::move(names)); }
 	//Models drawn on the infinite world; nullptr (before the models are destroyed) = no vegetation

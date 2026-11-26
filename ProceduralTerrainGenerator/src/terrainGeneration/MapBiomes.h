@@ -24,6 +24,7 @@ namespace mapbiomes {
 		std::string name;
 		glm::vec3 color{ 0.5f };	//LAND COVER display mode
 		std::vector<std::string> biomes;
+		bool operator==(const LandCoverClass&) const = default;
 	};
 
 	//The ESA WorldCover legend (codes 10 to 100, its colors) with the biomes of the default table each class allows

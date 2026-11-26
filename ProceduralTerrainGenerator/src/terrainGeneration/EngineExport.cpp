@@ -1,5 +1,6 @@
 #include "EngineExport.h"
 
+#include <set>
 #include <system_error>
 
 namespace engineexport {
@@ -43,6 +44,7 @@ namespace engineexport {
 	bool CopyMaterialTextures(const std::vector<MaterialTextures>& sources, std::vector<exportpack::Material>& materials,
 		const std::filesystem::path& packFolder, std::vector<exportpack::File>& files, std::string& error)
 	{
+		std::set<std::string> copied;
 		for (exportpack::Material& material : materials) {
 			if (material.id < 0 || material.id >= static_cast<int>(sources.size())) {
 				continue;
@@ -66,10 +68,14 @@ namespace engineexport {
 					continue;
 				}
 				const std::filesystem::path relative = std::filesystem::path("materials") / source.folder.filename() / from.filename();
+				*kind.path = PackPath(relative);
+				//Materials sharing a texture folder share its files: copied and listed once
+				if (!copied.insert(*kind.path).second) {
+					continue;
+				}
 				if (!CopyInto(from, packFolder, relative, error)) {
 					return false;
 				}
-				*kind.path = PackPath(relative);
 				std::string extension = PackPath(from.extension());
 				if (!extension.empty() && extension[0] == '.') {
 					extension.erase(0, 1);

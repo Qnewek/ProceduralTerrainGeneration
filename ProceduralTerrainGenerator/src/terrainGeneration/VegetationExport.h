@@ -25,6 +25,8 @@ namespace vegexport {
 	//Side in metres of the chunks PlaceMap places a map of pixels of p metres in: chunkTexels * floor(p) from 1 m, below it 8 * floor(16 p)
 	//(at least 8): always a multiple of every cell, so the plants do not depend on it, and about 128 pixels a side
 	int ChunkMetres(float pixel);
+	//PlaceMap places nothing on smaller pixels: a chunk of the smallest side (8 m) would be a window of more than 800 pixels a side per thread
+	inline constexpr float minPlantPixelMetres = 0.01f;
 	//Plants a map of the "Imported map" mode may have (stage D4): above it only trees, and with more trees than this none
 	inline constexpr size_t maxMapInstances = 2'000'000;
 

@@ -47,4 +47,11 @@ namespace tifffile {
 		GetArray(tif, 34735, TIFF_SHORT, keys);
 		return geo::FromGeoTiffTags(scale, tiepoint, transformation, keys);
 	}
+
+	bool Rotated(TIFF* tif)
+	{
+		std::vector<double> transformation;
+		GetArray(tif, 34264, TIFF_DOUBLE, transformation);
+		return geo::RotatedTransformation(transformation);
+	}
 }
