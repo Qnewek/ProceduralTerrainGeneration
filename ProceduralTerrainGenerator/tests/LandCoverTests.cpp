@@ -207,6 +207,33 @@ TEST_CASE("A large window is reduced by blocks")
 	CHECK(At(whole, 3, 4) == 99);
 }
 
+TEST_CASE("A file of one huge strip is read row by row")
+{
+	//Files saved without strips or tiles hold the whole raster in one strip; here 4200 x 4100 = 17 MB decoded at once before. Blocks of
+	//100 x 100 file pixels, one map pixel each
+	constexpr int width = 4200, height = 4100;
+	std::vector<double> values(static_cast<size_t>(width) * height);
+	for (int y = 0; y < height; y++) {
+		for (int x = 0; x < width; x++) {
+			values[static_cast<size_t>(y) * width + x] = 10 + 10 * ((x / 100 + y / 100) % 5);
+		}
+	}
+	const std::filesystem::path file = Folder() / "one_strip.tif";
+	TiffSpec spec = ClassSpec(width, height, Degrees(19.0, 51.0, 0.0001));
+	spec.rowsPerStrip = static_cast<uint32_t>(height);
+	WriteTiff(file, spec, values);
+	//The map lies over blocks 20..29 (from file pixel 2000), not at the top of the file
+	const landcover::ClassMap result = landcover::Compute({ file }, 10, 10, geo::GeoReference{ 4326, { 19.2, 50.8 }, { 0.01, -0.01 } }, 2000);
+	REQUIRE(result.classes.size() == 100);
+	REQUIRE(result.files.size() == 1);
+	CHECK(result.files[0].error.empty());
+	for (int y = 0; y < 10; y++) {
+		for (int x = 0; x < 10; x++) {
+			CHECK(At(result, x, y) == 10 + 10 * ((x + y) % 5));
+		}
+	}
+}
+
 TEST_CASE("Unreadable file reports an error")
 {
 	const landcover::ClassMap result = landcover::Compute({ Folder() / "missing.tif" }, 4, 3, geo::GeoReference{ 4326, { 19.0, 51.0 }, { 0.001, -0.001 } });

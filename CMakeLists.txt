@@ -87,6 +87,7 @@ add_executable(ProceduralTerrainGenerator
 	${PTG_SRC}/opengl/ChunkWorld.cpp
 	${PTG_SRC}/opengl/GpuErosion.cpp
 	${PTG_SRC}/opengl/GpuHeightCheck.cpp
+	${PTG_SRC}/opengl/AsyncRead.cpp
 	${PTG_SRC}/opengl/GpuHeightGenerator.cpp
 	${PTG_SRC}/opengl/GpuQuery.cpp
 	${PTG_SRC}/opengl/GpuSculpt.cpp

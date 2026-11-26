@@ -16,6 +16,7 @@
 #include <GL/glew.h>
 #include <GLFW/glfw3.h>
 
+#include "AsyncRead.h"
 #include "BiomePaint.h"
 #include "Grid.h"
 #include "GpuErosion.h"
@@ -972,6 +973,78 @@ namespace {
 		return ok;
 	}
 
+	//The river sample read without stalling: the same values as the synchronous read, available once the GPU is done
+	bool CheckAsync(GpuHeightGenerator& gpu)
+	{
+		std::cout << "\nasync: reads of the GPU through a pixel buffer\n";
+		const TerrainConfig config = TerrainConfig::Default();
+		const glm::vec2 center(1500.0f, -700.0f);
+		constexpr int size = 96;
+		constexpr float step = 4.0f;
+		const HeightField sync = gpu.SampleTerrain(config, center, size, step, glm::ivec2(1024, 768), nullptr);
+		AsyncRead read;
+		gpu.StartSampleTerrain(config, center, size, step, glm::ivec2(1024, 768), nullptr, read);
+		const bool pending = read.Pending();
+		glFinish();
+		const bool ready = read.Ready();
+		HeightField async(size, size);
+		const bool taken = read.Take(async.Data(), async.Size() * sizeof(float));
+		const bool same = taken && std::memcmp(sync.Data(), async.Data(), sync.Size() * sizeof(float)) == 0;
+		Report("async: sample equals the synchronous read", pending && ready && taken ? "" : "not pending / ready / taken", same && !read.Pending());
+		//What the frame pays for the river sample of the largest region (2048 cells): the synchronous read waits for the GPU, the async one only sends
+		glFinish();
+		auto ms = [](auto from) { return std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - from).count(); };
+		auto start = std::chrono::steady_clock::now();
+		gpu.SampleTerrain(config, center, 2048, step, glm::ivec2(1024, 768), nullptr);
+		const double syncMs = ms(start);
+		glFinish();
+		start = std::chrono::steady_clock::now();
+		gpu.StartSampleTerrain(config, center, 2048, step, glm::ivec2(1024, 768), nullptr, read);
+		const double asyncMs = ms(start);
+		glFinish();
+		read.Cancel();
+		std::ostringstream timing;
+		timing << std::fixed << std::setprecision(1) << "sync " << syncMs << " ms, async start " << asyncMs << " ms";
+		Report("async: 2048² sample, time in the frame", timing.str(), true);
+		return same && pending && ready && !read.Pending();
+	}
+
+	//A sculpt dab changes a rectangle of heights; the surface updated only around it must equal a pass over the whole map, also where the
+	//rectangle touches the map edge (there the Laplacian reaches 2 texels in)
+	bool CheckSurfaceRegion(GpuSurfacePass& pass)
+	{
+		constexpr int width = 40, height = 30;
+		auto fill = [](HeightField& map, float bump, glm::ivec4 rect) {
+			for (int y = 0; y < map.GetHeight(); y++) {
+				for (int x = 0; x < map.GetWidth(); x++) {
+					const bool inside = x >= rect.x && y >= rect.y && x < rect.x + rect.z && y < rect.y + rect.w;
+					map.At(x, y) = std::sin(0.37f * x) * std::cos(0.23f * y) + 0.01f * x * y + (inside ? bump * (1.0f + 0.1f * x - 0.07f * y) : 0.0f);
+				}
+			}
+		};
+		bool ok = true;
+		for (const auto& [name, rect] : { std::pair{ "surface: rectangle inside", glm::ivec4(12, 9, 7, 5) },
+				{ "surface: rectangle at the left edge", glm::ivec4(0, 0, 3, height) }, { "surface: rectangle in a corner", glm::ivec4(37, 27, 3, 3) },
+				{ "surface: rectangle near the edge", glm::ivec4(2, 6, 4, 5) } }) {
+			HeightField before(width, height), after(width, height);
+			fill(before, 0.0f, rect);
+			fill(after, 0.75f, rect);
+			TextureClass input(width, height, GL_R32F), updated(width, height, GL_RGBA32F), whole(width, height, GL_RGBA32F);
+			input.Upload(before.Data(), GL_RED, GL_FLOAT);
+			pass.Run(input, surfaceTexelSize, updated);
+			input.Upload(after.Data(), GL_RED, GL_FLOAT);
+			pass.RunRegion(input, surfaceTexelSize, updated, rect);
+			pass.Run(input, surfaceTexelSize, whole);
+			std::vector<Derivatives> a(static_cast<size_t>(width) * height), b(a.size());
+			updated.Read(GL_RGBA, GL_FLOAT, static_cast<int>(a.size() * sizeof(Derivatives)), a.data());
+			whole.Read(GL_RGBA, GL_FLOAT, static_cast<int>(b.size() * sizeof(Derivatives)), b.data());
+			const bool same = std::memcmp(a.data(), b.data(), a.size() * sizeof(Derivatives)) == 0;
+			Report(name, "equals the whole pass", same);
+			ok = ok && same;
+		}
+		return ok;
+	}
+
 	bool CheckSurface(GpuSurfacePass& pass)
 	{
 		std::cout << "\nsurface map: derivatives of maps with known derivatives\n";
@@ -1617,6 +1690,14 @@ namespace {
 				<< std::setw(10) << terrainMs << std::setw(11) << modifiedMs << std::setw(9) << biomesMs << std::setw(9) << splatMs
 				<< std::setw(13) << twoPassMs << std::setw(11) << onePassMs << std::setw(14) << surfaceMs << std::defaultfloat << "\n" << std::left;
 		}
+		//What a sculpt frame pays for the surface map: the square of a 128-texel brush instead of the whole map
+		TextureClass regionHeight(4096, 4096, GL_R32F), regionSurface(4096, 4096, GL_RGBA32F);
+		gpu.GenerateTerrain(config, MapArea{}, regionHeight);
+		const double regionMs = MedianMs([&] {
+			surfacePass.RunRegion(regionHeight, surfaceTexelSize, regionSurface, glm::ivec4(1900, 1900, 257, 257));
+			glFinish();
+		}, 9);
+		std::cout << "surface map of a 257x257 dab on a 4096x4096 map: " << std::fixed << std::setprecision(2) << regionMs << std::defaultfloat << " ms\n";
 	}
 
 	void RunErosionTimings(GpuHeightGenerator& gpu, GpuErosion& erosion)
@@ -1689,7 +1770,9 @@ int RunGpuHeightCheck()
 			ok = CheckLand(gpu) && ok;
 			ok = CheckChunks(gpu) && ok;
 			ok = CheckRivers(gpu) && ok;
+			ok = CheckAsync(gpu) && ok;
 			ok = CheckSurface(surfacePass) && ok;
+			ok = CheckSurfaceRegion(surfacePass) && ok;
 			ok = CheckErosion(gpu, erosion) && ok;
 			ok = CheckSculpt(sculptor) && ok;
 			ok = CheckMapBiomes(gpu) && ok;

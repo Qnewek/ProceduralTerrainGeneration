@@ -107,7 +107,8 @@ ProceduralTerrainGenerator/
       GpuHeightGenerator.*       jedyna generacja: szum, teren i biomy w compute shaderach (GenerateWorld = teren + biomy w jednym przebiegu); GpuHeightCheck.* = testy generacji (--gpu-check)
       NoisePreview.*             podgląd edytowanego szumu jako mapa 2D w panelu ImGui (≤ 512 tekseli na dłuższym boku, preview_compute.shader = skala szarości)
       RiverMap.*                 sieć rzek z Hydrology na GPU (2 tekstury, jednostki 20–21), czytana przy generacji przez common/rivers.glsl, + siatka wody rzek i jezior
-      GpuSurfacePass.*           mapa pochodnych (gradient + laplasjan) z mapy wysokości; uruchamia ją TerrainView i ChunkWorld
+      GpuSurfacePass.*           mapa pochodnych (gradient + laplasjan) z mapy wysokości; uruchamia ją TerrainView i ChunkWorld (RunRegion = tylko wokół zmienionego prostokąta)
+      AsyncRead.*                odczyt z GPU bez czekania (bufor pikseli + fence): Start*, w kolejnych klatkach Ready(), potem Take(); próbka rzek, głębia pod pędzlem
       GpuErosion.*               erozja w compute: kroplowa (erosion_droplet_compute.shader, algorytm dawnej wersji CPU) albo rury wirtualne + termiczna
                                  (erosion_pipe_compute.shader); metoda = ErosionConfig::method
       GpuSculpt.*                pędzel na GPU (sculpt_compute.shader): jeden dab w kwadracie wokół pędzla, wprost do warstwy wysokości
@@ -169,7 +170,8 @@ CMakeLists.txt, CMakePresets.json, vcpkg.json   build; GLFW, GLEW, glm, ImGui, I
 4. TCS: w 3D poziom teselacji z długości krawędzi na ekranie (`tessPixels`, suwak „Terrain detail”, 1–64), w widoku 2D po staremu 4–64 od odległości (ma zostać ostry). Normalna i kolor biomów liczone w FS na piksel (z `surfaceMap` / `biomeMap`). TES: próbkuje `heightMap`,
    przesuwa wierzchołek o `height * heightScale`, bierze normalną z `surfaceMap`, koloruje wg `displayMode`
    (0 grey, 1 topo, 2 mono, 3 biomy z `biomeMap`, 4 nachylenie, 5 krzywizna, 6 TEXTURED — materiały liczy FS z `splatMap`, 7 LAND COVER — klasy pokrycia z `landCoverMap`, tylko Imported map). `surfaceMap` (gradient + laplasjan surowej wysokości, `RGBA32F`)
-   liczy `TerrainView::Draw` przez `GpuSurfacePass`, tylko gdy warstwa wysokości zmieniła się od ostatniego razu (`LayerTexture` oznacza ją jako nieaktualną).
+   liczy `TerrainView::Draw` przez `GpuSurfacePass`, tylko gdy warstwa wysokości zmieniła się od ostatniego razu (`LayerTexture` oznacza ją jako nieaktualną;
+   `LayerTextureRegion` — dab pędzla — tylko prostokąt, sumowany do następnego Draw).
 5. Tryb „infinite” (TerrainGen i Noise heightmap) to `ChunkWorld`: w `Update(camera)` subsystem woła `Plan` (chunki w zasięgu „Render distance”)
    i `GenerateNext` z własną funkcją generującą (`GpuHeightGenerator` z originem chunka i `islandSize` = rozmiar mapy), a `Draw` rysuje chunki zamiast `TerrainView`.
    Każde żądanie (`Request*`) w tym trybie unieważnia wszystkie chunki; skończona mapa jest odświeżana po powrocie do „Partial generation”. Eksport i erozja działają tylko na skończonej mapie.
@@ -408,14 +410,16 @@ Wartości szumów są w [-1, 1]. Konwencja indeksowania: `map[y * width + x]`.
   przeliczane na jednostki mapy w `UploadRiverWater`), bez żłobienia koryt. Historia nie trafia do pliku, ustawienia rzek tak.
   Pędzle (C, sekcja „Sculpt” zakładki Edit, `MapImportSculpt.cpp`): wzory pędzli są dwa razy — `sculpt::Apply` (`Sculpt.cpp`, testy) i `sculpt_compute.shader`
   (`GpuSculpt`, kwadrat `sculpt::Area` wokół pędzla, czyta kopię kwadratu poszerzoną o zasięg SMOOTH) — zmiana w jednym wymaga zmiany w drugim, sprawdza
-  `--gpu-check` (sekcja `sculpt:`, ≤ 1e-5). Punkt pod kursorem: `PickUnderCursor` po `view.Draw` czyta 1 piksel głębi (`glReadPixels`) i odwraca macierze
+  `--gpu-check` (sekcja `sculpt:`, ≤ 1e-5). Punkt pod kursorem: `PickUnderCursor` po `view.Draw` zleca odczyt 1 piksela głębi (`AsyncRead`, bez czekania na GPU) i odwraca macierze
   `TerrainView::FrameBlock` (te same w 3D i 2D), `sculpt::PickTexel` zakłada mapę bez offsetu. Wejście myszy (przycisk, Shift + kółko) zapamiętuje
   `SculptInputImGui` w ramce ImGui (`io.MouseWheel` znika w `EndFrame`), `UpdateSculpt` (w `Update`, następna klatka) prowadzi pociągnięcie: w trakcie mapa
   żyje tylko na GPU (`view.LayerTexture`) w niezmienionych jednostkach (kolory, „Height scale” i izolinie stoją), przycięta do `Stroke::limit`: 1,5, a dla
   podnieś/obniż/szum `sculpt::StrokeLimit` = miejsce na 30 s malowania nad najwyższym punktem (płaska mapa ma jednostkę 1 m); tę samą granicę dostaje culling
   patchy w TCS (`TerrainRenderSettings::heightBound`, ustawiane w `MapImportSys::Draw`), `map` na CPU = stan sprzed pociągnięcia (FLATTEN bierze z niej cel),
   `Busy()` obejmuje pociągnięcie; puszczenie przycisku (też utrata fokusu, wyjście z trybu, M) = `ReadLayer` → `ApplyEdit` jednym krokiem historii.
-  Działanie na klatkę × `deltaTime` (≤ 0,1 s). Każda klatka malowania liczy całą `surfaceMap` od nowa (na 8192² to koszt pełnego przebiegu).
+  Działanie na klatkę × `deltaTime` (≤ 0,1 s). Klatka malowania liczy `surfaceMap` tylko w kwadracie dabu poszerzonym o 2 (`LayerTextureRegion` → `GpuSurfacePass::RunRegion`).
+  Teksel pod kursorem pochodzi z odczytu sprzed 1–2 klatek (z macierzami, viewportem i rozmiarem mapy z chwili zlecenia; inny viewport / rozmiar,
+  odczyt starszy niż 3 klatki albo nowa mapa = odrzucony).
   Biomy (D1, zakładka Biomes, `MapImportBiomes.cpp`): tabela, klimat, szumy T/H i materiały jak w TerrainGen (`mapbiomes::Settings::config`), ale C i M
   z mapy: C = podpisana odległość od brzegu (transformata odległości, ląd > morze) / `coastMetres` w [-1, 1] (bez morza 1), M = 2 · (max − min
   w promieniu `reliefRadiusMetres`) / `reliefMetres` − 1, W = 0; T i H = szumy w `climateOrigin + teksel · piksel` (metry), plamy materiałów w tekselach
@@ -467,7 +471,7 @@ Wartości szumów są w [-1, 1]. Konwencja indeksowania: `map[y * width + x]`.
 - Rzeki (tylko TerrainGen, zakładka „Rivers”, `WorldConfig::rivers`, domyślnie `NONE`): `carveRivers` (`common/rivers.glsl`) to ostatni krok wysokości w obu ścieżkach
   (`height_compute` i `biome_compute` z `writeHeight`), po modyfikatorach; biomy wybiera wysokość sprzed rzek. Generacja dostaje `const RiverInput*` (config + `RiverMap`);
   `SampleTerrain` zawsze bez rzek (z niej liczy się sieć — inaczej sprzężenie). Każdy dispatch ustawia `riverMethod` (program pamięta uniformy).
-  REGION: `TerrainGenerationSys::UpdateRivers` próbkuje teren (odczyt z GPU) i liczy `hydrology::Compute` w tle (`GenerationJob`), po przyjściu sieci ustawia
+  REGION: `TerrainGenerationSys::UpdateRivers` próbkuje teren (`StartSampleTerrain` + `AsyncRead`, odbiór w następnych klatkach; prośba o nową sieć w tym czasie odrzuca odczyt) i liczy `hydrology::Compute` w tle (`GenerationJob`), po przyjściu sieci ustawia
   `pending.terrain` bezpośrednio — nie `RequestTerrain`, które oznacza sieć jako nieaktualną (pętla). `RequestTerrain` i `RequestBiomes` (z modyfikatorami) unieważniają sieć.
   Region leży wokół środka mapy częściowej; w świecie nieskończonym (checkbox „Follow camera”, `riversFollowCamera`) przeskakuje za kamerą na stałej siatce
   (krok ¼ regionu w całych komórkach, `hydrology::PlaceRegion` / `LeftRegion`): `UpdateRivers(camera)` ustawia wtedy `riversStale` bezpośrednio (teren się nie
