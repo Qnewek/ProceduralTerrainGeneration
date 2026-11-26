@@ -9,6 +9,7 @@
 #include <vector>
 
 #include "glm/glm.hpp"
+#include "AsyncRead.h"
 #include "imgui.h"
 
 #include "BiomeEditor.h"
@@ -274,8 +275,8 @@ private:
 
 	//Sculpt brushes (MapImportSculpt.cpp). While a stroke runs the map lives only on the GPU (the TERRAIN layer); map keeps the state
 	//from before it, and letting the button go reads the layer back as one history step
+	//The map before the stroke is the CPU map itself (Busy() keeps it unchanged until the stroke ends), so a press copies nothing
 	struct Stroke {
-		HeightField before;		//metres, for the history
 		float target = 0.0f;	//FLATTEN: map units under the cursor where the stroke started
 		uint32_t seed = 0;		//NOISE
 		bool painted = false;	//a dab was applied; a click without one leaves no history step
@@ -289,6 +290,18 @@ private:
 	GpuSculpt sculptor;
 	//Map texel under the cursor, from the depth of the scene drawn in the last frame
 	std::optional<glm::vec2> hoverTexel;
+	//The depth under the cursor, read without waiting for the GPU: the texel of a frame comes from the read of an earlier one, with the matrices,
+	//viewport and map size it was started with
+	AsyncRead depthRead;
+	struct DepthPick {
+		glm::ivec2 pixel = glm::ivec2(0);
+		glm::mat4 viewProjection = glm::mat4(1.0f);
+		glm::ivec4 viewport = glm::ivec4(0);
+		glm::ivec2 mapSize = glm::ivec2(0);
+		int frame = 0;		//ImGui frame the read started in; older than maxPickAge frames = dropped (the mode was left meanwhile)
+	} depthPick;
+	static constexpr int maxPickAge = 3;
+	std::optional<glm::vec2> lastPick;
 	std::optional<Stroke> stroke;
 	uint32_t strokeSeed = 0;
 	//Mouse input of the last ImGui frame (Update runs before the next one): the left button went down over the scene, is held

@@ -1,5 +1,7 @@
 #include "GpuHeightGenerator.h"
 
+#include "AsyncRead.h"
+
 #include <algorithm>
 #include <array>
 #include <cstddef>
@@ -310,6 +312,16 @@ HeightField GpuHeightGenerator::SampleTerrain(const TerrainConfig& config, glm::
 	HeightField map(size, size);
 	target.Read(GL_RED, GL_FLOAT, static_cast<int>(map.Size() * sizeof(float)), map.Data());
 	return map;
+}
+
+void GpuHeightGenerator::StartSampleTerrain(const TerrainConfig& config, glm::vec2 center, int size, float step, glm::ivec2 islandSize,
+	const BiomeConfig* biomes, AsyncRead& read)
+{
+	//GL keeps the texture until the copy into the read's buffer is done
+	TextureClass target(size, size, GL_R32F);
+	const MapArea area{ center - glm::vec2(static_cast<float>(size) * step * 0.5f), step, islandSize };
+	GenerateTerrain(config, area, target, biomes);
+	read.StartTexture(target, GL_RED, GL_FLOAT, static_cast<size_t>(size) * size * sizeof(float));
 }
 
 void GpuHeightGenerator::GenerateBiomes(const BiomeConfig& biomes, const TerrainConfig& terrain, const MapArea& area, TextureClass& colors, TextureClass& ids,

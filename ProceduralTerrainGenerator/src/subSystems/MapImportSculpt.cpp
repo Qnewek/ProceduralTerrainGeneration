@@ -76,7 +76,7 @@ void MapImportSys::UpdateSculpt(const Camera& camera, bool active, float deltaTi
 		const glm::ivec2 size(map.GetWidth(), map.GetHeight());
 		const glm::ivec2 texel = glm::clamp(glm::ivec2(glm::round(*hoverTexel)), glm::ivec2(0), size - 1);
 		try {
-			stroke = Stroke{ WorkingMetres(), map.At(texel.x, texel.y), ++strokeSeed, false, limit };
+			stroke = Stroke{ map.At(texel.x, texel.y), ++strokeSeed, false, limit };
 		}
 		catch (const std::bad_alloc&) {
 			SetEditStatus("Sculpt: not enough memory for the history step", true);
@@ -109,7 +109,9 @@ void MapImportSys::UpdateSculpt(const Camera& camera, bool active, float deltaTi
 	dab.seed = stroke->seed;
 	//Draw gives the terrain culling the same bound; after the stroke the units follow the new highest point
 	dab.limit = stroke->limit;
-	sculptor.Apply(config, dab, view.LayerTexture(TerrainView::Layer::TERRAIN, map.GetWidth(), map.GetHeight()));
+	//The surface map follows only the square of the dab, not the whole map every frame
+	const glm::ivec2 size(map.GetWidth(), map.GetHeight());
+	sculptor.Apply(config, dab, view.LayerTextureRegion(TerrainView::Layer::TERRAIN, size.x, size.y, sculpt::Area(dab, config.radius, size)));
 	stroke->painted = true;
 }
 
@@ -122,11 +124,13 @@ void MapImportSys::FinishStroke()
 	}
 	const std::string label = std::string("Sculpt: ") + sculpt::BrushName(brush.brush);
 	try {
+		//The CPU map is still the state before the stroke
+		HeightField before = WorkingMetres();
 		HeightField metres = view.ReadLayer(TerrainView::Layer::TERRAIN);
 		for (size_t i = 0; i < metres.Size(); i++) {
 			metres[i] *= metresPerUnit;
 		}
-		ApplyEdit(std::move(metres), seaLevelMetres, { label, std::move(finished.before), seaLevelMetres });
+		ApplyEdit(std::move(metres), seaLevelMetres, { label, std::move(before), seaLevelMetres });
 		SetEditStatus(label, false);
 	}
 	catch (const std::bad_alloc&) {
@@ -151,6 +155,8 @@ void MapImportSys::PickUnderCursor(Camera& camera, LightSource& light)
 	const ImGuiIO& io = ImGui::GetIO();
 	//Over a panel only while no stroke runs: a stroke dragged over a panel goes on (ImGui does not take a button pressed over the scene)
 	if (!BrushOn() || map.Empty() || camera.MouseControl() || !ImGui::IsMousePosValid() || (io.WantCaptureMouse && !stroke && !paintStroke && !plantStroke)) {
+		depthRead.Cancel();
+		lastPick.reset();
 		return;
 	}
 	//Viewport in framebuffer pixels, origin at the bottom left; ImGui counts window points from the top left
@@ -161,17 +167,33 @@ void MapImportSys::PickUnderCursor(Camera& camera, LightSource& light)
 	const glm::vec2 cursor(io.MousePos.x * scale.x, framebufferHeight - io.MousePos.y * scale.y);
 	const glm::ivec2 pixel(glm::floor(cursor));
 	if (pixel.x < viewport[0] || pixel.y < viewport[1] || pixel.x >= viewport[0] + viewport[2] || pixel.y >= viewport[1] + viewport[3]) {
+		depthRead.Cancel();
+		lastPick.reset();
 		return;
 	}
-	//One pixel of the terrain just drawn (waits for the GPU to draw it)
-	float depth = 1.0f;
-	glReadPixels(pixel.x, pixel.y, 1, 1, GL_DEPTH_COMPONENT, GL_FLOAT, &depth);
 	//The matrices the terrain was drawn with, also the top-down camera of the 2D map
 	const FrameUniforms::Block block = TerrainView::FrameBlock(camera, light, renderSettings, view.GetFlatViewMin(), view.GetFlatViewMax());
 	const glm::mat4 viewProjection = block.projection * block.view;
 	const glm::ivec4 viewportRect(viewport[0], viewport[1], viewport[2], viewport[3]);
 	const glm::ivec2 size(map.GetWidth(), map.GetHeight());
-	hoverTexel = sculpt::PickTexel(glm::vec2(pixel) + 0.5f, depth, viewportRect, viewProjection, renderSettings.modelScale, size);
+	//One pixel of the terrain drawn in an earlier frame: glReadPixels here waited for the GPU to finish this frame's drawing, every frame.
+	//A read of another viewport or map size is dropped; a new one starts once the last has arrived
+	if (depthRead.Pending() && depthRead.Ready()) {
+		float depth = 1.0f;
+		if (depthRead.Take(&depth, sizeof(depth)) && depthPick.viewport == viewportRect && depthPick.mapSize == size
+			&& ImGui::GetFrameCount() - depthPick.frame <= maxPickAge) {
+			lastPick = sculpt::PickTexel(glm::vec2(depthPick.pixel) + 0.5f, depth, depthPick.viewport, depthPick.viewProjection, renderSettings.modelScale,
+				size);
+		}
+		else {
+			lastPick.reset();
+		}
+	}
+	if (!depthRead.Pending()) {
+		depthRead.StartPixels(pixel, glm::ivec2(1), GL_DEPTH_COMPONENT, GL_FLOAT, sizeof(float));
+		depthPick = { pixel, viewProjection, viewportRect, size, ImGui::GetFrameCount() };
+	}
+	hoverTexel = lastPick;
 	if (!hoverTexel) {
 		return;
 	}

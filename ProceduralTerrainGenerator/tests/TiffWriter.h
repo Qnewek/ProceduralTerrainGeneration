@@ -29,6 +29,7 @@ namespace testtiff {
 		uint16_t bits = 16;				//8 (unsigned), 16, 32 or 64 (float)
 		uint16_t compression = COMPRESSION_NONE;
 		uint32_t tile = 0;			//0 = strips
+		uint32_t rowsPerStrip = 2;	//with strips; the height = the whole file in one strip
 		uint16_t samplesPerPixel = 1;
 		Geo geo;
 	};
@@ -114,7 +115,7 @@ namespace testtiff {
 		};
 		const int pixelBytes = bytes * spec.samplesPerPixel;
 		if (spec.tile == 0) {
-			TIFFSetField(tif, TIFFTAG_ROWSPERSTRIP, 2u);
+			TIFFSetField(tif, TIFFTAG_ROWSPERSTRIP, spec.rowsPerStrip);
 			std::vector<unsigned char> row(static_cast<size_t>(spec.width) * pixelBytes);
 			for (int y = 0; y < spec.height; y++) {
 				for (int x = 0; x < spec.width; x++) {

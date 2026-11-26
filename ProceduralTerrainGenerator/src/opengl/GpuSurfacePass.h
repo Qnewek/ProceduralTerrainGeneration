@@ -2,6 +2,7 @@
 
 #include <memory>
 
+#include "glm/glm.hpp"
 #include "Shader.h"
 #include "TextureClass.h"
 
@@ -19,7 +20,12 @@ public:
 	//@param texelSize - distance between neighbouring texels in world units
 	//@param target - GL_RGBA32F of the same size
 	void Run(const TextureClass& height, float texelSize, TextureClass& target);
+	//Run limited to the texels that depend on the heights in changed (x, y, width, height): the rectangle grown by 2 (the Laplacian at the
+	//map edge reaches that far), so target must hold the surface of the heights from before the change
+	void RunRegion(const TextureClass& height, float texelSize, TextureClass& target, glm::ivec4 changed);
 
 private:
+	void Dispatch(const TextureClass& height, float texelSize, TextureClass& target, glm::ivec2 origin, glm::ivec2 size);
+
 	std::unique_ptr<Shader> shader;
 };
