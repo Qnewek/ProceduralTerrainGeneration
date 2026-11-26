@@ -111,6 +111,9 @@ void MapImportSys::InstallMap(HeightField units, float _metresPerUnit, glm::dvec
 	stroke.reset();
 	paintStroke.reset();
 	hoverTexel.reset();
+	//A depth read of the previous map would place the next press there
+	depthRead.Cancel();
+	lastPick.reset();
 	brushOutline.clear();
 	ShowUnits(std::move(units), _metresPerUnit, _pixelMetres);
 	//Painted biomes belong to the previous map (a project or a reload puts its own back after this)

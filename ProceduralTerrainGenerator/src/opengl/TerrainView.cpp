@@ -226,6 +226,32 @@ TextureClass& TerrainView::LayerTexture(Layer layer, int _width, int _height)
 	return *texture;
 }
 
+TextureClass& TerrainView::LayerTextureRegion(Layer layer, int _width, int _height, glm::ivec4 changed)
+{
+	const int index = static_cast<int>(layer);
+	const bool outdated = layer == Layer::BIOMES || surfaceOutdated[index];
+	std::unique_ptr<TextureClass>& texture = textures[index];
+	//A new texture has no surface map to update a part of
+	const bool fresh = !texture || texture->GetWidth() != _width || texture->GetHeight() != _height;
+	TextureClass& result = LayerTexture(layer, _width, _height);
+	if (layer == Layer::BIOMES || outdated || fresh) {
+		return result;
+	}
+	surfaceOutdated[index] = false;
+	if (changed.z > 0 && changed.w > 0) {
+		glm::ivec4& dirty = surfaceDirty[index];
+		if (dirty.z <= 0 || dirty.w <= 0) {
+			dirty = changed;
+		}
+		else {
+			const glm::ivec2 low = glm::min(glm::ivec2(dirty), glm::ivec2(changed));
+			const glm::ivec2 high = glm::max(glm::ivec2(dirty.x + dirty.z, dirty.y + dirty.w), glm::ivec2(changed.x + changed.z, changed.y + changed.w));
+			dirty = glm::ivec4(low, high - low);
+		}
+	}
+	return result;
+}
+
 void TerrainView::UpdateSurface(Layer heightLayer)
 {
 	const int index = static_cast<int>(heightLayer);
@@ -239,6 +265,10 @@ void TerrainView::UpdateSurface(Layer heightLayer)
 		surfacePass.Run(heightMap, worldUnitsPerTexel, *surface);
 		surfaceOutdated[index] = false;
 	}
+	else if (surfaceDirty[index].z > 0 && surfaceDirty[index].w > 0) {
+		surfacePass.RunRegion(heightMap, worldUnitsPerTexel, *surface, surfaceDirty[index]);
+	}
+	surfaceDirty[index] = glm::ivec4(0);
 }
 
 HeightField TerrainView::ReadLayer(Layer layer) const

@@ -92,6 +92,9 @@ public:
 	//Texture of a layer with the given size, for writing to it directly (GL_RGBA32F for BIOMES, GL_R32F otherwise).
 	//Marks the surface map of a height layer as out of date, so write the new contents before the next Draw
 	TextureClass& LayerTexture(Layer layer, int _width, int _height);
+	//LayerTexture of a height layer when only the heights in changed (x, y, width, height) will be written: the surface map is then updated
+	//around the rectangles written since the last Draw instead of over the whole map (a sculpt dab on an 8192 map)
+	TextureClass& LayerTextureRegion(Layer layer, int _width, int _height, glm::ivec4 changed);
 	//Copies a height layer to the CPU, waiting for the GPU; the layer must exist
 	HeightField ReadLayer(Layer layer) const;
 	//Copies the surface map of a height layer to the CPU (xy = gradient per world unit, z = Laplacian), recomputing it first if
@@ -172,4 +175,6 @@ private:
 	//Surface maps of TERRAIN and OVERLAY (GL_RGBA32F), indexed like the layers
 	std::unique_ptr<TextureClass> surfaces[2];
 	bool surfaceOutdated[2] = { true, true };
+	//Heights changed since the surface map was last updated, when only a part was (width 0 = none); ignored while surfaceOutdated
+	glm::ivec4 surfaceDirty[2] = { glm::ivec4(0), glm::ivec4(0) };
 };
