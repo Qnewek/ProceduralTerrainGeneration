@@ -80,7 +80,8 @@ void MapImportSys::StepHistory(bool redo)
 		return;
 	}
 	const std::string label = redo ? history.RedoLabel() : history.UndoLabel();
-	HeightField metres = WorkingMetres();
+	//A copy of the map in metres only for a step that swaps it (a sea or paint step of an 8192² map would copy 256 MB for nothing)
+	HeightField metres = (redo ? history.RedoHoldsMap() : history.UndoHoldsMap()) ? WorkingMetres() : HeightField();
 	std::optional<float> sea = seaLevelMetres;
 	//Moved, not copied (2 bytes a texel); back in place unless the step swapped it
 	biomepaint::Layer paint = std::move(biomePaint);
@@ -96,8 +97,13 @@ void MapImportSys::StepHistory(bool redo)
 	}
 	seaLevelMetres = sea;
 	//A step of painted biomes leaves the map and its climate alone
-	if (restored->map || restored->seaLevel) {
+	if (restored->map) {
 		ShowMetres(std::move(metres));
+	}
+	else if (restored->seaLevel) {
+		//As SetSeaLevel: the map and its units stay, the climate and the rivers follow the sea
+		dirty = true;
+		OnMapChanged();
 	}
 	if (restored->paint) {
 		UsePaint(std::move(paint));

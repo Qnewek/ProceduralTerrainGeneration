@@ -691,6 +691,29 @@ TEST_CASE("GeoTIFF georeference in UTM")
 	CheckGeo(header.info.georeference, 32634, { 400000.0, 5800000.0 }, { 30.0, -30.0 });
 }
 
+TEST_CASE("A rotated GeoTIFF is reported, without a georeference")
+{
+	TiffSpec spec;
+	spec.width = 6;
+	spec.height = 10;
+	spec.geo.pixel = 30.0;
+	spec.geo.epsg = 32634;
+	spec.geo.leftX = 400000.0;
+	spec.geo.topY = 5800000.0;
+	spec.geo.rotation = 5.0;
+	const std::filesystem::path path = TiffFolder() / "utm_rotated.tif";
+	WriteTiff(path, spec, std::vector<double>(60, 100.0));
+	heightmap::FileHeader header;
+	std::string error;
+	REQUIRE_MESSAGE(heightmap::Inspect(path, header, error), error);
+	CHECK(header.info.rotated);
+	CHECK_FALSE(header.info.georeference.has_value());
+
+	const std::filesystem::path plain = WriteUtmTiff("utm_not_rotated.tif", false);
+	REQUIRE_MESSAGE(heightmap::Inspect(plain, header, error), error);
+	CHECK_FALSE(header.info.rotated);
+}
+
 TEST_CASE("Pixel is point moves the corner by half a pixel")
 {
 	const std::filesystem::path path = WriteUtmTiff("utm_point.tif", true);

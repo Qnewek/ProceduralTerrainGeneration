@@ -3,6 +3,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
 #include <new>
 #include <numbers>
 #include <utility>
@@ -233,15 +234,46 @@ void MapImportSys::ProjectPlacedDots(Camera& camera, const LightSource& light)
 	const glm::mat4 viewProjection = block.projection * block.view;
 	const glm::ivec2 size(map.GetWidth(), map.GetHeight());
 	const float pixel = static_cast<float>(pixelMetres.x);
-	const size_t stride = (placedPlants.plants.size() + maxPlacedDots - 1) / maxPlacedDots;
-	placedDots.reserve(placedPlants.plants.size() / stride + 1);
-	for (size_t i = 0; i < placedPlants.plants.size(); i += stride) {
-		const glm::vec2 texel = placedPlants.plants[i].position / pixel;
-		const glm::ivec2 nearest = glm::clamp(glm::ivec2(glm::round(texel)), glm::ivec2(0), size - 1);
-		//Off a smaller map (kept, not drawn)
-		if (texel.x > static_cast<float>(size.x - 1) || texel.y > static_cast<float>(size.y - 1)) {
+	//The view from above is orthographic, so the screen is a linear function of the texel: the texels on screen (plus one) bound the dots,
+	//and the thinning to maxPlacedDots counts only those (a zoomed view keeps every dot it shows)
+	auto ndcOf = [&](glm::vec2 texel) {
+		const glm::vec4 clip = viewProjection * glm::vec4(sculpt::TexelToWorld(texel, 0.0f, renderSettings.heightScale, renderSettings.modelScale, size), 1.0f);
+		return glm::vec2(clip) / clip.w;
+	};
+	const glm::vec2 ndc0 = ndcOf(glm::vec2(0.0f));
+	const glm::mat2 toNdc(ndcOf(glm::vec2(1.0f, 0.0f)) - ndc0, ndcOf(glm::vec2(0.0f, 1.0f)) - ndc0);
+	if (std::abs(glm::determinant(toNdc)) < 1e-12f) {
+		return;
+	}
+	const glm::mat2 toTexel = glm::inverse(toNdc);
+	glm::vec2 visibleMin(std::numeric_limits<float>::max()), visibleMax(std::numeric_limits<float>::lowest());
+	for (const glm::vec2 corner : { glm::vec2(-1.0f, -1.0f), glm::vec2(1.0f, -1.0f), glm::vec2(-1.0f, 1.0f), glm::vec2(1.0f, 1.0f) }) {
+		const glm::vec2 texel = toTexel * (corner - ndc0);
+		visibleMin = glm::min(visibleMin, texel);
+		visibleMax = glm::max(visibleMax, texel);
+	}
+	//Off a smaller map (kept, not drawn); a plant may stand up to half a texel before texel 0
+	visibleMin = glm::max(visibleMin - 1.0f, glm::vec2(-1.0f));
+	visibleMax = glm::min(visibleMax + 1.0f, glm::vec2(size - 1));
+	auto visible = [&](glm::vec2 texel) {
+		return texel.x >= visibleMin.x && texel.y >= visibleMin.y && texel.x <= visibleMax.x && texel.y <= visibleMax.y;
+	};
+	size_t onScreen = 0;
+	for (const placedplants::Plant& plant : placedPlants.plants) {
+		onScreen += visible(plant.position / pixel) ? 1 : 0;
+	}
+	if (onScreen == 0) {
+		return;
+	}
+	const size_t stride = (onScreen + maxPlacedDots - 1) / maxPlacedDots;
+	placedDots.reserve(onScreen / stride + 1);
+	size_t seen = 0;
+	for (const placedplants::Plant& plant : placedPlants.plants) {
+		const glm::vec2 texel = plant.position / pixel;
+		if (!visible(texel) || seen++ % stride != 0) {
 			continue;
 		}
+		const glm::ivec2 nearest = glm::clamp(glm::ivec2(glm::round(texel)), glm::ivec2(0), size - 1);
 		const glm::vec3 world = sculpt::TexelToWorld(texel, map.At(nearest.x, nearest.y), renderSettings.heightScale, renderSettings.modelScale, size);
 		const glm::vec4 clip = viewProjection * glm::vec4(world, 1.0f);
 		if (clip.w <= 1e-4f) {

@@ -28,8 +28,9 @@ namespace utilities
 	bool MapSizeImGui(int& width, int& height);
     //@param infGen - infinite generation switch, nullptr hides it in modes without generation
     //@param landCover - LAND_COVER is offered (a class map is shown)
+    //@param heightScaleRange - ends of the "Height scale" slider (a map of the real world may have its true scale outside the default)
     bool DisplayModeImGui(float& modelSclae, float& topoStep, float& topoBandWidth, float& heightScale, heightMapMode& m, bool& wireFrame, bool& map2d, bool* infGen,
-        bool landCover = false);
+        bool landCover = false, glm::vec2 heightScaleRange = glm::vec2(16.0f, 4096.0f));
 	//Slider of the terrain tessellation of the 3D view (pixels per triangle edge)
 	void TerrainDetailImGui(float& tessPixels);
 	bool ImGuiButtonWrapper(const char* label, bool disabled);

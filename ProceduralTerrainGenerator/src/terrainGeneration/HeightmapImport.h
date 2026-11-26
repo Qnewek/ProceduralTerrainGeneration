@@ -27,6 +27,7 @@ namespace heightmap {
 		//Where the pixels lie (GeoTIFF tags, .hgt name, .asc header + .prj); after the crop and the downsample of the import,
 		//of the whole file from Inspect. epsg = 0: coordinates of a system the file does not name
 		std::optional<geo::GeoReference> georeference;
+		bool rotated = false;			//a GeoTIFF rotated or sheared by its ModelTransformation: georeference ignored
 	};
 
 	//Part of a file in its pixels

@@ -170,6 +170,17 @@ TEST_CASE("File without georeference is skipped under a georeferenced map")
 	CHECK(result.counts[90] == 0);
 }
 
+TEST_CASE("Land cover: a rotated file is skipped with the reason")
+{
+	Geo rotated = Degrees(19.0, 51.0, 0.001);
+	rotated.rotation = 0.0002;
+	const std::filesystem::path path = WriteClasses("rotated.tif", 20, 20, rotated, [](int, int) { return 20; });
+	const landcover::ClassMap result = landcover::Compute({ path }, 5, 5, geo::GeoReference{ 4326, { 19.0, 51.0 }, { 0.002, -0.002 } });
+	REQUIRE(result.files.size() == 1);
+	CHECK(result.files[0].skipped == "rotated or sheared GeoTIFF (not supported)");
+	CHECK(result.counts[20] == 0);
+}
+
 TEST_CASE("No data and outside the files give 0")
 {
 	const std::filesystem::path file = WriteClasses("nodata.tif", 10, 10, Degrees(19.0, 51.0, 0.001), [](int x, int) { return x < 5 ? 0 : 60; });

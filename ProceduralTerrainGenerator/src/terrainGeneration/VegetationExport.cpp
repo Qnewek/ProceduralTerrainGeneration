@@ -39,7 +39,7 @@ namespace vegexport {
 		const bool slopeFromHeights = surface.empty();
 		const float pixel = input.metresPerTexel;
 		if (width < 2 || mapHeight < 2 || (!slopeFromHeights && surface.size() != height.Size()) || ids.GetWidth() != width || ids.GetHeight() != mapHeight
-			|| !(pixel > 0.0f) || !std::isfinite(pixel)) {
+			|| !(pixel >= minPlantPixelMetres) || !std::isfinite(pixel)) {
 			return {};
 		}
 		std::vector<vegetation::ModelInfo> infos;

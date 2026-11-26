@@ -173,7 +173,13 @@ TEST_CASE("GeoTIFF tags")
 	REQUIRE(t.has_value());
 	CHECK(t->origin == glm::dvec2(400000.0, 5800000.0));
 	CHECK(t->pixel == glm::dvec2(30.0, -30.0));
+	CHECK_FALSE(geo::RotatedTransformation(transformation));
+	CHECK_FALSE(geo::RotatedTransformation(none));
 	transformation[1] = 0.5;
+	CHECK(geo::RotatedTransformation(transformation));
 	CHECK_FALSE(geo::FromGeoTiffTags(none, none, transformation, keys).has_value());
+	transformation[1] = 0.0;
+	transformation[4] = -0.25;
+	CHECK(geo::RotatedTransformation(transformation));
 	CHECK_FALSE(geo::FromGeoTiffTags(none, tiepoint, none, keys).has_value());
 }

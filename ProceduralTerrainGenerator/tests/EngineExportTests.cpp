@@ -80,6 +80,24 @@ TEST_CASE("Material textures: copied for materials on the map")
 	CHECK(materials[1].fallbackColor[0] == doctest::Approx(0.42f));
 }
 
+TEST_CASE("Material textures: a folder shared by two materials is copied once")
+{
+	const std::filesystem::path resources = EngineTempFolder("textures_shared_res");
+	const std::filesystem::path pack = EngineTempFolder("textures_shared_pack");
+	WriteText(resources / "Ground037" / "albedo.jpg", "albedo");
+	WriteText(resources / "Ground037" / "normal.png", "normal");
+	const std::vector<engineexport::MaterialTextures> sources = { Source(resources / "Ground037", 1.0f, 0.5f, 0.5f, 0.25f),
+		Source(resources / "Ground037", 2.0f, 0.4f, 0.4f, 0.2f) };
+	std::vector<exportpack::Material> materials = { OnMap(0, 0.3f), OnMap(1, 0.2f) };
+	std::vector<exportpack::File> files;
+	std::string error;
+	REQUIRE(engineexport::CopyMaterialTextures(sources, materials, pack, files, error));
+	CHECK(materials[0].albedo == "materials/Ground037/albedo.jpg");
+	CHECK(materials[1].albedo == materials[0].albedo);
+	CHECK(materials[1].normal == materials[0].normal);
+	CHECK(files.size() == 2);
+}
+
 TEST_CASE("Material textures: missing files keep the fallback color")
 {
 	const std::filesystem::path pack = EngineTempFolder("textures_missing");

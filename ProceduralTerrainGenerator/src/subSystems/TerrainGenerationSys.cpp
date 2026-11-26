@@ -174,6 +174,7 @@ void TerrainGenerationSys::UpdateRivers(const Camera& camera)
 		lakeCells = result->network.lakeCells;
 		lakeCount = result->network.lakes;
 		riverMs = result->ms;
+		shownRiverCenter = result->center;
 		riverNetwork = std::make_shared<const hydrology::Network>(std::move(result->network));
 		//Not RequestTerrain: that would start the network again
 		if (world.rivers.method == rivers::Method::REGION) {
@@ -195,6 +196,7 @@ void TerrainGenerationSys::UpdateRivers(const Camera& camera)
 				result.network = hydrology::Compute(sample, in.origin, in.cellSize, in.waterHeight, in.config);
 				result.water = hydrology::BuildWaterMesh(result.network, in.waterHeight, in.texelsPerHeight);
 				result.ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count();
+				result.center = in.center;
 				return result;
 			});
 		}
@@ -227,7 +229,7 @@ void TerrainGenerationSys::UpdateRivers(const Camera& camera)
 	gpu.StartSampleTerrain(world.terrain, center, cells, cellSize, glm::ivec2(world.width, world.height), biomesGeneration ? &world.biomes : nullptr,
 		riverSample);
 	riverSampleInput = { cells, cellSize, world.terrain.WaterHeight(), renderSettings.heightScale / TerrainView::worldUnitsPerTexel,
-		center - glm::vec2(static_cast<float>(cells) * cellSize * 0.5f), config };
+		center - glm::vec2(static_cast<float>(cells) * cellSize * 0.5f), center, config };
 }
 
 void TerrainGenerationSys::UpdateChunks(const Camera& camera)
@@ -1175,8 +1177,12 @@ void TerrainGenerationSys::RiversEditor()
 		ImGui::SetItemTooltip("The region jumps by a quarter of its side once the camera gets farther than a quarter from its middle\n"
 			"(onto a fixed grid, so a place always gets the same network). The new network is computed in the background and the chunks\n"
 			"are replaced from the nearest; rivers in the part the regions share may change. Off = the region stays where it is");
-		if (riverRegion) {
-			ImGui::Text("Region centre: %.0f, %.0f (map texels)", riverRegion->center.x, riverRegion->center.y);
+		//The network on screen; the region placed for the next one while it is being computed
+		if (shownRiverCenter) {
+			ImGui::Text("Region centre: %.0f, %.0f (map texels)", shownRiverCenter->x, shownRiverCenter->y);
+		}
+		if (riverRegion && (riverSample.Pending() || riverJob.IsRunning()) && (!shownRiverCenter || *shownRiverCenter != riverRegion->center)) {
+			ImGui::TextDisabled("Computing the network at %.0f, %.0f...", riverRegion->center.x, riverRegion->center.y);
 		}
 
 		ImGui::SeparatorText("Rivers");

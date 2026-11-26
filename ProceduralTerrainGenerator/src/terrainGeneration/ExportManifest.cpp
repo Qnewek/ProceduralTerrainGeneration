@@ -83,7 +83,7 @@ namespace exportpack {
 		grid["sizeMetres"] = { (m.width - 1) * m.metresPerTexel, (m.height - 1) * m.metresPerTexel };
 		grid["rowOrder"] = "row 0 first; it is the top edge of the 2D map view (the smallest Z)";
 		grid["axes"] = "right-handed, Y up: column = +X (right in the 2D map), row = +Z (down in the 2D map)";
-		//Neighbouring packs of one world fit together at these positions (metres = texels)
+		//Neighbouring packs of one world fit together at these positions, in texels of the generated world (1 m each)
 		grid["worldOrigin"] = { m.worldOrigin.x, m.worldOrigin.y };
 		grid["worldOriginNote"] = "world position of texel (0, 0) in texels of the generated world";
 		j["grid"] = grid;
