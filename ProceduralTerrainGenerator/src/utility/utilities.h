@@ -4,6 +4,7 @@
 
 #include "glm/glm.hpp"
 
+#include "CameraMath.h"
 #include "Noise.h"
 
 namespace utilities
@@ -29,7 +30,9 @@ namespace utilities
     //@param infGen - infinite generation switch, nullptr hides it in modes without generation
     //@param landCover - LAND_COVER is offered (a class map is shown)
     //@param heightScaleRange - ends of the "Height scale" slider (a map of the real world may have its true scale outside the default)
-    bool DisplayModeImGui(float& modelSclae, float& topoStep, float& topoBandWidth, float& heightScale, heightMapMode& m, bool& wireFrame, bool& map2d, bool* infGen,
+    //@param flatZoom - zoom of the 2D map, reset by "Fit 2D map"
+    bool DisplayModeImGui(float& modelSclae, float& topoStep, float& topoBandWidth, float& heightScale, heightMapMode& m, bool& wireFrame, bool& map2d,
+        cameramath::FlatZoom& flatZoom, bool* infGen,
         bool landCover = false, glm::vec2 heightScaleRange = glm::vec2(16.0f, 4096.0f));
 	//Slider of the terrain tessellation of the 3D view (pixels per triangle edge)
 	void TerrainDetailImGui(float& tessPixels);

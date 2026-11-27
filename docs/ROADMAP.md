@@ -770,7 +770,12 @@ oryginał tylko w pamięci i w projekcie („Wróć do oryginału”), plus Cofn
   trybach (`EditorCamera` + `CameraMath.*` z testami; checkbox „Editor camera (mouse)” w zakładce Camera). Do sprawdzenia w aplikacji: odczucie pędzli
   (tempo, twardość, szum) na DEM i mapie z TerrainGen, Cofnij po pociągnięciu, kółko pędzla w 2D, orbita/przesuwanie/kółko kamery w każdym trybie,
   FPS malowania na 8192² (każda klatka liczy całą mapę pochodnych od nowa).
-  Otwarte: kamera edytora w widoku 2D (przesuwanie i zoom kadru — każdy tryb ustawia kadr sam w `Draw`); mapa pochodnych tylko w kwadracie pędzla.
+  Otwarte: mapa pochodnych tylko w kwadracie pędzla.
+  ✅ 2026-11-27 kamera edytora w widoku 2D (wszystkie tryby): kółko = przybliżenie wokół kursora (od 32 tekseli na krótszym boku do 1,25 mapy), środkowy / prawy
+  przycisk = przeciąganie, F albo „Fit 2D map” (Display) = cała mapa; świat nieskończony (decyzja użytkownika): kadr jak dotąd z ustawień renderowania, tylko
+  przybliżenie w jego obrębie, bez przesuwania kamery. Powiększenie osobne w każdym trybie, reset przy nowym rozmiarze kadru (zmiana mapy, kopia po erozji,
+  porównanie metod, wejście/wyjście ze świata nieskończonego, „Render distance”). Do sprawdzenia w aplikacji: pędzle i kropki roślin w 2D po przybliżeniu
+  (Imported map), podpisy map w Noise, woda i rzeki w 2D, zmiana rozmiaru okna przy przybliżeniu, świat nieskończony w locie (przybliżenie zostaje).
 - **D. Biomy i roślinność — decyzja po C.** Propozycja „klimat z terenu”: temperatura i wilgotność to szumy zależne tylko od położenia (da się je policzyć
   nad każdą mapą), brakujące kontynentalność/górzystość liczone z mapy wysokości (wysokość nad wodą / odległość od brzegu, lokalna rzeźba), weirdness
   neutralne; dalej istniejąca tabela, materiały i `vegexport::PlaceMap`. Alternatywa: import mapy pokrycia terenu (np. ESA WorldCover) jako id biomów.

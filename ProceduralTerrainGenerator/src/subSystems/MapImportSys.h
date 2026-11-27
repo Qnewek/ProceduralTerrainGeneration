@@ -72,6 +72,8 @@ public:
 	void Draw(Renderer& renderer, Camera& camera, LightSource& light);
 	//true while the 2D map is shown instead of the 3D view
 	bool FlatView() const { return renderSettings.map2d; }
+	//Zoom of the 2D map for the editor camera, nullptr in 3D
+	cameramath::FlatZoom* FlatViewZoom() { return renderSettings.map2d ? &renderSettings.flatZoom : nullptr; }
 	void ReloadShaders()
 	{
 		view.ReloadShader(); erosion.ReloadShaders(); water.ReloadShader(); sculptor.ReloadShaders(); biomeGenerator.ReloadShaders(); vegetation.ReloadShader(); placedLayer.ReloadShader();

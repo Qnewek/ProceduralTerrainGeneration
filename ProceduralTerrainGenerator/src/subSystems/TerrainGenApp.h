@@ -87,6 +87,8 @@ private:
 	Clouds clouds;
 	//true if the active mode shows the 2D map, which has no sky
 	bool FlatView() const;
+	//Zoom of the 2D map of the current mode, nullptr in 3D
+	cameramath::FlatZoom* FlatViewZoom();
 
 	enum class mode
 	{

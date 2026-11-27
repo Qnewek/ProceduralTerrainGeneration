@@ -151,7 +151,8 @@ namespace utilities
 		ImGui::InputInt("Height", &height);
 		return ImGui::Button("Resize");
 	}
-	bool DisplayModeImGui(float& modelScale, float& topoStep, float& topoBandWidth, float& heightScale, heightMapMode& m, bool& wireFrame, bool& map2d, bool* infGen,
+	bool DisplayModeImGui(float& modelScale, float& topoStep, float& topoBandWidth, float& heightScale, heightMapMode& m, bool& wireFrame, bool& map2d,
+		cameramath::FlatZoom& flatZoom, bool* infGen,
 		bool landCover, glm::vec2 heightScaleRange)
 	{
 		if (infGen) {
@@ -188,6 +189,15 @@ namespace utilities
 		ImGui::Checkbox("WireFrame", &wireFrame);
 		ImGui::SameLine();
 		ImGui::Checkbox("2D map", &map2d);
+		if (map2d) {
+			ImGui::SameLine();
+			ImGui::BeginDisabled(flatZoom.scale == 1.0f && flatZoom.offset == glm::vec2(0.0f));
+			if (ImGui::Button("Fit 2D map")) {
+				cameramath::ResetFlatZoom(flatZoom);
+			}
+			ImGui::EndDisabled();
+			ImGui::SetItemTooltip("The whole map again (F); wheel = zoom, middle / right button = drag");
+		}
 		ImGui::SliderFloat("Model scale", &modelScale, 0.1f, 5.0f);
 		//Only the view: the maps stay in [0, 1], so nothing has to be generated again
 		ImGui::SliderFloat("Height scale", &heightScale, heightScaleRange.x, heightScaleRange.y, heightScaleRange.x < 10.0f ? "%.2f" : "%.0f",

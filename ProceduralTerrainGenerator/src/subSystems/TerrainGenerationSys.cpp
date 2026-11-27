@@ -812,7 +812,7 @@ void TerrainGenerationSys::LandStatsImGui()
 void TerrainGenerationSys::ImGuiDisplay()
 {
 	TerrainRenderSettings& s = renderSettings;
-	if (utilities::DisplayModeImGui(s.modelScale, s.topoStep, s.topoBandWidth, s.heightScale, s.displayMode, s.wireFrame, s.map2d, &infiniteGeneration)) {
+	if (utilities::DisplayModeImGui(s.modelScale, s.topoStep, s.topoBandWidth, s.heightScale, s.displayMode, s.wireFrame, s.map2d, s.flatZoom, &infiniteGeneration)) {
 		if(!biomesGeneration && s.displayMode == utilities::heightMapMode::BIOMES) {
 			s.displayMode = utilities::heightMapMode::TOPOGRAPHICAL;
 		}
