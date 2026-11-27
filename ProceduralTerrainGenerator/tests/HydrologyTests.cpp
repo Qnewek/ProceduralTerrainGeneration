@@ -77,6 +77,70 @@ TEST_CASE("Drainage: a depression fills into a lake drained over its rim")
 	CHECK(c % width == 0);
 }
 
+TEST_CASE("Lakes: groups smaller than the min lake area are dropped")
+{
+	//Plane falling towards x = 0 with a small pit (radius 2) and a big one (radius 8), both 0.1 deep
+	const auto pit = [](int x, int y, int cx, int cy, float radius) {
+		const float r = std::hypot(static_cast<float>(x - cx), static_cast<float>(y - cy));
+		return r < radius ? 0.1f * (1.0f - r / radius) : 0.0f;
+	};
+	const HeightField map = MakeMap([&](int x, int y) {
+		return 0.3f + 0.002f * static_cast<float>(x) - pit(x, y, 15, 20, 2.0f) - pit(x, y, 42, 21, 8.0f);
+	});
+	rivers::RiverConfig config;
+	config.minLakeArea = 0.0f;
+	const hydrology::Network all = hydrology::Compute(map, glm::vec2(0.0f), 1.0f, 0.0f, config);
+	REQUIRE(all.lakes == 2);
+	REQUIRE(all.levels.At(15, 20).lake != hydrology::noLake);
+
+	//Small pit: at most 13 cells (radius 2); big pit: well over 40
+	config.minLakeArea = 40.0f;
+	const hydrology::Network big = hydrology::Compute(map, glm::vec2(0.0f), 1.0f, 0.0f, config);
+	CHECK(big.lakes == 1);
+	CHECK(big.levels.At(15, 20).lake == hydrology::noLake);
+	CHECK(big.levels.At(42, 21).lake != hydrology::noLake);
+	CHECK(big.lakeCells < all.lakeCells);
+
+	//A lake of exactly the min area stays, half a texel^2 more drops it
+	config.minLakeArea = static_cast<float>(big.lakeCells);
+	CHECK(hydrology::Compute(map, glm::vec2(0.0f), 1.0f, 0.0f, config).lakes == 1);
+	config.minLakeArea = static_cast<float>(big.lakeCells) + 0.5f;
+	CHECK(hydrology::Compute(map, glm::vec2(0.0f), 1.0f, 0.0f, config).lakes == 0);
+
+	//The area is in texels^2: cells of 2 texels cover 4 texels^2 each
+	config.minLakeArea = 160.0f;
+	const hydrology::Network coarse = hydrology::Compute(map, glm::vec2(0.0f), 2.0f, 0.0f, config);
+	CHECK(coarse.lakes == 1);
+	CHECK(coarse.lakeCells == big.lakeCells);
+}
+
+TEST_CASE("Lakes: a river crosses a dropped lake")
+{
+	//Small pit on the axis of the valley
+	const HeightField map = MakeMap([](int x, int y) {
+		const float r = std::hypot(static_cast<float>(x - 30), static_cast<float>(y - 20));
+		return Valley(x, y) - (r < 2.0f ? 0.05f * (1.0f - r / 2.0f) : 0.0f);
+	});
+	rivers::RiverConfig config;
+	config.sourceArea = 50.0f;
+	config.meander = 0.0f;
+	config.smoothing = 0;
+	config.surfaceDrop = 0.0f;
+	config.minLakeArea = 0.0f;
+	REQUIRE(hydrology::Compute(map, glm::vec2(0.0f), 1.0f, 0.0f, config).lakes == 1);
+
+	config.minLakeArea = 100.0f;
+	const hydrology::Network net = hydrology::Compute(map, glm::vec2(0.0f), 1.0f, 0.0f, config);
+	CHECK(net.lakes == 0);
+	CHECK(net.rivers.At(30, 20).distance < 0.5f);
+	float previous = 1.0f;
+	for (int y = height - 3; y > 0; y--) {
+		const float level = net.levels.At(30, y).river;
+		CHECK(level <= previous);
+		previous = level;
+	}
+}
+
 TEST_CASE("Rivers: a river follows the valley and never rises downstream")
 {
 	rivers::RiverConfig config;
@@ -111,6 +175,8 @@ TEST_CASE("Rivers: nothing far from the courses, under the sea or in a flat lake
 	config.sourceArea = 50.0f;
 	config.bankWidth = 4.0f;
 	config.maxHalfWidth = 4.0f;
+	//The test maps are smaller than the default min lake area
+	config.minLakeArea = 0.0f;
 	SUBCASE("far from the valley")
 	{
 		const hydrology::Network net = hydrology::Compute(MakeMap(Valley), glm::vec2(0.0f), 1.0f, 0.0f, config);
@@ -142,6 +208,7 @@ TEST_CASE("Water level: in the channel and in lakes, none beside them or outside
 	config.meander = 0.0f;
 	config.smoothing = 0;
 	config.minHalfWidth = 2.0f;
+	config.minLakeArea = 0.0f;
 	config.maxHalfWidth = 2.0f;
 	//Region shifted and scaled: cell (x, y) lies at map position (100, 50) + 4 (x, y)
 	const glm::vec2 origin(100.0f, 50.0f);
@@ -165,6 +232,7 @@ TEST_CASE("Water mesh: rivers flow downstream, lakes stand still, nothing at the
 	config.sourceArea = 50.0f;
 	config.meander = 0.0f;
 	config.smoothing = 0;
+	config.minLakeArea = 0.0f;
 	SUBCASE("river")
 	{
 		const hydrology::Network net = hydrology::Compute(MakeMap(Valley), glm::vec2(0.0f), 1.0f, 0.0f, config);

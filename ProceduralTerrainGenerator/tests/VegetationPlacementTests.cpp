@@ -526,6 +526,8 @@ TEST_CASE("PlaceChunk: river water through the river frame")
 	config.sourceArea = 2000.0f;
 	config.meander = 0.0f;
 	config.smoothing = 0;
+	//The bowl is smaller than the default min lake area
+	config.minLakeArea = 0.0f;
 	const hydrology::Network net = hydrology::Compute(bowl, glm::vec2(0.0f), 1.0f, 0.0f, config);
 	REQUIRE(net.lakes == 1);
 

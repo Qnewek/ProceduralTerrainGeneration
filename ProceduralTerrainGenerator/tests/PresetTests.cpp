@@ -207,7 +207,7 @@ static WorldConfig DistinctWorld()
 		biome::TerrainModifier{ 1.31f, -0.032f, 0.033f, 33.0f, false },
 		{ { { 1, 2.5f } } } };
 	c.biomes.table = { alpha, beta };
-	c.rivers = { rivers::Method::NOISE, 41.5f, 0.0031f, 0.0017f, 0.35f, 77.5f, 5, 4096, 4, 123456.0f, 2.5f, 17.5f, 6.25f, 3, 0.0013f, 0.0055f, 300.0f,
+	c.rivers = { rivers::Method::NOISE, 41.5f, 0.0031f, 0.0017f, 0.35f, 77.5f, 5, 4096, 4, 123456.0f, 2.5f, 17.5f, 6.25f, 3, 0.0013f, 0.0055f, 4321.0f, 300.0f,
 		1234.0f, 7.5f, 0.15f, 0.45f, 98765 };
 	c.erosion = DistinctErosion();
 	return c;
@@ -231,6 +231,7 @@ static void CheckSameRivers(const rivers::RiverConfig& a, const rivers::RiverCon
 	CHECK(a.smoothing == b.smoothing);
 	CHECK(a.surfaceDrop == b.surfaceDrop);
 	CHECK(a.minLakeDepth == b.minLakeDepth);
+	CHECK(a.minLakeArea == b.minLakeArea);
 	CHECK(a.borderFade == b.borderFade);
 	CHECK(a.noiseScale == b.noiseScale);
 	CHECK(a.noiseHalfWidth == b.noiseHalfWidth);
@@ -817,6 +818,9 @@ TEST_CASE("Rivers JSON round trip")
 	CHECK_FALSE(error.empty());
 	error.clear();
 	CHECK_FALSE(preset::RiversFromJson(R"({"cellSize": 0})", untouched, error));
+	CHECK_FALSE(error.empty());
+	error.clear();
+	CHECK_FALSE(preset::RiversFromJson(R"({"minLakeArea": -1})", untouched, error));
 	CHECK_FALSE(error.empty());
 	CheckSameRivers(untouched, rivers::RiverConfig{});
 }

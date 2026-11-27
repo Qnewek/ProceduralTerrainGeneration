@@ -303,6 +303,9 @@ namespace rivers {
 		//A filled depression deeper than this is a lake (rivers have no channel in it)
 		//(0.01: the detail noise of the biome modifiers leaves many shallower pits)
 		float minLakeDepth = 0.01f;
+		//Lakes (4-connected groups of lake cells) smaller than this area (texels^2) are dropped: their cells are land; 0 = keep every lake
+		//(2500: the default world's region of 4096^2 texels keeps 4 of 371 lakes, cellSize 8)
+		float minLakeArea = 2500.0f;
 		//Rivers fade out over this distance (texels) inside the border of the region
 		float borderFade = 512.0f;
 
