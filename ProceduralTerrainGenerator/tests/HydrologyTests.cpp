@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstring>
 #include <functional>
 #include <optional>
 
@@ -344,6 +345,141 @@ TEST_CASE("Water mesh: a step in the river is steep water with foam below it, fa
 		CHECK(v.slope >= 0.0f);
 		CHECK(v.foam >= 0.0f);
 	}
+}
+
+namespace {
+	//Valley falling towards y = 0, 0.0016 per row (0.0004 per texel, cells 4 texels apart) with a steep reach of 0.012 per row
+	//between rows 22 and 18: four segments steeper than the fall slope, dropping 0.048 together
+	float StepValley(int x, int y)
+	{
+		const float steep = 0.0104f * static_cast<float>(std::clamp(y - 18, 0, 4));
+		return 0.2f + 0.0016f * static_cast<float>(y) + steep + 0.04f * std::abs(static_cast<float>(x - 30));
+	}
+
+	rivers::RiverConfig FallConfig()
+	{
+		rivers::RiverConfig config;
+		config.sourceArea = 50.0f * 16.0f;
+		config.meander = 0.0f;
+		config.smoothing = 0;
+		config.surfaceDrop = 0.0f;
+		config.minLakeArea = 0.0f;
+		config.waterfalls = true;
+		return config;
+	}
+
+	constexpr float fallCell = 4.0f;
+
+	bool SameNetwork(const hydrology::Network& a, const hydrology::Network& b)
+	{
+		return a.rivers.Size() == b.rivers.Size()
+			&& std::memcmp(a.rivers.Data(), b.rivers.Data(), a.rivers.Size() * sizeof(hydrology::RiverTexel)) == 0
+			&& std::memcmp(a.levels.Data(), b.levels.Data(), a.levels.Size() * sizeof(hydrology::LevelTexel)) == 0
+			&& std::memcmp(a.flow.Data(), b.flow.Data(), a.flow.Size() * sizeof(hydrology::FlowTexel)) == 0;
+	}
+}
+
+TEST_CASE("Waterfalls: nothing steeper than the fall slope leaves the network as it was")
+{
+	const HeightField map = MakeMap(StepValley);
+	rivers::RiverConfig config = FallConfig();
+	config.waterfalls = false;
+	const hydrology::Network off = hydrology::Compute(map, glm::vec2(0.0f), fallCell, 0.0f, config);
+	config.waterfalls = true;
+	config.fallSlope = 1.0f;
+	const hydrology::Network gentle = hydrology::Compute(map, glm::vec2(0.0f), fallCell, 0.0f, config);
+	CHECK(gentle.falls.empty());
+	CHECK(SameNetwork(off, gentle));
+	CHECK(off.falls.empty());
+}
+
+TEST_CASE("Waterfalls: a steep reach is one drop at its head with flat water below it")
+{
+	const HeightField map = MakeMap(StepValley);
+	rivers::RiverConfig config = FallConfig();
+	const hydrology::Network net = hydrology::Compute(map, glm::vec2(0.0f), fallCell, 0.0f, config);
+	config.waterfalls = false;
+	const hydrology::Network plain = hydrology::Compute(map, glm::vec2(0.0f), fallCell, 0.0f, config);
+	REQUIRE(net.falls.size() == 1);
+	const hydrology::Fall& fall = net.falls[0];
+	CHECK(fall.position.x == doctest::Approx(30.0f * fallCell));
+	CHECK(fall.position.y == doctest::Approx(22.0f * fallCell));
+	CHECK(fall.direction.y == doctest::Approx(-1.0f));
+	CHECK(fall.drop == doctest::Approx(0.048f).epsilon(1e-3));
+
+	const auto level = [&](const hydrology::Network& n, float x, float y) { return hydrology::WaterLevelAt(n, glm::vec2(x, y)); };
+	const float x = 30.0f * fallCell, head = 22.0f * fallCell;
+	const float top = map.At(30, 22), bottom = map.At(30, 18);
+	//Above the fall as before, below it the bottom of the reach, the step within a couple of texels
+	CHECK(level(net, x, head + 1.5f) == doctest::Approx(level(plain, x, head + 1.5f)).epsilon(1e-5));
+	CHECK(level(net, x, head + 10.0f) == doctest::Approx(level(plain, x, head + 10.0f)).epsilon(1e-5));
+	CHECK(level(net, x, head) == doctest::Approx(0.5f * (top + bottom)).epsilon(1e-4));
+	for (float y = 18.0f * fallCell; y <= head - 1.5f; y += 0.5f) {
+		CHECK(level(net, x, y) == doctest::Approx(bottom).epsilon(1e-5));
+	}
+	//Below the reach as before
+	CHECK(level(net, x, 12.0f * fallCell) == doctest::Approx(level(plain, x, 12.0f * fallCell)).epsilon(1e-5));
+	//The fall line runs across the course: the same beside it in the channel
+	for (const float dy : { -1.5f, 1.5f, 6.0f, -6.0f }) {
+		CHECK(level(net, x + 2.0f, head + dy) == doctest::Approx(level(net, x, head + dy)).epsilon(1e-5));
+	}
+}
+
+TEST_CASE("Waterfalls: water never rises downstream and stays at or below the surface without falls")
+{
+	const HeightField map = MakeMap(StepValley);
+	rivers::RiverConfig config = FallConfig();
+	config.meander = 6.0f;
+	config.smoothing = 2;
+	const hydrology::Network net = hydrology::Compute(map, glm::vec2(0.0f), fallCell, 0.0f, config);
+	config.waterfalls = false;
+	const hydrology::Network plain = hydrology::Compute(map, glm::vec2(0.0f), fallCell, 0.0f, config);
+	REQUIRE(!net.falls.empty());
+	//Along the course (each fall position has its x; the valley is straight, bends are small)
+	float previous = 1.0f;
+	int wet = 0;
+	for (float y = 40.0f * fallCell; y >= 2.0f * fallCell; y -= 0.25f) {
+		const float l = hydrology::WaterLevelAt(net, glm::vec2(30.0f * fallCell, y));
+		const float p = hydrology::WaterLevelAt(plain, glm::vec2(30.0f * fallCell, y));
+		if (!std::isfinite(l) || !std::isfinite(p)) {
+			continue;
+		}
+		wet++;
+		CHECK(l <= previous + 1e-6f);
+		INFO("y = " << y);
+		//Just above a fall the lip is flat at its level, where the ramp without falls already slopes down: a tiny excess within a cell of it
+		CHECK(l <= p + 0.01f * net.falls[0].drop);
+		previous = l;
+	}
+	CHECK(wet > 100);
+}
+
+TEST_CASE("Waterfalls: the water mesh has a vertical curtain at the fall and foam below it")
+{
+	const HeightField map = MakeMap(StepValley);
+	const hydrology::Network net = hydrology::Compute(map, glm::vec2(0.0f), fallCell, 0.0f, FallConfig());
+	REQUIRE(net.falls.size() == 1);
+	const float drop = net.falls[0].drop, head = net.falls[0].position.y;
+	const std::vector<hydrology::WaterVertex> mesh = hydrology::BuildWaterMesh(net, 0.0f, 256.0f);
+	REQUIRE(!mesh.empty());
+	CHECK(mesh.size() % 3 == 0);
+	float curtain = 0.0f, foamBelow = 0.0f;
+	int fine = 0;
+	for (const hydrology::WaterVertex& v : mesh) {
+		if (std::abs(v.x - 30.0f * fallCell) <= 1.0f && std::abs(v.y - head) <= 1.0f) {
+			curtain = std::max(curtain, v.slope);
+		}
+		if (std::abs(v.x - 30.0f * fallCell) <= 1.0f && v.y < head - 1.0f && v.y > head - fallCell) {
+			foamBelow = std::max(foamBelow, v.foam);
+		}
+		//Vertices between the cell centres: the quads at the fall are cut to texels
+		fine += std::fmod(v.y, fallCell) != 0.0f ? 1 : 0;
+		CHECK(v.slope >= 0.0f);
+	}
+	CHECK(fine > 0);
+	//Slope as height per texel: most of the drop over one texel
+	CHECK(curtain > 0.5f * drop);
+	CHECK(foamBelow > 0.3f * drop / fallCell);
 }
 
 TEST_CASE("Region centre: a grid of a quarter region in whole cells")
