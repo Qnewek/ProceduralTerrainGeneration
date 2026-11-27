@@ -13,12 +13,34 @@
 
 #ifndef NDEBUG
 namespace {
-	void APIENTRY GlDebugCallback(GLenum source, GLenum type, GLuint id, GLenum severity, GLsizei, const GLchar* message, const void*)
+	const char* GlDebugTypeName(GLenum type)
+	{
+		switch (type) {
+		case GL_DEBUG_TYPE_ERROR: return "ERROR";
+		case GL_DEBUG_TYPE_DEPRECATED_BEHAVIOR: return "DEPRECATED";
+		case GL_DEBUG_TYPE_UNDEFINED_BEHAVIOR: return "UB";
+		case GL_DEBUG_TYPE_PORTABILITY: return "PORTABILITY";
+		case GL_DEBUG_TYPE_PERFORMANCE: return "PERF";
+		default: return "OTHER";
+		}
+	}
+
+	const char* GlDebugSeverityName(GLenum severity)
+	{
+		switch (severity) {
+		case GL_DEBUG_SEVERITY_HIGH: return "HIGH";
+		case GL_DEBUG_SEVERITY_MEDIUM: return "MEDIUM";
+		case GL_DEBUG_SEVERITY_LOW: return "LOW";
+		default: return "INFO";
+		}
+	}
+
+	void APIENTRY GlDebugCallback(GLenum, GLenum type, GLuint id, GLenum severity, GLsizei, const GLchar* message, const void*)
 	{
 		if (severity == GL_DEBUG_SEVERITY_NOTIFICATION) {
 			return;
 		}
-		std::cerr << "[OpenGL Debug] (" << source << "/" << type << " #" << id << " sev=" << severity << "): " << message << std::endl;
+		std::cerr << "[OpenGL " << GlDebugTypeName(type) << " " << GlDebugSeverityName(severity) << " #" << id << "]: " << message << std::endl;
 	}
 }
 #endif

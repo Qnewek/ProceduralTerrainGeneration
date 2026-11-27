@@ -243,7 +243,7 @@ void GpuHeightGenerator::UploadBiomeTable(const BiomeConfig& biomes)
 		}
 	}
 	//The number of biomes can change, so the buffer gets new storage on every use
-	glNamedBufferData(biomeTable, entries.size() * sizeof(GpuBiomeEntry), entries.data(), GL_DYNAMIC_DRAW);
+	glNamedBufferData(biomeTable, entries.size() * sizeof(GpuBiomeEntry), entries.data(), GL_STREAM_DRAW);
 }
 
 void GpuHeightGenerator::RunHeightShader(int mode, bool modify, const MapArea& area, TextureClass& target, const RiverInput* rivers, float waterHeight)
