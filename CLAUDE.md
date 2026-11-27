@@ -353,6 +353,9 @@ Wartości szumów są w [-1, 1]. Konwencja indeksowania: `map[y * width + x]`.
   zakres głębokości wydłużony ku słońcu o najwyższy teren + `GL_DEPTH_CLAMP`; na czas przebiegu wyłączony `GL_SCISSOR_TEST` (prostokąt viewportu z `TerrainGenApp` zostawiał resztę mapy niewyczyszczoną = cień na pół ekranu). `ShadowMap::Render` idzie w `Draw` **przed** roślinnością: na kaskadę teren
   (`ChunkWorld::DrawShadow`: wszystkie liście quadtree w frustum słońca, nie tylko widoczne; teselacja 4× rzadsza) i rośliny (`VegetationLayer::CullShadows` +
   `DrawShadow`: przycinanie per kaskada w te same bufory co kamera, krótsze LOD-y `shadowDetail`, krzewy i skały do `shadowSmallRange`; impostory obrócone do słońca).
+  Ostatnia kaskada (≥ 2 kaskady, `farEveryOther`) rysowana co drugą klatkę: `Prepare` podstawia wtedy `drawnLast` (macierz z klatki rysującej, `farDepth` bieżący),
+  `Render` ją pomija; nowy rysunek po zmianie światła > 0,25°, teksela kaskady (rozmiar wycinka: zasięg, podział, FOV, okno), liczby kaskad, rozdzielczości, `modelScale` / `heightScale`, nowej tekstury i klatce bez cieni.
+  Koszt cieni roślin to głównie wypełnianie liści z testem alfa, nie trójkąty (impostory w dalszych kaskadach prawie nic nie dały).
   Dane kaskad idą przez `FrameBlock` (`shadowMatrices`, `shadowSplits`, `shadowTexels`, `shadowCascades` = 0 → brak cieni), a tekstura na jednostce 15
   (`FrameUniforms::shadowUnit`, `layout(binding = 15)` w `common/shadow.glsl`) — nie używaj jej do niczego innego. `TerrainView::FrameBlock` dokłada cienie z
   `TerrainRenderSettings::shadows` (subsystem ustawia wskaźnik co klatkę). Odbiorcy wołają `sunShadow(FragPos, normalna, pcf)` (offset po normalnej ~ teksel kaskady; na ostatnich `CASCADE_BLEND` = 10% głębokości kaskady cień miesza się z następną, bez skoku ostrości na granicy);

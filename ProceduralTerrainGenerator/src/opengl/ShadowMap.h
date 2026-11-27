@@ -68,9 +68,22 @@ private:
 	int resolution = 2048;
 	float strength = 0.8f;
 	float splitLambda = 0.8f;	//0 = equal cascades, 1 = logarithmic
+	//The last cascade (with 2 or more) drawn every other frame: in between its map and its sun view from the frame that drew it stay
+	bool farEveryOther = true;
 
 	bool active = false;
 	Cascade cascades[FrameUniforms::maxShadowCascades];
+	//The last cascade as last drawn and what it was drawn with; Prepare decides whether this frame reuses it (lastReused)
+	struct DrawnLast {
+		bool valid = false;
+		Cascade cascade;
+		glm::vec3 light = glm::vec3(0.0f);
+		int cascadeCount = 0;
+		int resolution = 0;
+		float modelScale = 0.0f, heightScale = 0.0f;
+	} drawnLast;
+	bool lastReused = false;
+	bool skipNext = false;		//alternates while the last cascade can be reused
 	GLuint texture = 0;
 	GLuint framebuffer = 0;
 	int textureResolution = 0;
