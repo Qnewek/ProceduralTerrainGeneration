@@ -15,6 +15,7 @@ out vec4 FragColor;
 #include "../common/sky.glsl"
 #include "../common/fog.glsl"
 #include "../common/shadow.glsl"
+#include "../common/light.glsl"
 
 uniform sampler2D heightMap;
 uniform float heightScale;
@@ -181,7 +182,7 @@ void main()
     float fresnel = 0.02 + 0.98 * pow(1.0 - max(dot(n, v), 0.0), 5.0);
     vec3 r = reflect(-v, n);
     r.y = abs(r.y);     //waves never reflect the ground below the horizon
-    vec3 sky = skyColor(r, light.direction);
+    vec3 sky = skyColor(r, skySun.xyz);
     if (reflections && !flatView) {
         //The sky with its clouds, where the direction of the reflection is on the screen and nothing stands in front of the sky there
         vec3 skyView = mat3(view) * r;
@@ -195,8 +196,8 @@ void main()
             }
         }
     }
-    vec3 sunlight = light.diffuse * sunlightTint(light.direction) * sunShadow(FragPos, vec3(0.0, 1.0, 0.0), 0);
-    vec3 ambient = light.ambient * ambientTint(light.direction);
+    vec3 sunlight = light.diffuse * directLightTint() * sunShadow(FragPos, vec3(0.0, 1.0, 0.0), 0);
+    vec3 ambient = light.ambient * ambientLightTint();
     float sunHeight = max(light.direction.y, 0.0);
     if (lightOn) {
         sky += sunlight * pow(max(dot(r, light.direction), 0.0), 600.0) * 4.0 * smoothstep(-0.05, 0.1, light.direction.y);

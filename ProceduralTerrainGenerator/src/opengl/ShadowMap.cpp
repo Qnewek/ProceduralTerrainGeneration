@@ -107,7 +107,8 @@ ShadowMap::Cascade ShadowMap::Fit(const glm::mat4& cameraWorld, glm::vec2 tanHal
 bool ShadowMap::Prepare(Camera& camera, const LightSource& light, const TerrainRenderSettings& settings)
 {
 	active = false;
-	const glm::vec3 sun = light.GetDirection();
+	//The directional light: the sun, or the moon at night
+	const glm::vec3 sun = light.GetLightDirection();
 	if (!enabled || settings.map2d || !light.IsLightOn() || sun.y < minSunHeight || !CreateTexture()) {
 		return false;
 	}

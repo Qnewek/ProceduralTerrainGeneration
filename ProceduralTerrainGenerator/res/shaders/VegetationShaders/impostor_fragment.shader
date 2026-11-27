@@ -21,6 +21,7 @@ uniform int frames;
 #include "../common/sky.glsl"
 #include "../common/fog.glsl"
 #include "../common/shadow.glsl"
+#include "../common/light.glsl"
 
 //As in vegetation_fragment.shader: alpha of distant mip levels raised, light let through to the back of the leaves
 const float ALPHA_MIP_BOOST = 0.25;
@@ -62,9 +63,9 @@ void main()
     if (lightOn) {
         float facing = dot(norm, light.direction);
         float diff = max(facing, 0.0) + max(-facing, 0.0) * TRANSLUCENCY;
-        vec3 ambient = light.ambient * ambientTint(light.direction);
+        vec3 ambient = light.ambient * ambientLightTint();
         //Looked up at the sun-facing side of the bounds: the flat quad must not shadow itself, only other casters shadow it
-        vec3 sunlight = light.diffuse * sunlightTint(light.direction) * sunShadow(FragPos + light.direction * ShadowLift, light.direction, 0);
+        vec3 sunlight = light.diffuse * directLightTint() * sunShadow(FragPos + light.direction * ShadowLift, light.direction, 0);
         result = (ambient * OCCLUSION + sunlight * diff) * color;
     }
     result = applyFog(result, FragPos);

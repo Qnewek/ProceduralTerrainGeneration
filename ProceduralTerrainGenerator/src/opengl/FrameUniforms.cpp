@@ -24,7 +24,8 @@ FrameUniforms::Block FrameUniforms::Make(const glm::mat4& view, const glm::mat4&
 	b.projection = projection;
 	b.viewPos = viewPos;
 	b.time = std::chrono::duration<float>(std::chrono::steady_clock::now() - programStart).count();
-	b.lightDirection = glm::vec4(light.GetDirection(), 0.0f);
+	b.lightDirection = glm::vec4(light.GetLightDirection(), 0.0f);
+	b.skySun = glm::vec4(light.GetDirection(), light.GetMoonLight());
 	b.lightAmbient = glm::vec4(light.GetAmbient(), 0.0f);
 	b.lightDiffuse = glm::vec4(light.GetDiffuse(), 0.0f);
 	b.lightOn = light.IsLightOn() ? 1 : 0;

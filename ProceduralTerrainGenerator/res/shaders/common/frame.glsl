@@ -1,8 +1,8 @@
 //Camera, sun and fog of the render pass, shared by all shaders (FrameUniforms::Block, field by field)
 
-//The sun: a directional light, the same everywhere
+//The directional light, the same everywhere: the sun, or the moon at night (skySun.w > 0)
 struct Light {
-    vec3 direction;     //unit vector towards the sun
+    vec3 direction;     //unit vector towards the light
     vec3 ambient;
     vec3 diffuse;
 };
@@ -35,4 +35,6 @@ layout(std140, binding = 1) uniform FrameBlock {
     vec4 cloudLayer;
     //xy = wind offset of the clouds (metres), z = world units per metre, w = density
     vec4 cloudWind;
+    //xyz = unit vector towards the sun (the sky, fog and ambient follow it: common/light.glsl), w = moonlight 0..1
+    vec4 skySun;
 };

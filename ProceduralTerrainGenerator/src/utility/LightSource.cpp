@@ -13,6 +13,36 @@ namespace {
 	constexpr float visibilityContrast = 3.912f;
 	//The night passes this many times faster in the day cycle
 	constexpr float nightSpeedUp = 3.0f;
+	//Tilt of the moon's path about the azimuth axis (degrees)
+	constexpr float moonTilt = 25.0f;
+	//Sun heights (sin of the elevation): the directional light becomes the moon below the first (the sunlight ends at -0.01, sky.glsl),
+	//the moonlight is full below the second
+	const float moonSwitch = std::sin(glm::radians(-4.0f));
+	const float moonFull = std::sin(glm::radians(-12.0f));
+}
+
+glm::vec3 LightSource::GetMoonDirection() const
+{
+	//Rotation of the point opposite the sun about the horizontal azimuth axis: it rises and sets with the sun, but passes the
+	//midnight sky moonTilt degrees off the zenith
+	const float a = glm::radians(azimuth), t = glm::radians(moonTilt);
+	const glm::vec3 axis(std::cos(a), 0.0f, std::sin(a));
+	const glm::vec3 p = -GetDirection();
+	return p * std::cos(t) + glm::cross(axis, p) * std::sin(t) + axis * glm::dot(axis, p) * (1.0f - std::cos(t));
+}
+
+float LightSource::GetMoonLight() const
+{
+	if (!moon) {
+		return 0.0f;
+	}
+	const float t = std::clamp((moonSwitch - GetDirection().y) / (moonSwitch - moonFull), 0.0f, 1.0f);
+	return t * t * (3.0f - 2.0f * t) * moonBrightness;
+}
+
+glm::vec3 LightSource::GetLightDirection() const
+{
+	return moon && GetDirection().y < moonSwitch ? GetMoonDirection() : GetDirection();
 }
 
 glm::vec3 LightSource::GetDirection() const
@@ -84,6 +114,13 @@ void LightSource::ImGuiDraw() {
 	//Both are tinted by the light of the sky (sky.glsl): the sunlight by the air it passes, the ambient by the whole sky
 	ImGui::ColorEdit3("Ambient", &ambient.x);
 	ImGui::ColorEdit3("Sunlight", &diffuse.x);
+	ImGui::Checkbox("Moon", &moon);
+	ImGui::SetItemTooltip("A full moon opposite the sun lights the night: direction, shadows and glints like the sun");
+	if (moon) {
+		ImGui::SameLine();
+		ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x * 0.5f);
+		ImGui::SliderFloat("Moon brightness", &moonBrightness, 0.0f, 2.0f, "%.2f");
+	}
 	ImGui::Checkbox("Lighting", &lightOn);
 	ImGui::SameLine();
 	ImGui::Checkbox("Fog", &fog);
