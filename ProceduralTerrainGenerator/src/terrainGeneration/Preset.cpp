@@ -302,6 +302,8 @@ namespace preset {
 			j["maxElevation"] = ReadableFloat(r.maxElevation);
 			j["noiseWarp"] = ReadableFloat(r.noiseWarp);
 			j["noiseSeed"] = r.noiseSeed;
+			j["waterfalls"] = r.waterfalls;
+			j["fallSlope"] = ReadableFloat(r.fallSlope);
 			return j;
 		}
 
@@ -637,6 +639,8 @@ namespace preset {
 			r.Read("maxElevation", c.maxElevation);
 			r.Read("noiseWarp", c.noiseWarp);
 			r.Read("noiseSeed", c.noiseSeed);
+			r.Read("waterfalls", c.waterfalls);
+			r.Read("fallSlope", c.fallSlope);
 		}
 
 		void ReadTerrain(const Reader& parent, const char* key, TerrainConfig& t)
@@ -933,6 +937,9 @@ namespace preset {
 			}
 			if (!positive(r.noiseScale) || !positive(r.noiseHalfWidth) || !positive(r.maxElevation) || !notNegative(r.noiseWarp)) {
 				throw std::runtime_error("Rivers: noiseScale, noiseHalfWidth and maxElevation must be greater than 0, noiseWarp must not be negative");
+			}
+			if (!positive(r.fallSlope)) {
+				throw std::runtime_error("Rivers: fallSlope must be greater than 0");
 			}
 		}
 

@@ -13,9 +13,18 @@ uniform vec4 riverNoise;		// RIVERS_NOISE: wavelength (texels), half width (texe
 uniform vec2 riverClimate;		// humidity added at a channel, distance (texels) from its edge over which it fades out
 uniform int riverBedMaterial;	// material of the bed in the splat map, -1 = none
 
-// RIVERS_REGION (RiverMap): offset to the nearest course (xy, texels), distance to it, half width; surface of that river, lake surface
+// RIVERS_REGION (RiverMap): offset to the nearest course (xy, texels), distance to it, half width; surface of that river (continuous across
+// a waterfall), lake surface, drop of a waterfall near and drop * distance along the course from its fall line (hydrology::LevelTexel)
 layout(binding = 20) uniform sampler2D riverMap;
 layout(binding = 21) uniform sampler2D riverLevels;
+// Half width (texels) of the step of a waterfall along the course = hydrology::fallEdge
+const float FALL_EDGE = 0.75;
+
+// Water surface of a river from the sampled levels = hydrology::RiverLevel: the drop of a waterfall is added upstream of its fall line
+float riverLevel(vec4 levels)
+{
+    return levels.z > 0.0 ? levels.x + levels.z * smoothstep(-FALL_EDGE, FALL_EDGE, levels.w / levels.z) : levels.x;
+}
 
 // The nearest channel of a texel
 struct Channel {
@@ -48,7 +57,7 @@ Channel channelAt(vec2 position)
 		// towards 0, but the interpolated distance there is large and overestimates the true one by less than a cell
 		c.distance = max(length(river.xy), river.z - riverRegion.z);
 		c.halfWidth = max(river.w, 0.5);
-		c.level = textureLod(riverLevels, uv, 0.0).x;
+		c.level = riverLevel(textureLod(riverLevels, uv, 0.0));
 	}
 	else {
 		// Distance to the zero line of the noise: value over the length of its gradient (one texel differences)

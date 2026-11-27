@@ -46,6 +46,9 @@ namespace hydrology {
 			float levelA, levelB;
 			float widthA, widthB;
 			float foamA, foamB;
+			//Waterfall attached to the segment (levels above are then continuous across it, see LevelTexel); fallDrop 0 = none
+			float fallDrop = 0.0f;
+			glm::vec2 fallPoint = glm::vec2(0.0f), fallDirection = glm::vec2(0.0f, 1.0f);	//cell coordinates, downstream
 		};
 
 		//Writes the segment into every cell it is the nearest course of, within radius cells of it
@@ -70,7 +73,10 @@ namespace hydrology {
 					RiverTexel& r = rivers.At(x, y);
 					if (distance < r.distance) {
 						r = { offset.x, offset.y, distance, glm::mix(s.widthA, s.widthB, t) };
-						net.levels.At(x, y).river = glm::mix(s.levelA, s.levelB, t);
+						LevelTexel& level = net.levels.At(x, y);
+						level.river = glm::mix(s.levelA, s.levelB, t);
+						level.fallDrop = s.fallDrop;
+						level.fallAlong = s.fallDrop > 0.0f ? s.fallDrop * glm::dot(s.fallPoint - q, s.fallDirection) * cellSize : 0.0f;
 						flow.foam = glm::mix(s.foamA, s.foamB, t);
 						net.flow.At(x, y) = flow;
 					}
@@ -120,6 +126,17 @@ namespace hydrology {
 			}
 			return count;
 		}
+	}
+
+	float FallStep(float along)
+	{
+		const float t = std::clamp((along + fallEdge) / (2.0f * fallEdge), 0.0f, 1.0f);
+		return t * t * (3.0f - 2.0f * t);
+	}
+
+	float RiverLevel(float river, float fallDrop, float fallAlong)
+	{
+		return fallDrop > 0.0f ? river + fallDrop * FallStep(fallAlong / fallDrop) : river;
 	}
 
 	Drainage Drain(const HeightField& terrain, float waterHeight)
@@ -301,20 +318,117 @@ namespace hydrology {
 			point = std::move(smoothed);
 		}
 
-		//Foam below falls: every point of a course gets the steepest segment slope upstream of it, fading with the distance from that segment
-		//(donors come after their receivers in the order, so going backwards every cell is final before its receiver takes it)
 		const auto end = [&](int c) { return river[d.receiver[c]] ? point[d.receiver[c]] : center(d.receiver[c]); };
 		const auto endLevelOf = [&](int c) { return river[d.receiver[c]] ? level[d.receiver[c]] : endLevel(d.receiver[c]); };
-		std::vector<float> foam(count, 0.0f);
+		const auto segmentSlope = [&](int c) {
+			const float length = glm::length(end(c) - point[c]) * cellSize;
+			return length > 0.0f ? std::max(level[c] - endLevelOf(c), 0.0f) / length : 0.0f;
+		};
+
+		//Waterfalls: runs of steep segments (gaps of up to 2 gentle ones joined) keep the level of their head, the rest lies at the level of the
+		//bottom of the run; the fall at the head is attached to the segments within 2 of it (see LevelTexel)
+		std::vector<int> fallAt(count, -1);			//fall attached to the segment from the cell
+		std::vector<char> startAbove(count, 0);		//the start of the segment lies upstream of the fall line (the head counts as upstream)
+		std::vector<char> endAbove(count, 0);		//its end too
+		std::vector<float> fallFoam(count, 0.0f);
+		if (config.waterfalls) {
+			constexpr int far = 1 << 20;
+			std::vector<char> steep(count, 0);
+			for (size_t c = 0; c < count; c++) {
+				steep[c] = river[c] && segmentSlope(static_cast<int>(c)) > config.fallSlope;
+			}
+			//Segments to the nearest steep one downstream (1 = the next) and upstream (1 = a donor's)
+			std::vector<int> down(count, far), upward(count, far);
+			for (const int c : d.order) {
+				const int r = d.receiver[c];
+				if (river[c] && river[r]) {
+					down[c] = steep[r] ? 1 : std::min(down[r] + 1, far);
+				}
+			}
+			for (auto it = d.order.rbegin(); it != d.order.rend(); ++it) {
+				const int c = *it;
+				const int r = d.receiver[c];
+				if (river[c] && river[r]) {
+					upward[r] = std::min(upward[r], steep[c] ? 1 : std::min(upward[c] + 1, far));
+				}
+			}
+			std::vector<char> run(count, 0);
+			for (size_t c = 0; c < count; c++) {
+				run[c] = steep[c] || (river[c] && upward[c] + down[c] <= 3);
+			}
+			//Bottom of the run of every cell in it (receivers first)
+			std::vector<float> bottom(count, 0.0f);
+			for (const int c : d.order) {
+				if (run[c]) {
+					const int r = d.receiver[c];
+					bottom[c] = river[r] && run[r] ? bottom[r] : endLevelOf(c);
+				}
+			}
+			std::vector<std::vector<int>> donors(count);
+			for (size_t c = 0; c < count; c++) {
+				if (river[c] && river[d.receiver[c]]) {
+					donors[static_cast<size_t>(d.receiver[c])].push_back(static_cast<int>(c));
+				}
+			}
+			const auto isHead = [&](size_t c) { return run[c] && (up[c] < 0 || !run[static_cast<size_t>(up[c])]); };
+			std::vector<int> heads;
+			for (size_t c = 0; c < count; c++) {
+				if (isHead(c) && level[c] > bottom[c]) {
+					heads.push_back(static_cast<int>(c));
+				}
+			}
+			std::vector<float> drops(heads.size());
+			for (size_t i = 0; i < heads.size(); i++) {
+				drops[i] = level[heads[i]] - bottom[heads[i]];
+			}
+			for (size_t c = 0; c < count; c++) {
+				if (run[c] && !isHead(c)) {
+					level[c] = bottom[c];
+				}
+			}
+			//A segment two falls would share takes the larger drop
+			std::vector<float> attachedDrop(count, 0.0f);
+			const auto attach = [&](int c, int fall, bool start, bool endToo) {
+				const float drop = net.falls[static_cast<size_t>(fall)].drop;
+				if (drop > attachedDrop[c]) {
+					attachedDrop[c] = drop;
+					fallAt[c] = fall;
+					startAbove[c] = start ? 1 : 0;
+					endAbove[c] = endToo ? 1 : 0;
+				}
+			};
+			for (size_t i = 0; i < heads.size(); i++) {
+				const int h = heads[i];
+				const glm::vec2 along = end(h) - point[h];
+				const glm::vec2 direction = glm::dot(along, along) > 0.0f ? glm::normalize(along) : glm::vec2(0.0f, 1.0f);
+				const int fall = static_cast<int>(net.falls.size());
+				net.falls.push_back({ origin + point[h] * cellSize, direction, drops[i] });
+				fallFoam[h] = drops[i] / cellSize;
+				attach(h, fall, true, false);
+				const int r = d.receiver[h];
+				if (river[r]) {
+					attach(r, fall, false, false);
+				}
+				for (const int u : donors[h]) {
+					attach(u, fall, true, true);
+					for (const int u2 : donors[u]) {
+						attach(u2, fall, true, true);
+					}
+				}
+			}
+		}
+
+		//Foam below falls: every point of a course gets the steepest segment slope (or waterfall) upstream of it, fading with the distance from it
+		//(donors come after their receivers in the order, so going backwards every cell is final before its receiver takes it)
+		std::vector<float> foam = fallFoam;
 		for (auto it = d.order.rbegin(); it != d.order.rend(); ++it) {
 			const int c = *it;
 			if (!river[c]) {
 				continue;
 			}
 			const float length = glm::length(end(c) - point[c]) * cellSize;
-			const float slope = length > 0.0f ? std::max(level[c] - endLevelOf(c), 0.0f) / length : 0.0f;
 			const int r = d.receiver[c];
-			foam[r] = std::max(foam[r], std::max(slope, foam[c] * std::exp(-length / foamLength)));
+			foam[r] = std::max(foam[r], std::max(segmentSlope(c), foam[c] * std::exp(-length / foamLength)));
 		}
 
 		//The carving reaches maxHalfWidth + bankWidth texels from a course; one more cell keeps bilinear sampling inside written cells
@@ -324,8 +438,17 @@ namespace hydrology {
 				continue;
 			}
 			const int r = d.receiver[c];
-			const Segment s{ point[c], end(static_cast<int>(c)), level[c], endLevelOf(static_cast<int>(c)), halfWidth[c],
+			Segment s{ point[c], end(static_cast<int>(c)), level[c], endLevelOf(static_cast<int>(c)), halfWidth[c],
 				river[r] ? halfWidth[r] : halfWidth[c], foam[c], foam[r] };
+			//Near a fall the level without its drop: continuous across the fall line, the drop added back upstream of it
+			if (fallAt[c] >= 0) {
+				const Fall& fall = net.falls[static_cast<size_t>(fallAt[c])];
+				s.fallDrop = fall.drop;
+				s.fallPoint = (fall.position - origin) / cellSize;
+				s.fallDirection = fall.direction;
+				s.levelA -= startAbove[c] ? fall.drop : 0.0f;
+				s.levelB -= endAbove[c] ? fall.drop : 0.0f;
+			}
 			Rasterize(s, radius, cellSize, net);
 		}
 		return net;
@@ -350,7 +473,9 @@ namespace hydrology {
 			bilinear([&](int i, int j) { return network.rivers.At(i, j).offsetY; }));
 		const float distance = std::max(glm::length(offset), bilinear([&](int i, int j) { return network.rivers.At(i, j).distance; }) - network.cellSize);
 		const float halfWidth = bilinear([&](int i, int j) { return network.rivers.At(i, j).halfWidth; });
-		float level = distance < std::max(halfWidth, 0.5f) ? bilinear([&](int i, int j) { return network.levels.At(i, j).river; }) : none;
+		float level = distance < std::max(halfWidth, 0.5f) ? RiverLevel(bilinear([&](int i, int j) { return network.levels.At(i, j).river; }),
+			bilinear([&](int i, int j) { return network.levels.At(i, j).fallDrop; }), bilinear([&](int i, int j) { return network.levels.At(i, j).fallAlong; }))
+			: none;
 		//Lake of the nearest cell
 		const LevelTexel& nearest = network.levels.At(static_cast<int>(cell.x + 0.5f), static_cast<int>(cell.y + 0.5f));
 		if (nearest.lake != noLake) {
@@ -379,18 +504,30 @@ namespace hydrology {
 		//Surface of every cell, waterHeight where it is dry (or not above the sea)
 		std::vector<float> level(network.rivers.Size(), waterHeight);
 		std::vector<char> wet(network.rivers.Size(), 0);
+		//Cells whose surface is the river in its channel with a waterfall near: quads touching them are cut to texels, so the fall is a step
+		std::vector<char> falling(network.rivers.Size(), 0);
 		for (size_t c = 0; c < level.size(); c++) {
 			const RiverTexel& r = network.rivers[c];
-			float l = network.levels[c].lake;
+			const LevelTexel& lt = network.levels[c];
+			float l = lt.lake;
 			if (r.distance < r.halfWidth + reach) {
-				const float river = network.levels[c].river;
-				l = std::max(l, r.distance < r.halfWidth ? river : underGround(static_cast<int>(c), river));
+				const float river = RiverLevel(lt.river, lt.fallDrop, lt.fallAlong);
+				const bool channel = r.distance < r.halfWidth;
+				falling[c] = channel && lt.fallDrop > 0.0f && river >= l;
+				l = std::max(l, channel ? river : underGround(static_cast<int>(c), river));
 			}
 			if (l > waterHeight) {
 				level[c] = l;
 				wet[c] = 1;
 			}
+			falling[c] = falling[c] && wet[c];
 		}
+		//The waterfall term of a cell (0 where it is not falling)
+		const auto fallTerm = [&](int c) {
+			const LevelTexel& lt = network.levels[c];
+			return falling[c] ? lt.fallDrop * FallStep(lt.fallAlong / lt.fallDrop) : 0.0f;
+		};
+		const int subdivisions = std::clamp(static_cast<int>(std::lround(network.cellSize)), 1, 16);
 
 		std::vector<WaterVertex> vertices;
 		for (int y = 0; y + 1 < height; y++) {
@@ -427,8 +564,53 @@ namespace hydrology {
 						v[k].foam = f.foam * (1.0f - beside);
 					}
 				}
-				for (const int k : { 0, 1, 2, 2, 1, 3 }) {
-					vertices.push_back(v[k]);
+				const bool fall = falling[corners[0]] || falling[corners[1]] || falling[corners[2]] || falling[corners[3]];
+				if (!fall) {
+					for (const int k : { 0, 1, 2, 2, 1, 3 }) {
+						vertices.push_back(v[k]);
+					}
+					continue;
+				}
+				//At a waterfall: texel quads, the corners interpolated with the fall evaluated exactly (the fields of LevelTexel interpolated, as
+				//the GPU samples them). An edge shared with a plain quad has no falling corner, so its fall term is 0 and the edge matches
+				float drop[4], along[4], term[4];
+				for (int k = 0; k < 4; k++) {
+					drop[k] = falling[corners[k]] ? network.levels[corners[k]].fallDrop : 0.0f;
+					along[k] = falling[corners[k]] ? network.levels[corners[k]].fallAlong : 0.0f;
+					term[k] = fallTerm(corners[k]);
+				}
+				std::vector<WaterVertex> grid(static_cast<size_t>(subdivisions + 1) * (subdivisions + 1));
+				for (int j = 0; j <= subdivisions; j++) {
+					for (int i = 0; i <= subdivisions; i++) {
+						const float fx = static_cast<float>(i) / subdivisions, fy = static_cast<float>(j) / subdivisions;
+						const float w[4] = { (1.0f - fx) * (1.0f - fy), fx * (1.0f - fy), (1.0f - fx) * fy, fx * fy };
+						const auto mixed = [&](auto value) { return w[0] * value(0) + w[1] * value(1) + w[2] * value(2) + w[3] * value(3); };
+						WaterVertex g;
+						g.x = glm::mix(v[0].x, v[1].x, fx);
+						g.y = glm::mix(v[0].y, v[2].y, fy);
+						g.flowX = mixed([&](int k) { return v[k].flowX; });
+						g.flowY = mixed([&](int k) { return v[k].flowY; });
+						g.slope = mixed([&](int k) { return v[k].slope; });
+						g.foam = mixed([&](int k) { return v[k].foam; });
+						g.level = mixed([&](int k) { return v[k].level; }) - mixed([&](int k) { return term[k]; });
+						const float d = mixed([&](int k) { return drop[k]; });
+						if (d > 0.0f) {
+							const float a = mixed([&](int k) { return along[k]; }) / d;
+							g.level += d * FallStep(a);
+							//The curtain: the drop over the texel around the vertex
+							g.slope += d * (FallStep(a + 0.5f) - FallStep(a - 0.5f));
+						}
+						grid[static_cast<size_t>(j) * (subdivisions + 1) + i] = g;
+					}
+				}
+				for (int j = 0; j < subdivisions; j++) {
+					for (int i = 0; i < subdivisions; i++) {
+						const size_t a = static_cast<size_t>(j) * (subdivisions + 1) + i;
+						const size_t b = a + 1, e = a + subdivisions + 1, f = e + 1;
+						for (const size_t k : { a, b, e, e, b, f }) {
+							vertices.push_back(grid[k]);
+						}
+					}
 				}
 			}
 		}
@@ -452,7 +634,10 @@ namespace hydrology {
 		const float waterHeight = seaMetres ? *seaMetres / mapMetresPerHeight
 			: *std::min_element(sample.Data(), sample.Data() + sample.Size()) - 1.0f;
 		const glm::vec2 origin(0.5f * static_cast<float>(cell - 1));
-		result.network = Compute(sample, origin, static_cast<float>(cell), waterHeight, config);
+		//No waterfalls: the map is not carved, so water lowered below a fall would lie under the terrain
+		rivers::RiverConfig mapConfig = config;
+		mapConfig.waterfalls = false;
+		result.network = Compute(sample, origin, static_cast<float>(cell), waterHeight, mapConfig);
 		result.water = BuildWaterMesh(result.network, waterHeight, static_cast<float>(mapMetresPerHeight / pixelMetres));
 		return result;
 	}

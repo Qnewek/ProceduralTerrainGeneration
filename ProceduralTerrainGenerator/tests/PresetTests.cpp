@@ -208,7 +208,7 @@ static WorldConfig DistinctWorld()
 		{ { { 1, 2.5f } } } };
 	c.biomes.table = { alpha, beta };
 	c.rivers = { rivers::Method::NOISE, 41.5f, 0.0031f, 0.0017f, 0.35f, 77.5f, 5, 4096, 4, 123456.0f, 2.5f, 17.5f, 6.25f, 3, 0.0013f, 0.0055f, 4321.0f, 300.0f,
-		1234.0f, 7.5f, 0.15f, 0.45f, 98765 };
+		1234.0f, 7.5f, 0.15f, 0.45f, 98765, true, 0.0034f };
 	c.erosion = DistinctErosion();
 	return c;
 }
@@ -238,6 +238,8 @@ static void CheckSameRivers(const rivers::RiverConfig& a, const rivers::RiverCon
 	CHECK(a.maxElevation == b.maxElevation);
 	CHECK(a.noiseWarp == b.noiseWarp);
 	CHECK(a.noiseSeed == b.noiseSeed);
+	CHECK(a.waterfalls == b.waterfalls);
+	CHECK(a.fallSlope == b.fallSlope);
 }
 
 static void CheckSameBiomes(const std::vector<biome::Biome>& a, const std::vector<biome::Biome>& b)
@@ -821,6 +823,7 @@ TEST_CASE("Rivers JSON round trip")
 	CHECK_FALSE(error.empty());
 	error.clear();
 	CHECK_FALSE(preset::RiversFromJson(R"({"minLakeArea": -1})", untouched, error));
+	CHECK_FALSE(preset::RiversFromJson(R"({"fallSlope": 0})", untouched, error));
 	CHECK_FALSE(error.empty());
 	CheckSameRivers(untouched, rivers::RiverConfig{});
 }
