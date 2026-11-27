@@ -36,17 +36,21 @@ void TextureClass::UploadRegion(int x, int y, int width, int height, int rowLeng
 
 void TextureClass::Upload(const void* data, GLenum format, GLenum type)
 {
+	glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
 	if (m_Layers > 1) {
 		glTextureSubImage3D(m_RendererID, 0, 0, 0, 0, m_Width, m_Height, m_Layers, format, type, data);
 	}
 	else {
 		glTextureSubImage2D(m_RendererID, 0, 0, 0, m_Width, m_Height, format, type, data);
 	}
+	glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
 }
 
 void TextureClass::Read(GLenum format, GLenum type, int size, void* data) const
 {
+	glPixelStorei(GL_PACK_ALIGNMENT, 1);
 	glGetTextureImage(m_RendererID, 0, format, type, size, data);
+	glPixelStorei(GL_PACK_ALIGNMENT, 4);
 }
 
 void TextureClass::Bind(unsigned int slot) const

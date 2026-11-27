@@ -7,10 +7,18 @@
 #include "IndexBuffer.h"
 #include "Shader.h"
 
+#ifndef NDEBUG
+#ifdef _MSC_VER
 #define ASSERT(x) if (!(x)) __debugbreak();
-#define GLCALL(x) GLClearError();\
-	x;\
-	ASSERT(GLLogCall(#x, __FILE__,__LINE__));
+#else
+#include <cassert>
+#define ASSERT(x) assert(x)
+#endif
+#define GLCALL(x) do { GLClearError(); x; ASSERT(GLLogCall(#x, __FILE__, __LINE__)); } while (0)
+#else
+#define ASSERT(x) ((void)0)
+#define GLCALL(x) x
+#endif
 #include <ostream>
 
 void GLClearError();

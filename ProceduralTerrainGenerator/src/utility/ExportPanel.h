@@ -106,6 +106,7 @@ private:
 	struct Background {
 		std::optional<meshexport::Result> meshes;
 		std::optional<vegexport::Result> vegetation;
+		std::string error;
 	};
 
 	//An export waiting for its background part, then written by Finish

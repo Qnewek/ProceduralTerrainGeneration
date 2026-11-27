@@ -26,6 +26,7 @@ void MapImportSys::SetVegetationModels(VegetationModels* models)
 	vegetationModels = models;
 	if (!models) {
 		vegetation.ClearExtraInstances();
+		placedLayer.ClearExtraInstances();
 	}
 	std::vector<BiomeEditor::PlantModel> names;
 	if (models) {
@@ -308,21 +309,31 @@ void MapImportSys::UpdateBiomes()
 	}
 	if (climateStale && !climateJob.IsRunning()) {
 		climateStale = false;
-		climateJob.Start([metres = WorkingMetres(), pixel = pixelMetres, sea = seaLevelMetres, settings = biomeSettings, version = mapVersion]() {
-			ClimateResult result;
-			result.version = version;
-			const auto start = std::chrono::steady_clock::now();
-			//An exception would come back in future.get() on the main thread and end the app; a map of 8192² needs about 1.3 GB here
-			try {
-				result.maps = mapbiomes::ComputeClimate(metres, pixel, sea, settings);
-			}
-			catch (const std::exception& e) {
-				result.maps = mapbiomes::ClimateMaps();
-				result.error = e.what();
-			}
-			result.ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count();
-			return result;
-		});
+		try {
+			climateJob.Start([metres = WorkingMetres(), pixel = pixelMetres, sea = seaLevelMetres, settings = biomeSettings, version = mapVersion]() {
+				ClimateResult result;
+				result.version = version;
+				const auto start = std::chrono::steady_clock::now();
+				//An exception would come back in future.get() on the main thread and end the app; a map of 8192² needs about 1.3 GB here
+				try {
+					result.maps = mapbiomes::ComputeClimate(metres, pixel, sea, settings);
+				}
+				catch (const std::exception& e) {
+					result.maps = mapbiomes::ClimateMaps();
+					result.error = e.what();
+				}
+				result.ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count();
+				return result;
+			});
+		}
+		catch (const std::bad_alloc&) {
+			biomeStatus = "Could not compute the climate: not enough memory";
+			biomeStatusIsError = true;
+		}
+		catch (const std::exception& e) {
+			biomeStatus = std::string("Could not compute the climate: ") + e.what();
+			biomeStatusIsError = true;
+		}
 	}
 	if (biomesStale && RunBiomePass(glm::ivec4(0, 0, -1, -1))) {
 		biomesStale = false;
@@ -459,10 +470,11 @@ void MapImportSys::BiomesImGui()
 	if (ImGui::Button("Refresh##biomepresets")) {
 		biomePresetsListed = false;
 	}
-	biomesChanged |= biomeEditor.ImGuiDraw(config.table);
+	bool otherTableChanged = false;
+	biomesChanged |= biomeEditor.ImGuiDraw(config.table, &otherTableChanged);
 	PaintImGui();
 
-	if (climateChanged || biomesChanged) {
+	if (climateChanged || biomesChanged || otherTableChanged) {
 		dirty = true;
 	}
 	if (biomesChanged) {

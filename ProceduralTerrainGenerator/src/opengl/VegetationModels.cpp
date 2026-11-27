@@ -158,6 +158,10 @@ struct VegetationModels::Preview {
 	bool wireframe = false;
 	double lastTime = 0.0;
 
+	Preview() = default;
+	Preview(const Preview&) = delete;
+	Preview& operator=(const Preview&) = delete;
+
 	~Preview()
 	{
 		glDeleteFramebuffers(1, &framebuffer);

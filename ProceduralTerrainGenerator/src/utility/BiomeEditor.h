@@ -13,8 +13,8 @@ class BiomeEditor
 {
 public:
 	//@return true if the table changed in a way that changes the biome map (anything but the name and the plants;
-	//the vegetation notices changed plants itself)
-	bool ImGuiDraw(std::vector<biome::Biome>& table);
+	//the vegetation notices changed plants itself). *otherChanged (when provided) receives true if the name or plants changed.
+	bool ImGuiDraw(std::vector<biome::Biome>& table, bool* otherChanged = nullptr);
 
 	//Forgets the selection, for a table replaced from outside (a loaded preset)
 	void Reset();
@@ -43,7 +43,8 @@ private:
 	//@return true if the modifier changed
 	bool TerrainModifier(biome::TerrainModifier& t);
 	//Plants of a biome: adding, removing, reordering and their settings
-	void Plants(biome::Biome& b);
+	//@return true if any plant entry changed
+	bool Plants(biome::Biome& b);
 
 	//Index of the selected biome; kept inside the table every frame
 	int selected = 0;

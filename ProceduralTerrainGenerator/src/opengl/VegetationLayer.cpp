@@ -40,23 +40,26 @@ namespace {
 	}
 
 	//Replaces the contents of a buffer, creating it if needed
-	void Upload(GLuint& buffer, const void* data, size_t bytes)
+	void Upload(GLuint& buffer, const void* data, size_t bytes, GLenum usage = GL_DYNAMIC_DRAW)
 	{
 		if (!buffer) {
 			glCreateBuffers(1, &buffer);
 		}
-		glNamedBufferData(buffer, static_cast<GLsizeiptr>(std::max<size_t>(bytes, 16)), data, GL_DYNAMIC_DRAW);
+		glNamedBufferData(buffer, static_cast<GLsizeiptr>(std::max<size_t>(bytes, 16)), nullptr, usage);
+		if (bytes > 0 && data != nullptr) {
+			glNamedBufferSubData(buffer, 0, static_cast<GLsizeiptr>(bytes), data);
+		}
 	}
 }
 
-void VegetationLayer::Buffer::Reserve(size_t needed)
+void VegetationLayer::Buffer::Reserve(size_t needed, GLenum usage)
 {
 	if (!id) {
 		glCreateBuffers(1, &id);
 	}
 	if (needed > bytes) {
 		bytes = std::max<size_t>(needed + needed / 2, 1024);
-		glNamedBufferData(id, static_cast<GLsizeiptr>(bytes), nullptr, GL_DYNAMIC_DRAW);
+		glNamedBufferData(id, static_cast<GLsizeiptr>(bytes), nullptr, usage);
 	}
 }
 
@@ -477,15 +480,21 @@ void VegetationLayer::BuildTables(const VegetationModels& models)
 	groupCount = groups;
 	meshCommandCount = static_cast<int>(meshGroups.size());
 	impostorCommandCount = static_cast<int>(impostorGroups.size());
-	Upload(modelsBuffer, infos.data(), infos.size() * sizeof(glm::uvec4));
-	Upload(variantsBuffer, variants.data(), variants.size() * sizeof(glm::vec4));
-	Upload(meshCommandBuffer, meshCommands.data(), meshCommands.size() * sizeof(GLuint));
-	Upload(meshGroupBuffer, meshGroups.data(), meshGroups.size() * sizeof(GLuint));
-	Upload(impostorCommandBuffer, impostorCommands.data(), impostorCommands.size() * sizeof(GLuint));
-	Upload(impostorGroupBuffer, impostorGroups.data(), impostorGroups.size() * sizeof(GLuint));
-	Upload(countsBuffer, nullptr, static_cast<size_t>(groups) * sizeof(GLuint));
-	Upload(offsetsBuffer, nullptr, static_cast<size_t>(groups) * sizeof(GLuint));
-	Upload(statsBuffer, nullptr, static_cast<size_t>(groups) * sizeof(GLuint));
+	Upload(modelsBuffer, infos.data(), infos.size() * sizeof(glm::uvec4), GL_STATIC_DRAW);
+	Upload(variantsBuffer, variants.data(), variants.size() * sizeof(glm::vec4), GL_STATIC_DRAW);
+	Upload(meshCommandBuffer, meshCommands.data(), meshCommands.size() * sizeof(GLuint), GL_DYNAMIC_COPY);
+	Upload(meshGroupBuffer, meshGroups.data(), meshGroups.size() * sizeof(GLuint), GL_STATIC_DRAW);
+	Upload(impostorCommandBuffer, impostorCommands.data(), impostorCommands.size() * sizeof(GLuint), GL_DYNAMIC_COPY);
+	Upload(impostorGroupBuffer, impostorGroups.data(), impostorGroups.size() * sizeof(GLuint), GL_STATIC_DRAW);
+	Upload(countsBuffer, nullptr, static_cast<size_t>(groups) * sizeof(GLuint), GL_DYNAMIC_COPY);
+	Upload(offsetsBuffer, nullptr, static_cast<size_t>(groups) * sizeof(GLuint), GL_DYNAMIC_COPY);
+	if (statsBuffer) {
+		glDeleteBuffers(1, &statsBuffer);
+		statsBuffer = 0;
+	}
+	glCreateBuffers(1, &statsBuffer);
+	glNamedBufferStorage(statsBuffer, static_cast<GLsizeiptr>(std::max<size_t>(static_cast<size_t>(groups) * sizeof(GLuint), 16)),
+		nullptr, GL_DYNAMIC_STORAGE_BIT | GL_MAP_READ_BIT);
 	statsPending = false;
 	tablesReadyModels = ready;
 }
@@ -588,9 +597,9 @@ bool VegetationLayer::Cull(const glm::vec3& eye, const glm::mat4& viewProjection
 	if (rangeData.empty()) {
 		return false;
 	}
-	rangesBuffer.Reserve(rangeData.size() * sizeof(glm::uvec4));
-	classifiedBuffer.Reserve(static_cast<size_t>(total) * sizeof(GLuint));
-	drawnBuffer.Reserve(static_cast<size_t>(total) * sizeof(GpuInstance));
+	rangesBuffer.Reserve(rangeData.size() * sizeof(glm::uvec4), GL_STREAM_DRAW);
+	classifiedBuffer.Reserve(static_cast<size_t>(total) * sizeof(glm::uvec2), GL_DYNAMIC_COPY);
+	drawnBuffer.Reserve(static_cast<size_t>(total) * sizeof(GpuInstance), GL_DYNAMIC_COPY);
 	//The buffers may still be read by the draws of a pass before (shadows)
 	glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT | GL_COMMAND_BARRIER_BIT | GL_VERTEX_ATTRIB_ARRAY_BARRIER_BIT);
 	glNamedBufferSubData(rangesBuffer.id, 0, static_cast<GLsizeiptr>(rangeData.size() * sizeof(glm::uvec4)), rangeData.data());
@@ -628,7 +637,7 @@ bool VegetationLayer::Cull(const glm::vec3& eye, const glm::mat4& viewProjection
 	glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 	cullShader->SetUniform1i("pass", 2);
 	glDispatchCompute(rangeCount, 1, 1);
-	glMemoryBarrier(GL_VERTEX_ATTRIB_ARRAY_BARRIER_BIT | GL_COMMAND_BARRIER_BIT);
+	glMemoryBarrier(GL_VERTEX_ATTRIB_ARRAY_BARRIER_BIT | GL_COMMAND_BARRIER_BIT | GL_BUFFER_UPDATE_BARRIER_BIT);
 	if (stats) {
 		glCopyNamedBufferSubData(countsBuffer, statsBuffer, 0, 0, static_cast<GLsizeiptr>(groupCount) * sizeof(GLuint));
 		statsPending = true;

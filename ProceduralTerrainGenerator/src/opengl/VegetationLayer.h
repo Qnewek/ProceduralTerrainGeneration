@@ -141,7 +141,7 @@ private:
 	struct Buffer {
 		GLuint id = 0;
 		size_t bytes = 0;
-		void Reserve(size_t needed);
+		void Reserve(size_t needed, GLenum usage = GL_DYNAMIC_COPY);
 	};
 
 	//Instances of a chunk made by a worker, sorted by blocks

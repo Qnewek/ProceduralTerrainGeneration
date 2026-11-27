@@ -74,7 +74,9 @@ private:
 		float farUvScale, farUvMix, farUvStart, farUvEnd;
 		float averageStart, averageEnd;
 		float macroStrength, macroSize;
+		float padding = 0.0f;
 	};
+	static_assert(sizeof(Block) == 336, "TerrainMaterials::Block must match std140 layout size");
 
 	void UploadBlock();
 

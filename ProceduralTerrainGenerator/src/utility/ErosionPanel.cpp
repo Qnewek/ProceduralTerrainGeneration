@@ -21,19 +21,28 @@ void ErosionParametersImGui(erosion::ErosionConfig& e)
 		ImGui::TextWrapped("Particles running down the slopes, eroding and depositing on the way.");
 		ImGui::InputInt("Droplet count", &e.dropletCount, 1000, 10000);
 		ImGui::InputInt("Droplet lifetime", &e.dropletLifetime);
-		ImGui::InputFloat("Inertia", &e.inertia);
-		ImGui::InputFloat("Droplet init velocity", &e.initialVelocity, 0.0f, 1.0f);
-		ImGui::InputFloat("Droplet init water", &e.initialWater, 0.0f, 1.0f);
-		ImGui::InputFloat("Erosion rate", &e.erosionRate, 0.0f, 1.0f);
-		ImGui::InputFloat("Deposition rate", &e.depositionRate, 0.0f, 1.0f);
-		ImGui::InputFloat("Evaporation rate", &e.evaporationRate, 0.0f, 1.0f);
-		ImGui::InputFloat("Gravity", &e.gravity, 0.0f, 10.0f);
-		ImGui::InputFloat("Min slope", &e.minSlope, 0.0f, 1.0f);
+		ImGui::InputFloat("Inertia", &e.inertia, 0.01f, 0.1f, "%.3f");
+		ImGui::InputFloat("Droplet init velocity", &e.initialVelocity, 0.1f, 1.0f, "%.3f");
+		ImGui::InputFloat("Droplet init water", &e.initialWater, 0.1f, 1.0f, "%.3f");
+		ImGui::InputFloat("Erosion rate", &e.erosionRate, 0.01f, 0.1f, "%.3f");
+		ImGui::InputFloat("Deposition rate", &e.depositionRate, 0.01f, 0.1f, "%.3f");
+		ImGui::InputFloat("Evaporation rate", &e.evaporationRate, 0.01f, 0.1f, "%.3f");
+		ImGui::InputFloat("Gravity", &e.gravity, 0.1f, 1.0f, "%.3f");
+		ImGui::InputFloat("Min slope", &e.minSlope, 0.005f, 0.05f, "%.4f");
 		ImGui::InputInt("Erosion radius", &e.erosionRadius);
-		ImGui::InputFloat("Blur", &e.blur, 0.0f, 1.0f);
+		ImGui::InputFloat("Blur", &e.blur, 0.01f, 0.1f, "%.3f");
 		e.dropletCount = std::max(e.dropletCount, 0);
 		e.dropletLifetime = std::max(e.dropletLifetime, 0);
+		e.inertia = std::clamp(e.inertia, 0.0f, 1.0f);
+		e.initialVelocity = std::clamp(e.initialVelocity, 0.0f, 100.0f);
+		e.initialWater = std::clamp(e.initialWater, 0.0f, 100.0f);
+		e.erosionRate = std::clamp(e.erosionRate, 0.0f, 1.0f);
+		e.depositionRate = std::clamp(e.depositionRate, 0.0f, 1.0f);
+		e.evaporationRate = std::clamp(e.evaporationRate, 0.0f, 1.0f);
+		e.gravity = std::clamp(e.gravity, 0.0f, 100.0f);
+		e.minSlope = std::clamp(e.minSlope, 0.0f, 1.0f);
 		e.erosionRadius = std::max(e.erosionRadius, 0);
+		e.blur = std::clamp(e.blur, 0.0f, 1.0f);
 	}
 	else {
 		erosion::PipeConfig& p = e.pipes;

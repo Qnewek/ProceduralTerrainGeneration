@@ -2,6 +2,8 @@
 
 #include <algorithm>
 #include <cstdio>
+#include <exception>
+#include <new>
 #include <system_error>
 
 #include "imgui.h"
@@ -247,30 +249,53 @@ void ExportPanel::ExportAll(const Pack& pack)
 		std::vector<glm::vec4> surface;
 		BiomeMap ids;
 	};
-	std::optional<Plants> plants;
-	if (vegetation) {
-		plants = Plants{ pack.vegetation->input(), pack.vegetation->readSurface(), pack.vegetation->readIds() };
-		plants->input.metresPerUnit = pack.metresPerUnit;
+	try {
+		std::optional<Plants> plants;
+		if (vegetation) {
+			plants = Plants{ pack.vegetation->input(), pack.vegetation->readSurface(), pack.vegetation->readIds() };
+			plants->input.metresPerUnit = pack.metresPerUnit;
+		}
+		job.Start([map = std::move(mainMap), meshSettings = std::move(meshSettings), plants = std::move(plants), packFolder, packName = std::string(name),
+			models = exportModels]() {
+			Background result;
+			try {
+				if (meshSettings) {
+					result.meshes = meshexport::Write(map, *meshSettings, packFolder);
+				}
+				if (plants) {
+					result.vegetation = vegexport::Write(map, plants->surface, plants->ids, plants->input, packName, models, packFolder);
+				}
+			}
+			catch (const std::bad_alloc&) {
+				result.meshes.reset();
+				result.vegetation.reset();
+				result.error = "not enough memory";
+			}
+			catch (const std::exception& e) {
+				result.meshes.reset();
+				result.vegetation.reset();
+				result.error = e.what();
+			}
+			return result;
+		});
+		status = "Saved: " + saved + (meshes ? "\nBuilding the meshes..." : "\nPlacing the vegetation...");
+		statusIsError = false;
 	}
-	job.Start([map = std::move(mainMap), meshSettings = std::move(meshSettings), plants = std::move(plants), packFolder, packName = std::string(name),
-		models = exportModels]() {
-		Background result;
-		if (meshSettings) {
-			result.meshes = meshexport::Write(map, *meshSettings, packFolder);
-		}
-		if (plants) {
-			result.vegetation = vegexport::Write(map, plants->surface, plants->ids, plants->input, packName, models, packFolder);
-		}
-		return result;
-	});
-	status = "Saved: " + saved + (meshes ? "\nBuilding the meshes..." : "\nPlacing the vegetation...");
-	statusIsError = false;
+	catch (const std::exception& e) {
+		SetError("background export", e.what(), pending->saved);
+		pending.reset();
+	}
 }
 
 void ExportPanel::PollBackground()
 {
 	std::optional<Background> result = job.TryTake();
 	if (!result || !pending) {
+		return;
+	}
+	if (!result->error.empty()) {
+		SetError("background export", result->error, pending->saved);
+		pending.reset();
 		return;
 	}
 	exportpack::Manifest& manifest = pending->manifest;
