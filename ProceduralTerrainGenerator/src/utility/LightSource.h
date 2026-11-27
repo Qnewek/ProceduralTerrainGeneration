@@ -30,6 +30,7 @@ private:
 	float windSpeed = 12.0f;		//metres per second
 	float windAzimuth = 30.0f;		//degrees, the direction the wind blows towards, from +X towards +Z
 	glm::vec2 windOffset = glm::vec2(0.0f);	//metres the clouds have moved
+	bool cloudSmoothing = true;		//blend every frame's march of the clouds into the frames before (Clouds)
 public:
 	void ImGuiDraw();
 	//Moves the sun along its path when the day cycle is on, and the clouds with the wind
@@ -51,6 +52,7 @@ public:
 	float GetHazeDensity() const;
 	float GetHazeFalloff() const;
 	bool AreCloudsOn() const { return clouds; }
+	bool IsCloudSmoothingOn() const { return cloudSmoothing; }
 	//FrameBlock::cloudLayer / cloudWind
 	glm::vec4 GetCloudLayer() const;
 	glm::vec4 GetCloudWind() const;

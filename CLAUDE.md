@@ -267,6 +267,9 @@ Wartości szumów są w [-1, 1]. Konwencja indeksowania: `map[y * width + x]`.
   blend `GL_ONE, GL_SRC_ALPHA`). Mapa pogody stale na jednostce 16 (`Clouds::weatherUnit`, `layout(binding = 16)` w `clouds.glsl`): `sunShadow` = cień kaskad × `cloudShadow`
   (pokrycie tam, gdzie promień ku słońcu przecina środek warstwy), więc cienie chmur padają na wszystko; w 2D wyłączone. Woda odbija niebo z chmurami z kopii sceny,
   gdy kierunek odbicia jest na ekranie. Koszt ok. 1 ms (1080p, pokrycie 0,45). Benchmark ma linię „clouds GPU” (tylko `RenderSky`).
+  Akumulacja czasowa („Temporal smoothing”): marsz pisze też odległość rozpraszania (R32F), `cloud_resolve_compute.shader` reprojektuje teksel macierzą
+  poprzedniej klatki, przycina historię do min/max 3×3 marszu i miesza 10% nowej klatki; `Clouds::History` osobno dla nieba i `DrawOver`,
+  ważna tylko po klatce `frameIndex − 1` tego samego marszu (przerwa, zmiana rozmiaru, wyłączenie = od nowa).
 - Po wyłączeniu „Infinite generation” subsystem przesuwa mapę pod kamerę i woła `TerrainView::BringCameraToMap` (kamera przenoszona tylko, gdy nie jest nad mapą
   z offsetem), dlatego `Update` dostaje `Camera&`. Kod liczący pozycję w świecie z teksela mapy musi uwzględnić `TerrainView::GetWorldCenter` / `GetMapOffset`
   (biom pod kamerą, woda `DrawMap`, podpisy map w Noise heightmap, eksport: `worldOrigin` w manifeście, rośliny i rzeki względem teksela (0, 0) mapy).

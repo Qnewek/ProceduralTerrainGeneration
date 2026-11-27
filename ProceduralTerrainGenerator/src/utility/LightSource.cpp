@@ -107,5 +107,7 @@ void LightSource::ImGuiDraw() {
 		ImGui::SliderFloat("Cloud shadows", &cloudShadows, 0.0f, 1.0f, "%.2f");
 		ImGui::SliderFloat("Wind speed", &windSpeed, 0.0f, 100.0f, "%.0f m/s");
 		ImGui::SliderFloat("Wind direction", &windAzimuth, 0.0f, 360.0f, "%.0f deg");
+		ImGui::Checkbox("Temporal smoothing", &cloudSmoothing);
+		ImGui::SetItemTooltip("Blends every frame of the clouds into the frames before: no grain, a short trail when they change fast");
 	}
 }

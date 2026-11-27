@@ -27,21 +27,55 @@ namespace {
 		glTextureParameteri(texture, GL_TEXTURE_WRAP_R, wrap);
 		return texture;
 	}
+
+	//Texture of the size of the cloud image, sampled linearly by the composite and the reprojection
+	GLuint MakeImage(GLenum format, const glm::ivec2& size)
+	{
+		GLuint texture = 0;
+		glCreateTextures(GL_TEXTURE_2D, 1, &texture);
+		glTextureStorage2D(texture, 1, format, size.x, size.y);
+		glTextureParameteri(texture, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+		glTextureParameteri(texture, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+		glTextureParameteri(texture, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+		glTextureParameteri(texture, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+		return texture;
+	}
 }
 
 Clouds::~Clouds()
 {
-	const GLuint textures[] = { shape, detail, weather, image, depthCopy };
-	glDeleteTextures(5, textures);
+	const GLuint textures[] = { shape, detail, weather, depthCopy };
+	glDeleteTextures(4, textures);
+	Release(sky);
+	Release(over);
 	glDeleteVertexArrays(1, &vao);
+}
+
+void Clouds::Release(History& history)
+{
+	const GLuint textures[] = { history.raw, history.distance, history.color[0], history.color[1] };
+	glDeleteTextures(4, textures);
+	history = History();
+}
+
+void Clouds::Allocate(History& history, const glm::ivec2& size)
+{
+	Release(history);
+	history.size = size;
+	history.raw = MakeImage(GL_RGBA16F, size);
+	history.distance = MakeImage(GL_R32F, size);
+	history.color[0] = MakeImage(GL_RGBA16F, size);
+	history.color[1] = MakeImage(GL_RGBA16F, size);
 }
 
 bool Clouds::Initialize()
 {
 	noiseShader = Shader::Compute("res/shaders/CloudShaders/cloud_noise_compute.shader");
 	marchShader = Shader::Compute("res/shaders/CloudShaders/cloud_compute.shader");
+	resolveShader = Shader::Compute("res/shaders/CloudShaders/cloud_resolve_compute.shader");
 	compositeShader = std::make_unique<Shader>("res/shaders/sky_vertex.shader", "res/shaders/CloudShaders/cloud_composite_fragment.shader");
-	if (!noiseShader || !noiseShader->IsValid() || !marchShader || !marchShader->IsValid() || !compositeShader->IsValid()) {
+	if (!noiseShader || !noiseShader->IsValid() || !marchShader || !marchShader->IsValid() || !resolveShader || !resolveShader->IsValid()
+		|| !compositeShader->IsValid()) {
 		std::cout << "[ERROR] Clouds: the shaders could not be built" << std::endl;
 		return false;
 	}
@@ -52,7 +86,7 @@ bool Clouds::Initialize()
 bool Clouds::ReloadShader()
 {
 	const bool noise = noiseShader->Reload();
-	const bool ok = noise && marchShader->Reload() && compositeShader->Reload();
+	const bool ok = noise && marchShader->Reload() && resolveShader->Reload() && compositeShader->Reload();
 	//The noise may have changed
 	return ok && MakeNoise();
 }
@@ -79,23 +113,18 @@ bool Clouds::MakeNoise()
 	return true;
 }
 
-void Clouds::March(Camera& camera, const LightSource& light, bool limitByDepth, const glm::ivec4& viewport)
+void Clouds::March(Camera& camera, const LightSource& light, bool limitByDepth, const glm::ivec4& viewport, History& history)
 {
 	const glm::ivec2 size((viewport.z + 1) / 2, (viewport.w + 1) / 2);
-	if (size != imageSize) {
-		glDeleteTextures(1, &image);
-		imageSize = size;
-		glCreateTextures(GL_TEXTURE_2D, 1, &image);
-		glTextureStorage2D(image, 1, GL_RGBA16F, size.x, size.y);
-		glTextureParameteri(image, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-		glTextureParameteri(image, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-		glTextureParameteri(image, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-		glTextureParameteri(image, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+	if (size != history.size) {
+		Allocate(history, size);
 	}
 	const FrameUniforms::Block block = FrameUniforms::Make(camera, light);
 	frameUniforms.Upload(block);
+	const glm::mat4 viewProjection = block.projection * block.view;
+	const glm::mat4 inverseViewProjection = glm::inverse(viewProjection);
 	marchShader->Bind();
-	marchShader->SetUniformMat4f("inverseViewProjection", glm::inverse(block.projection * block.view));
+	marchShader->SetUniformMat4f("inverseViewProjection", inverseViewProjection);
 	marchShader->SetUniformMat4f("inverseProjection", glm::inverse(block.projection));
 	marchShader->SetUniform1i("limitByDepth", limitByDepth ? 1 : 0);
 	marchShader->SetUniform1i("frameIndex", frameIndex);
@@ -105,11 +134,38 @@ void Clouds::March(Camera& camera, const LightSource& light, bool limitByDepth, 
 	if (limitByDepth) {
 		glBindTextureUnit(depthUnit, depthCopy);
 	}
-	glBindImageTexture(0, image, 0, GL_FALSE, 0, GL_WRITE_ONLY, GL_RGBA16F);
+	glBindImageTexture(0, history.raw, 0, GL_FALSE, 0, GL_WRITE_ONLY, GL_RGBA16F);
+	glBindImageTexture(1, history.distance, 0, GL_FALSE, 0, GL_WRITE_ONLY, GL_R32F);
 	constexpr int local = 8;
-	glDispatchCompute((size.x + local - 1) / local, (size.y + local - 1) / local, 1);
-	glMemoryBarrier(GL_TEXTURE_FETCH_BARRIER_BIT);
-	glBindTextureUnit(imageUnit, image);
+	const glm::ivec2 groups((size.x + local - 1) / local, (size.y + local - 1) / local);
+	glDispatchCompute(groups.x, groups.y, 1);
+	glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL_TEXTURE_FETCH_BARRIER_BIT);
+
+	GLuint result = history.raw;
+	if (light.IsCloudSmoothingOn()) {
+		const int next = 1 - history.current;
+		resolveShader->Bind();
+		resolveShader->SetUniformMat4f("inverseViewProjection", inverseViewProjection);
+		resolveShader->SetUniformMat4f("previousViewProjection", history.previousViewProjection);
+		resolveShader->SetUniform3fv("cameraPosition", block.viewPos);
+		resolveShader->SetUniform1f("unitsPerMetre", light.GetCloudWind().z);
+		//Only right after the previous frame of the same march (not after a gap, a resize or smoothing turned off)
+		resolveShader->SetUniform1i("historyValid", history.lastFrame >= 0 && history.lastFrame == frameIndex - 1 ? 1 : 0);
+		glBindImageTexture(0, history.color[next], 0, GL_FALSE, 0, GL_WRITE_ONLY, GL_RGBA16F);
+		glBindImageTexture(1, history.raw, 0, GL_FALSE, 0, GL_READ_ONLY, GL_RGBA16F);
+		glBindImageTexture(2, history.distance, 0, GL_FALSE, 0, GL_READ_ONLY, GL_R32F);
+		glBindTextureUnit(shapeNoiseUnit, history.color[history.current]);
+		glDispatchCompute(groups.x, groups.y, 1);
+		glMemoryBarrier(GL_TEXTURE_FETCH_BARRIER_BIT);
+		history.current = next;
+		history.lastFrame = frameIndex;
+		result = history.color[next];
+	}
+	else {
+		history.lastFrame = -1;
+	}
+	history.previousViewProjection = viewProjection;
+	glBindTextureUnit(imageUnit, result);
 }
 
 bool Clouds::RenderSky(Camera& camera, const LightSource& light)
@@ -123,7 +179,7 @@ bool Clouds::RenderSky(Camera& camera, const LightSource& light)
 	if (viewport.z <= 0 || viewport.w <= 0) {
 		return false;
 	}
-	March(camera, light, false, viewport);
+	March(camera, light, false, viewport, sky);
 	return true;
 }
 
@@ -148,7 +204,7 @@ void Clouds::DrawOver(Camera& camera, const LightSource& light)
 		glTextureParameteri(depthCopy, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 	}
 	glCopyTextureSubImage2D(depthCopy, 0, 0, 0, viewport.x, viewport.y, viewport.z, viewport.w);
-	March(camera, light, true, viewport);
+	March(camera, light, true, viewport, over);
 
 	//scene * transmittance + light, only over the scene (the sky has its clouds already)
 	compositeShader->Bind();
