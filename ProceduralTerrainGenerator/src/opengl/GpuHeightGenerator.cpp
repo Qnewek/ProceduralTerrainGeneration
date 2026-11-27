@@ -9,6 +9,7 @@
 #include <iostream>
 #include <string>
 
+#include "NestedSpline.h"
 #include "Simplex/SimplexNoise.h"
 #include "SplineSampling.h"
 
@@ -19,7 +20,7 @@ namespace {
 	//A long dispatch can trigger the Windows GPU watchdog and freezes the desktop, so large maps go in parts
 	constexpr int tileSize = 1024;
 
-	enum Mode { MODE_NOISE = 0, MODE_LINEAR = 1, MODE_SPLINE = 2, MODE_LAYERED = 3 };
+	enum Mode { MODE_NOISE = 0, MODE_LINEAR = 1, MODE_SPLINE = 2, MODE_LAYERED = 3, MODE_NESTED = 4 };
 
 	//Layout of NoiseParams in the shaders (std430)
 	struct GpuNoiseParams {
@@ -30,14 +31,20 @@ namespace {
 	static_assert(sizeof(GpuNoiseParams) == 92);
 
 	//Layout of the WorldInput block of both shaders (common/world_input.glsl, std430): noises in the order of biome::Parameter,
-	//permutation table 5 for the detail noise of the biome modifiers, 6 for the river noise, the three terrain splines
+	//permutation table 5 for the detail noise of the biome modifiers, 6 for the river noise, the three terrain splines,
+	//the nested curves of NESTED (nested::Flatten)
 	constexpr int detailTable = 5;
 	constexpr int riverTable = 6;
 	struct GpuWorldInput {
 		GpuNoiseParams noises[5];
 		uint32_t permutations[7 * 256];
 		float splines[3 * splineSamples];
+		nested::GpuCurve nestedCurves[nested::maxCurves];
+		nested::GpuKnot nestedKnots[nested::maxCurves * nested::maxPoints];
 	};
+	static_assert(sizeof(nested::GpuCurve) == 16 && sizeof(nested::GpuKnot) == 16);
+	static_assert(offsetof(GpuWorldInput, nestedCurves) == 5 * sizeof(GpuNoiseParams) + 7 * 256 * 4 + 3 * splineSamples * 4);
+	static_assert(sizeof(GpuWorldInput) == offsetof(GpuWorldInput, nestedKnots) + nested::maxCurves * nested::maxPoints * 16);
 
 	//Layout of BiomeEntry in common/biomes.glsl (std430)
 	struct GpuBiomeEntry {
@@ -68,13 +75,38 @@ namespace {
 		SetPermutation(permutations, index, n.seed);
 	}
 
-	//Fills the splines the terrain method uses (none for LINEAR_COMBINE)
+	//Fills the nested curves of NESTED; a tree the generation cannot use (a preset is checked, so only a bug) gives the one
+	//of the LAYERED curves instead
+	void SetNestedCurves(GpuWorldInput& input, const TerrainConfig& config)
+	{
+		NestedCurve scratch;
+		const NestedCurve* root = &nested::RootFor(config, scratch);
+		if (const std::string problem = nested::Problem(*root); !problem.empty()) {
+			std::cout << "[ERROR] Nested splines: " << problem << ", the tree of the Layered curves is used\n";
+			scratch = nested::FromLayered(config).root;
+			root = &scratch;
+			//The arrays of the buffer hold only a valid tree; anything else would be written past them
+			if (!nested::Problem(scratch).empty()) {
+				scratch = NestedCurve{ { { -1.0, 0.0, {} }, { 0.0, 0.0, {} }, { 1.0, 0.0, {} } }, false };
+			}
+		}
+		const nested::Flat flat = nested::Flatten(*root);
+		std::copy(flat.curves.begin(), flat.curves.end(), input.nestedCurves);
+		std::copy(flat.knots.begin(), flat.knots.end(), input.nestedKnots);
+	}
+
+	//Fills the splines or nested curves the terrain method uses (none for LINEAR_COMBINE)
 	//@return the mode of terrain.glsl for the method
-	int SetTerrainSplines(float* splines, const TerrainConfig& config)
+	int SetTerrainSplines(GpuWorldInput& input, const TerrainConfig& config)
 	{
 		if (config.method == EvaluationMethod::LINEAR_COMBINE) {
 			return MODE_LINEAR;
 		}
+		if (config.method == EvaluationMethod::NESTED) {
+			SetNestedCurves(input, config);
+			return MODE_NESTED;
+		}
+		float* splines = input.splines;
 		const WorldGenParameter components[] = { WorldGenParameter::CONTINENTALNESS, WorldGenParameter::MOUNTAINOUSNESS, WorldGenParameter::WEIRDNESS };
 		for (int i = 0; i < 3; i++) {
 			const std::vector<float> samples = SampleSpline(config.MethodSpline(components[i]), splineSamples);
@@ -135,7 +167,7 @@ namespace {
 		if (rivers && rivers->config.method == rivers::Method::NOISE) {
 			SetPermutation(input.permutations, riverTable, rivers->config.noiseSeed);
 		}
-		return SetTerrainSplines(input.splines, terrain);
+		return SetTerrainSplines(input, terrain);
 	}
 
 	//Values of RIVERS_* in common/rivers.glsl

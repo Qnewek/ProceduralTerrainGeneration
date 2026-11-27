@@ -9,3 +9,6 @@
 //The GPU gets splines as such a table and the spline editor draws it, so both show the same curve.
 //points must hold at least 3 points with strictly ascending x
 std::vector<float> SampleSpline(const SplinePoints& points, int count);
+
+//Value of the same curve at one noise value at (clamped to the points): the value SampleSpline gives at a sample there
+double EvaluateSpline(const SplinePoints& points, double at);
