@@ -1200,6 +1200,8 @@ void TerrainGenerationSys::RiversEditor()
 		ImGui::SetItemTooltip("How far below the terrain of its course the water surface lies");
 		changed |= ImGui::SliderFloat("Min lake depth", &r.minLakeDepth, 0.0f, 0.05f, "%.4f", ImGuiSliderFlags_AlwaysClamp);
 		ImGui::SetItemTooltip("A filled depression deeper than this is a lake; rivers cross lakes without a channel");
+		changed |= ImGui::SliderFloat("Min lake area", &r.minLakeArea, 0.0f, 1.0e6f, "%.3g texels^2", ImGuiSliderFlags_AlwaysClamp | ImGuiSliderFlags_Logarithmic);
+		ImGui::SetItemTooltip("Smaller lakes are dropped (their place is land); 0 = keep every lake");
 
 		ImGui::SeparatorText("Network");
 		if (riverJob.IsRunning() || riverSample.Pending()) {

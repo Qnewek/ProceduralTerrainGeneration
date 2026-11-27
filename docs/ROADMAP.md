@@ -571,7 +571,11 @@ Kroki:
   🟡 2026-11-16 etap 2: (4) woda rzek i jezior metody A — siatka z sieci (`BuildWaterMesh`: quad między środkami komórek, gdzie choć jeden jest mokry; suche narożniki na
   najwyższym poziomie quadu), linia brzegu z testu głębi z terenem, głębokość z kopii głębi sceny, fale niesione przepływem (flow map, prędkość 0,4–4 m/s ze spadku).
   (5) wilgotność biomów przy korycie (`humidity`, `humidityRange`), materiał dna w splat (`bedMaterial`, domyślnie Scree), roślinność nie stoi w wodzie rzek i jezior
-  (`WaterLevelAt`). Zostaje: jeziora bez progu powierzchni (dużo małych), woda rzek B bez przepływu (leży na poziomie morza), wodospady / progi przy stromym spadku.
+  (`WaterLevelAt`). Zostaje: woda rzek B bez przepływu (leży na poziomie morza), wodospady / progi przy stromym spadku.
+  ✅ 2026-11-27 próg powierzchni jezior: `RiverConfig::minLakeArea` (teksele², w Imported map px², suwak „Min lake area”, presety i projekt), grupa
+  4-spójnych komórek jeziora mniejsza od progu = ląd (rzeka przechodzi przez nią z wodą na poziomie przelewu). Domyślnie 2500: region 4096² domyślnego
+  świata (komórka 8) miał 371 jezior, z czego 354 poniżej 10 komórek; zostają 4. Do sprawdzenia w aplikacji: TerrainGen z rzekami Region — drobne
+  jeziorka zniknęły, „Min lake area” 0 przywraca je; Imported map — suwak przelicza sieć po puszczeniu; preset i projekt zapamiętują wartość.
 - **Zagnieżdżone splajny** (z „Teren 2.0”, pkt 3): punkty splajnu C są splajnami po M (i dalej po PV), wypiekane do tekstury LUT 2D/3D próbkowanej jednym odczytem.
   Daje klify tam, gdzie góry dochodzą do morza, płaskie plaże gdzie indziej, doliny wcięte poniżej podstawy. Najwięcej pracy: edytor UI (lista punktów C z wykresem po M, podgląd C×M jako mapa ciepła).
   ✅ 2026-11-27 (decyzje właściciela): nowa metoda NESTED obok LAYERED (domyślny świat bez zmian), trzy poziomy C → M → W z opcjonalnym zagnieżdżeniem
