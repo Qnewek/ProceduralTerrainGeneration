@@ -40,12 +40,12 @@ namespace {
 	}
 
 	//Replaces the contents of a buffer, creating it if needed
-	void Upload(GLuint& buffer, const void* data, size_t bytes)
+	void Upload(GLuint& buffer, const void* data, size_t bytes, GLenum usage = GL_DYNAMIC_DRAW)
 	{
 		if (!buffer) {
 			glCreateBuffers(1, &buffer);
 		}
-		glNamedBufferData(buffer, static_cast<GLsizeiptr>(std::max<size_t>(bytes, 16)), nullptr, GL_DYNAMIC_DRAW);
+		glNamedBufferData(buffer, static_cast<GLsizeiptr>(std::max<size_t>(bytes, 16)), nullptr, usage);
 		if (bytes > 0 && data != nullptr) {
 			glNamedBufferSubData(buffer, 0, static_cast<GLsizeiptr>(bytes), data);
 		}
@@ -488,7 +488,7 @@ void VegetationLayer::BuildTables(const VegetationModels& models)
 	Upload(impostorGroupBuffer, impostorGroups.data(), impostorGroups.size() * sizeof(GLuint));
 	Upload(countsBuffer, nullptr, static_cast<size_t>(groups) * sizeof(GLuint));
 	Upload(offsetsBuffer, nullptr, static_cast<size_t>(groups) * sizeof(GLuint));
-	Upload(statsBuffer, nullptr, static_cast<size_t>(groups) * sizeof(GLuint));
+	Upload(statsBuffer, nullptr, static_cast<size_t>(groups) * sizeof(GLuint), GL_STREAM_READ);
 	statsPending = false;
 	tablesReadyModels = ready;
 }
