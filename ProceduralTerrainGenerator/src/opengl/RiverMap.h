@@ -36,7 +36,7 @@ public:
 	float CellSize() const { return cellSize; }
 	glm::ivec2 Size() const { return rivers ? glm::ivec2(rivers->GetWidth(), rivers->GetHeight()) : glm::ivec2(0); }
 
-	//Water surface: triangles of hydrology::WaterVertex (attributes 0 = map position, 1 = level, 2 = flow); 0 vertices = none
+	//Water surface: triangles of hydrology::WaterVertex (attributes 0 = map position, 1 = level, 2 = flow, 3 = slope, 4 = foam); 0 vertices = none
 	GLuint WaterVertexArray() const { return waterVao; }
 	GLsizei WaterVertexCount() const { return waterVertices; }
 

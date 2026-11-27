@@ -8,6 +8,8 @@ in vec3 FragPos;
 in vec2 WaterXZ;
 in vec2 MapUV;
 in vec2 Flow;                   //metres per second (rivers); 0 = still water
+in float Steep;                 //share of falling white water (steep rivers: waterfalls, cascades)
+in float FallFoam;              //share of churning foam below a fall
 
 out vec4 FragColor;
 
@@ -75,6 +77,83 @@ vec2 waveSlope(vec2 p, float footprint)
         slope += WAVE[i].w * cos(phase) * WAVE[i].xy * fade;
     }
     return slope * waveStrength;
+}
+
+//Value noise in [0, 1] for the white water and the foam below falls (cheap hash, no tables)
+float waterHash(vec2 p)
+{
+    vec3 p3 = fract(vec3(p.xyx) * 0.1031);
+    p3 += dot(p3, p3.yzx + 33.33);
+    return fract((p3.x + p3.y) * p3.z);
+}
+
+float waterValueNoise(vec2 p)
+{
+    vec2 i = floor(p);
+    vec2 f = fract(p);
+    vec2 u = f * f * (3.0 - 2.0 * f);
+    return mix(mix(waterHash(i), waterHash(i + vec2(1.0, 0.0)), u.x), mix(waterHash(i + vec2(0.0, 1.0)), waterHash(i + vec2(1.0, 1.0)), u.x), u.y);
+}
+
+//Patterns of white water never use the flow direction or time in their coordinates directly: the flow changes across a triangle, and
+//a coordinate made of (changing direction) x (position or time) would shear into noise far from the origin or after a while. Streaks are
+//stretched along fixed axes, blended by the flow direction; motion is a shift by the flow restarted every FLOW_PERIOD, two copies a half
+//period apart cross-faded (as the waves). Each octave fades to its average before it gets finer than a few pixels (no shimmer far away)
+const int STREAK_AXES = 4;
+const vec2 STREAK_AXIS[STREAK_AXES] = vec2[](vec2(1.0, 0.0), vec2(0.7071068, 0.7071068), vec2(0.0, 1.0), vec2(-0.7071068, 0.7071068));
+
+//Noise stretched along the axis a (fine across it), two octaves
+float stretchedNoise(vec2 p, vec2 a, float footprint)
+{
+    vec2 q = vec2(dot(p, vec2(-a.y, a.x)), dot(p, a));
+    float coarse = mix(0.5, waterValueNoise(vec2(q.x * 3.0, q.y * 0.35)), 1.0 - smoothstep(0.06, 0.2, footprint));
+    float fine = mix(0.5, waterValueNoise(vec2(q.x * 7.0 + 13.0, q.y * 0.8)), 1.0 - smoothstep(0.03, 0.09, footprint));
+    return 0.6 * coarse + 0.4 * fine;
+}
+
+//Streaks along the flow at p, the axes weighted by how well they line up with it
+float streaksAt(vec2 p, vec2 along, float footprint)
+{
+    float sum = 0.0, weights = 0.0;
+    for (int i = 0; i < STREAK_AXES; i++) {
+        float w = pow(abs(dot(along, STREAK_AXIS[i])), 8.0);
+        if (w > 0.01) {
+            sum += w * stretchedNoise(p, STREAK_AXIS[i], footprint);
+            weights += w;
+        }
+    }
+    return sum / max(weights, 1e-6);
+}
+
+//Streaks of falling water, moving down the slope faster than the river (the water accelerates as it falls)
+//@param p - metres; flow - metres per second; footprint - metres per pixel
+float fallStreaks(vec2 p, vec2 flow, float footprint)
+{
+    float speed = length(flow);
+    vec2 along = speed > 0.0 ? flow / speed : vec2(0.0, 1.0);
+    vec2 velocity = flow * 2.0 + along * 2.0;
+    float phase0 = fract(time / FLOW_PERIOD), phase1 = fract(time / FLOW_PERIOD + 0.5);
+    float weight0 = 1.0 - abs(2.0 * phase0 - 1.0);
+    float n0 = streaksAt(p - velocity * phase0 * FLOW_PERIOD + vec2(17.0, 3.0), along, footprint);
+    float n1 = streaksAt(p - velocity * phase1 * FLOW_PERIOD, along, footprint);
+    //The cross-fade of two independent patterns pulls towards the average; stretched back
+    return clamp(0.5 + (mix(n1, n0, weight0) - 0.5) * 1.3, 0.0, 1.0);
+}
+
+//Churning foam: blobs carried by the flow and boiling in place
+float churningFoam(vec2 p, vec2 flow, float footprint)
+{
+    float phase0 = fract(time / FLOW_PERIOD), phase1 = fract(time / FLOW_PERIOD + 0.5);
+    float weight0 = 1.0 - abs(2.0 * phase0 - 1.0);
+    float carried0 = waterValueNoise((p - flow * 0.6 * phase0 * FLOW_PERIOD) * 1.3 + vec2(5.0, 11.0));
+    float carried1 = waterValueNoise((p - flow * 0.6 * phase1 * FLOW_PERIOD) * 1.3);
+    float carried = clamp(0.5 + (mix(carried1, carried0, weight0) - 0.5) * 1.3, 0.0, 1.0);
+    //Boiling: the same shift for every pixel, wrapped so it stays precise
+    vec2 boil = fract(vec2(time * 0.4, -time * 0.3) / 64.0) * 64.0;
+    float boiling = waterValueNoise(p * 3.7 + boil);
+    carried = mix(0.5, carried, 1.0 - smoothstep(0.2, 0.6, footprint));
+    boiling = mix(0.5, boiling, 1.0 - smoothstep(0.07, 0.25, footprint));
+    return 0.6 * carried + 0.4 * boiling;
 }
 
 //Point of the copied scene at screen coordinates uv, in view space (depth 1 = nothing drawn, the sky)
@@ -246,6 +325,24 @@ void main()
     }
 
     vec3 color = fresnel * reflection + (1.0 - fresnel) * mix(body, under, transmittance);
+    vec3 foamColor = vec3(0.92) * (lightOn ? ambient + sunlight * sunHeight : vec3(1.0));
+
+    //Waterfalls and cascades: steep water is opaque white streaks falling down the slope, lit by the slope of the surface itself
+    //(its normal from the derivatives, outside the branch: they need uniform control flow)
+    vec3 faceNormal = normalize(cross(dFdx(FragPos), dFdy(FragPos)));
+    faceNormal *= sign(faceNormal.y + 1e-6);
+    if (Steep > 0.0) {
+        float streaks = fallStreaks(p, Flow, footprint);
+        vec3 white = mix(vec3(0.62, 0.72, 0.76), vec3(0.97), smoothstep(0.25, 0.75, streaks));
+        //White water scatters light: half of it reaches even the side turned from the sun
+        vec3 lit = lightOn ? ambient + sunlight * (0.5 + 0.5 * max(dot(faceNormal, light.direction), 0.0)) : vec3(1.0);
+        color = mix(color, white * lit, Steep * (0.8 + 0.2 * streaks));
+    }
+    //Below a fall: churning foam spreading over the pool, thinning out downstream
+    if (FallFoam > 0.0) {
+        float churn = churningFoam(p, Flow, footprint);
+        color = mix(color, foamColor, FallFoam * smoothstep(0.35, 0.7, churn + 0.3 * FallFoam) * 0.9);
+    }
 
     //Foam: a line at the shore and thin bands running towards it in the last 0.3 m of depth (wide shallow flats stay clear)
     float shore = 1.0 - smoothstep(0.0, 0.3, depth);
@@ -254,7 +351,6 @@ void main()
     float bandFade = 1.0 - smoothstep(0.5, 1.5, fwidth(depth * 25.0));
     bands = mix(0.5, bands, bandFade);
     float foam = shore * smoothstep(0.6, 0.9, bands + shore * 0.35) * 0.85;
-    vec3 foamColor = vec3(0.92) * (lightOn ? ambient + sunlight * sunHeight : vec3(1.0));
     color = mix(color, foamColor, foam);
 
     color = applyFog(color, FragPos);

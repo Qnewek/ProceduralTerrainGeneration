@@ -14,10 +14,14 @@ out vec3 FragPos;           //after modelScale
 out vec2 WaterXZ;           //before modelScale, for the waves
 out vec2 MapUV;
 out vec2 Flow;              //the sea stands still
+out float Steep;            //no waterfalls or foam below them on the sea
+out float FallFoam;
 
 void main()
 {
     Flow = vec2(0.0);
+    Steep = 0.0;
+    FallFoam = 0.0;
     vec2 local = vec2(gl_VertexID & 1, gl_VertexID >> 1);
     WaterXZ = corner + local * size;
     MapUV = mix(uvMin, uvMax, local);

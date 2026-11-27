@@ -81,7 +81,8 @@ jobs:
           # 7-Zip is on the runner image; otherwise the tar of Windows (libarchive reads 7z, the tar of Git earlier in PATH does not)
           $sevenZip = "$env:ProgramFiles\7-Zip\7z.exe"
           if (Test-Path $sevenZip) {
-            & $sevenZip x mesa.7z -o.mesa x64\opengl32.dll x64\libgallium_wgl.dll -y
+            # Quoted: PowerShell splits an unquoted -o.mesa into "-o" ".mesa"
+            & $sevenZip x mesa.7z "-o.mesa" x64\opengl32.dll x64\libgallium_wgl.dll -y
           }
           else {
             & "$env:SystemRoot\System32\tar.exe" -xf mesa.7z -C .mesa x64/opengl32.dll x64/libgallium_wgl.dll

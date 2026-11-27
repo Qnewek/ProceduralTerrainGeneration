@@ -32,9 +32,10 @@ void RiverMap::Upload(const hydrology::Network& network, const std::vector<hydro
 		glCreateBuffers(1, &waterBuffer);
 		constexpr GLsizei stride = sizeof(hydrology::WaterVertex);
 		glVertexArrayVertexBuffer(waterVao, 0, waterBuffer, 0, stride);
-		const GLint sizes[] = { 2, 1, 2 };
-		const GLuint offsets[] = { offsetof(hydrology::WaterVertex, x), offsetof(hydrology::WaterVertex, level), offsetof(hydrology::WaterVertex, flowX) };
-		for (GLuint a = 0; a < 3; a++) {
+		const GLint sizes[] = { 2, 1, 2, 1, 1 };
+		const GLuint offsets[] = { offsetof(hydrology::WaterVertex, x), offsetof(hydrology::WaterVertex, level), offsetof(hydrology::WaterVertex, flowX),
+			offsetof(hydrology::WaterVertex, slope), offsetof(hydrology::WaterVertex, foam) };
+		for (GLuint a = 0; a < 5; a++) {
 			glEnableVertexArrayAttrib(waterVao, a);
 			glVertexArrayAttribFormat(waterVao, a, sizes[a], GL_FLOAT, GL_FALSE, offsets[a]);
 			glVertexArrayAttribBinding(waterVao, a, 0);
