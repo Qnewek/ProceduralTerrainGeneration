@@ -137,8 +137,8 @@ int RunVegetationPreview(const std::string& folder)
 						levels += (levels.empty() ? "" : " / ") + std::to_string(lod.triangles);
 					}
 					const glm::vec3 size = variant.boundsMax - variant.boundsMin;
-					std::printf("%-16s %8zu %10zu  %-24s %8.0f%s  %.2f x %.2f x %.2f m\n", v == 0 ? model.name.c_str() : "", v, variant.sourceTriangles,
-						levels.c_str(), model.loadMs, model.fromCache ? "" : "*", size.x, size.y, size.z);
+					std::printf("%-16s %8zu %10zu  %-24s %8.0f%s  %.2f x %.2f x %.2f m, sinks %.2f m per slope\n", v == 0 ? model.name.c_str() : "", v,
+						variant.sourceTriangles, levels.c_str(), model.loadMs, model.fromCache ? "" : "*", size.x, size.y, size.z, variant.sinkPerSlope);
 				}
 				const std::filesystem::path file = std::filesystem::path(folder) / (model.asset + ".png");
 				if (!SaveSheet(models, i, light, file)) {

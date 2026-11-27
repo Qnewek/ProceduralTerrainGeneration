@@ -410,7 +410,7 @@ vegexport::Input TerrainGenerationSys::VegetationExportInput() const
 	for (const VegetationModels::Model& m : vegetationModels->GetModels()) {
 		const bool ready = m.state == VegetationModels::State::READY && !m.variants.empty();
 		input.models.push_back({ m.name, m.kind, m.asset, ready ? static_cast<int>(m.variants.size()) : 0, vegetationModels->SourceFile(m), m.lodTargets,
-			vegetationModels->CacheFile(m) });
+			vegetationModels->CacheFile(m), vegetation::SinksOf(m.variants) });
 	}
 	input.settings.heightScale = renderSettings.heightScale;
 	input.settings.waterHeight = world.terrain.WaterHeight();

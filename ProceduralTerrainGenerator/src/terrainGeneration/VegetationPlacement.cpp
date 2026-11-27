@@ -215,6 +215,13 @@ namespace vegetation
 					instance.model = chosen->model;
 					instance.variant = static_cast<int>(Hash(h) % static_cast<uint32_t>(models[chosen->model].variants));
 					instance.layer = static_cast<Layer>(layer);
+					//Metres per unit of slope of the model at this size, in the horizontal units of the gradient, times the gradient (height
+					//per such unit) = height of the map
+					const std::vector<float>& sink = models[chosen->model].sinkPerSlope;
+					if (instance.variant < static_cast<int>(sink.size())) {
+						const float metres = sink[static_cast<size_t>(instance.variant)] * instance.scale / unitsPerMetre;
+						instance.position.y -= metres * settings.gradientUnitsPerMetre * glm::length(glm::vec2(surface));
+					}
 					out.push_back(instance);
 				}
 			}

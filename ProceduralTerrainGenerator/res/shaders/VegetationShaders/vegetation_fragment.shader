@@ -41,7 +41,13 @@ mat3 cotangentFrame(vec3 n, vec3 p, vec2 uv)
     vec3 dp1perp = cross(n, dp1);
     vec3 t = dp2perp * duv1.x + dp1perp * duv2.x;
     vec3 b = dp2perp * duv1.y + dp1perp * duv2.y;
-    float invmax = inversesqrt(max(dot(t, t), dot(b, b)));
+    float size = max(dot(t, t), dot(b, b));
+    //UV constant across the pixel (a mesh without texture coordinates): any frame around n, not 0 * inf = NaN (black)
+    if (!(size > 1e-20)) {
+        vec3 tangent = normalize(cross(abs(n.y) < 0.99 ? vec3(0.0, 1.0, 0.0) : vec3(1.0, 0.0, 0.0), n));
+        return mat3(tangent, cross(n, tangent), n);
+    }
+    float invmax = inversesqrt(size);
     return mat3(t * invmax, b * invmax, n);
 }
 

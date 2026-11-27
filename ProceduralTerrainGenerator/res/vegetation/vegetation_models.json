@@ -6,7 +6,7 @@
 		"rock": [ 4000, 1000, 250 ]
 	},
 	"models": [
-		{ "name": "Fir", "asset": "fir_tree_01", "kind": "tree" },
+		{ "name": "Fir", "asset": "fir_tree_01", "kind": "tree", "lods": [ 150000, 30000, 12000 ] },
 		{ "name": "Fir sapling", "asset": "fir_sapling", "kind": "shrub" },
 		{ "name": "Pine sapling", "asset": "pine_sapling_small", "kind": "shrub" },
 		{ "name": "Deciduous tree", "asset": "tree_small_02", "kind": "tree" },

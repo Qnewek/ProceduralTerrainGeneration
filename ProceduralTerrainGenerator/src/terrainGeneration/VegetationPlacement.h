@@ -34,10 +34,13 @@ namespace vegetation
 		std::string name;
 		int variants = 0;
 		Layer layer = Layer::TREES;
+		std::vector<float> sinkPerSlope;	//per variant (vegetation::Variant::sinkPerSlope, metres); missing = 0
 	};
 
 	struct Instance {
-		glm::vec3 position = glm::vec3(0.0f);	//x, z in world units (before modelScale); y = terrain height as in the height map
+		//x, z in world units (before modelScale); y = terrain height as in the height map, lowered on a slope by the sink of the variant,
+		//so its base does not hang above the ground downhill
+		glm::vec3 position = glm::vec3(0.0f);
 		float scale = 1.0f;		//world units per metre of the model
 		float yaw = 0.0f;		//radians
 		int model = 0;
@@ -62,6 +65,7 @@ namespace vegetation
 		glm::vec2 mapOrigin = glm::vec2(0.0f);	//world XZ of grid position (0, 0)
 		float worldUnitsPerTexel = 4.0f;		//world units per metre of the grid
 		float heightScale = 1.0f;				//world units of height 1, for slopes (the surface map gradient is per world unit)
+		float gradientUnitsPerMetre = unitsPerMetre;	//horizontal units of the surface gradient per metre (TerrainGen: world units; slopes from metres: 1)
 		float waterHeight = 0.0f;				//nothing stands at or below it
 		const hydrology::Network* rivers = nullptr;	//nothing stands under the water of its rivers and lakes; nullptr = none
 		float density = 1.0f;					//multiplies every probability
