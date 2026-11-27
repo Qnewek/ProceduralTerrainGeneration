@@ -574,6 +574,15 @@ Kroki:
   (`WaterLevelAt`). Zostaje: jeziora bez progu powierzchni (dużo małych), woda rzek B bez przepływu (leży na poziomie morza), wodospady / progi przy stromym spadku.
 - **Zagnieżdżone splajny** (z „Teren 2.0”, pkt 3): punkty splajnu C są splajnami po M (i dalej po PV), wypiekane do tekstury LUT 2D/3D próbkowanej jednym odczytem.
   Daje klify tam, gdzie góry dochodzą do morza, płaskie plaże gdzie indziej, doliny wcięte poniżej podstawy. Najwięcej pracy: edytor UI (lista punktów C z wykresem po M, podgląd C×M jako mapa ciepła).
+  ✅ 2026-11-27 (decyzje właściciela): nowa metoda NESTED obok LAYERED (domyślny świat bez zmian), trzy poziomy C → M → W z opcjonalnym zagnieżdżeniem
+  (punkt = liczba albo krzywa poziom niżej, krzywe W tylko liczby), wynik = wysokość w [0, 1], własny „Sea level”. Bez tablicy LUT: shader liczy drzewo wprost
+  (`terrain.glsl`, tylko węzły potrzebne segmentowi), reguła też na CPU (`NestedSpline.*`), `--gpu-check` porównuje (różnica ≤ 2,1e-7, chunki bit w bit).
+  Koszt (4096², domyślne drzewo z LAYERED): teren 19,2 ms vs 14,9 ms LAYERED, jeden przebieg z biomami 65,3 vs 60,9 ms. Pierwsze przełączenie na Nested buduje drzewo
+  z krzywych LAYERED („Copy from Layered” robi to na żądanie). Edytor w zakładce splajnów: krzywa otwartego poziomu ze ścieżką, Make sub-curve / Make constant,
+  mapa ciepła C × M przy wybranym W z linią brzegu. Presety: pole `terrain.nested`.
+  Do sprawdzenia w aplikacji: przełączenie na Nested — świat wygląda jak Layered; przeciąganie punktów na każdym poziomie — teren nadąża na żywo; sub-curve
+  i klif przy górskim wybrzeżu; usunięcie punktu z otwartą podkrzywą; Sea level przesuwa wodę, brzeg i biomy; zapis / odczyt presetu z Nested;
+  Layered → Nested → Layered → Nested zachowuje drzewo; `seaLevel` w paczce eksportu; Send to Imported map.
 - **Woda:** płaszczyzna oceanu z refleksją/refrakcją, głębia, piana przy brzegu.
   🟡 2026-11-14 pierwsza wersja (`WaterSurface`): quad na chunkach gruntu, głębokość z mapy wysokości chunka (kolor, przezroczystość, piana),
   odbicie nieba + słońca z Fresnelem, fale z sinusów wygaszanych `fwidth`. Też na mapie 2D (z góry).

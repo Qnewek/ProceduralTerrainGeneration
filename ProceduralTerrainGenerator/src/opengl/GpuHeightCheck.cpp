@@ -26,6 +26,7 @@
 #include "Hydrology.h"
 #include "LandStats.h"
 #include "MapBiomes.h"
+#include "NestedSpline.h"
 #include "glm/gtc/packing.hpp"
 #include "RiverMap.h"
 #include "TerrainView.h"
@@ -54,6 +55,53 @@ namespace {
 		std::function<void(TextureClass&)> generate;
 		float min, max;
 	};
+
+	//Every curve of the tree smooth (cubic) or straight
+	void SetCubic(NestedCurve& curve, bool cubic)
+	{
+		curve.cubic = cubic;
+		for (NestedPoint& p : curve.points) {
+			for (NestedCurve& sub : p.sub) {
+				SetCubic(sub, cubic);
+			}
+		}
+	}
+
+	//NESTED with the tree made from the default LAYERED curves, every curve cubic if asked
+	TerrainConfig NestedFromLayered(bool cubic)
+	{
+		TerrainConfig t = TerrainConfig::Default();
+		t.method = EvaluationMethod::NESTED;
+		t.nested = nested::FromLayered(t);
+		if (cubic) {
+			SetCubic(t.nested.root, true);
+		}
+		return t;
+	}
+
+	//Constants and curves on every level, straight and cubic curves, two W-curves shared by several points
+	NestedCurve HandBuiltTree()
+	{
+		const auto constants = [](std::vector<std::pair<double, double>> points, bool cubic) {
+			NestedCurve c;
+			c.cubic = cubic;
+			for (auto [x, y] : points) {
+				c.points.push_back({ x, y, {} });
+			}
+			return c;
+		};
+		const NestedCurve w1 = constants({ { -1.0, 0.1 }, { 0.0, 0.5 }, { 1.0, 0.9 } }, true);
+		const NestedCurve w2 = constants({ { -1.0, 0.9 }, { -0.3, 0.2 }, { 0.4, 0.6 }, { 1.0, 0.3 } }, false);
+		NestedCurve m1 = constants({ { -1.0, 0.2 }, { 0.0, 0.0 }, { 0.5, 0.7 }, { 1.0, 0.0 } }, true);
+		m1.points[1].sub = { w1 };
+		m1.points[3].sub = { w2 };
+		NestedCurve m2 = constants({ { -1.0, 0.05 }, { 0.2, 0.0 }, { 1.0, 0.4 } }, false);
+		m2.points[1].sub = { w2 };
+		NestedCurve root = constants({ { -1.0, 0.0 }, { -0.2, 0.0 }, { 0.3, 0.0 }, { 1.0, 0.95 } }, true);
+		root.points[1].sub = { m2 };
+		root.points[2].sub = { m1 };
+		return root;
+	}
 
 	//Every value must be finite and within the range the configuration promises
 	bool CheckRanges(GpuHeightGenerator& gpu)
@@ -113,6 +161,11 @@ namespace {
 		//A steep rise next to a flat part, where a natural cubic spline went far above 1
 		t.continentalnessSpline = { { -1.0, -0.9, 1.0 }, { 0.0, 1.0, 1.0 }, true };
 		cases.push_back({ "terrain: layered, steep cubic spline", [=, &gpu](TextureClass& target) { gpu.GenerateTerrain(t, MapArea{}, target); }, 0.0f, 1.0f });
+		t = NestedFromLayered(false);
+		cases.push_back({ "terrain: nested (from layered)", [=, &gpu](TextureClass& target) { gpu.GenerateTerrain(t, MapArea{}, target); }, 0.0f, 1.0f });
+		//Cubic curves are monotone, so the tree stays in [0, 1] like its values
+		t = NestedFromLayered(true);
+		cases.push_back({ "terrain: nested, cubic", [=, &gpu](TextureClass& target) { gpu.GenerateTerrain(t, MapArea{}, target); }, 0.0f, 1.0f });
 
 		std::cout << "values: finite and within the range of the configuration\n";
 		TextureClass target(mapWidth, mapHeight, GL_R32F);
@@ -232,6 +285,44 @@ namespace {
 		const bool landOk = inland > 0 && belowBase == 0 && raised > inland / 10;
 		Report("layered: inland", std::to_string(raised) + " of " + std::to_string(inland) + " raised, " + std::to_string(belowBase) + " below base", landOk);
 		return seaOk && landOk;
+	}
+
+	//The nested tree on the GPU (terrain.glsl) gives the heights of nested::Evaluate at the noise values of each texel
+	bool CheckNested(GpuHeightGenerator& gpu)
+	{
+		std::cout << "\nnested splines: the GPU equals the CPU rule (nested::Evaluate)\n";
+		TerrainConfig handBuilt = NestedFromLayered(false);
+		handBuilt.nested.root = HandBuiltTree();
+		const std::pair<std::string, TerrainConfig> cases[] = {
+			{ "nested: GPU equals CPU, from layered", NestedFromLayered(false) },
+			{ "nested: GPU equals CPU, cubic", NestedFromLayered(true) },
+			{ "nested: GPU equals CPU, hand-built", handBuilt },
+		};
+		TextureClass c(mapWidth, mapHeight, GL_R32F), m(mapWidth, mapHeight, GL_R32F), w(mapWidth, mapHeight, GL_R32F), height(mapWidth, mapHeight, GL_R32F);
+		bool allOk = true;
+		for (const auto& [name, t] : cases) {
+			//The same noises as the terrain evaluates (evaluateNoise with the parameters and seed of each)
+			gpu.GenerateNoise(t.continentalness, MapArea{}, c);
+			gpu.GenerateNoise(t.mountainousness, MapArea{}, m);
+			gpu.GenerateNoise(t.weirdness, MapArea{}, w);
+			gpu.GenerateTerrain(t, MapArea{}, height);
+			const HeightField cm = ReadHeight(c), mm = ReadHeight(m), wm = ReadHeight(w), hm = ReadHeight(height);
+			double largest = 0.0;
+			float low = hm[0], high = hm[0];
+			for (size_t i = 0; i < hm.Size(); i++) {
+				const double expected = nested::Evaluate(t.nested.root, cm[i], mm[i], wm[i]);
+				const double difference = std::abs(expected - hm[i]);
+				largest = std::isfinite(difference) ? std::max(largest, difference) : 1e30;
+				low = std::min(low, hm[i]);
+				high = std::max(high, hm[i]);
+			}
+			const bool ok = largest <= 1e-5 && high > low;
+			allOk = allOk && ok;
+			std::ostringstream details;
+			details << "largest difference " << std::scientific << std::setprecision(2) << largest;
+			Report(name, details.str(), ok);
+		}
+		return allOk;
 	}
 
 	struct BiomeResult {
@@ -634,6 +725,7 @@ namespace {
 		cases.push_back({ "world: spline method, sharp colors", spline, sharp, MapArea{} });
 		cases.push_back({ "world: chunk, step 2", TerrainConfig::Default(), BiomeConfig::Default(),
 			MapArea{ glm::vec2(300.0f, 30.0f), 2.0f, glm::ivec2(mapWidth, mapHeight) } });
+		cases.push_back({ "world: nested method", NestedFromLayered(true), BiomeConfig::Default(), MapArea{} });
 
 		bool allOk = true;
 		for (const WorldCase& c : cases) {
@@ -717,6 +809,10 @@ namespace {
 		TerrainConfig layered = TerrainConfig::Default();
 		layered.method = EvaluationMethod::LAYERED;
 		check("chunk: layered terrain", GL_RED, GL_FLOAT, [&](const MapArea& area, TextureClass& t) { gpu.GenerateTerrain(layered, area, t); });
+		TerrainConfig nestedTerrain = NestedFromLayered(true);
+		nestedTerrain.nested.root.points[2].sub.clear();
+		nestedTerrain.nested.root.points[3].sub = { HandBuiltTree().points[2].sub[0] };
+		check("chunk: nested terrain", GL_RED, GL_FLOAT, [&](const MapArea& area, TextureClass& t) { gpu.GenerateTerrain(nestedTerrain, area, t); });
 		const BiomeConfig biomes = BiomeConfig::Default();
 		check("chunk: biome modifiers", GL_RED, GL_FLOAT, [&](const MapArea& area, TextureClass& t) { gpu.GenerateTerrain(layered, area, t, &biomes); });
 		check("chunk: biome ids", GL_RED_INTEGER, GL_INT, [&](const MapArea& area, TextureClass& ids) {
@@ -1690,6 +1786,28 @@ namespace {
 				<< std::setw(10) << terrainMs << std::setw(11) << modifiedMs << std::setw(9) << biomesMs << std::setw(9) << splatMs
 				<< std::setw(13) << twoPassMs << std::setw(11) << onePassMs << std::setw(14) << surfaceMs << std::defaultfloat << "\n" << std::left;
 		}
+		//The nested method against LAYERED, the tree made from the default LAYERED curves
+		const TerrainConfig nestedConfig = NestedFromLayered(false);
+		std::cout << "nested [ms]     terrain   (layered)   one pass   (layered)\n";
+		for (int size : { 1024, 4096 }) {
+			TextureClass height(size, size, GL_R32F), colors(size, size, GL_RGBA32F), ids(size, size, GL_R32I);
+			TextureClass splat(size, size, GL_RGBA8, GpuHeightGenerator::splatLayers);
+			const auto terrainMs = [&](const TerrainConfig& t) {
+				return MedianMs([&] {
+					gpu.GenerateTerrain(t, MapArea{}, height);
+					glFinish();
+				}, 9);
+			};
+			const auto onePassMs = [&](const TerrainConfig& t) {
+				return MedianMs([&] {
+					gpu.GenerateWorld(t, biomes, MapArea{}, height, colors, ids, &splat);
+					glFinish();
+				}, 9);
+			};
+			std::cout << std::left << std::setw(14) << (std::to_string(size) + "x" + std::to_string(size)) << std::right << std::fixed << std::setprecision(2)
+				<< std::setw(10) << terrainMs(nestedConfig) << std::setw(12) << terrainMs(config)
+				<< std::setw(11) << onePassMs(nestedConfig) << std::setw(12) << onePassMs(config) << std::defaultfloat << "\n" << std::left;
+		}
 		//What a sculpt frame pays for the surface map: the square of a 128-texel brush instead of the whole map
 		TextureClass regionHeight(4096, 4096, GL_R32F), regionSurface(4096, 4096, GL_RGBA32F);
 		gpu.GenerateTerrain(config, MapArea{}, regionHeight);
@@ -1762,6 +1880,7 @@ int RunGpuHeightCheck()
 			ok = CheckDeterminism(gpu) && ok;
 			ok = CheckShapeOperations(gpu) && ok;
 			ok = CheckLayered(gpu) && ok;
+			ok = CheckNested(gpu) && ok;
 			ok = CheckBiomes(gpu) && ok;
 			ok = CheckClimate(gpu) && ok;
 			ok = CheckModifiers(gpu) && ok;
