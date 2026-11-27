@@ -615,7 +615,12 @@ Kroki:
   światło kierunkowe mocniej przy niskim słońcu; dolne części źdźbeł tracą światło kierunkowe zależnie od wysokości słońca (zamiast stałego przyciemnienia).
   Bench (las, podłoże `grass` 0,25): oświetlony grunt ok. 15% ciemniejszy, teren GPU 0,42 → ~0,5 ms. Do sprawdzenia w aplikacji: łąka (Grass, `grass` 1) przy niskim
   i wysokim słońcu, brak pierścienia na granicy zasięgu trawy, klify bez przyciemnienia, „Grass” wyłączona / 2D / inne tryby wyświetlania = jak dawniej, noc z księżycem.
-  Dalej możliwe: tańsze rośliny w dalekich kaskadach (same impostory / co druga klatka).
+  ✅ 2026-11-27 ostatnia kaskada co drugą klatkę (checkbox „Farthest cascade every other frame”, domyślnie włączony, przy ≥ 2 kaskadach): w klatce pominiętej zostaje
+  mapa i macierz słońca z klatki, która ją narysowała (odbiorcy rzutują nią), granica kaskady liczona co klatkę; rysowana od nowa po zmianie światła o > 0,25°, rozmiaru wycinka (teksel: zasięg cieni, podział, FOV, okno), liczby
+  kaskad, rozdzielczości, skali modelu / wysokości i po wyłączeniu cieni. Bench (las, impostory): cienie 5,19 → 4,53 ms (słońce 12°), 3,10 → 2,53 ms (40°), maks.
+  bez zmian. Próbowane i odrzucone: rośliny dalszych kaskad tylko jako impostory — kaskady 2–3 i tak rysują impostory (`shadowDetail` 0,3 → od 45 m), zysk 0,2 ms
+  tylko z kaskady 1, a cień drzew w 15–40 m wyraźnie się zmieniał; koszt to wypełnianie liści z testem alfa, nie trójkąty. Do sprawdzenia w aplikacji: szybki lot
+  i obrót kamery — daleki cień (100–300 m) bez skoków i bez pasa na granicy kaskad, przyspieszony cykl dnia, zmiana na księżyc, 1 kaskada = jak dawniej.
 - **Eksport:** heightmap 16-bit/EXR, splat mapy, mesh OBJ/glTF (z LOD), lista instancji roślinności (JSON) → import do Unity/Unreal/Godot.
   Kolejność (2026-11-20, właściciel zostawił ją do zaproponowania): (1) paczka + metadane + EXR, (2) mapy materiałów i biomów, (3) siatka glTF/OBJ z LOD
   + woda, (4) instancje roślinności, (5) opcjonalnie skrypty importu Unity/Godot.
