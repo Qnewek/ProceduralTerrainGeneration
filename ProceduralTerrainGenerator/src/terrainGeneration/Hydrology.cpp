@@ -45,6 +45,7 @@ namespace hydrology {
 			glm::vec2 a, b;		//cell coordinates
 			float levelA, levelB;
 			float widthA, widthB;
+			float foamA, foamB;
 		};
 
 		//Writes the segment into every cell it is the nearest course of, within radius cells of it
@@ -58,8 +59,8 @@ namespace hydrology {
 			const glm::vec2 ab = s.b - s.a;
 			const float length2 = glm::dot(ab, ab);
 			const float length = std::sqrt(length2);
-			const FlowTexel flow = length > 0.0f
-				? FlowTexel{ ab.x / length, ab.y / length, std::max(s.levelA - s.levelB, 0.0f) / (length * cellSize) } : FlowTexel{};
+			FlowTexel flow = length > 0.0f
+				? FlowTexel{ ab.x / length, ab.y / length, std::max(s.levelA - s.levelB, 0.0f) / (length * cellSize), 0.0f } : FlowTexel{};
 			for (int y = y0; y <= y1; y++) {
 				for (int x = x0; x <= x1; x++) {
 					const glm::vec2 q(static_cast<float>(x), static_cast<float>(y));
@@ -70,6 +71,7 @@ namespace hydrology {
 					if (distance < r.distance) {
 						r = { offset.x, offset.y, distance, glm::mix(s.widthA, s.widthB, t) };
 						net.levels.At(x, y).river = glm::mix(s.levelA, s.levelB, t);
+						flow.foam = glm::mix(s.foamA, s.foamB, t);
 						net.flow.At(x, y) = flow;
 					}
 				}
@@ -299,6 +301,22 @@ namespace hydrology {
 			point = std::move(smoothed);
 		}
 
+		//Foam below falls: every point of a course gets the steepest segment slope upstream of it, fading with the distance from that segment
+		//(donors come after their receivers in the order, so going backwards every cell is final before its receiver takes it)
+		const auto end = [&](int c) { return river[d.receiver[c]] ? point[d.receiver[c]] : center(d.receiver[c]); };
+		const auto endLevelOf = [&](int c) { return river[d.receiver[c]] ? level[d.receiver[c]] : endLevel(d.receiver[c]); };
+		std::vector<float> foam(count, 0.0f);
+		for (auto it = d.order.rbegin(); it != d.order.rend(); ++it) {
+			const int c = *it;
+			if (!river[c]) {
+				continue;
+			}
+			const float length = glm::length(end(c) - point[c]) * cellSize;
+			const float slope = length > 0.0f ? std::max(level[c] - endLevelOf(c), 0.0f) / length : 0.0f;
+			const int r = d.receiver[c];
+			foam[r] = std::max(foam[r], std::max(slope, foam[c] * std::exp(-length / foamLength)));
+		}
+
 		//The carving reaches maxHalfWidth + bankWidth texels from a course; one more cell keeps bilinear sampling inside written cells
 		const int radius = static_cast<int>(std::ceil((std::max(config.minHalfWidth, config.maxHalfWidth) + config.bankWidth) / cellSize)) + 1;
 		for (size_t c = 0; c < count; c++) {
@@ -306,8 +324,8 @@ namespace hydrology {
 				continue;
 			}
 			const int r = d.receiver[c];
-			const Segment s{ point[c], river[r] ? point[r] : center(r), level[c], river[r] ? level[r] : endLevel(r), halfWidth[c],
-				river[r] ? halfWidth[r] : halfWidth[c] };
+			const Segment s{ point[c], end(static_cast<int>(c)), level[c], endLevelOf(static_cast<int>(c)), halfWidth[c],
+				river[r] ? halfWidth[r] : halfWidth[c], foam[c], foam[r] };
 			Rasterize(s, radius, cellSize, net);
 		}
 		return net;
@@ -393,13 +411,20 @@ namespace hydrology {
 				for (int k = 0; k < 4; k++) {
 					const int c = corners[k];
 					const glm::vec2 p = network.origin + glm::vec2(static_cast<float>(c % width), static_cast<float>(c / width)) * network.cellSize;
-					v[k] = { p.x, p.y, wet[c] ? level[c] : underGround(c, top), 0.0f, 0.0f };
+					v[k] = { p.x, p.y, wet[c] ? level[c] : underGround(c, top), 0.0f, 0.0f, 0.0f, 0.0f };
 					//Lakes stand still; a river flows along its course
 					const FlowTexel& f = network.flow[c];
 					if (wet[c] && network.levels[c].lake == noLake) {
 						const float speed = FlowSpeed(f.slope * texelsPerHeight);
 						v[k].flowX = f.x * speed;
 						v[k].flowY = f.y * speed;
+						v[k].slope = f.slope;
+					}
+					//Foam on the river and on a lake where a fall enters it, fading out beside the course
+					if (wet[c]) {
+						const RiverTexel& r = network.rivers[c];
+						const float beside = std::clamp((r.distance - r.halfWidth) / reach, 0.0f, 1.0f);
+						v[k].foam = f.foam * (1.0f - beside);
 					}
 				}
 				for (const int k : { 0, 1, 2, 2, 1, 3 }) {

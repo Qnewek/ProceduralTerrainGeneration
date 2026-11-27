@@ -396,8 +396,11 @@ void MapImportSys::UploadRiverWater()
 	}
 	std::vector<hydrology::WaterVertex> vertices = riverNetwork->water;
 	const float toUnits = hydrology::mapMetresPerHeight / metresPerUnit;
+	//Heights of the map units the view draws, so the shader gets the slope of what it shows
 	for (hydrology::WaterVertex& v : vertices) {
 		v.level *= toUnits;
+		v.slope *= toUnits;
+		v.foam *= toUnits;
 	}
 	riverMap.Upload(riverNetwork->network, vertices);
 }
