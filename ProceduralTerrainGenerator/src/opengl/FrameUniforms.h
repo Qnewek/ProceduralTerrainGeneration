@@ -69,4 +69,5 @@ public:
 
 private:
 	GLuint buffer = 0;
+	GLuint dummyShadow = 0;
 };
