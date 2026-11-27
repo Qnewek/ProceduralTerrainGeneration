@@ -85,3 +85,133 @@ TEST_CASE("Units per pixel at a distance")
 	CHECK(cameramath::UnitsPerPixel(100.0f, 90.0f, 200) == doctest::Approx(1.0f));
 	CHECK(cameramath::UnitsPerPixel(100.0f, 90.0f, 0) > 0.0f);
 }
+
+namespace {
+	//World point (XZ) shown at ndc of a frame: +X to the right, -Z up
+	glm::vec2 FlatPoint(const cameramath::FlatFrame& f, glm::vec2 ndc)
+	{
+		return { f.center.x + ndc.x * f.half.x, f.center.y - ndc.y * f.half.y };
+	}
+
+	//A finite map 1024 x 512 world units at (100, -50) shown in a square view
+	cameramath::FlatZoom MapZoom(cameramath::FlatFrame& fit)
+	{
+		cameramath::FlatZoom zoom;
+		cameramath::SetFlatFit(zoom, glm::vec2(100.0f, -50.0f) - glm::vec2(512.0f, 256.0f), glm::vec2(100.0f, -50.0f) + glm::vec2(512.0f, 256.0f));
+		fit = cameramath::FitFlatFrame(zoom.fitMin, zoom.fitMax, 1.0f);
+		return zoom;
+	}
+}
+
+TEST_CASE("Flat view: the fitted frame has a margin and the aspect of the view")
+{
+	const cameramath::FlatFrame fit = cameramath::FitFlatFrame(glm::vec2(-100.0f, -50.0f), glm::vec2(100.0f, 50.0f), 1.0f);
+	CHECK(fit.center.x == doctest::Approx(0.0f));
+	CHECK(fit.half.x == doctest::Approx(102.0f));
+	CHECK(fit.half.y == doctest::Approx(102.0f));
+	const cameramath::FlatFrame wide = cameramath::FitFlatFrame(glm::vec2(-100.0f, -50.0f), glm::vec2(100.0f, 50.0f), 4.0f);
+	CHECK(wide.half.x == doctest::Approx(204.0f));
+	CHECK(wide.half.y == doctest::Approx(51.0f));
+	//Not zoomed = the fitted frame
+	cameramath::FlatZoom zoom;
+	const cameramath::FlatFrame shown = cameramath::Zoomed(fit, zoom);
+	CHECK(shown.half.x == doctest::Approx(fit.half.x));
+	CHECK(shown.center.y == doctest::Approx(fit.center.y));
+}
+
+TEST_CASE("Flat view: zooming keeps the point under the cursor")
+{
+	cameramath::FlatFrame fit;
+	cameramath::FlatZoom zoom = MapZoom(fit);
+	const glm::vec2 cursor(0.4f, -0.7f);
+	for (float factor : { 0.5f, 0.8f, 0.5f, 1.25f }) {
+		const glm::vec2 before = FlatPoint(cameramath::Zoomed(fit, zoom), cursor);
+		cameramath::ZoomFlatAt(zoom, fit, cursor, factor);
+		const glm::vec2 after = FlatPoint(cameramath::Zoomed(fit, zoom), cursor);
+		CHECK(after.x == doctest::Approx(before.x).epsilon(1e-4));
+		CHECK(after.y == doctest::Approx(before.y).epsilon(1e-4));
+	}
+	CHECK(zoom.scale == doctest::Approx(0.5f * 0.8f * 0.5f * 1.25f));
+}
+
+TEST_CASE("Flat view: zoom limits on a finite map")
+{
+	cameramath::FlatFrame fit;
+	cameramath::FlatZoom zoom = MapZoom(fit);
+	for (int i = 0; i < 100; i++) {
+		cameramath::ZoomFlatAt(zoom, fit, glm::vec2(0.0f), 0.5f);
+	}
+	//32 texels (4 world units each) across the shorter side
+	CHECK(std::min(cameramath::Zoomed(fit, zoom).half.x, cameramath::Zoomed(fit, zoom).half.y) == doctest::Approx(64.0f));
+	for (int i = 0; i < 100; i++) {
+		cameramath::ZoomFlatAt(zoom, fit, glm::vec2(0.9f, 0.9f), 2.0f);
+	}
+	CHECK(zoom.scale == doctest::Approx(1.25f));
+	//The centre never leaves the fitted frame
+	CHECK(std::abs(zoom.offset.x) <= fit.half.x + 1e-3f);
+	CHECK(std::abs(zoom.offset.y) <= fit.half.y + 1e-3f);
+}
+
+TEST_CASE("Flat view: panning moves the map with the cursor and stops at the edge of the frame")
+{
+	cameramath::FlatFrame fit;
+	cameramath::FlatZoom zoom = MapZoom(fit);
+	cameramath::ZoomFlatAt(zoom, fit, glm::vec2(0.0f), 0.25f);
+	//The point under the cursor moves with it: 100 px right and 50 px down in a view 800 px high
+	const cameramath::FlatFrame before = cameramath::Zoomed(fit, zoom);
+	const glm::vec2 grabbed = FlatPoint(before, glm::vec2(0.0f));
+	cameramath::PanFlat(zoom, fit, glm::vec2(100.0f, 50.0f), 800.0f);
+	const glm::vec2 ndcMoved(100.0f / 400.0f, -50.0f / 400.0f);
+	const glm::vec2 now = FlatPoint(cameramath::Zoomed(fit, zoom), ndcMoved);
+	CHECK(now.x == doctest::Approx(grabbed.x).epsilon(1e-4));
+	CHECK(now.y == doctest::Approx(grabbed.y).epsilon(1e-4));
+	cameramath::PanFlat(zoom, fit, glm::vec2(-1e6f, 1e6f), 800.0f);
+	CHECK(zoom.offset.x == doctest::Approx(fit.half.x));
+	CHECK(zoom.offset.y == doctest::Approx(-fit.half.y));
+}
+
+TEST_CASE("Flat view: an infinite world zooms only, inside the area it shows")
+{
+	cameramath::FlatFrame fit;
+	cameramath::FlatZoom zoom = MapZoom(fit);
+	zoom.fixedFrame = true;
+	cameramath::ZoomFlatAt(zoom, fit, glm::vec2(0.0f), 2.0f);
+	CHECK(zoom.scale == doctest::Approx(1.0f));
+	cameramath::ZoomFlatAt(zoom, fit, glm::vec2(1.0f, 1.0f), 0.5f);
+	const cameramath::FlatFrame shown = cameramath::Zoomed(fit, zoom);
+	CHECK(shown.center.x + shown.half.x <= fit.center.x + fit.half.x + 1e-3f);
+	CHECK(shown.center.y - shown.half.y >= fit.center.y - fit.half.y - 1e-3f);
+	const glm::vec2 offset = zoom.offset;
+	cameramath::PanFlat(zoom, fit, glm::vec2(300.0f, 0.0f), 800.0f);
+	CHECK(zoom.offset.x == offset.x);
+	//Zooming out again ends at the whole area
+	cameramath::ZoomFlatAt(zoom, fit, glm::vec2(-1.0f, 0.3f), 4.0f);
+	CHECK(zoom.offset.x == doctest::Approx(0.0f));
+	CHECK(zoom.offset.y == doctest::Approx(0.0f));
+}
+
+TEST_CASE("Flat view: a frame of another size resets the zoom, a moved frame keeps it")
+{
+	cameramath::FlatFrame fit;
+	cameramath::FlatZoom zoom = MapZoom(fit);
+	cameramath::ZoomFlatAt(zoom, fit, glm::vec2(0.5f, 0.5f), 0.5f);
+	cameramath::SetFlatFit(zoom, zoom.fitMin + glm::vec2(40.0f), zoom.fitMax + glm::vec2(40.0f));
+	CHECK(zoom.scale == doctest::Approx(0.5f));
+	//The area of the infinite world follows the camera: centre +- radius, whose float difference wobbles by rounding
+	cameramath::SetFlatFit(zoom, glm::vec2(-4097.3f), glm::vec2(4097.3f));
+	cameramath::ZoomFlatAt(zoom, cameramath::FitFlatFrame(zoom.fitMin, zoom.fitMax, 1.0f), glm::vec2(0.0f), 0.5f);
+	for (float c = 0.0f; c < 50000.0f; c += 1234.567f) {
+		cameramath::SetFlatFit(zoom, glm::vec2(c, -c) - glm::vec2(4097.3f), glm::vec2(c, -c) + glm::vec2(4097.3f));
+	}
+	CHECK(zoom.scale == doctest::Approx(0.5f));
+	cameramath::SetFlatFit(zoom, glm::vec2(100.0f, -50.0f) - glm::vec2(512.0f, 256.0f), glm::vec2(100.0f, -50.0f) + glm::vec2(512.0f, 256.0f));
+	cameramath::ZoomFlatAt(zoom, fit, glm::vec2(0.5f, 0.5f), 0.5f);
+	cameramath::SetFlatFit(zoom, zoom.fitMin, zoom.fitMax + glm::vec2(1100.0f, 0.0f));
+	CHECK(zoom.scale == 1.0f);
+	CHECK(zoom.offset == glm::vec2(0.0f));
+	//Reset (F, "Fit 2D map")
+	cameramath::ZoomFlatAt(zoom, fit, glm::vec2(0.5f, 0.5f), 0.5f);
+	cameramath::ResetFlatZoom(zoom);
+	CHECK(zoom.scale == 1.0f);
+	CHECK(zoom.offset == glm::vec2(0.0f));
+}

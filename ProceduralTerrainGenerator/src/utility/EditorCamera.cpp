@@ -1,6 +1,7 @@
 #include "EditorCamera.h"
 
 #include <algorithm>
+#include <cmath>
 
 #include "glm/gtc/matrix_transform.hpp"
 #include "imgui.h"
@@ -44,6 +45,12 @@ namespace {
 		camera.SetView(pose.position, pose.yaw, pose.pitch);
 	}
 
+	//Frame of the 2D map before zooming, as TerrainView fits it into the view
+	cameramath::FlatFrame FlatFit(const cameramath::FlatZoom& flat, glm::ivec4 viewport)
+	{
+		return cameramath::FitFlatFrame(flat.fitMin, flat.fitMax, viewport.w > 0 ? static_cast<float>(viewport.z) / viewport.w : 1.0f);
+	}
+
 	//Distance of the pivot when nothing is under the cursor (sky): two seconds of flight, at least a few units
 	float FallbackDistance(const Camera& camera)
 	{
@@ -51,7 +58,7 @@ namespace {
 	}
 }
 
-void EditorCamera::Update(GLFWwindow* window, Camera& camera, glm::ivec4 viewport, bool flatView)
+void EditorCamera::Update(GLFWwindow* window, Camera& camera, glm::ivec4 viewport, cameramath::FlatZoom* flat)
 {
 	const bool down[3] = {
 		glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS,
@@ -66,8 +73,15 @@ void EditorCamera::Update(GLFWwindow* window, Camera& camera, glm::ivec4 viewpor
 	glm::dvec2 cursor;
 	glfwGetCursorPos(window, &cursor.x, &cursor.y);
 
-	if (!enabled || flatView || camera.MouseControl()) {
+	//A 3D drag ends when the 2D map comes, and the other way round
+	if (!enabled || camera.MouseControl() || (drag != Drag::NONE && (drag == Drag::FLAT_PAN) != (flat != nullptr))) {
 		End(window, camera);
+		if (!enabled || camera.MouseControl()) {
+			return;
+		}
+	}
+	if (flat) {
+		UpdateFlat(window, down, pressed, cursor, viewport, *flat);
 		return;
 	}
 	if (drag == Drag::NONE) {
@@ -119,6 +133,35 @@ void EditorCamera::Update(GLFWwindow* window, Camera& camera, glm::ivec4 viewpor
 	}
 }
 
+void EditorCamera::UpdateFlat(GLFWwindow* window, const bool down[3], const bool pressed[3], glm::dvec2 cursor, glm::ivec4 viewport,
+	cameramath::FlatZoom& flat)
+{
+	//F: the whole map again (not while typing into a field)
+	const bool fitKey = glfwGetKey(window, GLFW_KEY_F) == GLFW_PRESS;
+	if (fitKey && !fitKeyWasDown && !ImGui::GetIO().WantCaptureKeyboard) {
+		cameramath::ResetFlatZoom(flat);
+	}
+	fitKeyWasDown = fitKey;
+	if (drag == Drag::NONE) {
+		const bool overScene = !ImGui::GetIO().WantCaptureMouse && Inside(ToFramebuffer(window, cursor), viewport);
+		if (overScene && (pressed[1] || pressed[2])) {
+			drag = Drag::FLAT_PAN;
+			flatButton = pressed[2] ? 2 : 1;
+			lastCursor = cursor;
+		}
+		return;
+	}
+	if (!down[flatButton]) {
+		drag = Drag::NONE;
+		return;
+	}
+	const glm::vec2 delta(cursor - lastCursor);
+	lastCursor = cursor;
+	if (delta != glm::vec2(0.0f)) {
+		cameramath::PanFlat(flat, FlatFit(flat, viewport), delta * glm::vec2(FramebufferScale(window)), static_cast<float>(viewport.w));
+	}
+}
+
 void EditorCamera::Begin(GLFWwindow* window, const Camera& camera, Drag kind, glm::dvec2 cursor)
 {
 	drag = kind;
@@ -139,8 +182,8 @@ void EditorCamera::End(GLFWwindow* window, const Camera& camera)
 	if (drag == Drag::NONE) {
 		return;
 	}
-	//M took the mouse meanwhile: its hidden cursor stays
-	if (drag != Drag::PAN && !camera.MouseControl()) {
+	//M took the mouse meanwhile: its hidden cursor stays; panning never hid it
+	if (drag != Drag::PAN && drag != Drag::FLAT_PAN && !camera.MouseControl()) {
 		glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
 		glfwSetCursorPos(window, pressCursor.x, pressCursor.y);
 	}
@@ -172,15 +215,22 @@ void EditorCamera::AfterDraw(const Camera& camera, glm::ivec4 viewport)
 	}
 }
 
-void EditorCamera::ImGuiWheel(GLFWwindow* window, Camera& camera, glm::ivec4 viewport, bool flatView)
+void EditorCamera::ImGuiWheel(GLFWwindow* window, Camera& camera, glm::ivec4 viewport, cameramath::FlatZoom* flat)
 {
 	const ImGuiIO& io = ImGui::GetIO();
-	if (!enabled || flatView || camera.MouseControl() || io.WantCaptureMouse || io.KeyShift || io.MouseWheel == 0.0f) {
+	if (!enabled || camera.MouseControl() || io.WantCaptureMouse || io.KeyShift || io.MouseWheel == 0.0f) {
 		return;
 	}
 	glm::dvec2 cursor;
 	glfwGetCursorPos(window, &cursor.x, &cursor.y);
-	if (!Inside(ToFramebuffer(window, cursor), viewport)) {
+	const glm::vec2 pixel = ToFramebuffer(window, cursor);
+	if (!Inside(pixel, viewport)) {
+		return;
+	}
+	if (flat) {
+		//A notch = 15% closer, about the point under the cursor
+		const glm::vec2 ndc = (pixel - glm::vec2(viewport.x, viewport.y)) / glm::vec2(viewport.z, viewport.w) * 2.0f - 1.0f;
+		cameramath::ZoomFlatAt(*flat, FlatFit(*flat, viewport), ndc, std::pow(0.85f, io.MouseWheel));
 		return;
 	}
 	//A notch = a quarter of a second of flight
@@ -193,5 +243,6 @@ void EditorCamera::ImGuiDraw()
 	ImGui::SetItemTooltip("Steering with the mouse over the 3D view, like in game engine editors");
 	if (enabled) {
 		ImGui::TextDisabled("Right button: look (+ WASD fly), Alt + left: orbit,\nmiddle: pan, wheel: forward / back");
+		ImGui::TextDisabled("2D map: wheel: zoom, middle / right: drag,\nF: whole map (infinite world: zoom only)");
 	}
 }

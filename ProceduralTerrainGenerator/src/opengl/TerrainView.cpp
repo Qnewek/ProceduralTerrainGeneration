@@ -114,25 +114,24 @@ std::unique_ptr<Shader> TerrainView::CreateTerrainShader()
 }
 
 namespace {
-	//Sets view/projection of a top-down orthographic camera framing the given area
+	//Sets view/projection of a top-down orthographic camera framing the given area, zoomed by settings.flatZoom (which records the area)
 	void SetFlatCamera(FrameUniforms::Block& frame, const TerrainRenderSettings& settings, glm::vec2 flatMin, glm::vec2 flatMax)
 	{
-		//Bounds are given before modelScale; model = scale * translate(offset), so scaling them is enough
-		glm::vec2 min = flatMin * settings.modelScale;
-		glm::vec2 max = flatMax * settings.modelScale;
-		glm::vec2 center = (min + max) * 0.5f;
-		glm::vec2 half = (max - min) * 0.5f * 1.02f;	//small margin
-
 		//Keep the aspect ratio of the viewport
 		GLint viewport[4];
 		glGetIntegerv(GL_VIEWPORT, viewport);
-		float aspect = viewport[3] > 0 ? static_cast<float>(viewport[2]) / viewport[3] : 1.0f;
-		if (half.x < half.y * aspect) {
-			half.x = half.y * aspect;
+		const float aspect = viewport[3] > 0 ? static_cast<float>(viewport[2]) / viewport[3] : 1.0f;
+		//Passes drawn only in 3D give no area
+		if (flatMin != flatMax) {
+			cameramath::SetFlatFit(settings.flatZoom, flatMin, flatMax);
 		}
-		else {
-			half.y = half.x / aspect;
-		}
+		const cameramath::FlatFrame fit = cameramath::FitFlatFrame(flatMin, flatMax, aspect);
+		//A resized window changes the frame under the zoom
+		cameramath::ClampFlatZoom(settings.flatZoom, fit);
+		const cameramath::FlatFrame shown = cameramath::Zoomed(fit, settings.flatZoom);
+		//Bounds are given before modelScale; model = scale * translate(offset), so scaling them is enough
+		const glm::vec2 center = shown.center * settings.modelScale;
+		const glm::vec2 half = shown.half * settings.modelScale;
 
 		//Camera above the highest possible point looking straight down; +X to the right, -Z up
 		float top = std::abs(settings.heightScale * settings.modelScale) + 1.0f;
