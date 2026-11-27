@@ -11,16 +11,72 @@
 
 #include "utilities.h"
 
+#ifndef NDEBUG
+namespace {
+	void APIENTRY GlDebugCallback(GLenum source, GLenum type, GLuint id, GLenum severity, GLsizei, const GLchar* message, const void*)
+	{
+		if (severity == GL_DEBUG_SEVERITY_NOTIFICATION) {
+			return;
+		}
+		std::cerr << "[OpenGL Debug] (" << source << "/" << type << " #" << id << " sev=" << severity << "): " << message << std::endl;
+	}
+}
+#endif
+
 TerrainGenApp::TerrainGenApp() : window(nullptr), windowWidth(0), windowHeight(0), deltaTime(0.0f), lastFrame(0.0),
 rightPanelWidth(400.0f),topPanelHeight(30.0f), bottomPanelHeight(280.0f), leftPanelWidth(400.0f),
 width(250), height(250), heightScale(256.0f),
 camera(1920, 1080, glm::vec3(0.0f, heightScale, 0.0f), 100.0f, 5000.0f), renderer(),
-noiseGenSys(), currentMode(mode::NOISE_HEIGHTMAP)
+currentMode(mode::NOISE_HEIGHTMAP)
 {
 }
 
 TerrainGenApp::~TerrainGenApp()
 {
+	Shutdown();
+}
+
+void TerrainGenApp::Shutdown()
+{
+	if (!glfwInitialized && !window && !imguiInitialized) {
+		return;
+	}
+	if (window) {
+		glfwHideWindow(window);
+	}
+	if (terrainGenSys) {
+		terrainGenSys->SetVegetationModels(nullptr);
+		terrainGenSys->SetTerrainMaterials(nullptr);
+	}
+	if (mapImportSys) {
+		mapImportSys->SetVegetationModels(nullptr);
+		mapImportSys->SetTerrainMaterials(nullptr);
+	}
+	//Destroy all GL-owning objects before tearing down the OpenGL context
+	mapImportSys.reset();
+	terrainGenSys.reset();
+	noiseGenSys.reset();
+	clouds.reset();
+	sky.reset();
+	metrics.reset();
+	materials.reset();
+	vegetation.reset();
+
+	if (imguiInitialized) {
+		ImGui_ImplOpenGL3_Shutdown();
+		ImGui_ImplGlfw_Shutdown();
+		ImPlot::DestroyContext();
+		ImGui::DestroyContext();
+		imguiInitialized = false;
+	}
+	if (window) {
+		glfwDestroyWindow(window);
+		window = nullptr;
+	}
+	if (glfwInitialized) {
+		glfwTerminate();
+		glfwInitialized = false;
+	}
 }
 
 
@@ -31,21 +87,30 @@ bool TerrainGenApp::Initialize()
         std::cout << "[ERROR] Failed to initialize GLFW" << std::endl;
         return false;
     }
+    glfwInitialized = true;
 
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 5);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 	glfwWindowHint(GLFW_MAXIMIZED, GLFW_TRUE);
+#ifndef NDEBUG
+	glfwWindowHint(GLFW_OPENGL_DEBUG_CONTEXT, GLFW_TRUE);
+#endif
     
-    GLFWmonitor* primaryMonitor = glfwGetPrimaryMonitor();
-    const GLFWvidmode* mode = glfwGetVideoMode(primaryMonitor);
+    int initWidth = 1920, initHeight = 1080;
+    if (GLFWmonitor* primaryMonitor = glfwGetPrimaryMonitor()) {
+        if (const GLFWvidmode* mode = glfwGetVideoMode(primaryMonitor)) {
+            initWidth = mode->width;
+            initHeight = mode->height;
+        }
+    }
 
-    window = glfwCreateWindow(mode->width, mode->height, "Procedural terrain generator", NULL, NULL);
+    window = glfwCreateWindow(initWidth, initHeight, "Procedural terrain generator", NULL, NULL);
 
     if (!window)
     {
         std::cout << "[ERROR] Failed to create GLFW window" << std::endl;
-        glfwTerminate();
+        Shutdown();
         return false;
     }
 
@@ -63,10 +128,20 @@ bool TerrainGenApp::Initialize()
 
     if (glewInit() != GLEW_OK) {
         std::cout << "[ERROR] Failed to initialize GLEW" << std::endl;
-        glfwDestroyWindow(window);
-        glfwTerminate();
+        Shutdown();
         return false;
     }
+
+#ifndef NDEBUG
+    GLint contextFlags = 0;
+    glGetIntegerv(GL_CONTEXT_FLAGS, &contextFlags);
+    if (contextFlags & GL_CONTEXT_FLAG_DEBUG_BIT) {
+        glEnable(GL_DEBUG_OUTPUT);
+        glEnable(GL_DEBUG_OUTPUT_SYNCHRONOUS);
+        glDebugMessageCallback(GlDebugCallback, nullptr);
+        glDebugMessageControl(GL_DONT_CARE, GL_DONT_CARE, GL_DEBUG_SEVERITY_NOTIFICATION, 0, nullptr, GL_FALSE);
+    }
+#endif
 
     glEnable(GL_DEPTH_TEST);
 	glDepthFunc(GL_LEQUAL);
@@ -80,6 +155,7 @@ bool TerrainGenApp::Initialize()
     
 	ImGui_ImplGlfw_InitForOpenGL(window, true);
 	ImGui_ImplOpenGL3_Init("#version 450");
+	imguiInitialized = true;
 
     metrics = std::make_unique<FrameMetrics>();
     //Without the list the TEXTURED mode has nothing to show, but the rest of the app works
@@ -96,30 +172,39 @@ bool TerrainGenApp::Initialize()
     //Logic initialization
 	renderer.SetPatches(4);
 	camera.SetScreenSize(ViewportWidth(), ViewportHeight());
-    if (!noiseGenSys.Initialize(width, height, heightScale)) {
+	noiseGenSys = std::make_unique<NoiseBasedGenerationSys>();
+    if (!noiseGenSys->Initialize(width, height, heightScale)) {
         std::cout << "[ERROR] Failed to initialize NoiseBasedGenerationSys" << std::endl;
+        Shutdown();
         return false;
     }
 	//TerrainGen builds continents thousands of texels wide, so its mountains need a larger scale than one small map
-	if (!terrainGenSys.Initialize(width, height, worldHeightScale)) {
+	terrainGenSys = std::make_unique<TerrainGenerationSys>();
+	if (!terrainGenSys->Initialize(width, height, worldHeightScale)) {
 		std::cout << "[ERROR] Failed to initialize TerrainGenerationSys" << std::endl;
+		Shutdown();
 		return false;
 	}
 	std::vector<std::string> materialNames;
 	for (const TerrainMaterial& m : materials->GetMaterials()) {
 		materialNames.push_back(m.name);
 	}
-	terrainGenSys.SetMaterialNames(materialNames);
-	terrainGenSys.SetVegetationModels(vegetation.get());
-	terrainGenSys.SetTerrainMaterials(materials.get());
-	if (!mapImportSys.Initialize(width, height, heightScale)) {
+	terrainGenSys->SetMaterialNames(materialNames);
+	terrainGenSys->SetVegetationModels(vegetation.get());
+	terrainGenSys->SetTerrainMaterials(materials.get());
+	mapImportSys = std::make_unique<MapImportSys>();
+	if (!mapImportSys->Initialize(width, height, heightScale)) {
 		std::cout << "[ERROR] Failed to initialize MapImportSys" << std::endl;
+		Shutdown();
 		return false;
 	}
-	mapImportSys.SetMaterialNames(std::move(materialNames));
-	mapImportSys.SetVegetationModels(vegetation.get());
-	mapImportSys.SetTerrainMaterials(materials.get());
-    if (!sky.Initialize() || !clouds.Initialize()) {
+	mapImportSys->SetMaterialNames(std::move(materialNames));
+	mapImportSys->SetVegetationModels(vegetation.get());
+	mapImportSys->SetTerrainMaterials(materials.get());
+	sky = std::make_unique<Sky>();
+	clouds = std::make_unique<Clouds>();
+    if (!sky->Initialize() || !clouds->Initialize()) {
+        Shutdown();
         return false;
     }
 
@@ -150,16 +235,16 @@ void TerrainGenApp::Start()
 
         //Install finished background generation and start the pending one (only for the active mode)
         if (currentMode == mode::NOISE_HEIGHTMAP) {
-            noiseGenSys.Update(camera);
+            noiseGenSys->Update(camera);
         }
         else if (currentMode == mode::TERRAIN_GEN) {
-            terrainGenSys.Update(camera);
+            terrainGenSys->Update(camera);
         }
         //Every frame: a project save started before leaving the mode (or before closing the window) has to finish
-        mapImportSys.Update(camera, currentMode == mode::MAP_IMPORT, deltaTime);
+        mapImportSys->Update(camera, currentMode == mode::MAP_IMPORT, deltaTime);
         //The sky and the light colors of this frame, read by every lit shader (also in the 2D map)
         light.Update(deltaTime);
-        sky.Update(camera, light);
+        sky->Update(camera, light);
 
 		Draw();
         //The depth of the scene is still there: the point a drag started this frame turns around
@@ -167,32 +252,32 @@ void TerrainGenApp::Start()
         ImGuiRender();
         //"Send map" pressed in a Saving tab this frame: the map opens in the Imported map mode once it is installed (with unsaved
         //changes after the question, drawn in every mode; Cancel leaves the user where they were)
-        std::optional<mapproject::Project> sent = noiseGenSys.TakeSentMap();
+        std::optional<mapproject::Project> sent = noiseGenSys->TakeSentMap();
         if (!sent) {
-            sent = terrainGenSys.TakeSentMap();
+            sent = terrainGenSys->TakeSentMap();
         }
         if (sent) {
-            mapImportSys.Receive(std::move(*sent));
+            mapImportSys->Receive(std::move(*sent));
         }
-        if (mapImportSys.TakeReceived()) {
+        if (mapImportSys->TakeReceived()) {
             currentMode = mode::MAP_IMPORT;
         }
-        const bool holeInView = (currentMode == mode::NOISE_HEIGHTMAP && noiseGenSys.HoleInView()) || (currentMode == mode::TERRAIN_GEN && terrainGenSys.HoleInView());
+        const bool holeInView = (currentMode == mode::NOISE_HEIGHTMAP && noiseGenSys->HoleInView()) || (currentMode == mode::TERRAIN_GEN && terrainGenSys->HoleInView());
         metrics->EndFrame(deltaTime * 1000.0, (glfwGetTime() - currentFrame) * 1000.0, camera.GetPosition(), holeInView);
 
         camera.SetScreenSize(ViewportWidth(), ViewportHeight());
         
         glfwPollEvents();
         //Closing the window with an unsaved project asks first; the window closes once the changes are saved or discarded
-        if (glfwWindowShouldClose(window) && mapImportSys.HasUnsavedChanges()) {
+        if (glfwWindowShouldClose(window) && mapImportSys->HasUnsavedChanges()) {
             glfwSetWindowShouldClose(window, GLFW_FALSE);
-            mapImportSys.RequestQuit();
+            mapImportSys->RequestQuit();
             //Closed from the taskbar while minimized: the "Unsaved changes" question is drawn only in a visible window
             if (glfwGetWindowAttrib(window, GLFW_ICONIFIED) != 0) {
                 glfwRestoreWindow(window);
             }
         }
-        if (mapImportSys.TakeQuit()) {
+        if (mapImportSys->TakeQuit()) {
             glfwSetWindowShouldClose(window, GLFW_TRUE);
         }
         if (glfwGetWindowAttrib(window, GLFW_ICONIFIED) != 0)
@@ -203,21 +288,7 @@ void TerrainGenApp::Start()
         glfwSwapBuffers(window);
     }
 
-    //Background jobs and model loading finish while the subsystems are destroyed: behind a hidden window, not a frozen one
-    glfwHideWindow(window);
-    metrics.reset();
-    materials.reset();
-    terrainGenSys.SetVegetationModels(nullptr);
-    mapImportSys.SetVegetationModels(nullptr);
-    terrainGenSys.SetTerrainMaterials(nullptr);
-    vegetation.reset();
-    ImGui_ImplOpenGL3_Shutdown();
-    ImGui_ImplGlfw_Shutdown();
-	ImPlot::DestroyContext();
-    ImGui::DestroyContext();
-
-    glfwDestroyWindow(window);
-    glfwTerminate();
+    Shutdown();
 }
 
 
@@ -241,20 +312,20 @@ void TerrainGenApp::Draw()
     metrics->BeginScene();
     materials->Bind();
     if (!FlatView()) {
-        sky.Draw(camera, light, clouds.RenderSky(camera, light));
+        sky->Draw(camera, light, clouds->RenderSky(camera, light));
     }
     if (currentMode == mode::NOISE_HEIGHTMAP)
     {
-        noiseGenSys.Draw(renderer, camera, light);
+        noiseGenSys->Draw(renderer, camera, light);
     }
     else if (currentMode == mode::TERRAIN_GEN) {
-		terrainGenSys.Draw(renderer, camera, light);
+		terrainGenSys->Draw(renderer, camera, light);
     }
     else if (currentMode == mode::MAP_IMPORT) {
-        mapImportSys.Draw(renderer, camera, light);
+        mapImportSys->Draw(renderer, camera, light);
     }
     if (!FlatView()) {
-        clouds.DrawOver(camera, light);
+        clouds->DrawOver(camera, light);
     }
     metrics->EndScene();
 
@@ -263,20 +334,20 @@ void TerrainGenApp::Draw()
 
 void TerrainGenApp::ReloadShaders()
 {
-    noiseGenSys.ReloadShaders();
-    terrainGenSys.ReloadShaders();
-    mapImportSys.ReloadShaders();
-    sky.ReloadShader();
-    clouds.ReloadShader();
+    noiseGenSys->ReloadShaders();
+    terrainGenSys->ReloadShaders();
+    mapImportSys->ReloadShaders();
+    sky->ReloadShader();
+    clouds->ReloadShader();
     vegetation->ReloadShader();
 }
 
 bool TerrainGenApp::FlatView() const
 {
     switch (currentMode) {
-    case mode::NOISE_HEIGHTMAP: return noiseGenSys.FlatView();
-    case mode::TERRAIN_GEN: return terrainGenSys.FlatView();
-    case mode::MAP_IMPORT: return mapImportSys.FlatView();
+    case mode::NOISE_HEIGHTMAP: return noiseGenSys->FlatView();
+    case mode::TERRAIN_GEN: return terrainGenSys->FlatView();
+    case mode::MAP_IMPORT: return mapImportSys->FlatView();
     }
     return false;
 }
@@ -284,9 +355,9 @@ bool TerrainGenApp::FlatView() const
 cameramath::FlatZoom* TerrainGenApp::FlatViewZoom()
 {
     switch (currentMode) {
-    case mode::NOISE_HEIGHTMAP: return noiseGenSys.FlatViewZoom();
-    case mode::TERRAIN_GEN: return terrainGenSys.FlatViewZoom();
-    case mode::MAP_IMPORT: return mapImportSys.FlatViewZoom();
+    case mode::NOISE_HEIGHTMAP: return noiseGenSys->FlatViewZoom();
+    case mode::TERRAIN_GEN: return terrainGenSys->FlatViewZoom();
+    case mode::MAP_IMPORT: return mapImportSys->FlatViewZoom();
     }
     return nullptr;
 }
@@ -308,13 +379,13 @@ void TerrainGenApp::ImGuiRender()
     std::vector<PanelTabs::Tab> viewTabs = {
         { "Display", [this] {
             if (currentMode == mode::NOISE_HEIGHTMAP) {
-                noiseGenSys.ImGuiDisplay();
+                noiseGenSys->ImGuiDisplay();
             }
             else if (currentMode == mode::TERRAIN_GEN) {
-                terrainGenSys.ImGuiDisplay();
+                terrainGenSys->ImGuiDisplay();
             }
             else {
-                mapImportSys.ImGuiDisplay();
+                mapImportSys->ImGuiDisplay();
             }
         } },
         { "Camera", [this] { camera.ImGuiDraw(); editorCamera.ImGuiDraw(); } },
@@ -323,22 +394,22 @@ void TerrainGenApp::ImGuiRender()
         { "Vegetation", [this] {
             if (currentMode == mode::TERRAIN_GEN) {
                 ImGui::SeparatorText("Placement");
-                terrainGenSys.ImGuiVegetation();
+                terrainGenSys->ImGuiVegetation();
                 ImGui::SeparatorText("Models");
             }
             vegetation->ImGuiDraw(light);
         } },
     };
     if (currentMode == mode::NOISE_HEIGHTMAP) {
-        viewTabs.push_back({ "Presets", [this] { noiseGenSys.ImGuiPresets(camera); } });
-        viewTabs.push_back({ "Saving", [this] { noiseGenSys.ImGuiSaving(); } });
+        viewTabs.push_back({ "Presets", [this] { noiseGenSys->ImGuiPresets(camera); } });
+        viewTabs.push_back({ "Saving", [this] { noiseGenSys->ImGuiSaving(); } });
     }
     else if (currentMode == mode::TERRAIN_GEN) {
-        viewTabs.push_back({ "Presets", [this] { terrainGenSys.ImGuiPresets(camera); } });
-        viewTabs.push_back({ "Saving", [this] { terrainGenSys.ImGuiSaving(); } });
+        viewTabs.push_back({ "Presets", [this] { terrainGenSys->ImGuiPresets(camera); } });
+        viewTabs.push_back({ "Saving", [this] { terrainGenSys->ImGuiSaving(); } });
     }
     else if (currentMode == mode::MAP_IMPORT) {
-        viewTabs.push_back({ "Saving", [this] { mapImportSys.ImGuiSaving(); } });
+        viewTabs.push_back({ "Saving", [this] { mapImportSys->ImGuiSaving(); } });
     }
     viewTabs.push_back({ "About", [] {
         ImGui::TextWrapped("Hi Dear User!\n"
@@ -357,13 +428,13 @@ void TerrainGenApp::ImGuiRender()
     rightPanelWidth = ImGui::GetWindowWidth() <= windowWidth/2 ? ImGui::GetWindowWidth() : windowWidth/2;
 
     if (currentMode == mode::NOISE_HEIGHTMAP) {
-        noiseGenSys.ImGuiRightPanel();
+        noiseGenSys->ImGuiRightPanel();
     }
     else if(currentMode == mode::TERRAIN_GEN) {
-		terrainGenSys.ImGuiRightPanel();
+		terrainGenSys->ImGuiRightPanel();
 	}
     else if (currentMode == mode::MAP_IMPORT) {
-        mapImportSys.ImGuiRightPanel();
+        mapImportSys->ImGuiRightPanel();
     }
     ImGui::End();
 
@@ -405,13 +476,13 @@ void TerrainGenApp::ImGuiRender()
 
     camera.ImGuiOutPut();
     if (currentMode == mode::NOISE_HEIGHTMAP) {
-        noiseGenSys.ImGuiOutput();
+        noiseGenSys->ImGuiOutput();
     }
     else if (currentMode == mode::TERRAIN_GEN) {
-		terrainGenSys.ImGuiOutput(camera.GetPosition());
+		terrainGenSys->ImGuiOutput(camera.GetPosition());
     }
     else if (currentMode == mode::MAP_IMPORT) {
-        mapImportSys.ImGuiOutput();
+        mapImportSys->ImGuiOutput();
     }
     bottomPanelHeight = ImGui::GetWindowHeight() <= windowHeight / 3 ? ImGui::GetWindowHeight() : windowHeight / 3;
 
@@ -419,13 +490,13 @@ void TerrainGenApp::ImGuiRender()
 
     //Names of the maps shown side by side, over the scene drawn this frame
     if (currentMode == mode::NOISE_HEIGHTMAP) {
-        noiseGenSys.ImGuiMapLabels();
+        noiseGenSys->ImGuiMapLabels();
     }
     else if (currentMode == mode::TERRAIN_GEN) {
-        terrainGenSys.ImGuiMapLabels();
+        terrainGenSys->ImGuiMapLabels();
     }
     //In every mode: closing the window asks about an unsaved project too
-    mapImportSys.ImGuiModals();
+    mapImportSys->ImGuiModals();
 
     ImGui::Render();
     metrics->BeginUi();

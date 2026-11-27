@@ -1,7 +1,7 @@
 #include "IndexBuffer.h"
 #include "Renderer.h"
 
-IndexBuffer::IndexBuffer(const unsigned int* data, unsigned int count) : m_Count(count)
+IndexBuffer::IndexBuffer(const unsigned int* data, unsigned int count) : m_Count(count), m_Capacity(count)
 {
     static_assert(sizeof(unsigned int) == sizeof(GLuint));
 
@@ -13,7 +13,7 @@ IndexBuffer::IndexBuffer(const unsigned int* data, unsigned int count) : m_Count
 
 IndexBuffer::~IndexBuffer()
 {
-	GLCALL(glDeleteBuffers(1, &m_RendererID));
+	glDeleteBuffers(1, &m_RendererID);
 }
 
 void IndexBuffer::Bind() const
@@ -30,6 +30,12 @@ void IndexBuffer::UpdateData(const unsigned int* data, unsigned int count)
 {
     m_Count = count;
     GLCALL(glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m_RendererID));
-    GLCALL(glBufferSubData(GL_ELEMENT_ARRAY_BUFFER, 0, count * sizeof(unsigned int), data));
+    if (count > m_Capacity) {
+        m_Capacity = count;
+        GLCALL(glBufferData(GL_ELEMENT_ARRAY_BUFFER, count * sizeof(unsigned int), data, GL_DYNAMIC_DRAW));
+    }
+    else {
+        GLCALL(glBufferSubData(GL_ELEMENT_ARRAY_BUFFER, 0, count * sizeof(unsigned int), data));
+    }
 }
 

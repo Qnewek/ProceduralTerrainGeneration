@@ -455,14 +455,17 @@ void ChunkWorld::DrawShadow(Renderer& renderer, const FrameUniforms::Block& bloc
 
 void ChunkWorld::DrawChunks(Renderer& renderer, const std::vector<Chunk*>& list, const TerrainRenderSettings& settings)
 {
+	(void)renderer;
 	const glm::mat4 scale = glm::scale(glm::mat4(1.0f), glm::vec3(settings.modelScale));
 	if (settings.wireFrame) {
 		glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
 	}
+	shader->Bind();
+	vao->Bind();
 	for (const Chunk* chunk : list) {
 		const float step = static_cast<float>(1 << chunk->level);
 		const glm::vec2 corner = mapOrigin + glm::vec2(chunk->coord) * NodeSize(chunk->level);
-		shader->SetModel(glm::translate(scale, glm::vec3(corner.x, 0.0f, corner.y)));
+		shader->SetUniformMat4f("model", glm::translate(scale, glm::vec3(corner.x, 0.0f, corner.y)));
 		shader->SetUniform1f("meshScale", step);
 		shader->SetUniform2f("texelWorldSize", TerrainView::worldUnitsPerTexel * step, TerrainView::worldUnitsPerTexel * step);
 		shader->SetUniform1f("skirtDepth", std::min(skirtPart * step, maxSkirtPart) * std::abs(settings.heightScale));
@@ -473,7 +476,7 @@ void ChunkWorld::DrawChunks(Renderer& renderer, const std::vector<Chunk*>& list,
 			chunk->splat->Bind(TerrainView::splatUnit);
 		}
 		shader->SetUniform1i("useSplat", chunk->splat ? 1 : 0);
-		renderer.DrawPatches(*vao, *shader, patchCount, 4);
+		GLCALL(glDrawArrays(GL_PATCHES, 0, patchCount * 4));
 	}
 	if (settings.wireFrame) {
 		glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);

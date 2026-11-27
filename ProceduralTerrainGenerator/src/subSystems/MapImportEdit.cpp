@@ -118,26 +118,34 @@ void MapImportSys::StartEdit(const std::string& label, std::function<void(Height
 		return;
 	}
 	const uint64_t version = mapVersion;
-	editJob.Start([metres = WorkingMetres(), label, operation = std::move(operation), version]() mutable {
-		EditResult result;
-		result.label = label;
-		result.version = version;
-		auto start = std::chrono::steady_clock::now();
-		//An exception would come back in future.get() on the main thread and end the app
-		try {
-			operation(metres);
-			result.metres = std::move(metres);
-		}
-		catch (const std::bad_alloc&) {
-			result.error = "not enough memory";
-		}
-		catch (const std::exception& e) {
-			result.error = e.what();
-		}
-		result.ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count();
-		return result;
-	});
-	SetEditStatus(label + "...", false);
+	try {
+		editJob.Start([metres = WorkingMetres(), label, operation = std::move(operation), version]() mutable {
+			EditResult result;
+			result.label = label;
+			result.version = version;
+			auto start = std::chrono::steady_clock::now();
+			//An exception would come back in future.get() on the main thread and end the app
+			try {
+				operation(metres);
+				result.metres = std::move(metres);
+			}
+			catch (const std::bad_alloc&) {
+				result.error = "not enough memory";
+			}
+			catch (const std::exception& e) {
+				result.error = e.what();
+			}
+			result.ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count();
+			return result;
+		});
+		SetEditStatus(label + "...", false);
+	}
+	catch (const std::bad_alloc&) {
+		SetEditStatus(label + " failed: not enough memory", true);
+	}
+	catch (const std::exception& e) {
+		SetEditStatus(label + " failed: " + e.what(), true);
+	}
 }
 
 void MapImportSys::FinishEdit(EditResult& result)
@@ -367,25 +375,39 @@ void MapImportSys::UpdateRivers()
 		return;
 	}
 	const uint64_t version = mapVersion;
-	riverJob.Start([metres = WorkingMetres(), pixel = pixelMetres.x, sea = seaLevelMetres, config = riverConfig, version]() {
-		RiverResult result;
-		result.version = version;
-		auto start = std::chrono::steady_clock::now();
-		//An exception would come back in future.get() on the main thread and end the app
-		try {
-			result.rivers = hydrology::ComputeOnMap(metres, pixel, sea, config);
-		}
-		catch (const std::bad_alloc&) {
-			result.rivers = hydrology::MapRivers();
-			result.rivers.error = "Not enough memory for the river network";
-		}
-		catch (const std::exception& e) {
-			result.rivers = hydrology::MapRivers();
-			result.rivers.error = std::string("River network failed: ") + e.what();
-		}
-		result.ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count();
-		return result;
-	});
+	try {
+		riverJob.Start([metres = WorkingMetres(), pixel = pixelMetres.x, sea = seaLevelMetres, config = riverConfig, version]() {
+			RiverResult result;
+			result.version = version;
+			auto start = std::chrono::steady_clock::now();
+			//An exception would come back in future.get() on the main thread and end the app
+			try {
+				result.rivers = hydrology::ComputeOnMap(metres, pixel, sea, config);
+			}
+			catch (const std::bad_alloc&) {
+				result.rivers = hydrology::MapRivers();
+				result.rivers.error = "Not enough memory for the river network";
+			}
+			catch (const std::exception& e) {
+				result.rivers = hydrology::MapRivers();
+				result.rivers.error = std::string("River network failed: ") + e.what();
+			}
+			result.ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count();
+			return result;
+		});
+	}
+	catch (const std::bad_alloc&) {
+		auto failed = std::make_shared<hydrology::MapRivers>();
+		failed->error = "Not enough memory for the river network";
+		riverNetwork = std::move(failed);
+		riverMap.Clear();
+	}
+	catch (const std::exception& e) {
+		auto failed = std::make_shared<hydrology::MapRivers>();
+		failed->error = std::string("River network failed: ") + e.what();
+		riverNetwork = std::move(failed);
+		riverMap.Clear();
+	}
 }
 
 void MapImportSys::UploadRiverWater()

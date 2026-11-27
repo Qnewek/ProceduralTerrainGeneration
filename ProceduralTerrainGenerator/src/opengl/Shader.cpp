@@ -214,6 +214,9 @@ void Shader::SetUniform1iv(const std::string& name, int count, const int* values
 
 void Shader::SetUniform3fvArray(const std::string& name, int count, const glm::vec3* values)
 {
+	if (count <= 0 || !values) {
+		return;
+	}
 	glUniform3fv(GetUniformLocation(name), count, &values[0].x);
 }
 
@@ -285,17 +288,19 @@ void Shader::SetProjection(const glm::mat4& projection)
 
 int Shader::GetUniformLocation(const std::string& name)
 {
-	if(m_UniformLocationCache.find(name) != m_UniformLocationCache.end())
+	const auto it = m_UniformLocationCache.find(name);
+	if (it != m_UniformLocationCache.end())
 	{
-		return m_UniformLocationCache[name];
+		return it->second;
 	}
 
-	GLCALL(int location = glGetUniformLocation(m_RendererID, name.c_str()));
-    if(location == -1)
+	int location = -1;
+	GLCALL(location = glGetUniformLocation(m_RendererID, name.c_str()));
+	if (location == -1)
 	{
 		std::cout << "Warning: uniform '" << name << "' doesn't exist!" << std::endl;
 	}
 
 	m_UniformLocationCache[name] = location;
-    return location;
+	return location;
 }

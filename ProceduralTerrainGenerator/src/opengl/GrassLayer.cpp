@@ -175,7 +175,7 @@ void GrassLayer::Draw(const ChunkWorld& chunks, Camera& camera, const LightSourc
 		const GLuint threads = static_cast<GLuint>(size.x) * static_cast<GLuint>(size.y) * static_cast<GLuint>(slots);
 		glDispatchCompute((threads + 63) / 64, 1, 1);
 	}
-	glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT | GL_COMMAND_BARRIER_BIT);
+	glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT | GL_COMMAND_BARRIER_BIT | GL_BUFFER_UPDATE_BARRIER_BIT);
 	glCopyNamedBufferSubData(commandBuffer, statsBuffer, 0, 0, sizeof(emptyCommand));
 	statsPending = true;
 

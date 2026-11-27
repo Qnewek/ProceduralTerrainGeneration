@@ -36,15 +36,19 @@ void AsyncRead::Fence()
 void AsyncRead::StartTexture(const TextureClass& texture, GLenum format, GLenum type, size_t bytes)
 {
 	BindBuffer(bytes);
+	glPixelStorei(GL_PACK_ALIGNMENT, 1);
 	//With a pack buffer bound the pointer is an offset into it
 	glGetTextureImage(texture.GetID(), 0, format, type, static_cast<GLsizei>(bytes), nullptr);
+	glPixelStorei(GL_PACK_ALIGNMENT, 4);
 	Fence();
 }
 
 void AsyncRead::StartPixels(glm::ivec2 pixel, glm::ivec2 size, GLenum format, GLenum type, size_t bytes)
 {
 	BindBuffer(bytes);
+	glPixelStorei(GL_PACK_ALIGNMENT, 1);
 	glReadPixels(pixel.x, pixel.y, size.x, size.y, format, type, nullptr);
+	glPixelStorei(GL_PACK_ALIGNMENT, 4);
 	Fence();
 }
 

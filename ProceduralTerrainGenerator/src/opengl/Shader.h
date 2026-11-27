@@ -20,6 +20,8 @@ public:
 	Shader(const std::string& filepath);
 	Shader(const std::string& vertexFilepath, const std::string& fragmentFilepath, const std::string& tessControlFilepath, const std::string& tessEvaluationFilepath);
 	~Shader();
+	Shader(const Shader&) = delete;
+	Shader& operator=(const Shader&) = delete;
 
 	//@return a compute program; check IsValid(), as for the constructors
 	static std::unique_ptr<Shader> Compute(const std::string& computeFilepath);

@@ -34,16 +34,18 @@ public:
 private:
 	void Draw();
 	void ImGuiRender();
+	//Releases GL resources, ImGui and GLFW in context-safe order
+	void Shutdown();
 	//Rebuilds all shaders from their source files (F5)
 	void ReloadShaders();
 	//Reads the current drawable area of the window; keeps the last size while minimized
 	void UpdateWindowSize();
 
 private:
-	//SubSystems
-	NoiseBasedGenerationSys noiseGenSys;
-	TerrainGenerationSys terrainGenSys;
-	MapImportSys mapImportSys;
+	//SubSystems (owned via unique_ptr so they are destroyed before the GL context in Shutdown)
+	std::unique_ptr<NoiseBasedGenerationSys> noiseGenSys;
+	std::unique_ptr<TerrainGenerationSys> terrainGenSys;
+	std::unique_ptr<MapImportSys> mapImportSys;
 
 	//Time variables
 	float deltaTime;
@@ -78,13 +80,15 @@ private:
 	//x, y, width, height of the 3D view in framebuffer pixels, origin at the bottom left (as glViewport in Draw)
 	glm::ivec4 ViewportRect() const { return { static_cast<int>(leftPanelWidth), static_cast<int>(bottomPanelHeight), ViewportWidth(), ViewportHeight() }; }
 	GLFWwindow* window;
+	bool glfwInitialized = false;
+	bool imguiInitialized = false;
 	Renderer renderer;
 	Camera camera;
 	EditorCamera editorCamera;
 	//The sun
 	LightSource light;
-	Sky sky;
-	Clouds clouds;
+	std::unique_ptr<Sky> sky;
+	std::unique_ptr<Clouds> clouds;
 	//true if the active mode shows the 2D map, which has no sky
 	bool FlatView() const;
 	//Zoom of the 2D map of the current mode, nullptr in 3D

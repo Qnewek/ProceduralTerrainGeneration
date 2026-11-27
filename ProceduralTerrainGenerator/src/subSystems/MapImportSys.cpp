@@ -6,7 +6,9 @@
 #include <chrono>
 #include <cmath>
 #include <cstdio>
+#include <exception>
 #include <iostream>
+#include <new>
 
 #include "imgui.h"
 
@@ -230,54 +232,64 @@ void MapImportSys::StartSaving(const std::filesystem::path& path)
 		SetProjectStatus("Wait for the current save or load to finish", true);
 		return;
 	}
-	mapproject::Project project;
-	project.working = map;
-	project.original = original;
-	project.pixelMetres = pixelMetres;
-	project.seaLevel = seaLevelMetres;
-	project.source = projectSource;
-	project.generation = projectGeneration;
-	project.verticalExaggeration = renderSettings.heightScale / trueHeightScale;
-	project.rivers = preset::RiversJson(riverConfig);
-	project.biomes = mapbiomes::ToJson(biomeSettings, path.parent_path());
-	if (!biomePaint.texels.empty()) {
-		project.paint = biomePaint;
-	}
-	project.georeference = georeference;
-	project.vegetation = plantSettings;
-	project.placedPlants = placedPlants;
-	const float unit = metresPerUnit;
-	const uint64_t version = mapVersion;
-	saveJob.Start([project = std::move(project), path, unit, version]() mutable {
-		SaveResult result;
-		result.path = path;
-		result.version = version;
-		auto start = std::chrono::steady_clock::now();
-		//An exception would come back in future.get() on the main thread and end the app
-		try {
-			for (HeightField* m : { &project.working, &project.original }) {
-				for (size_t i = 0; i < m->Size(); i++) {
-					(*m)[i] *= unit;
+	try {
+		mapproject::Project project;
+		project.working = map;
+		project.original = original;
+		project.pixelMetres = pixelMetres;
+		project.seaLevel = seaLevelMetres;
+		project.source = projectSource;
+		project.generation = projectGeneration;
+		project.verticalExaggeration = renderSettings.heightScale / trueHeightScale;
+		project.rivers = preset::RiversJson(riverConfig);
+		project.biomes = mapbiomes::ToJson(biomeSettings, path.parent_path());
+		if (!biomePaint.texels.empty()) {
+			project.paint = biomePaint;
+		}
+		project.georeference = georeference;
+		project.vegetation = plantSettings;
+		project.placedPlants = placedPlants;
+		const float unit = metresPerUnit;
+		const uint64_t version = mapVersion;
+		saveJob.Start([project = std::move(project), path, unit, version]() mutable {
+			SaveResult result;
+			result.path = path;
+			result.version = version;
+			auto start = std::chrono::steady_clock::now();
+			//An exception would come back in future.get() on the main thread and end the app
+			try {
+				for (HeightField* m : { &project.working, &project.original }) {
+					for (size_t i = 0; i < m->Size(); i++) {
+						(*m)[i] *= unit;
+					}
 				}
+				result.ok = mapproject::Save(path, project, result.error);
 			}
-			result.ok = mapproject::Save(path, project, result.error);
-		}
-		catch (const std::bad_alloc&) {
-			result.ok = false;
-			result.error = "Not enough memory to save the project";
-		}
-		catch (const std::exception& e) {
-			result.ok = false;
-			result.error = e.what();
-		}
-		if (result.ok) {
-			std::error_code ec;
-			result.bytes = std::filesystem::file_size(path, ec);
-		}
-		result.ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count();
-		return result;
-	});
-	SetProjectStatus("Saving " + FileNameOf(path) + "...", false);
+			catch (const std::bad_alloc&) {
+				result.ok = false;
+				result.error = "Not enough memory to save the project";
+			}
+			catch (const std::exception& e) {
+				result.ok = false;
+				result.error = e.what();
+			}
+			if (result.ok) {
+				std::error_code ec;
+				result.bytes = std::filesystem::file_size(path, ec);
+			}
+			result.ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count();
+			return result;
+		});
+		SetProjectStatus("Saving " + FileNameOf(path) + "...", false);
+	}
+	catch (const std::bad_alloc&) {
+		SetProjectStatus("Could not save " + FileNameOf(path) + ": not enough memory", true);
+		afterSave.reset();
+	}
+	catch (const std::exception& e) {
+		SetProjectStatus("Could not save " + FileNameOf(path) + ": " + e.what(), true);
+		afterSave.reset();
+	}
 }
 
 void MapImportSys::FinishSaving(SaveResult& result)

@@ -21,8 +21,8 @@ struct Range {
     uint pad;
 };
 layout(std430, binding = 1) readonly buffer Ranges { Range ranges[]; };
-//Per instance of the ranges: group << 20 | index in the group, CULLED if not drawn
-layout(std430, binding = 2) buffer Classified { uint classified[]; };
+//Per instance of the ranges: (group, index in the group), (CULLED, 0) if not drawn
+layout(std430, binding = 2) buffer Classified { uvec2 classified[]; };
 layout(std430, binding = 3) buffer Counts { uint counts[]; };
 //Per variant of all models: x = largest horizontal extent around the base, y, z = lowest and highest point, in metres;
 //w = its last level of detail
@@ -144,12 +144,12 @@ void main()
         Instance instance = placed[range.first + i];
         if (pass == 0) {
             uint group = Classify(instance);
-            classified[range.outBase + i] = group == CULLED ? CULLED : (group << 20) | atomicAdd(counts[group], 1u);
+            classified[range.outBase + i] = group == CULLED ? uvec2(CULLED, 0u) : uvec2(group, atomicAdd(counts[group], 1u));
         }
         else {
-            uint c = classified[range.outBase + i];
-            if (c != CULLED) {
-                drawn[offsets[c >> 20] + (c & 0xFFFFFu)] = instance;
+            uvec2 c = classified[range.outBase + i];
+            if (c.x != CULLED) {
+                drawn[offsets[c.x] + c.y] = instance;
             }
         }
     }

@@ -45,7 +45,10 @@ namespace {
 		if (!buffer) {
 			glCreateBuffers(1, &buffer);
 		}
-		glNamedBufferData(buffer, static_cast<GLsizeiptr>(std::max<size_t>(bytes, 16)), data, GL_DYNAMIC_DRAW);
+		glNamedBufferData(buffer, static_cast<GLsizeiptr>(std::max<size_t>(bytes, 16)), nullptr, GL_DYNAMIC_DRAW);
+		if (bytes > 0 && data != nullptr) {
+			glNamedBufferSubData(buffer, 0, static_cast<GLsizeiptr>(bytes), data);
+		}
 	}
 }
 
@@ -589,7 +592,7 @@ bool VegetationLayer::Cull(const glm::vec3& eye, const glm::mat4& viewProjection
 		return false;
 	}
 	rangesBuffer.Reserve(rangeData.size() * sizeof(glm::uvec4));
-	classifiedBuffer.Reserve(static_cast<size_t>(total) * sizeof(GLuint));
+	classifiedBuffer.Reserve(static_cast<size_t>(total) * sizeof(glm::uvec2));
 	drawnBuffer.Reserve(static_cast<size_t>(total) * sizeof(GpuInstance));
 	//The buffers may still be read by the draws of a pass before (shadows)
 	glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT | GL_COMMAND_BARRIER_BIT | GL_VERTEX_ATTRIB_ARRAY_BARRIER_BIT);
@@ -628,7 +631,7 @@ bool VegetationLayer::Cull(const glm::vec3& eye, const glm::mat4& viewProjection
 	glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 	cullShader->SetUniform1i("pass", 2);
 	glDispatchCompute(rangeCount, 1, 1);
-	glMemoryBarrier(GL_VERTEX_ATTRIB_ARRAY_BARRIER_BIT | GL_COMMAND_BARRIER_BIT);
+	glMemoryBarrier(GL_VERTEX_ATTRIB_ARRAY_BARRIER_BIT | GL_COMMAND_BARRIER_BIT | GL_BUFFER_UPDATE_BARRIER_BIT);
 	if (stats) {
 		glCopyNamedBufferSubData(countsBuffer, statsBuffer, 0, 0, static_cast<GLsizeiptr>(groupCount) * sizeof(GLuint));
 		statsPending = true;

@@ -2,9 +2,11 @@
 
 #include "SendToImported.h"
 
-#include <iostream>
 #include <algorithm>
 #include <chrono>
+#include <exception>
+#include <iostream>
+#include <new>
 
 #include "imgui.h"
 #include "implot.h"
@@ -170,16 +172,21 @@ glm::vec2 TerrainGenerationSys::MapPositionUnder(const Camera& camera) const
 void TerrainGenerationSys::UpdateRivers(const Camera& camera)
 {
 	if (std::optional<RiverResult> result = riverJob.TryTake()) {
-		riverMap.Upload(result->network, result->water);
-		riverCells = result->network.riverCells;
-		lakeCells = result->network.lakeCells;
-		lakeCount = result->network.lakes;
-		riverMs = result->ms;
-		shownRiverCenter = result->center;
-		riverNetwork = std::make_shared<const hydrology::Network>(std::move(result->network));
-		//Not RequestTerrain: that would start the network again
-		if (world.rivers.method == rivers::Method::REGION) {
-			pending.terrain = true;
+		if (!result->error.empty()) {
+			std::cout << "[ERROR] River network failed: " << result->error << std::endl;
+		}
+		else {
+			riverMap.Upload(result->network, result->water);
+			riverCells = result->network.riverCells;
+			lakeCells = result->network.lakeCells;
+			lakeCount = result->network.lakes;
+			riverMs = result->ms;
+			shownRiverCenter = result->center;
+			riverNetwork = std::make_shared<const hydrology::Network>(std::move(result->network));
+			//Not RequestTerrain: that would start the network again
+			if (world.rivers.method == rivers::Method::REGION) {
+				pending.terrain = true;
+			}
 		}
 	}
 	const rivers::RiverConfig& config = world.rivers;
@@ -189,21 +196,38 @@ void TerrainGenerationSys::UpdateRivers(const Camera& camera)
 	}
 	if (riverSample.Pending() && riverSample.Ready() && !riverJob.IsRunning()) {
 		const RiverSampleInput in = riverSampleInput;
-		HeightField sample(in.cells, in.cells);
-		if (riverSample.Take(sample.Data(), sample.Size() * sizeof(float))) {
-			riverJob.Start([sample = std::move(sample), in]() {
-				const auto start = std::chrono::steady_clock::now();
-				RiverResult result;
-				result.network = hydrology::Compute(sample, in.origin, in.cellSize, in.waterHeight, in.config);
-				result.water = hydrology::BuildWaterMesh(result.network, in.waterHeight, in.texelsPerHeight);
-				result.ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count();
-				result.center = in.center;
-				return result;
-			});
+		try {
+			HeightField sample(in.cells, in.cells);
+			if (riverSample.Take(sample.Data(), sample.Size() * sizeof(float))) {
+				riverJob.Start([sample = std::move(sample), in]() {
+					const auto start = std::chrono::steady_clock::now();
+					RiverResult result;
+					try {
+						result.network = hydrology::Compute(sample, in.origin, in.cellSize, in.waterHeight, in.config);
+						result.water = hydrology::BuildWaterMesh(result.network, in.waterHeight, in.texelsPerHeight);
+					}
+					catch (const std::bad_alloc&) {
+						result.network = hydrology::Network();
+						result.water.clear();
+						result.error = "not enough memory";
+					}
+					catch (const std::exception& e) {
+						result.network = hydrology::Network();
+						result.water.clear();
+						result.error = e.what();
+					}
+					result.ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count();
+					result.center = in.center;
+					return result;
+				});
+			}
+			else {
+				//The read failed: a new sample starts below instead of leaving the region without a network
+				riversStale = true;
+			}
 		}
-		else {
-			//The read failed: a new sample starts below instead of leaving the region without a network
-			riversStale = true;
+		catch (const std::exception& e) {
+			std::cout << "[ERROR] River sample allocation failed: " << e.what() << std::endl;
 		}
 	}
 	//The terrain did not change, so not RequestRivers / RequestTerrain: the arriving network replaces the chunks.
@@ -349,7 +373,10 @@ void TerrainGenerationSys::UpdateErosion()
 
 	if (std::optional<ErodedPlants> result = erodedPlantsJob.TryTake()) {
 		//Plants of an older copy (eroded again or reset meanwhile) are dropped
-		if (eroded.shown && biomesGeneration && result->version == eroded.version) {
+		if (!result->error.empty()) {
+			std::cout << "[ERROR] Eroded plants placement failed: " << result->error << std::endl;
+		}
+		else if (eroded.shown && biomesGeneration && result->version == eroded.version) {
 			vegetationLayer.SetExtraInstances(result->instances);
 			eroded.plantsMs = result->ms;
 		}
@@ -379,21 +406,36 @@ void TerrainGenerationSys::StartErodedPlants()
 	if (eroded.treesOnly) {
 		input.layerMask = 1u << static_cast<int>(vegetation::Layer::TREES);
 	}
-	HeightField copy = view.ReadLayer(TerrainView::Layer::OVERLAY);
-	//Slopes from the heights (as on the maps of the real world), not the surface map: that is 16 bytes per texel, 1 GB to read back at 8192²
-	std::vector<glm::vec4> surface;
-	//Where the centre of texel (0, 0) of the copy is drawn: that of the map, shifted along X
-	const glm::vec2 texelZero = view.GetWorldCorner() + glm::vec2(ErodedShift(), 0.0f) + 0.5f * TerrainView::worldUnitsPerTexel;
-	const float metresPerUnit = input.metresPerUnit;
-	const uint64_t version = eroded.version;
-	erodedPlantsJob.Start([copy = std::move(copy), surface = std::move(surface), ids = biomeMap, input = std::move(input), texelZero, metresPerUnit, version]() {
-		const auto start = std::chrono::steady_clock::now();
-		ErodedPlants result;
-		result.instances = vegexport::ToAppInstances(vegexport::PlaceMap(copy, surface, ids, input), texelZero, metresPerUnit);
-		result.version = version;
-		result.ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count();
-		return result;
-	});
+	try {
+		HeightField copy = view.ReadLayer(TerrainView::Layer::OVERLAY);
+		//Slopes from the heights (as on the maps of the real world), not the surface map: that is 16 bytes per texel, 1 GB to read back at 8192²
+		std::vector<glm::vec4> surface;
+		//Where the centre of texel (0, 0) of the copy is drawn: that of the map, shifted along X
+		const glm::vec2 texelZero = view.GetWorldCorner() + glm::vec2(ErodedShift(), 0.0f) + 0.5f * TerrainView::worldUnitsPerTexel;
+		const float metresPerUnit = input.metresPerUnit;
+		const uint64_t version = eroded.version;
+		erodedPlantsJob.Start([copy = std::move(copy), surface = std::move(surface), ids = biomeMap, input = std::move(input), texelZero, metresPerUnit, version]() {
+			const auto start = std::chrono::steady_clock::now();
+			ErodedPlants result;
+			result.version = version;
+			try {
+				result.instances = vegexport::ToAppInstances(vegexport::PlaceMap(copy, surface, ids, input), texelZero, metresPerUnit);
+			}
+			catch (const std::bad_alloc&) {
+				result.instances.clear();
+				result.error = "not enough memory";
+			}
+			catch (const std::exception& e) {
+				result.instances.clear();
+				result.error = e.what();
+			}
+			result.ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count();
+			return result;
+		});
+	}
+	catch (const std::exception& e) {
+		std::cout << "[ERROR] Eroded plants setup failed: " << e.what() << std::endl;
+	}
 }
 
 bool TerrainGenerationSys::AnyVegetationModel() const

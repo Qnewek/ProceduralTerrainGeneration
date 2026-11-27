@@ -31,8 +31,11 @@ void BiomeEditor::Reset()
 	selected = 0;
 }
 
-bool BiomeEditor::ImGuiDraw(std::vector<biome::Biome>& table)
+bool BiomeEditor::ImGuiDraw(std::vector<biome::Biome>& table, bool* otherChanged)
 {
+	if (otherChanged) {
+		*otherChanged = false;
+	}
 	if (table.empty()) {
 		//Never happens: BiomeConfig and presets keep at least one biome
 		ImGui::TextDisabled("[The biome table is empty]");
@@ -102,7 +105,7 @@ bool BiomeEditor::ImGuiDraw(std::vector<biome::Biome>& table)
 	biome::Biome& b = table[selected];
 	ImGui::SeparatorText("Selected biome");
 	//The name does not change the map
-	InputString("Name", b.name);
+	bool nonMapChanged = InputString("Name", b.name);
 	changed |= ImGui::ColorEdit3("Color", glm::value_ptr(b.color), ImGuiColorEditFlags_Float);
 	ImGui::TextDisabled("Value ranges (min, max) of the parameters the biome covers");
 	for (int i = 0; i < biome::PARAMETER_COUNT; i++) {
@@ -126,7 +129,10 @@ bool BiomeEditor::ImGuiDraw(std::vector<biome::Biome>& table)
 	}
 
 	changed |= MaterialLayers(b);
-	Plants(b);
+	nonMapChanged |= Plants(b);
+	if (otherChanged) {
+		*otherChanged = nonMapChanged;
+	}
 	return changed;
 }
 
@@ -165,8 +171,9 @@ void BiomeEditor::SetPlantModels(std::vector<PlantModel> models)
 	plantModels = std::move(models);
 }
 
-void BiomeEditor::Plants(biome::Biome& b)
+bool BiomeEditor::Plants(biome::Biome& b)
 {
+	bool changed = false;
 	ImGui::SeparatorText("Vegetation");
 	ImGui::TextDisabled("Trees, shrubs and rocks of the infinite world; a cell of a layer holds at most one of them, earlier plants first");
 	auto modelOf = [&](const std::string& name) -> const PlantModel* {
@@ -226,22 +233,25 @@ void BiomeEditor::Plants(biome::Biome& b)
 				for (const PlantModel& m : plantModels) {
 					const std::string label = m.name + " (" + vegetation::layerNames[static_cast<int>(m.layer)] + ")";
 					if (ImGui::Selectable(label.c_str(), m.name == plant.model)) {
-						plant.model = m.name;
+						if (plant.model != m.name) {
+							plant.model = m.name;
+							changed = true;
+						}
 					}
 				}
 				ImGui::EndCombo();
 			}
 			ImGui::SetItemTooltip("The model decides the layer: trees and rocks on 8 m cells, shrubs on 4 m cells");
-			ImGui::SliderFloat("Density", &plant.density, 0.0f, 1.0f, "%.3f", ImGuiSliderFlags_Logarithmic | ImGuiSliderFlags_AlwaysClamp);
+			changed |= ImGui::SliderFloat("Density", &plant.density, 0.0f, 1.0f, "%.3f", ImGuiSliderFlags_Logarithmic | ImGuiSliderFlags_AlwaysClamp);
 			ImGui::SetItemTooltip("Chance that a cell of its layer holds this plant, where it can grow");
 			//Kept above 0 and ordered by the widget
-			ImGui::DragFloatRange2("Scale", &plant.minScale, &plant.maxScale, 0.01f, 0.05f, 20.0f, "%.2f", nullptr, ImGuiSliderFlags_AlwaysClamp);
+			changed |= ImGui::DragFloatRange2("Scale", &plant.minScale, &plant.maxScale, 0.01f, 0.05f, 20.0f, "%.2f", nullptr, ImGuiSliderFlags_AlwaysClamp);
 			ImGui::SetItemTooltip("Size relative to the model, random between min and max");
-			ImGui::SliderFloat("Max slope", &plant.maxSlope, 0.0f, 90.0f, "%.0f deg", ImGuiSliderFlags_AlwaysClamp);
-			ImGui::DragFloatRange2("Elevation", &plant.elevation.min, &plant.elevation.max, 0.005f, -1.0f, 1.0f, "%.3f", nullptr,
+			changed |= ImGui::SliderFloat("Max slope", &plant.maxSlope, 0.0f, 90.0f, "%.0f deg", ImGuiSliderFlags_AlwaysClamp);
+			changed |= ImGui::DragFloatRange2("Elevation", &plant.elevation.min, &plant.elevation.max, 0.005f, -1.0f, 1.0f, "%.3f", nullptr,
 				ImGuiSliderFlags_AlwaysClamp);
 			ImGui::SetItemTooltip("Where it grows, as the Elevation range of biomes: 0 = the water surface, 1 = the highest peak");
-			ImGui::SliderFloat("Clustering", &plant.clustering, 0.0f, 1.0f, "%.2f", ImGuiSliderFlags_AlwaysClamp);
+			changed |= ImGui::SliderFloat("Clustering", &plant.clustering, 0.0f, 1.0f, "%.2f", ImGuiSliderFlags_AlwaysClamp);
 			ImGui::SetItemTooltip("0 = spread evenly, 1 = in forests and clearings");
 			ImGui::TreePop();
 		}
@@ -249,9 +259,11 @@ void BiomeEditor::Plants(biome::Biome& b)
 	}
 	if (remove >= 0) {
 		b.plants.erase(b.plants.begin() + remove);
+		changed = true;
 	}
 	if (moveUp > 0) {
 		std::swap(b.plants[moveUp], b.plants[moveUp - 1]);
+		changed = true;
 	}
 
 	ImGui::BeginDisabled(b.plants.size() >= biome::maxPlants);
@@ -259,6 +271,7 @@ void BiomeEditor::Plants(biome::Biome& b)
 		biome::Plant plant;
 		plant.model = plantModels.empty() ? std::string() : plantModels.front().name;
 		b.plants.push_back(plant);
+		changed = true;
 	}
 	ImGui::EndDisabled();
 	ImGui::SetItemTooltip("At most %d plants per biome", static_cast<int>(biome::maxPlants));
@@ -267,9 +280,11 @@ void BiomeEditor::Plants(biome::Biome& b)
 	ImGui::BeginDisabled(defaults.empty());
 	if (ImGui::Button("Default plants")) {
 		b.plants = defaults;
+		changed = true;
 	}
 	ImGui::EndDisabled();
 	ImGui::SetItemTooltip("The plants of the default biome with this name");
+	return changed;
 }
 
 bool BiomeEditor::MaterialLayers(biome::Biome& b)

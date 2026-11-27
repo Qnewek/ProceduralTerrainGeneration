@@ -119,6 +119,7 @@ private:
 		std::vector<hydrology::WaterVertex> water;
 		double ms = 0.0;
 		glm::vec2 center = glm::vec2(0.0f);		//of the region, map texels
+		std::string error;
 	};
 	//The network whose water WaterSurface draws: only while the REGION method is chosen
 	const RiverMap* RiverWater() const { return world.rivers.method == rivers::Method::REGION && riverMap.Ready() ? &riverMap : nullptr; }
@@ -173,6 +174,7 @@ private:
 		std::vector<vegetation::Instance> instances;
 		uint64_t version = 0;
 		double ms = 0.0;
+		std::string error;
 	};
 	GenerationJob<ErodedPlants> erodedPlantsJob;
 	//Above this many texels the eroded copy gets only trees: shrubs and rocks of a whole large map would take millions of instances

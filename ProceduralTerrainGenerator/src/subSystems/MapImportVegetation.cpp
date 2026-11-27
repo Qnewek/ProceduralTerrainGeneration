@@ -5,6 +5,7 @@
 #include <cfloat>
 #include <chrono>
 #include <exception>
+#include <new>
 #include <utility>
 
 #include "imgui.h"
@@ -154,36 +155,46 @@ void MapImportSys::UpdatePlants()
 	}
 	placedReadyModels = ready;
 
-	BiomeMap ids(width, height);
-	biomeIds->Read(GL_RED_INTEGER, GL_INT, static_cast<int>(ids.Size() * sizeof(int)), ids.Data());
-	const glm::vec2 texelZero = PlantTexelZero();
-	vegexport::Input input = PlantInput();
-	plantCancel = std::make_shared<std::atomic<bool>>(false);
-	input.cancel = plantCancel;
-	plantJob.Start([units = map, ids = std::move(ids), input = std::move(input), texelZero, version = plantVersion]() {
-		PlantResult result;
-		result.version = version;
-		const auto start = std::chrono::steady_clock::now();
-		//An exception would come back in future.get() on the main thread and end the app
-		try {
-			vegexport::Limited limited = vegexport::PlaceMapLimited(units, {}, ids, input);
-			result.kept = limited.kept;
-			result.count = limited.placed.size();
-			result.instances = vegexport::ToAppInstances(limited.placed, texelZero, input.metresPerUnit, input.metresPerTexel);
-			//In the order SetExtraInstances culls them by, so the frame taking the result skips sorting 2 million plants
-			vegetation::SortIntoSquares(result.instances, VegetationLayer::ExtraSquare());
-		}
-		catch (const std::bad_alloc&) {
-			result.instances.clear();
-			result.error = "not enough memory";
-		}
-		catch (const std::exception& e) {
-			result.instances.clear();
-			result.error = e.what();
-		}
-		result.ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count();
-		return result;
-	});
+	try {
+		BiomeMap ids(width, height);
+		biomeIds->Read(GL_RED_INTEGER, GL_INT, static_cast<int>(ids.Size() * sizeof(int)), ids.Data());
+		const glm::vec2 texelZero = PlantTexelZero();
+		vegexport::Input input = PlantInput();
+		plantCancel = std::make_shared<std::atomic<bool>>(false);
+		input.cancel = plantCancel;
+		plantJob.Start([units = map, ids = std::move(ids), input = std::move(input), texelZero, version = plantVersion]() {
+			PlantResult result;
+			result.version = version;
+			const auto start = std::chrono::steady_clock::now();
+			//An exception would come back in future.get() on the main thread and end the app
+			try {
+				vegexport::Limited limited = vegexport::PlaceMapLimited(units, {}, ids, input);
+				result.kept = limited.kept;
+				result.count = limited.placed.size();
+				result.instances = vegexport::ToAppInstances(limited.placed, texelZero, input.metresPerUnit, input.metresPerTexel);
+				//In the order SetExtraInstances culls them by, so the frame taking the result skips sorting 2 million plants
+				vegetation::SortIntoSquares(result.instances, VegetationLayer::ExtraSquare());
+			}
+			catch (const std::bad_alloc&) {
+				result.instances.clear();
+				result.error = "not enough memory";
+			}
+			catch (const std::exception& e) {
+				result.instances.clear();
+				result.error = e.what();
+			}
+			result.ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count();
+			return result;
+		});
+	}
+	catch (const std::bad_alloc&) {
+		plantStatus = "Could not place plants: not enough memory";
+		plantStatusIsError = true;
+	}
+	catch (const std::exception& e) {
+		plantStatus = std::string("Could not place plants: ") + e.what();
+		plantStatusIsError = true;
+	}
 }
 
 void MapImportSys::UploadPlacedPlants()
