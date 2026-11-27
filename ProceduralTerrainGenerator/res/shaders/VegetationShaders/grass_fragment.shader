@@ -19,14 +19,17 @@ const float TRANSLUCENCY = 0.35;
 void main()
 {
     vec3 n = normalize(Normal);
-    //Darker at the base, where the blades shade each other
-    vec3 albedo = Color * mix(0.6, 1.1, Along);
+    vec3 albedo = Color * mix(0.75, 1.05, Along);
     vec3 result = albedo;
     if (lightOn) {
         float facing = dot(n, light.direction);
         float diff = max(facing, 0.0) + max(-facing, 0.0) * TRANSLUCENCY;
-        vec3 ambient = light.ambient * ambientLightTint();
-        vec3 sunlight = light.diffuse * directLightTint() * sunShadow(FragPos, vec3(0.0, 1.0, 0.0), 0);
+        //Lower down the neighbouring blades hide the light: the sun more when it is low (its path through the grass is longer),
+        //the sky a little
+        float sunUp = clamp(light.direction.y, 0.0, 1.0);
+        float directKeep = mix(mix(0.2, 0.65, sunUp), 1.0, Along);
+        vec3 ambient = light.ambient * ambientLightTint() * mix(0.8, 1.0, Along);
+        vec3 sunlight = light.diffuse * directLightTint() * sunShadow(FragPos, vec3(0.0, 1.0, 0.0), 0) * directKeep;
         result = (ambient + sunlight * diff) * albedo;
     }
     result = applyFog(result, FragPos);

@@ -31,6 +31,10 @@ struct TerrainRenderSettings {
 	float tessPixels = 6.0f;	//3D view: length of a terrain triangle edge on screen in pixels (smaller = more detail); the 2D map ignores it
 	//Sun shadows of this frame (set by the subsystem after rendering them), added to the FrameBlock of the 3D view; nullptr = none
 	const ShadowMap* shadows = nullptr;
+	//World units (before modelScale) around the camera where GrassLayer draws blades this frame: the TEXTURED terrain darkens the
+	//ground under them (set by the subsystem); 0 = no grass
+	float grassRange = 0.0f;
+	float grassShade = 1.0f;	//strength of that darkening for the density and height of the blades (GrassLayer::GroundShade)
 };
 
 //Renders a height field as a tessellated patch grid. Owns the mesh, the shader and the textures,

@@ -20,6 +20,9 @@ uniform int displayMode;    //values of utilities::heightMapMode; the colors of 
 //Without it (no biomes) the TEXTURED mode draws previewMaterial
 uniform sampler2DArray splatMap;
 uniform bool useSplat;
+//World units around the camera with blades of grass (GrassLayer), 0 = none: the ground under them gets less light
+uniform float grassRange;
+uniform float grassShade;   //strength of that for the density and height of the blades, 0–1
 //Normal per pixel from the surface map (the TES one is interpolated between vertices, which blurs distant, sparsely tessellated terrain)
 uniform sampler2D surfaceMap;
 //Biome colors per pixel too (mode 3)
@@ -160,6 +163,33 @@ void texturedSurface(SurfaceSampling p, out vec3 albedo, out vec3 normal, out fl
     roughness /= sum;
 }
 
+//Share of the ground under blades of grass: material weights from the splat map times their grass, with the weight that steep
+//slopes hand over to cliff materials (as texturedSurface does) taking the grass of the cliff material. 0 without biomes
+//(GrassLayer grows blades only from the splat map)
+float grassCover(vec3 surfaceNormal)
+{
+    if (!useSplat) {
+        return 0.0;
+    }
+    float slope = acos(clamp(surfaceNormal.y, -1.0, 1.0));
+    float cliff = cliffSlopeEnd > cliffSlopeStart ? smoothstep(cliffSlopeStart, cliffSlopeEnd, slope) : (slope >= cliffSlopeStart ? 1.0 : 0.0);
+    float cover = 0.0;
+    float total = 0.0;
+    for (int l = 0; l < MAX_MATERIALS / 4; l++) {
+        vec4 shares = texture(splatMap, vec3(MapCoord, l));
+        for (int c = 0; c < 4; c++) {
+            int m = l * 4 + c;
+            if (m < materialCount && shares[c] >= MIN_MATERIAL_WEIGHT) {
+                int target = int(materialParams[m].y);
+                float grass = target != m ? mix(materialParams[m].z, materialParams[target].z, cliff) : materialParams[m].z;
+                cover += shares[c] * grass;
+                total += shares[c];
+            }
+        }
+    }
+    return total > 0.0 ? clamp(cover / total, 0.0, 1.0) : 0.0;
+}
+
 //Blinn-Phong highlight of the sun, sharper and stronger on smooth surfaces (wet sand, polished rock, snow crust);
 //most terrain materials are rough, so it stays a faint sheen there
 float sunSpecular(vec3 n, vec3 toLight, vec3 toViewer, float roughness)
@@ -182,6 +212,14 @@ void main()
     float occlusion = 1.0;
     float roughness = 1.0;
     bool textured = displayMode == MODE_TEXTURED;
+    //Ground under blades of grass, in the modes that show the surface (not in the analysis ones); fades out where the blades
+    //get shorter (grass_compute.shader), by the same horizontal distance
+    float grass = 0.0;
+    if (grassRange > 0.0 && (textured || displayMode == MODE_BIOMES)) {
+        float flatDistance = length((viewPos - FragPos).xz) / model[0][0];
+        float fade = 1.0 - smoothstep(0.8 * grassRange, grassRange, flatDistance);
+        grass = fade > 0.0 ? grassCover(norm) * fade * grassShade : 0.0;
+    }
     if (textured) {
         //displayMode is uniform, so the derivatives inside surfaceSampling are taken in uniform control flow
         float viewDistance = length(viewPos - FragPos) / model[0][0];
@@ -200,6 +238,10 @@ void main()
         //The colors set in the UI change with the sun height, like the sky does
         vec3 ambient = light.ambient * ambientLightTint();
         vec3 sunlight = light.diffuse * directLightTint() * sunShadow(FragPos, geometryNormal, 1);
+        //The ground between blades of grass: a low sun crosses more blades before it reaches it, the sky is partly hidden
+        float sunUp = clamp(light.direction.y, 0.0, 1.0);
+        sunlight *= 1.0 - grass * mix(0.85, 0.45, sunUp);
+        ambient *= 1.0 - grass * 0.4;
         result = (ambient * occlusion + sunlight * diff) * baseColor;
         if (textured && diff > 0.0) {
             result += sunlight * diff * sunSpecular(norm, light.direction, normalize(viewPos - FragPos), roughness);

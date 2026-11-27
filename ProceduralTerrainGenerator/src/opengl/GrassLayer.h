@@ -37,6 +37,11 @@ public:
 	void SetEnabled(bool on) { enabled = on; }
 	//Blades drawn by the frame before the last Draw (the count comes back from the GPU a frame late)
 	int DrawnBlades() const { return drawnBlades; }
+	//World units around the camera where Draw puts blades with these settings (TerrainRenderSettings::grassRange), 0 = none
+	float DrawnRange(const TerrainRenderSettings& settings) const;
+	//How strongly the blades shade the ground under them (TerrainRenderSettings::grassShade): full from 8 blades per m² and 0.3 m blades,
+	//weaker for sparser or shorter grass
+	float GroundShade() const;
 
 	//Blades in the buffer at most
 	static constexpr GLuint capacity = 1u << 20;

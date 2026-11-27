@@ -291,7 +291,7 @@ void TerrainMaterials::UploadBlock()
 {
 	Block block{};
 	for (size_t i = 0; i < materials.size(); i++) {
-		block.params[i] = glm::vec4(1.0f / materials[i].tileSize, static_cast<float>(materials[i].cliffMaterial), 0.0f, 0.0f);
+		block.params[i] = glm::vec4(1.0f / materials[i].tileSize, static_cast<float>(materials[i].cliffMaterial), materials[i].grass, 0.0f);
 	}
 	block.materialCount = static_cast<int>(materials.size());
 	block.previewMaterial = previewMaterial;
