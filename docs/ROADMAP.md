@@ -597,7 +597,9 @@ Kroki:
   z bliska), chmur wysokich (cirrus), deszczu.
   ✅ 2026-11-14 cienie: `ShadowMap`, do 4 stabilizowanych kaskad 2048², teren i roślinność rzucają, wszystko (teren, rośliny, impostory, trawa, woda) przyjmuje;
   PCF 3×3 na terenie, 1 próbka sprzętowa na roślinach. Koszt w dżungli (bench 1, oko 2 m): 3,3 ms przy wysokim słońcu, 5,5 ms przy 12°; teren 0,5 ms, reszta rośliny.
-  Dalej możliwe: tańsze rośliny w dalekich kaskadach (same impostory / co druga klatka), mieszanie granic kaskad, kontaktowe cienie trawy.
+  ✅ 2026-11-27 mieszanie granic kaskad: na ostatnich 10% głębokości każdej kaskady (poza ostatnią) cień = mieszanka z następną kaskadą (`smoothstep`, `CASCADE_BLEND` w `common/shadow.glsl`), bez skoku ostrości
+  na granicy; koszt bez zmian w granicach pomiaru (bench). Do sprawdzenia w aplikacji: teren z cieniami drzew przy wysokim i niskim słońcu, 1–4 kaskady, „Cascade split” 0 i 1 — granic kaskad nie widać.
+  Dalej możliwe: tańsze rośliny w dalekich kaskadach (same impostory / co druga klatka), kontaktowe cienie trawy.
 - **Eksport:** heightmap 16-bit/EXR, splat mapy, mesh OBJ/glTF (z LOD), lista instancji roślinności (JSON) → import do Unity/Unreal/Godot.
   Kolejność (2026-11-20, właściciel zostawił ją do zaproponowania): (1) paczka + metadane + EXR, (2) mapy materiałów i biomów, (3) siatka glTF/OBJ z LOD
   + woda, (4) instancje roślinności, (5) opcjonalnie skrypty importu Unity/Godot.
