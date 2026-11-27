@@ -19,9 +19,9 @@ int main(int argc, char* argv[])
 		}
 	}
 
-	//Checks of the GPU generation and its timings, without the application window
+	//Checks of the GPU generation and its timings (not with --no-timings), without the application window
 	if (argc > 1 && std::strcmp(argv[1], "--gpu-check") == 0) {
-		return RunGpuHeightCheck();
+		return RunGpuHeightCheck(!(argc > 2 && std::strcmp(argv[2], "--no-timings") == 0));
 	}
 	//Levels of detail of the vegetation models as pictures, for checking how the simplification looks
 	if (argc > 1 && std::strcmp(argv[1], "--vegetation-preview") == 0) {

@@ -299,6 +299,53 @@ TEST_CASE("Water mesh: rivers flow downstream, lakes stand still, nothing at the
 	}
 }
 
+TEST_CASE("Water mesh: a step in the river is steep water with foam below it, fading downstream")
+{
+	rivers::RiverConfig config;
+	config.sourceArea = 50.0f * 16.0f;
+	config.meander = 0.0f;
+	config.smoothing = 0;
+	config.surfaceDrop = 0.0f;
+	config.minLakeArea = 0.0f;
+	//A gentle valley falling towards y = 0 with a step of 0.03 between rows 21 and 20; cells 4 texels apart
+	constexpr float cellSize = 4.0f;
+	const HeightField map = MakeMap([](int x, int y) {
+		return 0.2f + 0.0016f * static_cast<float>(y) + 0.04f * std::abs(static_cast<float>(x - 30)) + (y > 20 ? 0.03f : 0.0f);
+	});
+	const hydrology::Network net = hydrology::Compute(map, glm::vec2(0.0f), cellSize, 0.0f, config);
+	const std::vector<hydrology::WaterVertex> mesh = hydrology::BuildWaterMesh(net, 0.0f, 256.0f);
+	REQUIRE(!mesh.empty());
+	//Largest slope and foam (height per texel) of the vertices on the course at row y
+	const auto at = [&](int y) {
+		float slope = -1.0f, foam = -1.0f;
+		for (const hydrology::WaterVertex& v : mesh) {
+			if (v.x == 30.0f * cellSize && v.y == static_cast<float>(y) * cellSize) {
+				slope = std::max(slope, v.slope);
+				foam = std::max(foam, v.foam);
+			}
+		}
+		REQUIRE(slope >= 0.0f);
+		return std::make_pair(slope, foam);
+	};
+	//The step: 0.03 over one cell of 4 texels; the valley above it 0.0004 per texel
+	float stepSlope = 0.0f;
+	for (int y = 19; y <= 22; y++) {
+		stepSlope = std::max(stepSlope, at(y).first);
+	}
+	CHECK(stepSlope > 0.005f);
+	CHECK(at(35).first < 0.001f);
+	//Foam below the step, as strong as the fall right under it, weaker downstream; none above it
+	CHECK(at(20).second > 0.005f);
+	CHECK(at(17).second < at(20).second);
+	CHECK(at(12).second < 0.25f * at(20).second);
+	CHECK(at(30).second < 0.001f);
+	//Never negative
+	for (const hydrology::WaterVertex& v : mesh) {
+		CHECK(v.slope >= 0.0f);
+		CHECK(v.foam >= 0.0f);
+	}
+}
+
 TEST_CASE("Region centre: a grid of a quarter region in whole cells")
 {
 	CHECK(hydrology::RegionStep(8192, 8) == 2048.0f);

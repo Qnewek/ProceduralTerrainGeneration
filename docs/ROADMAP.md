@@ -287,6 +287,8 @@ Biomy (Faza 3, pkt 3–4) opierają się na wysokości i znaczeniu szumów C/M/W
    Zostały configi, tablica permutacji (`makePermutation`) i `tk::spline` do tablicy splajnu dla GPU, tabela biomów i jej testy. Pkt 7 Fazy 2 (CPU fallback) odpada.
    `--gpu-check` sprawdza teraz same wyniki GPU: zakresy i skończoność dla każdej opcji, determinizm, biomy, chunki/LOD bit w bit, pochodne na mapach analitycznych.
    Strata: CI nie sprawdza generacji (brak GPU na runnerach); ewentualnie później Mesa llvmpipe (programowy GL 4.5 z compute shaderami).
+   ✅ 2026-11-27 CI sprawdza generację: krok „Generation check (llvmpipe)” w Release uruchamia `--gpu-check --no-timings` na Mesa llvmpipe 26.3.1
+   (mesa-dist-win, przypięta wersja + SHA256, cache). Wszystkie sprawdzenia przechodzą na llvmpipe bez zmian w nich (lokalnie, łącznie z porównaniami bit w bit).
 1. ✅ 2026-11-08 **Operacje na szumie** (nowe pola `NoiseConfigParameters`, domyślnie wyłączone): domain warping (`warpStrength`, `warpScale`; przesunięcie
    współrzędnych 4-oktawowym szumem z tej samej tablicy permutacji), fBm tłumiony gradientem (`slopeErosion`; analityczne pochodne `simplex2Grad`, oktawa dzielona
    przez 1 + k·|∇ niższych oktaw|²), tarasy (`terraceSteps`, `terraceSharpness`; na końcu, po redystrybucji). Przy wyłączonych warpie i tłumieniu działa stara pętla,
@@ -571,7 +573,11 @@ Kroki:
   🟡 2026-11-16 etap 2: (4) woda rzek i jezior metody A — siatka z sieci (`BuildWaterMesh`: quad między środkami komórek, gdzie choć jeden jest mokry; suche narożniki na
   najwyższym poziomie quadu), linia brzegu z testu głębi z terenem, głębokość z kopii głębi sceny, fale niesione przepływem (flow map, prędkość 0,4–4 m/s ze spadku).
   (5) wilgotność biomów przy korycie (`humidity`, `humidityRange`), materiał dna w splat (`bedMaterial`, domyślnie Scree), roślinność nie stoi w wodzie rzek i jezior
-  (`WaterLevelAt`). Zostaje: woda rzek B bez przepływu (leży na poziomie morza), wodospady / progi przy stromym spadku.
+  (`WaterLevelAt`). Zostaje: woda rzek B bez przepływu (leży na poziomie morza), pionowe progi (schodkowy profil rzeki).
+  ✅ 2026-11-27 wodospady i kaskady (bez zmiany generacji): stroma tafla rzeki (nachylenie rysowane 0,3–0,7, na domyślnym świecie ok. 1–3% komórek koryta,
+  maks. ok. 0,8–1,1) = nieprzezroczysty biały strumień smugowany w dół spadku, oświetlony z nachylenia tafli; poniżej spadku kotłująca się piana zanikająca na ok. 12 m
+  (też na tafli jeziora przy ujściu). TerrainGen (REGION) i Imported map. Do sprawdzenia w aplikacji: rzeka schodząca z gór / odpływ jeziora po stromym zboczu,
+  z bliska i z daleka (bez migotania), Height scale większy i mniejszy (więcej / mniej białej wody), widok 2D, mapa DEM z rzekami.
   ✅ 2026-11-27 próg powierzchni jezior: `RiverConfig::minLakeArea` (teksele², w Imported map px², suwak „Min lake area”, presety i projekt), grupa
   4-spójnych komórek jeziora mniejsza od progu = ląd (rzeka przechodzi przez nią z wodą na poziomie przelewu). Domyślnie 2500: region 4096² domyślnego
   świata (komórka 8) miał 371 jezior, z czego 354 poniżej 10 komórek; zostają 4. Do sprawdzenia w aplikacji: TerrainGen z rzekami Region — drobne

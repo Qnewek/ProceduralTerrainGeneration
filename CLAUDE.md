@@ -25,7 +25,9 @@ Plan napraw i rozwoju: `docs/ROADMAP.md` (ID zadań `B*`, `A*`, `F*` są tam zde
 - Shadery/tekstury czytane z `res/...` względem katalogu roboczego; jeśli go tam nie ma, `main` przechodzi do
   `PTG_RESOURCE_DIR` (= `ProceduralTerrainGenerator/` w źródłach, wpisany przez CMake). Hot-reload działa na źródłach.
 - CI: `.github/workflows/build.yml` — Windows (`windows-2022` = VS 2022, jak lokalnie), oba presety, vcpkg na commicie z baseline
-  (cache binarek w `actions/cache`), testy jednostkowe. Generacji CI nie sprawdza: działa tylko na GPU, a runnery GPU nie mają.
+  (cache binarek w `actions/cache`), testy jednostkowe, a w Release `--gpu-check --no-timings` na Mesa llvmpipe (programowy GL 4.5: `opengl32.dll` +
+  `libgallium_wgl.dll` z mesa-dist-win obok kopii exe, wersja i SHA256 archiwum w `MESA_VERSION` / `MESA_SHA256` w workflow, cache w `actions/cache`).
+  Nie kładź tych DLL w `out/build` — aplikacja ruszy wtedy na CPU. Lokalnie llvmpipe: to samo w katalogu poza buildem, `GALLIUM_DRIVER=llvmpipe`.
 - Testy: `ctest --preset x64-release` (doctest, target `ptg_tests`, kod w `ProceduralTerrainGenerator/tests/`, `ptg_core` + nagłówki z `utility/`).
   Szczegóły doctesta: `out\build\x64-release\ptg_tests.exe`. Mapy testowe są niekwadratowe. Znany błąd = test z `doctest::should_fail()`
   i ID z ROADMAP; po naprawie błędu test zacznie zgłaszać niepowodzenie, wtedy usuń oznaczenie.
@@ -517,7 +519,7 @@ Wartości szumów są w [-1, 1]. Konwencja indeksowania: `map[y * width + x]`.
   `GenerateBiomes` też dostaje `RiverInput` (wilgotność, dno), żeby zgadzał się z `GenerateWorld`. Woda rzek i jezior (REGION): `hydrology::BuildWaterMesh` (w zadaniu w tle) → siatka
   w `RiverMap`, rysowana przez `WaterSurface` po morzu tą samą kopią sceny (`water_mesh_vertex.shader` + wspólny FS, `meshWater`: głębokość z kopii głębi, fale niesione przepływem);
   brzeg przycina test głębi z terenem, na skończonej mapie `clipRect`. Poziom wody zostaje tylko w jeziorach i korytach (dno wyżłobione); suche narożniki
-  i brzegi rzek schodzą pod grunt próbki (`Network::ground`), inaczej tafla wisiała nad niższym terenem (odpływ jeziora, zbocze obok rzeki). Jeziora mniejsze od `minLakeArea` (grupa 4-spójnych komórek) są lądem — testy na małych mapach
+  i brzegi rzek schodzą pod grunt próbki (`Network::ground`), inaczej tafla wisiała nad niższym terenem (odpływ jeziora, zbocze obok rzeki). Wodospady i kaskady: wierzchołek ma `slope` (nachylenie tafli rzeki) i `foam` (najbardziej stromy spadek w górę biegu, zanik `foamLength` = 12 tekseli w dół, liczony w `Compute` po kolejności spływu), oba w wysokości na teksel; VS przelicza je na nachylenie rysowane (`heightScale / texelSize`, Imported map skaluje je jak `level`), FS: stroma woda (0,3–0,7) = biały smugowany strumień, poniżej kotłująca się piana. Jeziora mniejsze od `minLakeArea` (grupa 4-spójnych komórek) są lądem — testy na małych mapach
   z jeziorem ustawiają `minLakeArea = 0`. Nowy parametr rzek = `RiverConfig` + presety
   (`RiversToJson`/`ReadRivers`/`CheckRivers`) + `PresetTests` + UI; zmiana shadera → `--gpu-check` (sekcja `rivers:`).
 - **Generacja jest tylko w GLSL** (`ComputeShaders/`, `common/noise.glsl`, `common/simplex.glsl`, `common/surface.glsl`). Nowe pole configu szumu trzeba

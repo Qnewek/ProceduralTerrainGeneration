@@ -49,11 +49,15 @@ namespace hydrology {
 	//@param waterHeight - cells below it are sea (outlets)
 	Drainage Drain(const HeightField& terrain, float waterHeight);
 
-	//Per cell, on the CPU only: downstream direction of the nearest course (unit vector along map x, y) and its slope (height per texel)
+	//Per cell, on the CPU only: downstream direction of the nearest course (unit vector along map x, y) and its slope (height per texel);
+	//foam = the steepest fall upstream of that point of the course (height per texel), fading over foamLength texels downstream of it
 	struct FlowTexel {
 		float x = 0.0f, y = 0.0f;
 		float slope = 0.0f;
+		float foam = 0.0f;
 	};
+	//Texels over which the foam below a fall fades to 1/e
+	constexpr float foamLength = 12.0f;
 
 	struct Network {
 		//Cell (x, y) covers map position origin + (x, y) * cellSize (its center)
@@ -74,11 +78,15 @@ namespace hydrology {
 	//@param waterHeight - sea level (TerrainConfig::WaterHeight)
 	Network Compute(const HeightField& terrain, glm::vec2 origin, float cellSize, float waterHeight, const rivers::RiverConfig& config);
 
-	//Vertex of the water surface of rivers and lakes: map position (texels), surface height, flow velocity (metres per second along map x, y)
+	//Vertex of the water surface of rivers and lakes: map position (texels), surface height, flow velocity (metres per second along map x, y),
+	//slope of a river surface along its flow and the foam below falls (FlowTexel::foam), both height per texel (0 on still water and dry banks):
+	//the water shader turns steep water white (waterfalls, cascades) and churns the foam
 	struct WaterVertex {
 		float x = 0.0f, y = 0.0f;
 		float level = 0.0f;
 		float flowX = 0.0f, flowY = 0.0f;
+		float slope = 0.0f;
+		float foam = 0.0f;
 	};
 
 	//Surface of the water of rivers (in their channel) and lakes at a map position, sampled as common/rivers.glsl samples the network;

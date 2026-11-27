@@ -16,6 +16,9 @@ jobs:
     env:
       VCPKG_ROOT: ${{ github.workspace }}/.vcpkg
       VCPKG_DEFAULT_BINARY_CACHE: ${{ github.workspace }}/.vcpkg-cache
+      # Mesa for Windows (github.com/pal1000/mesa-dist-win) for the generation check; a new version needs its archive hash
+      MESA_VERSION: "26.3.1"
+      MESA_SHA256: "64E84CF13D67DD354640BF443ED0445E6A83AFD06A5729F0750B3744D633B3F1"
 
     steps:
       - uses: actions/checkout@v4
@@ -55,6 +58,47 @@ jobs:
       - name: Build
         run: cmake --build --preset ${{ matrix.preset }}
 
-      # Generation runs only on the GPU, which the runners do not have; it is checked by hand with --gpu-check
       - name: Unit tests
         run: ctest --preset ${{ matrix.preset }}
+
+      # Generation runs only in compute shaders and the runners have no GPU: --gpu-check runs on Mesa llvmpipe (OpenGL 4.5 on the CPU),
+      # its opengl32.dll next to a copy of the exe (the build folder stays on the system OpenGL). Release only: Debug would take far longer
+      - name: Cache Mesa
+        if: matrix.preset == 'x64-release'
+        id: mesa-cache
+        uses: actions/cache@v4
+        with:
+          path: .mesa
+          key: mesa-${{ env.MESA_VERSION }}
+
+      - name: Download Mesa
+        if: matrix.preset == 'x64-release' && steps.mesa-cache.outputs.cache-hit != 'true'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force .mesa | Out-Null
+          Invoke-WebRequest "https://github.com/pal1000/mesa-dist-win/releases/download/$env:MESA_VERSION/mesa3d-$env:MESA_VERSION-release-msvc.7z" -OutFile mesa.7z -MaximumRetryCount 3 -RetryIntervalSec 5
+          if ((Get-FileHash mesa.7z -Algorithm SHA256).Hash -ne $env:MESA_SHA256) { throw "Unexpected Mesa archive" }
+          # 7-Zip is on the runner image; otherwise the tar of Windows (libarchive reads 7z, the tar of Git earlier in PATH does not)
+          $sevenZip = "$env:ProgramFiles\7-Zip\7z.exe"
+          if (Test-Path $sevenZip) {
+            # Quoted: PowerShell splits an unquoted -o.mesa into "-o" ".mesa"
+            & $sevenZip x mesa.7z "-o.mesa" x64\opengl32.dll x64\libgallium_wgl.dll -y
+          }
+          else {
+            & "$env:SystemRoot\System32\tar.exe" -xf mesa.7z -C .mesa x64/opengl32.dll x64/libgallium_wgl.dll
+          }
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if (-not (Test-Path .mesa/x64/opengl32.dll) -or -not (Test-Path .mesa/x64/libgallium_wgl.dll)) { throw "Mesa DLLs not extracted" }
+
+      - name: Generation check (llvmpipe)
+        if: matrix.preset == 'x64-release'
+        # About 1 minute on 16 cores; a hang of the software driver must not hold the runner for hours
+        timeout-minutes: 20
+        shell: pwsh
+        env:
+          GALLIUM_DRIVER: llvmpipe
+        run: |
+          New-Item -ItemType Directory -Force gpu-check | Out-Null
+          Copy-Item out/build/x64-release/ProceduralTerrainGenerator.exe, .mesa/x64/opengl32.dll, .mesa/x64/libgallium_wgl.dll gpu-check/
+          ./gpu-check/ProceduralTerrainGenerator.exe --gpu-check --no-timings
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
