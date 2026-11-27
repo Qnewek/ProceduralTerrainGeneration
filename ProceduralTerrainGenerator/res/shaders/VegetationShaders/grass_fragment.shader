@@ -11,6 +11,7 @@ out vec4 FragColor;
 #include "../common/sky.glsl"
 #include "../common/fog.glsl"
 #include "../common/shadow.glsl"
+#include "../common/light.glsl"
 
 //Share of the sunlight that passes through a blade lit from behind
 const float TRANSLUCENCY = 0.35;
@@ -24,8 +25,8 @@ void main()
     if (lightOn) {
         float facing = dot(n, light.direction);
         float diff = max(facing, 0.0) + max(-facing, 0.0) * TRANSLUCENCY;
-        vec3 ambient = light.ambient * ambientTint(light.direction);
-        vec3 sunlight = light.diffuse * sunlightTint(light.direction) * sunShadow(FragPos, vec3(0.0, 1.0, 0.0), 0);
+        vec3 ambient = light.ambient * ambientLightTint();
+        vec3 sunlight = light.diffuse * directLightTint() * sunShadow(FragPos, vec3(0.0, 1.0, 0.0), 0);
         result = (ambient + sunlight * diff) * albedo;
     }
     result = applyFog(result, FragPos);

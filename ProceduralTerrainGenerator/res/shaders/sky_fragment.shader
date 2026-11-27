@@ -6,6 +6,7 @@ out vec4 FragColor;
 
 uniform mat4 inverseViewProjection;     // inverse of projection * view, view without the camera translation
 uniform vec3 sunDirection;              // unit vector towards the sun
+uniform vec4 moonDirection;             // xyz = unit vector towards the moon, w = 1 if the moon is on
 uniform bool cloudsOn;
 uniform vec4 viewportRect;              // xy = lower-left corner in window pixels, zw = size
 layout(binding = 13) uniform sampler2D cloudImage;     // Clouds::imageUnit: rgb = light, a = transmittance
@@ -40,9 +41,10 @@ void main()
     vec4 farPoint = inverseViewProjection * vec4(ndc, 1.0, 1.0);
     vec3 dir = normalize(farPoint.xyz / farPoint.w);
     vec3 color = skyColor(dir, sunDirection) + sunDisc(dir, sunDirection);
-    //Stars fade in as the sky darkens and sink into the haze at the horizon
+    //Stars fade in as the sky darkens and sink into the haze at the horizon; the moon's glow hides those near it
     float night = 1.0 - smoothstep(-0.2, 0.0, sunDirection.y);
-    color += stars(dir) * night * smoothstep(0.0, 0.15, dir.y);
+    vec4 moon = moonDirection.w > 0.0 ? moonDisc(dir, moonDirection.xyz, sunDirection) : vec4(0.0);
+    color += stars(dir) * night * smoothstep(0.0, 0.15, dir.y) * (1.0 - moon.a) + moon.rgb;
     if (cloudsOn) {
         vec4 clouds = texture(cloudImage, (gl_FragCoord.xy - viewportRect.xy) / viewportRect.zw);
         color = color * clouds.a + clouds.rgb;

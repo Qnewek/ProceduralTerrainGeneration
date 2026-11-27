@@ -24,6 +24,7 @@ uniform bool bake;
 #include "../common/sky.glsl"
 #include "../common/fog.glsl"
 #include "../common/shadow.glsl"
+#include "../common/light.glsl"
 
 //Alpha of distant mip levels is averaged down, so thin leaves would vanish; raising it with the mip level keeps their coverage
 const float ALPHA_MIP_BOOST = 0.25;
@@ -94,8 +95,8 @@ void main()
         if (foliage) {
             diff += max(-facing, 0.0) * TRANSLUCENCY;
         }
-        vec3 ambient = light.ambient * ambientTint(light.direction);
-        vec3 sunlight = light.diffuse * sunlightTint(light.direction) * sunShadow(FragPos, n, 0);
+        vec3 ambient = light.ambient * ambientLightTint();
+        vec3 sunlight = light.diffuse * directLightTint() * sunShadow(FragPos, n, 0);
         result = (ambient * occlusion + sunlight * diff) * albedo.rgb;
         if (facing > 0.0) {
             float smoothness = 1.0 - roughness;

@@ -256,9 +256,12 @@ Wartości szumów są w [-1, 1]. Konwencja indeksowania: `map[y * width + x]`.
   = `sunlightTint`, oświetlenie całym niebem = `ambientTint`, unormowane do słońca na 45° stałą `AMBIENT_REFERENCE`) i trzyma go na jednostce 14 (`Sky::skyViewUnit`,
   `layout(binding = 14)` w `sky.glsl`) — nie używaj jej do niczego innego. Każde narzędzie z własnym oknem rysujące oświetlone shadery musi mieć `Sky` i wołać `Update`
   (bez LUT światło jest czarne). LUT jest liniowy, `skyToDisplay` = 1 − exp(−L · `SKY_EXPOSURE`), bez gammy (reszta oświetlenia też jej nie ma). Noc: `NIGHT_SKY`, `NIGHT_AMBIENT`, gwiazdy.
+  Księżyc: `FrameBlock::light.direction` = światło kierunkowe (`LightSource::GetLightDirection`: słońce, nocą księżyc), a niebo / mgła / ambient biorą
+  słońce z `skySun.xyz` (w = światło księżyca). Oświetlone shadery wołają `directLightTint()` i `ambientLightTint()` (`common/light.glsl`), nie
+  `sunlightTint(light.direction)` — LUT zna tylko słońce. `LightSource::GetDirection` = zawsze słońce (LUT nieba); cienie i impostory idą za światłem kierunkowym.
   Mgła (`applyFog` w `common/fog.glsl`, wszystkie shadery sceny): zamglenie o gęstości malejącej wykładniczo z wysokością (`FrameBlock::hazeDensity/hazeFalloff`, z „Haze visibility/height”,
   całka analityczna wzdłuż promienia) w kolor nieba przy horyzoncie (`fogColor`), potem zanikanie w niebo od „Fog start” do „Render distance”; w widoku 2D mgły i nieba nie ma.
-  Kolory ambient i słońca z UI są w shaderze mnożone przez `ambientTint` / `sunlightTint` (`sky.glsl`).
+  Kolory ambient i słońca z UI są w shaderze mnożone przez `ambientLightTint()` / `directLightTint()` (`light.glsl`, na bazie `ambientTint` / `sunlightTint` z `sky.glsl`).
   Chmury (`Clouds`, ustawienia w `LightSource`, sekcja „Clouds” w Sun & sky; w `FrameBlock` jako `cloudLayer` / `cloudWind`): warstwa między „Cloud base” a base + thickness (metry),
   gęstość = mapa pogody 512² (kafel 24 km, przesuwana wiatrem) × szum kształtu 128³ (Perlin-Worley) erodowany szumem detalu 32³ — wszystko w `cloud_noise_compute.shader`,
   liczone raz. Ray march (`cloud_compute.shader`) w połowie rozdzielczości viewportu, światło: krótki marsz ku słońcu + faza dwupłatowa + niebo; daleko zanikają w niebo.

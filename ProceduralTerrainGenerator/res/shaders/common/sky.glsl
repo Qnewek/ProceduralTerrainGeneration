@@ -12,6 +12,11 @@ const float SKY_EXPOSURE = 60.0;
 //Night: the sky and the light that stays when the sun is gone (stars, the moon), display colors
 const vec3 NIGHT_SKY = vec3(0.010, 0.014, 0.040);
 const vec3 NIGHT_AMBIENT = vec3(0.30, 0.36, 0.55);
+//Moonlight (multiplier of the light color at full moonlight, common/light.glsl), the night ambient under the moon (dimmer, so the
+//moonlight has a direction) and the color of the moon disc
+const vec3 MOON_LIGHT = vec3(0.20, 0.24, 0.34);
+const float MOON_NIGHT_AMBIENT = 0.6;
+const vec3 MOON_DISC = vec3(0.85, 0.88, 0.95);
 
 vec3 skyToDisplay(vec3 radiance)
 {
@@ -39,11 +44,12 @@ vec3 sunlightTint(vec3 sunDirection)
 
 //Multiplier of the ambient light: the light of the whole sky, 1 for a sun 45 degrees high; dimmer and warmer at dusk, never darker than the night.
 //Its color shift is halved: the Ambient color of the UI is already the color of a day sky
-vec3 ambientTint(vec3 sunDirection)
+//@param night - multiplier of the night floor (1, MOON_NIGHT_AMBIENT under the moon)
+vec3 ambientTint(vec3 sunDirection, float night)
 {
     vec3 tint = skyLightColor(1);
     tint = mix(vec3(dot(tint, vec3(0.2126, 0.7152, 0.0722))), tint, 0.5);
-    return max(tint, NIGHT_AMBIENT);
+    return max(tint, NIGHT_AMBIENT * night);
 }
 
 //Sky seen along a direction, without the sun disc; below the horizon it fades into a dark ground haze
@@ -72,6 +78,18 @@ vec3 sunDisc(vec3 dir, vec3 sunDirection)
     float c = dot(normalize(dir), sunDirection);
     float disc = smoothstep(0.99955, 0.99975, c);
     return sunlightTint(sunDirection) * (disc * 2.0 + pow(max(c, 0.0), 800.0) * 0.4);
+}
+
+//Moon disc and its glow, added on top of skyColor; visible as the sky darkens
+//@param moonDirection - unit vector towards the moon
+//@return rgb = light of the disc and glow, a = share of the stars the glow hides
+vec4 moonDisc(vec3 dir, vec3 moonDirection, vec3 sunDirection)
+{
+    float c = dot(normalize(dir), moonDirection);
+    float disc = smoothstep(0.99955, 0.99975, c);
+    float glow = pow(max(c, 0.0), 300.0);
+    float night = 1.0 - daylight(sunDirection);
+    return vec4(MOON_DISC * (disc + glow * 0.08) * night, max(disc, glow) * night);
 }
 
 //Color the terrain fades into: the sky at the horizon in the direction of the view
