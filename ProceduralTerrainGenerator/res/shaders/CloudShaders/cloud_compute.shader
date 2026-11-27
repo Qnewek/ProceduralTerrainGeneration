@@ -3,10 +3,13 @@
 //ray of every texel, lit by the sun (a short march towards it, two-lobe phase) and by the sky. Output: rgb = light from the clouds
 //(display colors, premultiplied), a = transmittance; the scene behind becomes scene * a + rgb.
 //limitByDepth: the ray ends at the scene (copied depth), texels of the sky are left empty - for a camera at or above the clouds,
-//over the drawn scene; without it the ray goes to the far end of the layer - for the sky, drawn before the scene
+//over the drawn scene; without it the ray goes to the far end of the layer - for the sky, drawn before the scene.
+//distanceImage: distance (metres of the cloud layer, along the ray) where the light was scattered on average, for the reprojection of
+//cloud_resolve_compute.shader; without a cloud the middle of the slab, without the slab MAX_DISTANCE
 
 layout(local_size_x = 8, local_size_y = 8) in;
 layout(rgba16f, binding = 0) uniform writeonly image2D cloudImage;
+layout(r32f, binding = 1) uniform writeonly image2D distanceImage;
 layout(binding = 11) uniform sampler3D shapeNoise;
 layout(binding = 12) uniform sampler3D detailNoise;
 layout(binding = 13) uniform sampler2D sceneDepth;
@@ -132,6 +135,7 @@ void main()
     }
     if (!inside || exit <= enter) {
         imageStore(cloudImage, texel, vec4(0.0, 0.0, 0.0, 1.0));
+        imageStore(distanceImage, texel, vec4(MAX_DISTANCE));
         return;
     }
 
@@ -145,8 +149,9 @@ void main()
     float segment = exit - enter;
     int steps = int(clamp(segment / 25.0, 24.0, float(MAX_STEPS)));
     float stepLength = segment / float(steps);
-    //Interleaved gradient noise: the steps start at a different point for every texel and frame, which turns banding into fine noise
-    float jitter = fract(52.9829189 * fract(dot(vec2(texel) + float(frameIndex % 64) * 5.588238, vec2(0.06711056, 0.00583715))));
+    //Interleaved gradient noise: the steps start at a different point for every texel, which turns banding into fine noise; the golden
+    //ratio sequence moves it every frame so that the frames blended by cloud_resolve_compute.shader cover the step evenly
+    float jitter = fract(52.9829189 * fract(dot(vec2(texel), vec2(0.06711056, 0.00583715))) + float(frameIndex % 256) * 0.618034);
 
     vec3 scattered = vec3(0.0);
     float transmittance = 1.0;
@@ -174,10 +179,13 @@ void main()
         }
     }
     //Far clouds fade into the sky behind them
+    float scatterDistance = 0.5 * (enter + exit);
     if (weightSum > 0.0) {
-        float fade = exp(-(weightedDistance / weightSum) / FADE_DISTANCE);
+        scatterDistance = weightedDistance / weightSum;
+        float fade = exp(-scatterDistance / FADE_DISTANCE);
         scattered *= fade;
         transmittance = transmittance + (1.0 - transmittance) * (1.0 - fade);
     }
     imageStore(cloudImage, texel, vec4(scattered, transmittance));
+    imageStore(distanceImage, texel, vec4(scatterDistance));
 }

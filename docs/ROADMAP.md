@@ -597,8 +597,11 @@ Kroki:
   rozpraszanie), kolory słońca i ambientu z tego samego modelu, zamglenie wysokościowe (`fog.glsl`) zamiast samej mgły odległości, pora dnia + cykl dnia (noc 3× szybciej),
   gwiazdy. Brak: księżyca (noc oświetla tylko `NIGHT_AMBIENT`), perspektywy powietrznej z pełnego modelu (zamglenie jest artystyczne).
   ✅ 2026-11-14 chmury (`Clouds`): wolumetryczne, ray march w compute w połowie rozdzielczości (szumy 3D Perlin-Worley + mapa pogody, wiatr), światło słońca i nieba,
-  cienie chmur na terenie i roślinach, odbicia w wodzie, kamera nad chmurami (składanie po scenie). Ok. 1 ms. Brak: akumulacji czasowej (szum ditheringu jest widoczny
-  z bliska), chmur wysokich (cirrus), deszczu.
+  cienie chmur na terenie i roślinach, odbicia w wodzie, kamera nad chmurami (składanie po scenie). Ok. 1 ms. Brak: chmur wysokich (cirrus), deszczu.
+  ✅ 2026-11-27 akumulacja czasowa chmur („Temporal smoothing” w sekcji Clouds, domyślnie włączone): marsz każdej klatki (+ średnia odległość rozpraszania)
+  → `cloud_resolve_compute.shader`: reprojekcja macierzą poprzedniej klatki, historia przycięta do min/max 3×3 marszu, 10% nowej klatki; osobna historia
+  dla nieba i dla składania po scenie, przesunięcie kroków złotą proporcją. Koszt ok. +0,07 ms (bench). Do sprawdzenia w aplikacji: ziarno chmur z bliska
+  znika (porównać z checkboxem), szybki obrót kamery i przeskok (Places) bez smug, kamera nad podstawą chmur, zmiana rozmiaru okna.
   ✅ 2026-11-14 cienie: `ShadowMap`, do 4 stabilizowanych kaskad 2048², teren i roślinność rzucają, wszystko (teren, rośliny, impostory, trawa, woda) przyjmuje;
   PCF 3×3 na terenie, 1 próbka sprzętowa na roślinach. Koszt w dżungli (bench 1, oko 2 m): 3,3 ms przy wysokim słońcu, 5,5 ms przy 12°; teren 0,5 ms, reszta rośliny.
   ✅ 2026-11-27 mieszanie granic kaskad: na ostatnich 10% głębokości każdej kaskady (poza ostatnią) cień = mieszanka z następną kaskadą (`smoothstep`, `CASCADE_BLEND` w `common/shadow.glsl`), bez skoku ostrości
