@@ -138,7 +138,7 @@ void TerrainGenApp::Start()
 
         UpdateWindowSize();
 
-        editorCamera.Update(window, camera, ViewportRect(), FlatView());
+        editorCamera.Update(window, camera, ViewportRect(), FlatViewZoom());
         camera.SteerCamera(window, deltaTime, true);
 
         bool reloadKeyDown = glfwGetKey(window, GLFW_KEY_F5) == GLFW_PRESS;
@@ -281,12 +281,22 @@ bool TerrainGenApp::FlatView() const
     return false;
 }
 
+cameramath::FlatZoom* TerrainGenApp::FlatViewZoom()
+{
+    switch (currentMode) {
+    case mode::NOISE_HEIGHTMAP: return noiseGenSys.FlatViewZoom();
+    case mode::TERRAIN_GEN: return terrainGenSys.FlatViewZoom();
+    case mode::MAP_IMPORT: return mapImportSys.FlatViewZoom();
+    }
+    return nullptr;
+}
+
 void TerrainGenApp::ImGuiRender()
 {
     ImGui_ImplOpenGL3_NewFrame();
     ImGui_ImplGlfw_NewFrame();
     ImGui::NewFrame();
-    editorCamera.ImGuiWheel(window, camera, ViewportRect(), FlatView());
+    editorCamera.ImGuiWheel(window, camera, ViewportRect(), FlatViewZoom());
 
     //Left panel
     ImGui::SetNextWindowPos(ImVec2(0, 0), ImGuiCond_Always);

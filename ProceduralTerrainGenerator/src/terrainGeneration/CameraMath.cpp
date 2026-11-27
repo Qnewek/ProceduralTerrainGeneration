@@ -55,4 +55,73 @@ namespace cameramath {
 	{
 		return 2.0f * distance * std::tan(glm::radians(fovDegrees) * 0.5f) / static_cast<float>(std::max(viewportHeight, 1));
 	}
+
+	FlatFrame FitFlatFrame(glm::vec2 min, glm::vec2 max, float aspect)
+	{
+		FlatFrame frame;
+		frame.center = (min + max) * 0.5f;
+		frame.half = glm::max((max - min) * 0.5f * 1.02f, glm::vec2(1e-3f));
+		aspect = aspect > 0.0f ? aspect : 1.0f;
+		if (frame.half.x < frame.half.y * aspect) {
+			frame.half.x = frame.half.y * aspect;
+		}
+		else {
+			frame.half.y = frame.half.x / aspect;
+		}
+		return frame;
+	}
+
+	FlatFrame Zoomed(const FlatFrame& fit, const FlatZoom& zoom)
+	{
+		return { fit.center + zoom.offset, fit.half * zoom.scale };
+	}
+
+	void SetFlatFit(FlatZoom& zoom, glm::vec2 min, glm::vec2 max)
+	{
+		//An area moving with the camera has its size wobble by rounding (centre +- radius), so only a real change counts
+		const glm::vec2 size = max - min, last = zoom.fitMax - zoom.fitMin;
+		const glm::vec2 tolerance = 1e-4f * glm::max(glm::abs(size), glm::vec2(1.0f));
+		if (glm::any(glm::greaterThan(glm::abs(size - last), tolerance))) {
+			ResetFlatZoom(zoom);
+		}
+		zoom.fitMin = min;
+		zoom.fitMax = max;
+	}
+
+	void ResetFlatZoom(FlatZoom& zoom)
+	{
+		zoom.scale = 1.0f;
+		zoom.offset = glm::vec2(0.0f);
+	}
+
+	void ClampFlatZoom(FlatZoom& zoom, const FlatFrame& fit)
+	{
+		const float maxScale = zoom.fixedFrame ? 1.0f : flatMaxScale;
+		const float minScale = std::min(zoom.minHalf / std::min(fit.half.x, fit.half.y), maxScale);
+		zoom.scale = std::clamp(zoom.scale, minScale, maxScale);
+		const glm::vec2 reach = zoom.fixedFrame ? fit.half * (1.0f - zoom.scale) : fit.half;
+		zoom.offset = glm::clamp(zoom.offset, -reach, reach);
+	}
+
+	void ZoomFlatAt(FlatZoom& zoom, const FlatFrame& fit, glm::vec2 ndc, float factor)
+	{
+		const FlatFrame before = Zoomed(fit, zoom);
+		const glm::vec2 point(before.center.x + ndc.x * before.half.x, before.center.y - ndc.y * before.half.y);
+		zoom.scale *= factor;
+		ClampFlatZoom(zoom, fit);
+		const glm::vec2 half = fit.half * zoom.scale;
+		zoom.offset = point - glm::vec2(ndc.x * half.x, -ndc.y * half.y) - fit.center;
+		ClampFlatZoom(zoom, fit);
+	}
+
+	void PanFlat(FlatZoom& zoom, const FlatFrame& fit, glm::vec2 pixels, float viewportHeight)
+	{
+		if (zoom.fixedFrame) {
+			return;
+		}
+		//Pixels are square (the frame has the aspect of the view); the cursor moving down moves the map towards +Z on the screen
+		const float unitsPerPixel = 2.0f * fit.half.y * zoom.scale / std::max(viewportHeight, 1.0f);
+		zoom.offset -= pixels * unitsPerPixel;
+		ClampFlatZoom(zoom, fit);
+	}
 }

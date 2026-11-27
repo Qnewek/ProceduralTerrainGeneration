@@ -285,7 +285,11 @@ Wartości szumów są w [-1, 1]. Konwencja indeksowania: `map[y * width + x]`.
 - Kto pisze do warstwy wysokości, musi wziąć teksturę przez `LayerTexture` / `SetLayer` (one oznaczają `surfaceMap` jako nieaktualną). Zapis inną drogą zostawi
   starą normalną. `surfaceMap` nie zależy od `heightScale`: skala jest stosowana w `surface.glsl`.
 - Tryb „2D map” nie ma osobnej gałęzi w shaderze — `TerrainView` podmienia `view`/`projection` na ortogonalną
-  kamerę z góry (+X w prawo, −Z w górę) kadrującą `SetFlatViewBounds` (domyślnie cała mapa).
+  kamerę z góry (+X w prawo, −Z w górę) kadrującą `SetFlatViewBounds` (domyślnie cała mapa). Tryb podaje tylko obszar do pokazania; powiększenie i przesunięcie
+  to `TerrainRenderSettings::flatZoom` (`cameramath::FlatZoom`, osobne w każdym trybie, zmieniane przez `EditorCamera`), które `TerrainView::FrameBlock` stosuje
+  (`FitFlatFrame` → `Zoomed`) i w którym zapisuje obszar — obszar innego rozmiaru resetuje powiększenie (tolerancja na zaokrąglenia obszaru jadącego za kamerą),
+  przesunięty je zostawia. Każdy użytkownik widoku 2D bierze macierze z `FrameBlock` (teren, chunki, woda, pędzle, podpisy, kropki roślin), więc idzie za powiększeniem.
+  Mapa skończona: od 32 tekseli na krótszym boku do 1,25 obszaru, środek w obszarze; świat nieskończony (`fixedFrame`): tylko przybliżenie wewnątrz obszaru z „Render distance”.
 - Shadery obsługują `#include "plik"` (ścieżka względna do pliku zawierającego, każdy plik raz na etap; wspólne
   w `res/shaders/common/`). F5 w oknie aplikacji przeładowuje wszystkie shadery — przy błędzie zostaje stary program,
   a błąd idzie do konsoli. Numery linii w błędach dotyczą pliku, w którym błąd jest, ale nazwa pliku nie jest podawana.
@@ -500,8 +504,9 @@ Wartości szumów są w [-1, 1]. Konwencja indeksowania: `map[y * width + x]`.
   bez morza nic nie jest wodą, komórki od `round(climateOrigin)` (mapa z TerrainGen = te same drzewa), rzeki przez `river*`. Rysuje własny
   `VegetationLayer` (tylko zestaw „extra”, `SetUnitsPerMetre(4 / piksel)` w `ShowUnits` — LOD i zasięgi w metrach) po `PickUnderCursor`, więc pędzel
   i orbita czytają głębię terenu. Cieni i trawy nie ma (wymagają `ChunkWorld`).
-- Kamera edytora (`EditorCamera`, wszystkie tryby, tylko widok 3D i bez M): prawy przycisk = rozglądanie (z WASD lot), Alt + lewy = orbita, środkowy = przesuwanie,
-  kółko = przód/tył (Shift + kółko nigdy — zostaje dla promienia pędzla). Punkt obrotu i odległość przesuwania: `AfterDraw` czyta głębię pod kursorem po `Draw`
+- Kamera edytora (`EditorCamera`, wszystkie tryby, bez M): prawy przycisk = rozglądanie (z WASD lot), Alt + lewy = orbita, środkowy = przesuwanie,
+  kółko = przód/tył (Shift + kółko nigdy — zostaje dla promienia pędzla). Na mapie 2D (`Update`/`ImGuiWheel` dostają `FlatZoom*`): kółko = przybliżenie wokół kursora,
+  środkowy lub prawy = przeciąganie mapy, F / „Fit 2D map” w Display = cała mapa. Punkt obrotu i odległość przesuwania: `AfterDraw` czyta głębię pod kursorem po `Draw`
   (macierze `camera.GetViewProjection()`), bez trafienia punkt przed kamerą. Matematyka w `CameraMath.*` (`ptg_core`, testy). Lewy przycisk bez Alt należy do pędzli.
 - Rzeki (tylko TerrainGen, zakładka „Rivers”, `WorldConfig::rivers`, domyślnie `NONE`): `carveRivers` (`common/rivers.glsl`) to ostatni krok wysokości w obu ścieżkach
   (`height_compute` i `biome_compute` z `writeHeight`), po modyfikatorach; biomy wybiera wysokość sprzed rzek. Generacja dostaje `const RiverInput*` (config + `RiverMap`);

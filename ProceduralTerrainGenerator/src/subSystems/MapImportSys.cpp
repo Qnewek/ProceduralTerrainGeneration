@@ -1058,7 +1058,7 @@ void MapImportSys::ImGuiDisplay()
 	//Around the true proportions of the map too (a flat DEM of 90 m pixels has a true scale of about 2)
 	const glm::vec2 heightScaleRange = map.Empty() ? glm::vec2(16.0f, 4096.0f)
 		: glm::vec2(std::min(16.0f, trueHeightScale / 16.0f), std::max(4096.0f, trueHeightScale * 16.0f));
-	if (utilities::DisplayModeImGui(s.modelScale, s.topoStep, s.topoBandWidth, s.heightScale, s.displayMode, s.wireFrame, s.map2d, nullptr, LandCoverShown(),
+	if (utilities::DisplayModeImGui(s.modelScale, s.topoStep, s.topoBandWidth, s.heightScale, s.displayMode, s.wireFrame, s.map2d, s.flatZoom, nullptr, LandCoverShown(),
 		heightScaleRange)) {
 		if (s.displayMode == utilities::heightMapMode::BIOMES && !BiomesOn()) {
 			s.displayMode = utilities::heightMapMode::GREYSCALE;

@@ -11,6 +11,7 @@
 #include "Renderer.h"
 #include "VertexBufferLayout.h"
 #include "Camera.h"
+#include "CameraMath.h"
 #include "LightSource.h"
 #include "Grid.h"
 #include "utilities.h"
@@ -28,6 +29,8 @@ struct TerrainRenderSettings {
 	utilities::heightMapMode displayMode = utilities::heightMapMode::GREYSCALE;
 	bool wireFrame = false;
 	bool map2d = false;		//top-down orthographic view instead of the camera
+	//Zoom and pan of the 2D map (EditorCamera); FrameBlock records in it the area the mode fits, so it changes while drawing
+	mutable cameramath::FlatZoom flatZoom;
 	float tessPixels = 6.0f;	//3D view: length of a terrain triangle edge on screen in pixels (smaller = more detail); the 2D map ignores it
 	//Sun shadows of this frame (set by the subsystem after rendering them), added to the FrameBlock of the 3D view; nullptr = none
 	const ShadowMap* shadows = nullptr;

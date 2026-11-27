@@ -127,6 +127,12 @@ class NoiseBasedGenerationSys
 		void Draw(Renderer& renderer, Camera& camera, LightSource& light);
 		//true while the 2D map is shown instead of the 3D view
 		bool FlatView() const { return renderSettings.map2d; }
+		//Zoom of the 2D map for the editor camera, nullptr in 3D; the infinite world only zooms inside the area it shows
+		cameramath::FlatZoom* FlatViewZoom()
+		{
+			renderSettings.flatZoom.fixedFrame = chunksShown;
+			return renderSettings.map2d ? &renderSettings.flatZoom : nullptr;
+		}
 		//Infinite generation shows chunks with part of the view not generated yet
 		bool HoleInView() const { return chunksShown && chunks.HasHoleInView(); }
 		void ReloadShaders() { view.ReloadShader(); pipesView.ReloadShader(); chunks.ReloadShader(); gpu.ReloadShaders(); erosion.ReloadShaders(); }
