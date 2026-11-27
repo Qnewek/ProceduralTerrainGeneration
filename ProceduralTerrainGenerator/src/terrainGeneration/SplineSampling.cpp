@@ -36,35 +36,38 @@ namespace {
 		slope[n - 1] = endSlope(h[n - 2], h[n - 3], secant[n - 2], secant[n - 3]);
 		return slope;
 	}
-}
 
-std::vector<float> SampleSpline(const SplinePoints& points, int count)
-{
-	const std::vector<double>& x = points.x;
-	const std::vector<double>& y = points.y;
-	const std::vector<double> slope = points.cubic ? MonotoneSlopes(x, y) : std::vector<double>();
-
-	std::vector<float> samples(count);
-	size_t piece = 0;
-	for (int i = 0; i < count; i++) {
-		//Outside the points (only if they do not reach -1 or 1) the end value is kept
-		const double at = std::clamp(-1.0 + 2.0 * i / (count - 1), x.front(), x.back());
+	//Value at at; slope is empty for straight segments. Outside the points (only if they do not reach -1 or 1) the end value is kept
+	double ValueAt(const std::vector<double>& x, const std::vector<double>& y, const std::vector<double>& slope, double at)
+	{
+		at = std::clamp(at, x.front(), x.back());
+		size_t piece = 0;
 		while (piece + 2 < x.size() && at > x[piece + 1]) {
 			piece++;
 		}
 		const double h = x[piece + 1] - x[piece];
 		const double t = (at - x[piece]) / h;
-		double value;
-		if (points.cubic) {
+		if (!slope.empty()) {
 			//Cubic Hermite basis
 			const double t2 = t * t, t3 = t2 * t;
-			value = (2.0 * t3 - 3.0 * t2 + 1.0) * y[piece] + (t3 - 2.0 * t2 + t) * h * slope[piece]
+			return (2.0 * t3 - 3.0 * t2 + 1.0) * y[piece] + (t3 - 2.0 * t2 + t) * h * slope[piece]
 				+ (-2.0 * t3 + 3.0 * t2) * y[piece + 1] + (t3 - t2) * h * slope[piece + 1];
 		}
-		else {
-			value = y[piece] + t * (y[piece + 1] - y[piece]);
-		}
-		samples[i] = static_cast<float>(value);
+		return y[piece] + t * (y[piece + 1] - y[piece]);
+	}
+}
+
+double EvaluateSpline(const SplinePoints& points, double at)
+{
+	return ValueAt(points.x, points.y, points.cubic ? MonotoneSlopes(points.x, points.y) : std::vector<double>(), at);
+}
+
+std::vector<float> SampleSpline(const SplinePoints& points, int count)
+{
+	const std::vector<double> slope = points.cubic ? MonotoneSlopes(points.x, points.y) : std::vector<double>();
+	std::vector<float> samples(count);
+	for (int i = 0; i < count; i++) {
+		samples[i] = static_cast<float>(ValueAt(points.x, points.y, slope, -1.0 + 2.0 * i / (count - 1)));
 	}
 	return samples;
 }

@@ -35,6 +35,7 @@
 #include "WaterSurface.h"
 #include "GpuErosion.h"
 #include "MapLabels.h"
+#include "NestedSplineEditor.h"
 #include "VegetationExport.h"
 
 //What has to be regenerated at the next Update; with infinite generation a terrain or biome request regenerates the chunks
@@ -240,12 +241,16 @@ private:
 	BiomeParameter editedBiomeComponent = BiomeParameter::TEMPERATURE;
 	int samplingResolution = 500;
 	int splineDraggedPoint = -1;
+	//The spline editor of the NESTED method
+	NestedSplineEditor nestedEditor;
 
 	//Content of the generation tabs
 	void TerrainImGui();
 	void LandStatsImGui();
 	void NoiseEditor();
 	void SplineEditor();
+	//Switches the terrain method and regenerates; the first switch to NESTED makes its tree from the LAYERED curves
+	void SetTerrainMethod(EvaluationMethod method);
 	void BiomesEditor();
 	void BiomeTableEditor();
 	void BiomeNoisesEditor();

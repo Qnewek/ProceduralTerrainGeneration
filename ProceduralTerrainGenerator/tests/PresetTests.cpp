@@ -6,6 +6,7 @@
 #include <random>
 #include <string>
 
+#include "NestedSpline.h"
 #include "Preset.h"
 #include "WorldConfig.h"
 
@@ -74,6 +75,31 @@ static void CheckSameSpline(const SplinePoints& a, const SplinePoints& b)
 	CHECK(a.x == b.x);
 	CHECK(a.y == b.y);
 	CHECK(a.cubic == b.cubic);
+}
+
+//Three levels, curves over C, M and W, some linear, some cubic; values unlike any other field the invalid cases replace
+static NestedCurve DistinctNestedTree()
+{
+	NestedCurve w{ { { -1.0, 0.125, {} }, { 0.25, 0.625, {} }, { 1.0, 0.875, {} } }, true };
+	NestedCurve m{ { { -1.0, 0.25, {} }, { -0.5, 0.0, { w } }, { 0.5, 0.375, {} }, { 1.0, 0.75, {} } }, false };
+	return NestedCurve{ { { -1.0, 0.0, {} }, { 0.25, 0.0, { m } }, { 1.0, 0.5, { w } } }, true };
+}
+
+static void CheckSameNestedCurve(const NestedCurve& a, const NestedCurve& b)
+{
+	CHECK(a.cubic == b.cubic);
+	REQUIRE(a.points.size() == b.points.size());
+	for (size_t i = 0; i < a.points.size(); i++) {
+		CAPTURE(i);
+		CHECK(a.points[i].x == b.points[i].x);
+		REQUIRE(a.points[i].sub.size() == b.points[i].sub.size());
+		if (a.points[i].sub.empty()) {
+			CHECK(a.points[i].y == b.points[i].y);
+		}
+		else {
+			CheckSameNestedCurve(a.points[i].sub[0], b.points[i].sub[0]);
+		}
+	}
 }
 
 //Every erosion field unlike the defaults
@@ -156,6 +182,8 @@ static WorldConfig DistinctWorld()
 	c.terrain.coastWidth = 0.07f;
 	c.terrain.mountainShare = 0.33f;
 	c.terrain.peaksSpline = { {-1.0, 0.7, 1.0}, {0.1, 0.8, 0.9}, true };
+	c.terrain.nested.root = DistinctNestedTree();
+	c.terrain.nested.seaLevel = 0.17f;
 	c.biomes.temperature = DistinctNoise(4);
 	c.biomes.humidity = DistinctNoise(5);
 	c.biomes.blendWidth = 0.17f;
@@ -267,6 +295,8 @@ TEST_CASE("A world preset keeps every field")
 	CHECK(loaded.terrain.coastWidth == original.terrain.coastWidth);
 	CHECK(loaded.terrain.mountainShare == original.terrain.mountainShare);
 	CheckSameSpline(loaded.terrain.peaksSpline, original.terrain.peaksSpline);
+	CheckSameNestedCurve(loaded.terrain.nested.root, original.terrain.nested.root);
+	CHECK(loaded.terrain.nested.seaLevel == original.terrain.nested.seaLevel);
 	CheckSameNoise(loaded.biomes.temperature, original.biomes.temperature);
 	CheckSameNoise(loaded.biomes.humidity, original.biomes.humidity);
 	CHECK(loaded.biomes.blendWidth == original.biomes.blendWidth);
@@ -347,13 +377,77 @@ TEST_CASE("Every river method survives saving, and a preset without rivers has n
 
 TEST_CASE("Every terrain method survives saving")
 {
-	for (EvaluationMethod method : { EvaluationMethod::LINEAR_COMBINE, EvaluationMethod::SPLINE_COMBINE, EvaluationMethod::LAYERED }) {
+	for (EvaluationMethod method : { EvaluationMethod::LINEAR_COMBINE, EvaluationMethod::SPLINE_COMBINE, EvaluationMethod::LAYERED,
+		EvaluationMethod::NESTED }) {
 		WorldConfig original = DistinctWorld();
 		original.terrain.method = method;
 		WorldConfig loaded;
 		std::string error;
 		REQUIRE_MESSAGE(preset::FromJson(preset::ToJson(original), loaded, error), error);
 		CHECK(loaded.terrain.method == method);
+	}
+}
+
+TEST_CASE("Nested tree round trip")
+{
+	WorldConfig original = DistinctWorld();
+	original.terrain.method = EvaluationMethod::NESTED;
+	WorldConfig loaded;
+	std::string error;
+	REQUIRE_MESSAGE(preset::FromJson(preset::ToJson(original), loaded, error), error);
+	CHECK(loaded.terrain.method == EvaluationMethod::NESTED);
+	CheckSameNestedCurve(loaded.terrain.nested.root, original.terrain.nested.root);
+	CHECK(loaded.terrain.nested.seaLevel == 0.17f);
+	//An empty tree of another method stays empty
+	original.terrain.method = EvaluationMethod::LAYERED;
+	original.terrain.nested.root = {};
+	REQUIRE_MESSAGE(preset::FromJson(preset::ToJson(original), loaded, error), error);
+	CHECK(loaded.terrain.nested.root.points.empty());
+}
+
+TEST_CASE("NESTED without a tree is filled from LAYERED on load")
+{
+	WorldConfig loaded;
+	std::string error;
+	REQUIRE_MESSAGE(preset::FromJson(R"({"kind": "world", "version": 2, "width": 64, "height": 32,
+		"terrain": {"method": "NESTED", "seaLevel": 0.4, "mountainShare": 0.5}})", loaded, error), error);
+	REQUIRE(loaded.terrain.method == EvaluationMethod::NESTED);
+	const NestedTerrain expected = nested::FromLayered(loaded.terrain);
+	REQUIRE(!loaded.terrain.nested.root.points.empty());
+	CheckSameNestedCurve(loaded.terrain.nested.root, expected.root);
+	CHECK(loaded.terrain.nested.seaLevel == doctest::Approx(0.2f));
+
+	//A sea level written in the file is kept
+	REQUIRE_MESSAGE(preset::FromJson(R"({"kind": "world", "version": 2, "width": 64, "height": 32,
+		"terrain": {"method": "NESTED", "nested": {"seaLevel": 0.35}}})", loaded, error), error);
+	CHECK(!loaded.terrain.nested.root.points.empty());
+	CHECK(loaded.terrain.nested.seaLevel == 0.35f);
+}
+
+TEST_CASE("Broken nested trees are rejected")
+{
+	WorldConfig original = DistinctWorld();
+	original.terrain.method = EvaluationMethod::NESTED;
+	const std::string valid = preset::ToJson(original);
+	//Presets are written with an indent of 2, so every point is an object over several lines
+	const std::string cases[] = {
+		Replaced(valid, "\"seaLevel\": 0.17", "\"seaLevel\": 1.5"),
+		//A value of the W-curve out of range
+		Replaced(valid, "\"y\": 0.125", "\"y\": 1.125"),
+		//The second point of the root at -1, like the first one
+		Replaced(valid, "\"x\": 0.25", "\"x\": -1.0"),
+		Replaced(valid, "\"x\": 0.25", "\"x\": \"a\""),
+		Replaced(valid, "\"points\": [", "\"points\": 1, \"unused\": ["),
+		Replaced(valid, "\"curve\": {", "\"curve\": 1, \"unused\": {"),
+	};
+	for (const std::string& text : cases) {
+		CAPTURE(text);
+		WorldConfig config;
+		config.width = 77;
+		std::string error;
+		CHECK_FALSE(preset::FromJson(text, config, error));
+		CHECK(error.find("nested") != std::string::npos);
+		CHECK(config.width == 77);
 	}
 }
 

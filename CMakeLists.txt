@@ -67,6 +67,7 @@ add_library(ptg_core STATIC
 	${PTG_SRC}/terrainGeneration/MaterialExport.cpp
 	${PTG_SRC}/terrainGeneration/MeshExport.cpp
 	${PTG_SRC}/terrainGeneration/MeshFile.cpp
+	${PTG_SRC}/terrainGeneration/NestedSpline.cpp
 	${PTG_SRC}/terrainGeneration/Places.cpp
 	${PTG_SRC}/terrainGeneration/PlacedPlants.cpp
 	${PTG_SRC}/terrainGeneration/Preset.cpp
@@ -135,6 +136,7 @@ add_executable(ProceduralTerrainGenerator
 	${PTG_SRC}/utility/SendToImported.cpp
 	${PTG_SRC}/utility/Sky.cpp
 	${PTG_SRC}/utility/utilities.cpp
+	${PTG_SRC}/utility/NestedSplineEditor.cpp
 	${PTG_SRC}/utility/PanelTabs.cpp
 )
 target_include_directories(ProceduralTerrainGenerator PRIVATE
@@ -184,6 +186,7 @@ add_executable(ptg_tests
 	${PTG_DIR}/tests/MaterialExportTests.cpp
 	${PTG_DIR}/tests/MeshExportTests.cpp
 	${PTG_DIR}/tests/MeshFileTests.cpp
+	${PTG_DIR}/tests/NestedSplineTests.cpp
 	${PTG_DIR}/tests/PermutationTests.cpp
 	${PTG_DIR}/tests/PlacedPlantsTests.cpp
 	${PTG_DIR}/tests/PlacesTests.cpp

@@ -14,6 +14,7 @@
 #include <nlohmann/json.hpp>
 
 #include "FileIO.h"
+#include "NestedSpline.h"
 
 namespace preset {
 	namespace {
@@ -63,6 +64,7 @@ namespace preset {
 			{ EvaluationMethod::LINEAR_COMBINE, "LINEAR_COMBINE" },
 			{ EvaluationMethod::SPLINE_COMBINE, "SPLINE_COMBINE" },
 			{ EvaluationMethod::LAYERED, "LAYERED" },
+			{ EvaluationMethod::NESTED, "NESTED" },
 		};
 
 		constexpr EnumName<erosion::Method> erosionMethodNames[] = {
@@ -147,6 +149,27 @@ namespace preset {
 			j["x"] = s.x;
 			j["y"] = s.y;
 			j["cubic"] = s.cubic;
+			return j;
+		}
+
+		//{"cubic": b, "points": [{"x": f, "y": f} or {"x": f, "curve": {...}}]}
+		json NestedCurveToJson(const NestedCurve& c)
+		{
+			json points = json::array();
+			for (const NestedPoint& p : c.points) {
+				json point;
+				point["x"] = p.x;
+				if (p.sub.empty()) {
+					point["y"] = p.y;
+				}
+				else {
+					point["curve"] = NestedCurveToJson(p.sub[0]);
+				}
+				points.push_back(std::move(point));
+			}
+			json j;
+			j["cubic"] = c.cubic;
+			j["points"] = std::move(points);
 			return j;
 		}
 
@@ -491,6 +514,58 @@ namespace preset {
 			r.Read("cubic", s.cubic);
 		}
 
+		//depth: 0 = curve over continentalness; a curve deeper than nested::maxDepth is refused while reading, so a file cannot nest without end
+		void ReadNestedCurve(const json& field, const std::string& path, int depth, NestedCurve& c)
+		{
+			const Reader r(field, path);
+			r.Read("cubic", c.cubic);
+			const json* points = r.Find("points");
+			if (!points) {
+				return;
+			}
+			if (!points->is_array()) {
+				throw std::runtime_error(r.PathOf("points") + " must be an array of points");
+			}
+			c.points.clear();
+			for (size_t index = 0; index < points->size(); index++) {
+				const std::string pointPath = r.PathOf("points") + "[" + std::to_string(index) + "]";
+				const Reader point((*points)[index], pointPath);
+				NestedPoint& p = c.points.emplace_back();
+				const auto number = [&](const char* key, double& value) {
+					const json* f = point.Find(key);
+					if (!f || !f->is_number() || !std::isfinite(f->get<double>())) {
+						throw std::runtime_error(point.PathOf(key) + " must be a number");
+					}
+					value = f->get<double>();
+				};
+				number("x", p.x);
+				if (const json* curve = point.Find("curve")) {
+					if (depth + 1 >= nested::maxDepth) {
+						throw std::runtime_error(point.PathOf("curve") + ": curves over weirdness hold only numbers");
+					}
+					ReadNestedCurve(*curve, point.PathOf("curve"), depth + 1, p.sub.emplace_back());
+				}
+				else {
+					number("y", p.y);
+				}
+			}
+		}
+
+		//@return whether the field holds its own sea level
+		bool ReadNested(const Reader& parent, const char* key, NestedTerrain& n)
+		{
+			const json* field = parent.Find(key);
+			if (!field) {
+				return false;
+			}
+			Reader r(*field, parent.PathOf(key));
+			r.Read("seaLevel", n.seaLevel);
+			if (const json* root = r.Find("root")) {
+				ReadNestedCurve(*root, r.PathOf("root"), 0, n.root);
+			}
+			return r.Find("seaLevel") != nullptr;
+		}
+
 		void ReadErosion(const Reader& parent, const char* key, erosion::ErosionConfig& e)
 		{
 			const json* field = parent.Find(key);
@@ -581,6 +656,16 @@ namespace preset {
 			r.Read("coastWidth", t.coastWidth);
 			r.Read("mountainShare", t.mountainShare);
 			ReadSpline(r, "peaksSpline", t.peaksSpline);
+			//Missing in presets saved before the nested method existed. NESTED without a tree gets the one of its LAYERED fields,
+			//as the switch to NESTED in the editor does (a sea level written in the file is kept)
+			const bool seaLevelGiven = ReadNested(r, "nested", t.nested);
+			if (t.method == EvaluationMethod::NESTED && t.nested.root.points.empty()) {
+				const float seaLevel = t.nested.seaLevel;
+				t.nested = nested::FromLayered(t);
+				if (seaLevelGiven) {
+					t.nested.seaLevel = seaLevel;
+				}
+			}
 		}
 
 		void ReadBiomes(const Reader& parent, const char* key, BiomeConfig& b)
@@ -887,6 +972,16 @@ namespace preset {
 			if (!(c.terrain.mountainShare >= 0.0f && c.terrain.mountainShare <= 1.0f)) {
 				throw std::runtime_error("mountainShare must be between 0 and 1");
 			}
+			if (!(c.terrain.nested.seaLevel >= 0.0f && c.terrain.nested.seaLevel <= 1.0f)) {
+				throw std::runtime_error("terrain.nested.seaLevel must be between 0 and 1");
+			}
+			//An empty tree is allowed (not made yet); a tree that is there has to be one the generation can use
+			if (!c.terrain.nested.root.points.empty()) {
+				const std::string problem = nested::Problem(c.terrain.nested.root);
+				if (!problem.empty()) {
+					throw std::runtime_error("terrain.nested: " + problem);
+				}
+			}
 			CheckNoise(c.biomes.temperature, "Temperature");
 			CheckNoise(c.biomes.humidity, "Humidity");
 			CheckBiomes(c.biomes);
@@ -1021,6 +1116,10 @@ namespace preset {
 		terrain["coastWidth"] = ReadableFloat(c.terrain.coastWidth);
 		terrain["mountainShare"] = ReadableFloat(c.terrain.mountainShare);
 		terrain["peaksSpline"] = SplineToJson(c.terrain.peaksSpline);
+		json nestedTerrain;
+		nestedTerrain["seaLevel"] = ReadableFloat(c.terrain.nested.seaLevel);
+		nestedTerrain["root"] = NestedCurveToJson(c.terrain.nested.root);
+		terrain["nested"] = std::move(nestedTerrain);
 		root["terrain"] = std::move(terrain);
 
 		root["biomes"] = BiomesToJson(c.biomes);

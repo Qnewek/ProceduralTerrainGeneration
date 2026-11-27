@@ -21,13 +21,33 @@ enum class EvaluationMethod {
 	SPLINE_COMBINE,
 	//Base land shape from continentalness with mountains on top: amplitude from mountainousness, shape from weirdness
 	//read as peaks and valleys (see TerrainConfig::seaLevel)
-	LAYERED
+	LAYERED,
+	//Height = a curve over continentalness whose points are numbers or curves over mountainousness, whose points are numbers
+	//or curves over weirdness (TerrainConfig::nested, NestedSpline.h)
+	NESTED
 };
 
 //Control points of a spline mapping a noise value [-1, 1] to a factor [0, 1]
 struct SplinePoints {
 	std::vector<double> x, y;
 	bool cubic = false;		//cubic spline if true, linear interpolation otherwise
+};
+
+struct NestedCurve;
+//A point of a nested curve: the value y, or (sub holds one curve) the value of a curve over the next noise
+struct NestedPoint {
+	double x = 0.0, y = 0.0;
+	std::vector<NestedCurve> sub;	//empty = the constant y, otherwise exactly 1 curve one level down
+};
+//A curve of the NESTED method: over continentalness (root), mountainousness (its children) or weirdness (theirs, numbers only).
+//Points with strictly ascending x from -1 to 1, values in [0, 1]; rules and limits in NestedSpline.h
+struct NestedCurve {
+	std::vector<NestedPoint> points;
+	bool cubic = false;		//monotone cubic (PCHIP, as SampleSpline) if true, straight segments otherwise
+};
+struct NestedTerrain {
+	NestedCurve root;		//over continentalness; empty = not made yet (filled from the LAYERED curves on use)
+	float seaLevel = 0.06f;	//height of the water surface, in [0, 1]
 };
 
 struct TerrainConfig {
@@ -47,9 +67,17 @@ struct TerrainConfig {
 	float mountainShare = 0.8f;
 	SplinePoints peaksSpline{ {-1.0, -0.5, 0.0, 0.5, 1.0}, {0.15, 0.3, 0.5, 0.8, 1.0} };
 
-	//Height of the water surface the climate of biomes is measured from: seaLevel * (1 - mountainShare) for LAYERED;
-	//the other methods have no sea, so heights are measured from 0
-	float WaterHeight() const { return method == EvaluationMethod::LAYERED ? seaLevel * (1.0f - mountainShare) : 0.0f; }
+	//NESTED: the tree of curves and its own sea level
+	NestedTerrain nested;
+
+	//Height of the water surface the climate of biomes is measured from: seaLevel * (1 - mountainShare) for LAYERED,
+	//nested.seaLevel for NESTED; the other methods have no sea, so heights are measured from 0
+	float WaterHeight() const {
+		return method == EvaluationMethod::LAYERED ? seaLevel * (1.0f - mountainShare)
+			: method == EvaluationMethod::NESTED ? nested.seaLevel : 0.0f;
+	}
+	//Whether the method has a sea at WaterHeight() (water surface, coast, climate measured from it)
+	bool HasSea() const { return method == EvaluationMethod::LAYERED || method == EvaluationMethod::NESTED; }
 
 	noise::NoiseConfigParameters& Noise(WorldGenParameter p) {
 		switch (p) {

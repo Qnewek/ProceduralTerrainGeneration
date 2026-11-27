@@ -11,6 +11,7 @@
 
 #include "BiomeSettingsPanel.h"
 #include "ErosionPanel.h"
+#include "NestedSpline.h"
 #include "Preset.h"
 #include "SplineSampling.h"
 #include "TerrainMaterials.h"
@@ -738,7 +739,7 @@ void TerrainGenerationSys::TerrainImGui()
 
 	ImGui::SeparatorText("Terrain method");
 	int evaluatingOption = static_cast<int>(world.terrain.method);
-	const char* methodOptions[] = { "Linear", "Spline", "Layered" };
+	const char* methodOptions[] = { "Linear", "Spline", "Layered", "Nested" };
 	if (ImGui::BeginCombo("Method", methodOptions[evaluatingOption]))
 	{
 		for (int n = 0; n < IM_ARRAYSIZE(methodOptions); n++)
@@ -746,8 +747,7 @@ void TerrainGenerationSys::TerrainImGui()
 			bool is_selected = (evaluatingOption == n);
 			if (ImGui::Selectable(methodOptions[n], is_selected)) {
 				evaluatingOption = n;
-				world.terrain.method = static_cast<EvaluationMethod>(evaluatingOption);
-				changeTerrain = true;
+				SetTerrainMethod(static_cast<EvaluationMethod>(evaluatingOption));
 			}
 			if (is_selected)
 				ImGui::SetItemDefaultFocus();
@@ -867,7 +867,7 @@ void TerrainGenerationSys::ImGuiSaving()
 	pack.range = heightmap::terrainRange;
 	pack.metresPerUnit = renderSettings.heightScale / TerrainView::worldUnitsPerTexel;
 	pack.worldOrigin = view.GetMapOffset();
-	if (world.terrain.method == EvaluationMethod::LAYERED) {
+	if (world.terrain.HasSea()) {
 		pack.seaLevel = world.terrain.WaterHeight();
 	}
 	pack.generation = [this] { return preset::ToJson(world); };
@@ -1050,7 +1050,7 @@ void TerrainGenerationSys::BiomesEditor()
 	}
 
 	const bool climateChanged = biomepanel::Climate(world.biomes.climate);
-	if (world.terrain.method != EvaluationMethod::LAYERED) {
+	if (!world.terrain.HasSea()) {
 		ImGui::TextDisabled("This terrain method has no sea: heights are measured from 0");
 	}
 	if (climateChanged) {
@@ -1229,20 +1229,36 @@ void TerrainGenerationSys::RiversEditor()
 	}
 }
 
+void TerrainGenerationSys::SetTerrainMethod(EvaluationMethod method)
+{
+	world.terrain.method = method;
+	//The first switch to NESTED makes the tree from the LAYERED curves, so the world looks nearly the same; a tree made before is kept
+	if (method == EvaluationMethod::NESTED && world.terrain.nested.root.points.empty()) {
+		world.terrain.nested = nested::FromLayered(world.terrain);
+	}
+	changeTerrain = true;
+}
+
 void TerrainGenerationSys::SplineEditor()
 {
+	if (world.terrain.method == EvaluationMethod::NESTED) {
+		changeTerrain |= nestedEditor.Show(world.terrain);
+		return;
+	}
 	const bool layered = world.terrain.method == EvaluationMethod::LAYERED;
 	if (world.terrain.method == EvaluationMethod::LINEAR_COMBINE) {
 		//Edits would change nothing, so the editor offers a method that uses them instead
 		ImGui::TextWrapped("The Linear method uses no splines. Switch to a method that does:");
 		if (ImGui::Button("Layered##splineMethod")) {
-			world.terrain.method = EvaluationMethod::LAYERED;
-			changeTerrain = true;
+			SetTerrainMethod(EvaluationMethod::LAYERED);
 		}
 		ImGui::SameLine();
 		if (ImGui::Button("Spline##splineMethod")) {
-			world.terrain.method = EvaluationMethod::SPLINE_COMBINE;
-			changeTerrain = true;
+			SetTerrainMethod(EvaluationMethod::SPLINE_COMBINE);
+		}
+		ImGui::SameLine();
+		if (ImGui::Button("Nested##splineMethod")) {
+			SetTerrainMethod(EvaluationMethod::NESTED);
 		}
 		return;
 	}

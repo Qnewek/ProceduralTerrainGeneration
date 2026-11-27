@@ -31,7 +31,7 @@ Plan napraw i rozwoju: `docs/ROADMAP.md` (ID zadań `B*`, `A*`, `F*` są tam zde
   i ID z ROADMAP; po naprawie błędu test zacznie zgłaszać niepowodzenie, wtedy usuń oznaczenie.
 - **Test generacji: `out\build\x64-release\ProceduralTerrainGenerator.exe --gpu-check`** (ukryte okno, potrzebny GPU z OpenGL 4.5; uruchamiaj po każdej
   zmianie shaderów generacji). Sprawdza: wartości skończone i w zakresie opcji (każda opcja, ridge, wyspy, metody terenu), determinizm i wpływ seeda,
-  zgodność id i kolorów biomów (też biomów Imported map, `mapbiomes:`), chunki i poziomy LOD bit w bit z pełną mapą, mapę pochodnych na mapach o znanych pochodnych, udział wody domyślnego świata
+  zagnieżdżone splajny (GPU = `nested::Evaluate`), zgodność id i kolorów biomów (też biomów Imported map, `mapbiomes:`), chunki i poziomy LOD bit w bit z pełną mapą, mapę pochodnych na mapach o znanych pochodnych, udział wody domyślnego świata
   (55–65%, ≥ 80% lądu w kontynentach), rzeki (obie metody: zakres, jeden przebieg = dwa, chunki), erozję (krople i rury), pędzle (GPU = `sculpt::Apply`); potem czasy GPU generacji i erozji.
   Nowa opcja generacji = nowy przypadek w `CheckRanges` (`GpuHeightCheck.cpp`).
 - **Wielkość liter ścieżek = dokładnie taka jak w gicie** (`git ls-files`): `src/opengl`, `src/subSystems`,
@@ -72,7 +72,9 @@ ProceduralTerrainGenerator/
                                  materiały teksela pomalowanego — wzorzec CPU mieszania w `map_biome_compute.shader`
       Biome.*                    biom = zakresy 6 parametrów (5 szumów + elewacja) + kolor; najbliższy biom (Nearest) i wagi przejść (BlendWeight) — opis reguł, które liczy biome_compute.shader
       Grid.h                     mapy Grid<T>
-      SplineSampling.*           próbkowanie splajnu do tablicy (dla GPU i wykresu w edytorze)
+      SplineSampling.*           próbkowanie splajnu do tablicy (dla GPU i wykresu w edytorze), `EvaluateSpline` = wartość w jednym punkcie
+      NestedSpline.*             metoda NESTED: drzewo krzywych C → M → W (`nested::Evaluate` = wzorzec CPU dla `terrain.glsl`), przeliczenie z LAYERED
+                                 (`FromLayered`), spłaszczenie dla GPU (`Flatten`), walidacja (`Problem`), ścieżka edytora (`ValidPath`)
       Frustum.h                  płaszczyzny frustum z macierzy i test AABB (culling chunków)
       Preset.*                   zapis/odczyt WorldConfig i NoiseMapConfig jako JSON + walidacja; opcjonalne `mapOffset` (położenie mapy częściowej)
       Places.*                   nazwane miejsca trybu (kamera przed Model scale, yaw/pitch, `mapOffset`) w jednym pliku JSON: places/world.json, places/noise.json
@@ -129,6 +131,9 @@ ProceduralTerrainGenerator/
       ErosionPanel.*             parametry erozji (wybór metody + jej pola, bez przycisków), wspólne dla zakładek Erosion obu trybów; nazwa metody
       MapLabels.*                podpisy map rysowanych obok siebie (mapa + kopie po erozji): rzut w Draw, rysowanie w ramce ImGui
       ExportPanel.*              sekcja „Saving” w ImGui: paczka w exports/<nazwa>/; subsystem podaje `ExportPanel::Pack` (mapy, zakres, metry na jednostkę, morze, preset)
+      NestedSplineEditor.*       edytor metody NESTED w zakładce splajnów TerrainGen: krzywa otwartego poziomu, ścieżka punktów, tabela punktów krzywej
+                                 (wartość albo „curve”, Open / Make sub-curve / Make constant),
+                                 mapa ciepła wysokości C × M przy wybranym W z linią brzegu
       BiomeEditor.*              edytor tabeli biomów (lista, zakresy, diagram Whittakera T × H); edytuje tabelę w miejscu, subsystem przelicza biomy;
                                  `ShowTerrainModifiers(false)` w Imported map
       BiomeSettingsPanel.*       sekcje ustawień biomów wspólne dla TerrainGen i Imported map (blend, klimat, materiały)
@@ -233,6 +238,15 @@ Wartości szumów są w [-1, 1]. Konwencja indeksowania: `map[y * width + x]`.
   tk::spline usunięty 2026-11-08): nie wychodzi poza wartości sąsiednich punktów, więc splajn z punktami w [0, 1] daje wynik w [0, 1]. GPU dostaje splajn jako tablicę 1024 próbek, a edytor rysuje
   krzywą tą samą funkcją (`SampleSpline`, `SplineSampling.*`). Edytor zmienia splajn w configu na żywo (bez kopii); końce zostają w x = -1 i 1, minimum 3 punkty.
   Domyślna metoda terenu to LAYERED (Linear nie używa splajnów).
+- Zagnieżdżone splajny (metoda NESTED, od 2026-11-27): `TerrainConfig::nested` = drzewo (`NestedCurve` / `NestedPoint`: punkt = liczba albo krzywa poziom niżej)
+  + własny poziom morza (`WaterHeight()` zwraca `nested.seaLevel`; `HasSea()` = LAYERED lub NESTED — tego używaj, gdy chodzi o „świat ma morze”, a `method == LAYERED`
+  tylko dla pól LAYERED). Limity: 3–16 punktów na krzywą, ≤ 64 krzywe W, głębokość 3. GPU nie dostaje tablicy próbek: drzewo idzie spłaszczone (`nested::Flatten`)
+  na koniec bufora `WorldInput` (`nestedCurves[81]`, `nestedKnots[81 * 16]` = `GpuWorldInput`), a `terrain.glsl` liczy je wprost (`nestedC/M/W`, tylko węzły potrzebne
+  segmentowi). Reguła jest dwa razy: `nested::EvaluateAt` (`NestedSpline.cpp`) i `terrain.glsl` — zmiana w jednym wymaga zmiany w drugim, sprawdza `--gpu-check`
+  (sekcja `nested:`, ≤ 1e-5; chunki i jeden przebieg bit w bit). Puste drzewo = jeszcze nie zrobione: pierwsze przełączenie na NESTED (`SetTerrainMethod`), odczyt presetu
+  z NESTED bez drzewa i `nested::RootFor` (generacja) biorą `FromLayered` (gęste splajny LAYERED: krzywe M przycinane do 64 / liczba punktów lądu C,
+  żeby drzewo zmieściło się w buforze; `SetNestedCurves` i tak sprawdza `Problem` przed kopiowaniem). Preset: pole `terrain.nested` {seaLevel, root}, `Check` odrzuca drzewo z `Problem`.
+  Przy NESTED zakładka splajnów pokazuje `NestedSplineEditor` (suwaki LAYERED są ukryte); mapa ciepła liczy CPU (96², ok. 0,3 ms), więc działa przy przeciąganiu.
 - Uniformy terenu ustawia wyłącznie `TerrainView::Draw` — subsystemy nie dotykają shadera. Wysokość bierze się
   z warstwy podanej w `Draw` (`heightLayer`: TERRAIN = jednostka 0, OVERLAY = 1 dla podglądu szumu / erozji w Noise heightmap).
   TerrainGen zawsze pokazuje teren wynikowy; edytowany szum składowy widać tylko w `NoisePreview` w panelu, a zmiany jego parametrów od razu regenerują teren (i biomy, jeśli są włączone).
