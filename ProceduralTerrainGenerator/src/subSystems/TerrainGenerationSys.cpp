@@ -630,6 +630,7 @@ void TerrainGenerationSys::ApplyWorld(const WorldConfig& loaded)
 
 void TerrainGenerationSys::Draw(Renderer& renderer, Camera& camera, LightSource& light) {
 	renderSettings.shadows = nullptr;
+	renderSettings.grassRange = 0.0f;
 	mapLabels.Clear();
 	if (chunksShown) {
 		//Shadow maps first: they need the plants culled for the sun before the camera culling reuses the buffers
@@ -641,6 +642,8 @@ void TerrainGenerationSys::Draw(Renderer& renderer, Camera& camera, LightSource&
 		vegetationLayer.Draw(camera, light, renderSettings, vegetationModels);
 		if (terrainMaterials) {
 			grass.Draw(chunks, camera, light, renderSettings, *terrainMaterials);
+			renderSettings.grassRange = grass.DrawnRange(renderSettings);
+			renderSettings.grassShade = grass.GroundShade();
 		}
 		chunks.Draw(renderer, camera, light, renderSettings);
 		//Last: it reads a copy of everything drawn before
@@ -666,6 +669,8 @@ void TerrainGenerationSys::Draw(Renderer& renderer, Camera& camera, LightSource&
 		vegetationLayer.Draw(camera, light, renderSettings, vegetationModels);
 		if (terrainMaterials) {
 			grass.Draw(chunks, camera, light, renderSettings, *terrainMaterials);
+			renderSettings.grassRange = grass.DrawnRange(renderSettings);
+			renderSettings.grassShade = grass.GroundShade();
 		}
 	}
 	else if (vegetationLayer.HasExtraInstances()) {
@@ -674,6 +679,8 @@ void TerrainGenerationSys::Draw(Renderer& renderer, Camera& camera, LightSource&
 	view.Draw(renderer, camera, light, renderSettings, TerrainView::Layer::TERRAIN);
 	const glm::vec3 copyOffset(shift, 0.0f, 0.0f);
 	if (erodedHeight) {
+		//No grass grows on the copy
+		renderSettings.grassRange = 0.0f;
 		view.Draw(renderer, camera, light, renderSettings, TerrainView::Layer::OVERLAY, copyOffset);
 	}
 	//Water last: it reads a copy of everything drawn before

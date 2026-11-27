@@ -318,6 +318,8 @@ namespace {
 			const double updateMs = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - updateStart).count();
 
 			settings.shadows = nullptr;
+			//As in TerrainGenApp: the terrain shader reads the material parameters (grass under the blades) from this block
+			materials.Bind();
 			shadowTimer.Begin();
 			if (shadows.Render(renderer, camera, light, settings, chunks, vegetation, &models)) {
 				settings.shadows = &shadows;
@@ -331,6 +333,8 @@ namespace {
 			vegetationTimer.End();
 			grassTimer.Begin();
 			grass.Draw(chunks, camera, light, settings, materials);
+			settings.grassRange = grass.DrawnRange(settings);
+			settings.grassShade = grass.GroundShade();
 			grassTimer.End();
 			terrainTimer.Begin();
 			chunks.Draw(renderer, camera, light, settings);

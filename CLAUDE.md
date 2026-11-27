@@ -361,6 +361,12 @@ Wartości szumów są w [-1, 1]. Konwencja indeksowania: `map[y * width + x]`.
   Trawa (`GrassLayer`, w `TerrainGenerationSys`): co klatkę `grass_compute.shader` przechodzi po tekselach wokół kamery na chunkach gruntu i dopisuje do bufora źdźbła,
   które tam rosną (udział trawy materiałów ze splat mapy: pola `grass` i `grassColor` w `terrain_materials.json`, mniej na klifach, rzadsze z odległością)
   i są w kadrze; jedno `glDrawArraysIndirect`, źdźbło budowane z `gl_VertexID`, wiatr w VS. Nic nie jest trzymane między klatkami ani czytane z GPU.
+  Cień w trawie: FS terenu (tryby TEXTURED i BIOMES) przyciemnia grunt pod źdźbłami — pokrycie = udziały splat × `grass` materiału (`materialParams[m].z`,
+  z przekazaniem wagi klifom jak w `texturedSurface`), wygaszane jak źdźbła (0,8–1 zasięgu), × `grassShade` (`GrassLayer::GroundShade`: pełne od 8 źdźbeł/m² i 0,3 m),
+  światło kierunkowe mocniej przy niskim słońcu, ambient słabiej.
+  Zasięg = `TerrainRenderSettings::grassRange` (ustawia subsystem po `GrassLayer::Draw` z `DrawnRange`, 0 = bez trawy: inne tryby, 2D, kopia po erozji).
+  Shader źdźbła traci światło kierunkowe ku podstawie, tym bardziej, im niżej słońce. Narzędzie rysujące teren TEXTURED/BIOMES musi wołać `TerrainMaterials::Bind`
+  (UBO materiałów, w aplikacji `TerrainGenApp`), inaczej `grass` = 0.
   Kamera, słońce i mgła idą do shaderów terenu, roślinności i trawy przez blok `FrameBlock` (`common/frame.glsl`, std140, binding 1) = `FrameUniforms::Block`
   (pole w pole); każdy renderer ma własny `FrameUniforms` i wgrywa blok przed rysowaniem (widok 2D, pieczenie impostorów i podgląd podmieniają kamerę).
   Impostory (tylko `kind` "tree"): przy instalacji `VegetationModels::BakeImpostors` renderuje LOD0 każdego wariantu z 8×8 kierunków półsfery (hemi-octahedral,

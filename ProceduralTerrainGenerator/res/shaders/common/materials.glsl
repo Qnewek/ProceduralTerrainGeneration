@@ -8,7 +8,7 @@ uniform sampler2DArray materialDetail;
 //MAX_MATERIALS = TerrainMaterials::maxMaterials; the layout mirrors TerrainMaterials::Block
 #define MAX_MATERIALS 16
 layout(std140, binding = 0) uniform TerrainMaterialBlock {
-    vec4 materialParams[MAX_MATERIALS];     //x = 1 / tileSize, y = material that replaces this one on steep slopes
+    vec4 materialParams[MAX_MATERIALS];     //x = 1 / tileSize, y = material that replaces this one on steep slopes, z = grass on it
     int materialCount;
     int previewMaterial;                    //material drawn everywhere without biomes
     float textureScale;                     //multiplies the tile size of every material
