@@ -22,6 +22,7 @@ uniform int frameIndex;
 #include "../common/frame.glsl"
 #include "../common/sky.glsl"
 #include "../common/clouds.glsl"
+#include "../common/light.glsl"
 
 const float SHAPE_TILE = 2400.0;        //metres covered by the shape noise
 const float DETAIL_TILE = 280.0;
@@ -142,9 +143,10 @@ void main()
     vec3 sun = light.direction;
     float cosAngle = dot(dir, sun);
     float phase = mix(henyeyGreenstein(cosAngle, 0.75), henyeyGreenstein(cosAngle, -0.25), 0.55);
-    vec3 sunColor = sunlightTint(sun) * light.diffuse * SUN_INTENSITY;
-    vec3 skyTop = skyColor(vec3(0.0, 1.0, 0.0), sun);
-    vec3 skyHorizon = fogColor(dir, sun);
+    //Lit by the directional light (the moon at night), the sky light follows the sun
+    vec3 sunColor = directLightTint() * light.diffuse * SUN_INTENSITY;
+    vec3 skyTop = skyColor(vec3(0.0, 1.0, 0.0), skySun.xyz);
+    vec3 skyHorizon = fogColor(dir, skySun.xyz);
 
     float segment = exit - enter;
     int steps = int(clamp(segment / 25.0, 24.0, float(MAX_STEPS)));

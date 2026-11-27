@@ -3,7 +3,8 @@
 #include "glm/glm.hpp"
 
 //The sun: a directional light that lights the whole world the same way, set by its azimuth and the time of day (elevation),
-//with an optional day cycle, and the weather: fog and clouds. Sky computes the sky and the colors of the light for its direction; the fog
+//with an optional day cycle, and the weather: fog and clouds. At night a full moon opposite the sun takes over as the directional light
+//(GetLightDirection: shadows, specular, water glint), while the sky, fog and ambient follow the sun (GetDirection). Sky computes the sky and the colors of the light for its direction; the fog
 //(haze and the fade at the render distance) takes the sky color; Clouds draws the cloud layer, whose shadows fall on everything
 class LightSource
 {
@@ -31,6 +32,8 @@ private:
 	float windAzimuth = 30.0f;		//degrees, the direction the wind blows towards, from +X towards +Z
 	glm::vec2 windOffset = glm::vec2(0.0f);	//metres the clouds have moved
 	bool cloudSmoothing = true;		//blend every frame's march of the clouds into the frames before (Clouds)
+	bool moon = true;
+	float moonBrightness = 1.0f;	//multiplier of the moonlight (common/light.glsl)
 public:
 	void ImGuiDraw();
 	//Moves the sun along its path when the day cycle is on, and the clouds with the wind
@@ -41,6 +44,14 @@ public:
 
 	//Unit vector from the ground towards the sun
 	glm::vec3 GetDirection() const;
+	//Unit vector towards the full moon: opposite the sun, its path tilted about the azimuth axis (not at the zenith at midnight)
+	glm::vec3 GetMoonDirection() const;
+	//0..1: how much the directional light is the moon (0 = the sun, by day or with the moon off), times Moon brightness;
+	//it rises after the sun is below the switch height, where the sunlight is already gone
+	float GetMoonLight() const;
+	//Direction of the directional light: the moon once the sun is below the switch height (moon on), else the sun
+	glm::vec3 GetLightDirection() const;
+	bool IsMoonOn() const { return moon; }
 	glm::vec3 GetAmbient() const { return ambient; }
 	glm::vec3 GetDiffuse() const { return diffuse; }
 	bool IsLightOn() const { return lightOn; }

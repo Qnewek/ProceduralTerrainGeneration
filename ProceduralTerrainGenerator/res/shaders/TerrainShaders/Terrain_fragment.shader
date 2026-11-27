@@ -36,6 +36,7 @@ uniform float heightScale;
 #include "../common/surface.glsl"
 #include "../common/materials.glsl"
 #include "../common/shadow.glsl"
+#include "../common/light.glsl"
 
 const int MODE_BIOMES = 3;
 const int MODE_TEXTURED = 6;
@@ -197,8 +198,8 @@ void main()
     if (lightOn) {
         float diff = max(dot(norm, light.direction), 0.0);
         //The colors set in the UI change with the sun height, like the sky does
-        vec3 ambient = light.ambient * ambientTint(light.direction);
-        vec3 sunlight = light.diffuse * sunlightTint(light.direction) * sunShadow(FragPos, geometryNormal, 1);
+        vec3 ambient = light.ambient * ambientLightTint();
+        vec3 sunlight = light.diffuse * directLightTint() * sunShadow(FragPos, geometryNormal, 1);
         result = (ambient * occlusion + sunlight * diff) * baseColor;
         if (textured && diff > 0.0) {
             result += sunlight * diff * sunSpecular(norm, light.direction, normalize(viewPos - FragPos), roughness);

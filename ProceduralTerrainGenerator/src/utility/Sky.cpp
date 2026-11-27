@@ -96,6 +96,8 @@ void Sky::Draw(Camera& camera, const LightSource& sun, bool clouds)
 	shader->Bind();
 	shader->SetUniformMat4f("inverseViewProjection", glm::inverse(*camera.GetProjectionMatrix() * rotation));
 	shader->SetUniform3fv("sunDirection", sun.GetDirection());
+	const glm::vec3 moon = sun.GetMoonDirection();
+	shader->SetUniform4f("moonDirection", moon.x, moon.y, moon.z, sun.IsMoonOn() ? 1.0f : 0.0f);
 	shader->SetUniform1i("cloudsOn", clouds ? 1 : 0);
 	GLint viewport[4];
 	glGetIntegerv(GL_VIEWPORT, viewport);

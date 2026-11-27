@@ -12,7 +12,7 @@ vec3 applyFog(vec3 color, vec3 worldPos)
     }
     vec3 toFragment = worldPos - viewPos;
     float rayDistance = length(toFragment);
-    vec3 sky = fogColor(toFragment, light.direction);
+    vec3 sky = fogColor(toFragment, skySun.xyz);
     //Optical depth of density hazeDensity * exp(-hazeFalloff * y) along the ray from the camera: exact for an exponential
     float k = hazeFalloff * toFragment.y;
     float along = abs(k) > 1e-4 ? (1.0 - exp(-k)) / k : 1.0;

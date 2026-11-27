@@ -595,7 +595,12 @@ Kroki:
 - **Atmosfera:** fog zależny od wysokości, skybox/atmospheric scattering, cykl dnia, cienie (cascaded shadow maps).
   ✅ 2026-11-14 (`Sky`): niebo z rozpraszania (Hillaire 2020: LUT transmitancji raz, LUT widoku nieba co klatkę w compute; Rayleigh, Mie, ozon, przybliżone wielokrotne
   rozpraszanie), kolory słońca i ambientu z tego samego modelu, zamglenie wysokościowe (`fog.glsl`) zamiast samej mgły odległości, pora dnia + cykl dnia (noc 3× szybciej),
-  gwiazdy. Brak: księżyca (noc oświetla tylko `NIGHT_AMBIENT`), perspektywy powietrznej z pełnego modelu (zamglenie jest artystyczne).
+  gwiazdy. Brak: perspektywy powietrznej z pełnego modelu (zamglenie jest artystyczne).
+  ✅ 2026-11-27 księżyc (checkbox „Moon” + „Moon brightness” w Sun & sky): pełnia naprzeciw słońca na jego torze przechylonym o 25°; gdy słońce zejdzie
+  poniżej −4°, światło kierunkowe (`light.direction`: cienie, specular, odblask na wodzie, światło chmur) staje się księżycem, jego światło rośnie do −12°
+  (`MOON_LIGHT`, ambient nocy × 0,6), a niebo, mgła i ambient idą za słońcem (`FrameBlock::skySun`, `common/light.glsl`). Tarcza z poświatą przygasza gwiazdy.
+  Bez faz. Koszt bez zmian (bench). Do sprawdzenia w aplikacji: zachód słońca bez przeskoku światła i cieni, noc z cieniami drzew i odblaskiem na wodzie,
+  tarcza księżyca wschodzi o zachodzie, „Moon” wyłączony = noc jak dawniej, dzień bez zmian, kamera nad chmurami nocą.
   ✅ 2026-11-14 chmury (`Clouds`): wolumetryczne, ray march w compute w połowie rozdzielczości (szumy 3D Perlin-Worley + mapa pogody, wiatr), światło słońca i nieba,
   cienie chmur na terenie i roślinach, odbicia w wodzie, kamera nad chmurami (składanie po scenie). Ok. 1 ms. Brak: chmur wysokich (cirrus), deszczu.
   ✅ 2026-11-27 akumulacja czasowa chmur („Temporal smoothing” w sekcji Clouds, domyślnie włączone): marsz każdej klatki (+ średnia odległość rozpraszania)
