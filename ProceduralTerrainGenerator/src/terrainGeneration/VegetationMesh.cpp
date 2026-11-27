@@ -19,7 +19,7 @@ namespace vegetation
 {
 	namespace {
 		//Bumped whenever the cache layout or the way levels are built changes, so old caches are rebuilt
-		constexpr uint32_t cacheVersion = 6;
+		constexpr uint32_t cacheVersion = 7;
 		constexpr char cacheMagic[4] = { 'P', 'T', 'G', 'V' };
 		//Relative error allowed when collapsing edges (meshoptimizer: a part of the mesh extent)
 		constexpr float surfaceError = 0.05f;
@@ -56,12 +56,13 @@ namespace vegetation
 			return std::string(uri.c_str());
 		}
 
-		void ComputeNormals(SourcePart& part)
+		//Normals of vertices [firstVertex, end) from triangles [firstIndex, end) of the indices (one primitive; earlier ones keep theirs)
+		void ComputeNormals(SourcePart& part, size_t firstVertex, size_t firstIndex)
 		{
-			for (Vertex& v : part.vertices) {
-				v.normal = glm::vec3(0.0f);
+			for (size_t i = firstVertex; i < part.vertices.size(); i++) {
+				part.vertices[i].normal = glm::vec3(0.0f);
 			}
-			for (size_t i = 0; i + 2 < part.indices.size(); i += 3) {
+			for (size_t i = firstIndex; i + 2 < part.indices.size(); i += 3) {
 				Vertex& a = part.vertices[part.indices[i]];
 				Vertex& b = part.vertices[part.indices[i + 1]];
 				Vertex& c = part.vertices[part.indices[i + 2]];
@@ -70,7 +71,8 @@ namespace vegetation
 				b.normal += n;
 				c.normal += n;
 			}
-			for (Vertex& v : part.vertices) {
+			for (size_t i = firstVertex; i < part.vertices.size(); i++) {
+				Vertex& v = part.vertices[i];
 				const float length = glm::length(v.normal);
 				v.normal = length > 0.0f ? v.normal / length : glm::vec3(0.0f, 1.0f, 0.0f);
 			}
@@ -331,7 +333,11 @@ namespace vegetation
 						}
 					}
 					if (normalValues.empty()) {
-						ComputeNormals(part);
+						ComputeNormals(part, first, indexStart);
+					}
+					//After the normals, so copies on the seam keep them
+					if (uvValues.empty()) {
+						CylinderUvs(part, first, indexStart);
 					}
 				}
 			}
@@ -369,6 +375,120 @@ namespace vegetation
 				}
 			}
 			source.parts.clear();
+		}
+	}
+
+	void CylinderUvs(SourcePart& part, size_t firstVertex, size_t firstIndex, float tileMetres)
+	{
+		const size_t end = part.vertices.size();
+		if (firstVertex >= end || !(tileMetres > 0.0f)) {
+			return;
+		}
+		float low = INFINITY, high = -INFINITY;
+		for (size_t i = firstVertex; i < end; i++) {
+			low = std::min(low, part.vertices[i].position.y);
+			high = std::max(high, part.vertices[i].position.y);
+		}
+		if (!std::isfinite(low) || !std::isfinite(high)) {
+			return;
+		}
+		//Slices of the height: the middle of the bounds of their vertices is the axis there, their mean distance from it the usual radius
+		constexpr float sliceMetres = 0.25f;
+		const int slices = std::clamp(static_cast<int>((high - low) / sliceMetres) + 1, 1, 4096);
+		const float sliceHeight = std::max((high - low) / static_cast<float>(slices), 1e-6f);
+		struct Slice {
+			glm::vec2 low = glm::vec2(INFINITY), high = glm::vec2(-INFINITY), centre = glm::vec2(0.0f);
+			float radius = 0.0f;
+			int count = 0;
+		};
+		std::vector<Slice> slice(static_cast<size_t>(slices));
+		auto sliceOf = [&](float y) { return std::clamp(static_cast<int>((y - low) / sliceHeight), 0, slices - 1); };
+		for (size_t i = firstVertex; i < end; i++) {
+			const glm::vec3& p = part.vertices[i].position;
+			Slice& s = slice[static_cast<size_t>(sliceOf(p.y))];
+			s.low = glm::min(s.low, glm::vec2(p.x, p.z));
+			s.high = glm::max(s.high, glm::vec2(p.x, p.z));
+			s.count++;
+		}
+		//Empty slices take the axis of the nearest filled one below, the lowest ones of the first filled
+		int filled = -1;
+		for (int k = 0; k < slices; k++) {
+			Slice& s = slice[static_cast<size_t>(k)];
+			if (s.count > 0) {
+				s.centre = (s.low + s.high) * 0.5f;
+				if (filled < 0) {
+					for (int j = 0; j < k; j++) {
+						slice[static_cast<size_t>(j)].centre = s.centre;
+					}
+				}
+				filled = k;
+			}
+			else if (filled >= 0) {
+				s.centre = slice[static_cast<size_t>(filled)].centre;
+			}
+		}
+		//Linear between the middles of the slices, so a leaning axis has no steps
+		auto between = [&](float y, auto value) {
+			const float f = (y - low) / sliceHeight - 0.5f;
+			const int k0 = std::clamp(static_cast<int>(std::floor(f)), 0, slices - 1);
+			const int k1 = std::min(k0 + 1, slices - 1);
+			const float t = std::clamp(f - static_cast<float>(k0), 0.0f, 1.0f);
+			return value(slice[static_cast<size_t>(k0)]) * (1.0f - t) + value(slice[static_cast<size_t>(k1)]) * t;
+		};
+		auto centreAt = [&](float y) { return between(y, [](const Slice& s) { return s.centre; }); };
+		for (size_t i = firstVertex; i < end; i++) {
+			const glm::vec3& p = part.vertices[i].position;
+			slice[static_cast<size_t>(sliceOf(p.y))].radius += glm::length(glm::vec2(p.x, p.z) - centreAt(p.y));
+		}
+		float radiusSum = 0.0f;
+		int radiusCount = 0;
+		for (Slice& s : slice) {
+			if (s.count > 0) {
+				s.radius /= static_cast<float>(s.count);
+				radiusSum += s.radius;
+				radiusCount++;
+			}
+		}
+		for (int k = 0, last = -1; k < slices; k++) {
+			if (slice[static_cast<size_t>(k)].count > 0) {
+				last = k;
+			}
+			else if (last >= 0) {
+				slice[static_cast<size_t>(k)].radius = slice[static_cast<size_t>(last)].radius;
+			}
+		}
+		//A whole number of tiles around, so the texture meets itself on the seam
+		const float turn = 6.2831853f;
+		const float tilesAround = std::max(1.0f, std::round(turn * radiusSum / static_cast<float>(radiusCount) / tileMetres));
+		for (size_t i = firstVertex; i < end; i++) {
+			Vertex& v = part.vertices[i];
+			const glm::vec2 offset = glm::vec2(v.position.x, v.position.z) - centreAt(v.position.y);
+			const float radius = glm::length(offset);
+			const float angle = std::atan2(offset.y, offset.x);
+			const float usualRadius = between(v.position.y, [](const Slice& s) { return s.radius; });
+			v.uv = glm::vec2((angle / turn + 0.5f) * tilesAround, (v.position.y + radius - usualRadius) / tileMetres);
+		}
+		//Triangles across the seam: corners more than half a turn behind the furthest one use a copy one turn further
+		std::unordered_map<uint32_t, uint32_t> copies;
+		for (size_t t = firstIndex; t + 2 < part.indices.size(); t += 3) {
+			float furthest = -INFINITY;
+			for (int k = 0; k < 3; k++) {
+				furthest = std::max(furthest, part.vertices[part.indices[t + k]].uv.x);
+			}
+			for (int k = 0; k < 3; k++) {
+				uint32_t& index = part.indices[t + k];
+				if (index < firstVertex || part.vertices[index].uv.x >= furthest - tilesAround * 0.5f) {
+					continue;
+				}
+				auto found = copies.find(index);
+				if (found == copies.end()) {
+					Vertex copy = part.vertices[index];
+					copy.uv.x += tilesAround;
+					found = copies.emplace(index, static_cast<uint32_t>(part.vertices.size())).first;
+					part.vertices.push_back(copy);
+				}
+				index = found->second;
+			}
 		}
 	}
 
@@ -580,6 +700,39 @@ namespace vegetation
 		}
 	}
 
+	float SinkPerSlope(const SourceModel& model)
+	{
+		float low = INFINITY, high = -INFINITY;
+		for (const SourcePart& part : model.parts) {
+			for (const Vertex& v : part.vertices) {
+				low = std::min(low, v.position.y);
+				high = std::max(high, v.position.y);
+			}
+		}
+		if (low > high) {
+			return 0.0f;
+		}
+		const float top = low + (high - low) * sinkPart;
+		float sink = 0.0f;
+		for (const SourcePart& part : model.parts) {
+			for (const Vertex& v : part.vertices) {
+				if (v.position.y <= top) {
+					sink = std::max(sink, glm::length(glm::vec2(v.position.x, v.position.z)));
+				}
+			}
+		}
+		return sink;
+	}
+
+	std::vector<float> SinksOf(const std::vector<Variant>& variants)
+	{
+		std::vector<float> sinks;
+		for (const Variant& v : variants) {
+			sinks.push_back(v.sinkPerSlope);
+		}
+		return sinks;
+	}
+
 	void SimplifySurface(const SourcePart& part, size_t targetTriangles, std::vector<Vertex>& vertices, std::vector<uint32_t>& indices)
 	{
 		const size_t triangleCount = part.indices.size() / 3;
@@ -695,6 +848,7 @@ namespace vegetation
 		for (const SourceModel& model : variants) {
 			Variant variant;
 			variant.sourceTriangles = model.TriangleCount();
+			variant.sinkPerSlope = SinkPerSlope(model);
 			size_t foliageTriangles = 0;
 			for (const SourcePart& part : model.parts) {
 				if (materials[part.material].foliage) {
@@ -810,6 +964,7 @@ namespace vegetation
 				Write(out, static_cast<uint64_t>(variant.sourceTriangles));
 				Write(out, variant.boundsMin);
 				Write(out, variant.boundsMax);
+				Write(out, variant.sinkPerSlope);
 				Write(out, static_cast<uint32_t>(variant.lods.size()));
 				for (const Lod& lod : variant.lods) {
 					Write(out, lod.triangles);
@@ -865,7 +1020,8 @@ namespace vegetation
 			Variant variant;
 			uint64_t sourceTriangles = 0;
 			uint32_t lodCount = 0;
-			if (!Read(in, sourceTriangles) || !Read(in, variant.boundsMin) || !Read(in, variant.boundsMax) || !Read(in, lodCount) || lodCount > 16) {
+			if (!Read(in, sourceTriangles) || !Read(in, variant.boundsMin) || !Read(in, variant.boundsMax) || !Read(in, variant.sinkPerSlope)
+				|| !std::isfinite(variant.sinkPerSlope) || !Read(in, lodCount) || lodCount > 16) {
 				return false;
 			}
 			variant.sourceTriangles = static_cast<size_t>(sourceTriangles);

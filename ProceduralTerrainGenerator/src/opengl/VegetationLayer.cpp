@@ -443,7 +443,8 @@ void VegetationLayer::BuildTables(const VegetationModels& models)
 	for (size_t m = 0; m < list.size(); m++) {
 		const VegetationModels::Model& model = list[m];
 		const bool isReady = model.state == VegetationModels::State::READY && !model.variants.empty();
-		modelInfos.push_back({ model.name, isReady ? static_cast<int>(model.variants.size()) : 0, vegetation::LayerOfKind(model.kind) });
+		modelInfos.push_back({ model.name, isReady ? static_cast<int>(model.variants.size()) : 0, vegetation::LayerOfKind(model.kind),
+			vegetation::SinksOf(model.variants) });
 		ready += model.state == VegetationModels::State::READY ? 1 : 0;
 		if (!isReady) {
 			continue;

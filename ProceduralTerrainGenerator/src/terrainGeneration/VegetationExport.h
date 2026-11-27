@@ -37,6 +37,7 @@ namespace vegexport {
 		std::filesystem::path source;		//its glTF file
 		std::vector<uint32_t> lodTargets;	//triangles of its levels of detail, as the app builds them; empty = the source mesh only
 		std::filesystem::path cache;		//the app's cache of those levels (vegetation::SaveCache); empty or stale = built again
+		std::vector<float> sinkPerSlope;	//per variant, as loaded by the app (vegetation::Variant::sinkPerSlope)
 	};
 
 	//A plant in metres, axes of the pack: position = where the base of the model stands on the terrain

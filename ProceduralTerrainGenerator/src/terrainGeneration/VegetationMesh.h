@@ -52,6 +52,7 @@ namespace vegetation
 		std::vector<Lod> lods;			//nearest first
 		glm::vec3 boundsMin = glm::vec3(0.0f), boundsMax = glm::vec3(0.0f);
 		size_t sourceTriangles = 0;		//triangles of the variant as loaded
+		float sinkPerSlope = 0.0f;		//SinkPerSlope of the source variant, metres
 	};
 	//All levels of detail of all variants of a model in one vertex and index array (indices are absolute)
 	struct ModelMesh {
@@ -70,8 +71,25 @@ namespace vegetation
 	//@return false and error if the file cannot be read
 	bool LoadGltf(const std::filesystem::path& file, std::vector<Material>& materials, std::vector<SourceModel>& variants, std::string& error);
 
+	//Cylindrical texture coordinates for vertices [firstVertex, end) of part used by triangles [firstIndex, end) of its indices,
+	//for primitives without TEXCOORD_0 (a trunk mapped by the generated coordinates of the modelling tool): the axis follows
+	//the middle of the vertices at each height (a leaning trunk), u = angle around it (a whole number of tiles), v = height plus the
+	//distance beyond the usual radius at that height (roots spreading out), both in tiles of tileMetres. Vertices on the seam of
+	//triangles that cross it are copied with u one turn further, so no triangle spans the whole texture
+	constexpr float barkTileMetres = 1.0f;
+	void CylinderUvs(SourcePart& part, size_t firstVertex, size_t firstIndex, float tileMetres = barkTileMetres);
+
 	//Moves the model so it stands on the origin: lowest point at y = 0, the middle of its lowest part (trunk) at x = z = 0
 	void MoveBaseToOrigin(SourceModel& model);
+
+	//How far (metres) a model standing on its axis (x = z = 0) must sink per unit of slope (rise over run) so that its base shows no gap
+	//on a slope that it would not show on flat ground: ground r metres downhill lies r * slope lower, so the sink is slope times the largest
+	//horizontal distance from the axis over the vertices in the lowest sinkPart of the model (roots, the bottom of a rock; branches higher
+	//up are left out), whichever way it is turned. Linear in the slope, so it holds on any slope
+	float SinkPerSlope(const SourceModel& model);
+	constexpr float sinkPart = 0.1f;
+	//Variant::sinkPerSlope of each variant, for the placement (vegetation::ModelInfo::sinkPerSlope)
+	std::vector<float> SinksOf(const std::vector<Variant>& variants);
 
 	//Simplified copy of a surface (trunk, branches, rock) with about targetTriangles triangles, by collapsing edges.
 	//A surface of many pieces (branches) first loses its smallest pieces until the rest can get close to the target;
