@@ -44,7 +44,7 @@ namespace vegexport {
 		}
 		std::vector<vegetation::ModelInfo> infos;
 		for (const Model& m : input.models) {
-			infos.push_back({ m.name, m.variants, vegetation::LayerOfKind(m.kind) });
+			infos.push_back({ m.name, m.variants, vegetation::LayerOfKind(m.kind), m.sinkPerSlope });
 		}
 		const vegetation::PreparedPlants plants = vegetation::PreparePlants(input.plants, infos);
 
@@ -122,6 +122,7 @@ namespace vegexport {
 				settings.riverOrigin = input.settings.riverOrigin - glm::vec2(origin);
 				if (slopeFromHeights) {
 					settings.heightScale = input.metresPerUnit;
+					settings.gradientUnitsPerMetre = 1.0f;
 				}
 				settings.rivers = input.rivers.get();
 				settings.layerMask = input.layerMask;

@@ -38,7 +38,7 @@ std::vector<vegexport::Model> MapImportSys::PlantModels() const
 		for (const VegetationModels::Model& m : vegetationModels->GetModels()) {
 			const bool ready = m.state == VegetationModels::State::READY && !m.variants.empty();
 			models.push_back({ m.name, m.kind, m.asset, ready ? static_cast<int>(m.variants.size()) : 0, vegetationModels->SourceFile(m), m.lodTargets,
-				vegetationModels->CacheFile(m) });
+				vegetationModels->CacheFile(m), vegetation::SinksOf(m.variants) });
 		}
 	}
 	return models;

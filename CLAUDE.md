@@ -300,6 +300,9 @@ Wartości szumów są w [-1, 1]. Konwencja indeksowania: `map[y * width + x]`.
   `VegetationModels` wczytuje je w tle (wątki, bez GL) i instaluje w `Update` na wątku GL; LOD-y budowane przy pierwszym wczytaniu (`vegetation::BuildLods`) i trzymane
   w `res/vegetation/cache/` — zmiana algorytmu LOD-ów lub formatu wymaga podbicia `cacheVersion` w `VegetationMesh.cpp`, inaczej zostaną stare. Modele są w metrach
   (1 m = 4 jednostki świata), podstawa w początku układu; jeden plik = kilka wariantów. Jakość LOD-ów sprawdza `--vegetation-preview [folder]` (PNG).
+  Prymityw bez `TEXCOORD_0` dostaje UV cylindryczne (`CylinderUvs`; stałe UV = rama tangentów z pochodnych NaN = czarny). Wariant ma `sinkPerSlope`
+  (największy promień dolnych 10% modelu, metry): `PlaceChunk` obniża instancję o to · skala · gradient, żeby podstawa nie wisiała nad zboczem — gradient w jednostkach
+  `PlacementSettings::gradientUnitsPerMetre` (świat: 4, nachylenie z wysokości mapy w metrach: 1); `ModelInfo` / `vegexport::Model` niosą to z `SinksOf`.
   Rozmieszczenie (`VegetationPlacement.*`, CPU, testy): siatka komórek z jitterem na warstwę (drzewa/krzewy/skały), komórki w całości w jednym chunku, wszystko
   z hasha pozycji komórki → deterministyczne i bez szwów. Siatka jest w metrach (teksel TerrainGen = 1 m): `ChunkMaps::step` = metry na teksel map
   (1, 2^L dla grubszych chunków, piksel mapy rzeczywistej), `PlacementSettings::elevation*` / `river*` przeliczają wysokość dla elewacji roślin i pozycje

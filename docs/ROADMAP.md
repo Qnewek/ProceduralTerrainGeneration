@@ -485,6 +485,7 @@ Kroki:
    - Pierwsze wczytanie (budowa LOD-ów) ok. 6–7 s w tle, najdłużej jodła; potem z cache ok. 0,1–0,2 s na model. Cache: `res/vegetation/cache/*.mesh` (klucz: rozmiar i data plików + budżety).
    - Shader: alpha test z podbiciem alfy na dalszych mipach, oba boki liści z przeświecaniem, normal mapy z ramki z pochodnych (bez tangentów), oświetlenie i mgła jak terenu.
    - Znane: trzecia jodła ma czarny pień (materiał `trunk_c`, do sprawdzenia mapowanie UV); LOD2 drzew jest rzadki — zastąpią go impostory (krok 4).
+     (Pień naprawiony 2026-11-27, punkt 7.)
 2. **Rozmieszczenie i rendering:** compute per kafel świata (jittered grid, seed z kafla — deterministyczne i bez szwów), wysokość i biom liczone tą samą funkcją co teren,
    reguły na sztywno (gęstość z biomu, maska nachylenia i wody), instancing z wyborem LOD po odległości.
    - Wynik (2026-11-12, w toku): zamiast compute rozmieszczenie na CPU z map chunków poziomu 0 czytanych z GPU (≤ 4 chunki na klatkę) — te same mapy co teren,
@@ -514,11 +515,30 @@ Kroki:
      nie przekracza 16,7 ms (rozmieszczanie ≤ 5 ms). Dłuższe klatki przy 8 km były w fazie benchmarku z siatkami (GPU 84 ms/klatkę, odczyt map na to czeka) — PBO niepotrzebne.
    - Granica 150 m: impostor ma średnio kolor pełnego modelu LOD0 (pas koron 45/53/27 wobec 44/53/28; AO już nie wpieczone w albedo, tylko stała okluzja światła otoczenia).
      Różnicę robiło za rzadkie LOD2 (ok. 1 na 40 liści, powiększanie ograniczone do 4×): limit podniesiony do 8× (`maxCardScale`, cache LOD-ów v6).
-     Jodła w LOD2 nadal rzadsza (gałązki z igłami słabo wypełniają koronę po powiększeniu).
+     Jodła w LOD2 nadal rzadsza (gałązki z igłami słabo wypełniają koronę po powiększeniu) — od 2026-11-27 LOD2 jodły ma 12k trójkątów (punkt 7).
 5. **Trawa:** osobny system blisko kamery (compute + wiatr w VS).
    - 2026-11-14: `GrassLayer` — źdźbła z compute co klatkę wokół kamery według materiałów splat mapy (`grass` w `terrain_materials.json`), jedno rysowanie pośrednie,
      wiatr w VS; ~8 tys. źdźbeł w dżungli za 0,05 ms GPU. Do oceny wyglądu właściciela (gęstość, kolory, łąki).
 6. **Wspólny UBO kamery i światła:** ✅ 2026-11-14 `FrameUniforms` + `common/frame.glsl` (teren, roślinność, impostory, trawa; niebo ma nadal własne uniformy).
+7. **Pozostałości** (2026-11-27, branch `fix/vegetation-leftovers`):
+   - ✅ Czarny pień trzeciej jodły: prymityw `trunk_c` w pliku Poly Haven nie ma `TEXCOORD_0` (w Blenderze współrzędne generowane), więc UV = (0, 0) wszędzie,
+     pochodne UV w FS = 0 i rama tangentów z pochodnych = 0 · ∞ = NaN (czarne cieniowanie). Teraz `vegetation::CylinderUvs` daje takiemu prymitywowi UV
+     cylindryczne (oś za środkiem wierzchołków na każdej wysokości — pień jest pochylony, całkowita liczba kafli 1 m dookoła, v = wysokość + wystawanie
+     korzeni ponad zwykły promień, wierzchołki na szwie kopiowane), a `cotangentFrame` przy zerowych pochodnych bierze dowolną ramę wokół normalnej. Cache LOD-ów v7.
+   - ✅ Szczelina pod pniami na stromych zboczach: model stał najniższym punktem na wysokości terenu w środku, więc po stronie w dół zbocza o nachyleniu g
+     podstawa wisiała o promień · g. Każdy wariant ma `sinkPerSlope` (największa odległość od osi wierzchołków dolnych 10% modelu: grunt r m w dół zbocza
+     leży r · g niżej, więc obniżenie o g · r nie dodaje szczeliny, której model nie ma na płaskim — liniowe w g, dokładne przy każdym nachyleniu),
+     `PlaceChunk` obniża instancję o `sinkPerSlope` · skala · g (`PlacementSettings::gradientUnitsPerMetre`: gradient na jednostkę świata albo na metr przy
+     nachyleniu z wysokości mapy w `vegexport`). `ComputeNormals` liczy już tylko normalne nowego prymitywu (wcześniej nadpisywał normalne z pliku
+     wcześniejszych prymitywów tego samego materiału). Jodła 0,68–0,73 m, kamienie 0,12–0,35 m, paproć 0,2–0,5 m
+     (liście przy ziemi), leżący pień 0,95 m (kolumna „sinks” w `--vegetation-preview`). Ten sam wynik w eksporcie i w Imported map.
+   - ✅ Rzadki LOD2 jodły: własne `lods` w `vegetation_models.json` = 150k / 30k / 12k. `--vegetation-bench 1 30`: z impostorami bez zmian (1,76 mln trójkątów),
+     dalekie drzewa jako siatki 33,5 → 45,7 mln trójkątów, GPU roślinności 9,5 → 11,1 ms.
+   - Świadomie bez zmian (decyzja właściciela): szum plam materiałów. Pomiar `--gpu-check` (jeden przebieg teren + biomy + splat): 4096² 58 ms, bez szumu plam 45 ms
+     (ok. 23%), 512² 1,65 / 1,27 ms; chunk 131² to ułamek milisekundy. Rozważane: wspólne 2 pola szumu (odrzucone — materiały o bliskich kątach dostają
+     prawie ten sam szum i znikają plamy między nimi), jedna oktawa (połowa kosztu), wspólna siatka simplex z osobnym hashem gradientów (zysk niepewny).
+   - Do sprawdzenia w aplikacji: pień trzeciej jodły z bliska (szew tekstury, korzenie); drzewa, krzewy i kamienie na stromym zboczu (bez szczeliny od strony
+     w dół, niezbyt głęboko od strony w górę), paprocie na zboczu; jodła w zasięgu LOD2 (przed 150 m) z wyłączonymi impostorami i z włączonymi.
 
 ### Faza 5 — realizm i narzędzia (otwarte)
 - **Erozja na GPU:** hydrauliczna (pipe model / virtual pipes lub kroplowa w compute z atomics) + termiczna;

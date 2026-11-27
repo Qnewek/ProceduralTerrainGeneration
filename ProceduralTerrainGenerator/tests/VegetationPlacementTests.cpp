@@ -149,6 +149,47 @@ TEST_CASE("PlaceChunk: pinned output at step 1 and 2")
 	CHECK(HashOf(far) == 2292678894679707513ULL);
 }
 
+TEST_CASE("PlaceChunk: on a slope a model sinks by its sink per slope times its scale and the gradient, the rest unchanged")
+{
+	//Gradient 0.0005 height per world unit = slope 0.512 at heightScale 1024 (27 degrees, under the 30 of the tree)
+	const glm::vec2 gradient(0.0003f, 0.0004f);
+	const TestMaps maps(glm::ivec2(256, -128), Flat, gradient, 0);
+	std::vector<ModelInfo> sinking = models;
+	sinking[0].sinkPerSlope = { 0.5f, 1.0f, 2.0f };
+	sinking[2].sinkPerSlope = { 0.25f };	//one value for two variants: the second one does not sink
+	std::vector<Instance> plain, sunk;
+	PlaceChunk(maps.maps, Plants(0.5f), models, Settings(glm::ivec2(256, -128)), plain);
+	PlaceChunk(maps.maps, Plants(0.5f), sinking, Settings(glm::ivec2(256, -128)), sunk);
+	REQUIRE(!plain.empty());
+	REQUIRE(plain.size() == sunk.size());
+	int lowered = 0;
+	for (size_t i = 0; i < plain.size(); i++) {
+		const Instance& a = plain[i];
+		const Instance& b = sunk[i];
+		CHECK(a.position.y == 0.5f);
+		CHECK(b.position.x == a.position.x);
+		CHECK(b.position.z == a.position.z);
+		CHECK(b.model == a.model);
+		CHECK(b.variant == a.variant);
+		CHECK(b.scale == a.scale);
+		const std::vector<float>& sink = sinking[a.model].sinkPerSlope;
+		const float metres = a.variant < static_cast<int>(sink.size()) ? sink[a.variant] : 0.0f;
+		CHECK(b.position.y == doctest::Approx(a.position.y - metres * a.scale * glm::length(gradient)));
+		lowered += b.position.y < a.position.y;
+	}
+	CHECK(lowered > 0);
+
+	//A gradient per metre (slopes from a map in metres) stands for 4 times the slope of the same numbers per world unit
+	PlacementSettings perMetre = Settings(glm::ivec2(256, -128));
+	perMetre.gradientUnitsPerMetre = 1.0f;
+	std::vector<Instance> metres;
+	PlaceChunk(maps.maps, Plants(0.5f), sinking, perMetre, metres);
+	REQUIRE(metres.size() == sunk.size());
+	for (size_t i = 0; i < metres.size(); i++) {
+		CHECK(0.5f - metres[i].position.y == doctest::Approx((0.5f - sunk[i].position.y) / unitsPerMetre));
+	}
+}
+
 TEST_CASE("LayerOfKind: tree, shrub and rock; other kinds are shrubs")
 {
 	CHECK(LayerOfKind("tree") == Layer::TREES);

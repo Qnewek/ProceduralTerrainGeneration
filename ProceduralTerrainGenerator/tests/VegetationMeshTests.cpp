@@ -266,10 +266,50 @@ TEST_CASE("BuildLods: fewer triangles per level, foliage share, ranges inside th
 	CHECK(loaded.materials[1].name == "leaves");
 	CHECK(loaded.materials[1].foliage);
 	CHECK(loaded.variants[0].sourceTriangles == 4000);
+	CHECK(tree.sinkPerSlope == doctest::Approx(SinkPerSlope(model)));
+	CHECK(tree.sinkPerSlope > 0.0f);
+	CHECK(loaded.variants[0].sinkPerSlope == tree.sinkPerSlope);
 	//Another key: the cache is stale
 	CHECK_FALSE(LoadCache(file, loaded, 999));
 	std::filesystem::remove(file);
 	CHECK_FALSE(LoadCache(file, loaded, 1234));
+}
+
+TEST_CASE("SinkPerSlope: farthest reach over the low part of the model, branches higher up left out")
+{
+	SourceModel model;
+	SourcePart part;
+	auto ring = [&](float radius, float y) {
+		for (int s = 0; s < 8; s++) {
+			const float angle = 6.2831853f * s / 8;
+			Vertex v;
+			v.position = glm::vec3(radius * std::cos(angle), y, radius * std::sin(angle));
+			part.vertices.push_back(v);
+		}
+	};
+	//Lowest point at y = -2 (not yet moved to the origin): a 10 m trunk of radius 0.5, a root reaching 1.2 m out 0.4 m up,
+	//a branch 3 m out halfway up (above the lowest tenth, so it does not count)
+	ring(0.5f, -2.0f);
+	ring(0.5f, 8.0f);
+	ring(3.0f, 3.0f);
+	Vertex root;
+	root.position = glm::vec3(1.2f, -1.6f, 0.0f);
+	part.vertices.push_back(root);
+	model.parts.push_back(part);
+	//The root tip 1.2 m out must reach down to ground 1.2 * slope lower, as far as on flat ground (0.4 m above it)
+	CHECK(SinkPerSlope(model) == doctest::Approx(1.2f));
+
+	//Nothing reaches out (a pole): no sinking
+	SourceModel pole;
+	SourcePart line;
+	for (const float y : { 0.0f, 5.0f }) {
+		Vertex v;
+		v.position = glm::vec3(0.0f, y, 0.0f);
+		line.vertices.push_back(v);
+	}
+	pole.parts.push_back(line);
+	CHECK(SinkPerSlope(pole) == 0.0f);
+	CHECK(SinkPerSlope(SourceModel{}) == 0.0f);
 }
 
 TEST_CASE("BuildLods keeps parts of fewer than 4 triangles whole")
@@ -336,10 +376,11 @@ TEST_CASE("LoadGltf applies node transforms, merges overlapping roots per materi
 	REQUIRE(variants.size() == 1);
 	const SourceModel& model = variants[0];
 	REQUIRE(model.parts.size() == 1);
-	CHECK(model.parts[0].vertices.size() == 6);
+	//Without texture coordinates in the file a vertex on the seam of the generated ones may be copied (CylinderUvs)
+	CHECK(model.parts[0].vertices.size() >= 6);
 	CHECK(model.TriangleCount() == 2);
 	CHECK(model.parts[0].vertices[0].position.y == doctest::Approx(1.0f));
-	CHECK(model.parts[0].vertices[5].position.x == doctest::Approx(-1.0f));
+	CHECK(model.parts[0].vertices[model.parts[0].indices[4]].position.x == doctest::Approx(-1.0f));
 	//Counter-clockwise from above in both copies (the mirrored one has its winding flipped): normals up
 	for (const Vertex& v : model.parts[0].vertices) {
 		CHECK(v.normal.y == doctest::Approx(1.0f));
@@ -348,6 +389,78 @@ TEST_CASE("LoadGltf applies node transforms, merges overlapping roots per materi
 	std::vector<SourceModel> ignored;
 	CHECK_FALSE(LoadGltf(TempFile("missing.gltf"), materials, ignored, error));
 	CHECK_FALSE(error.empty());
+}
+
+TEST_CASE("LoadGltf gives texture coordinates to a primitive without them, not one point of the texture")
+{
+	//A constant UV has zero screen derivatives, so the tangent frame of the shader was NaN and the surface black (fir trunk_c)
+	std::vector<Material> materials;
+	std::vector<SourceModel> variants;
+	std::string error;
+	REQUIRE(LoadText(TriangleGltf(R"([ { "mesh": 0 } ])", "[0]"), materials, variants, error));
+	REQUIRE(variants.size() == 1);
+	const SourcePart& part = variants[0].parts[0];
+	REQUIRE(part.indices.size() == 3);
+	//A flat triangle around the axis: coordinates around it differ (a full map is checked on a trunk below)
+	const glm::vec2 a = part.vertices[part.indices[0]].uv, b = part.vertices[part.indices[1]].uv, c = part.vertices[part.indices[2]].uv;
+	CHECK(glm::length(b - a) + glm::length(c - a) > 0.1f);
+}
+
+TEST_CASE("CylinderUvs maps a leaning trunk: tiles around and up, no triangle across the seam")
+{
+	constexpr int segments = 16, rings = 21;
+	constexpr float height = 10.0f, radius = 0.3f, lean = 0.05f;
+	SourcePart part;
+	//A vertex of an earlier primitive keeps its coordinates
+	Vertex earlier;
+	earlier.uv = glm::vec2(0.25f, 0.75f);
+	part.vertices.push_back(earlier);
+	//and its triangle keeps its indices
+	part.indices.insert(part.indices.end(), { 0, 0, 0 });
+	for (int k = 0; k < rings; k++) {
+		const float y = height * k / (rings - 1);
+		for (int s = 0; s < segments; s++) {
+			//Half a step off, so no vertex lies exactly on the seam
+			const float angle = 6.2831853f * (s + 0.5f) / segments;
+			Vertex v;
+			v.position = glm::vec3(lean * y + radius * std::cos(angle), y, radius * std::sin(angle));
+			part.vertices.push_back(v);
+		}
+	}
+	for (int k = 0; k + 1 < rings; k++) {
+		for (int s = 0; s < segments; s++) {
+			const uint32_t a = 1 + k * segments + s, b = 1 + k * segments + (s + 1) % segments;
+			const uint32_t c = a + segments, d = b + segments;
+			part.indices.insert(part.indices.end(), { a, c, b, b, c, d });
+		}
+	}
+	const size_t vertexCount = part.vertices.size();
+	CylinderUvs(part, 1, 3, 1.0f);
+
+	CHECK(part.vertices[0].uv == earlier.uv);
+	CHECK(part.indices[0] + part.indices[1] + part.indices[2] == 0u);
+	part.indices.erase(part.indices.begin(), part.indices.begin() + 3);
+	//Copies only on the seam: at most one per ring
+	CHECK(part.vertices.size() > vertexCount);
+	CHECK(part.vertices.size() <= vertexCount + rings);
+	//Circumference 1.88 m in 1 m tiles = 2 tiles around
+	const float tilesAround = 2.0f;
+	const float stepU = tilesAround / segments, stepV = height / (rings - 1);
+	float lowU = INFINITY, highU = -INFINITY, lowV = INFINITY, highV = -INFINITY;
+	for (size_t i = 0; i < part.indices.size(); i += 3) {
+		const glm::vec2 a = part.vertices[part.indices[i]].uv, b = part.vertices[part.indices[i + 1]].uv, c = part.vertices[part.indices[i + 2]].uv;
+		CHECK(std::abs((b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x)) > 1e-4f);
+		CHECK(std::max({ a.x, b.x, c.x }) - std::min({ a.x, b.x, c.x }) < stepU * 1.2f);
+		CHECK(std::max({ a.y, b.y, c.y }) - std::min({ a.y, b.y, c.y }) < stepV * 1.2f);
+		for (const glm::vec2 uv : { a, b, c }) {
+			lowU = std::min(lowU, uv.x);
+			highU = std::max(highU, uv.x);
+			lowV = std::min(lowV, uv.y);
+			highV = std::max(highV, uv.y);
+		}
+	}
+	CHECK(highU - lowU == doctest::Approx(tilesAround).epsilon(0.02));
+	CHECK(highV - lowV == doctest::Approx(height).epsilon(0.02));
 }
 
 TEST_CASE("LoadGltf: roots apart are variants, children belong to their root")
