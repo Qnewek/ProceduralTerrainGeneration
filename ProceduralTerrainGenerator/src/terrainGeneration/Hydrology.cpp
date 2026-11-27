@@ -76,22 +76,24 @@ namespace hydrology {
 			}
 		}
 
-		//Number of 4-connected groups of lake cells
-		int CountLakes(const std::vector<char>& lake, int width, int height)
+		//Clears the 4-connected groups of lake cells with fewer than minCells cells
+		//@return number of groups kept
+		int RemoveSmallLakes(std::vector<char>& lake, int width, int height, int minCells)
 		{
 			std::vector<char> seen(lake.size(), 0);
-			std::vector<int> stack;
+			std::vector<int> stack, group;
 			int count = 0;
 			for (size_t start = 0; start < lake.size(); start++) {
 				if (!lake[start] || seen[start]) {
 					continue;
 				}
-				count++;
+				group.clear();
 				seen[start] = 1;
 				stack.push_back(static_cast<int>(start));
 				while (!stack.empty()) {
 					const int c = stack.back();
 					stack.pop_back();
+					group.push_back(c);
 					const int x = c % width, y = c / width;
 					const int next[4][2] = { { x + 1, y }, { x - 1, y }, { x, y + 1 }, { x, y - 1 } };
 					for (const auto& n : next) {
@@ -104,6 +106,14 @@ namespace hydrology {
 							stack.push_back(i);
 						}
 					}
+				}
+				if (static_cast<int>(group.size()) < minCells) {
+					for (const int c : group) {
+						lake[c] = 0;
+					}
+				}
+				else {
+					count++;
 				}
 			}
 			return count;
@@ -219,13 +229,17 @@ namespace hydrology {
 		const float cellArea = cellSize * cellSize;
 		for (size_t c = 0; c < count; c++) {
 			lake[c] = d.lakeLevel[c] >= waterHeight && d.lakeLevel[c] - terrain[c] > config.minLakeDepth;
+		}
+		//Small lakes are land: a river may cross them (its surface at the spill level, as it never rises downstream)
+		const double minCells = std::ceil(static_cast<double>(config.minLakeArea) / static_cast<double>(cellArea));
+		net.lakes = RemoveSmallLakes(lake, width, height, static_cast<int>(std::min(minCells, static_cast<double>(count) + 1.0)));
+		for (size_t c = 0; c < count; c++) {
 			river[c] = d.receiver[c] >= 0 && !lake[c] && terrain[c] >= waterHeight && d.area[c] * cellArea >= config.sourceArea;
 			if (lake[c]) {
 				net.levels[c].lake = d.lakeLevel[c];
 				net.lakeCells++;
 			}
 		}
-		net.lakes = CountLakes(lake, width, height);
 
 		//Surface where a river ends (a lake, the sea or the border of the region)
 		const auto endLevel = [&](int c) {

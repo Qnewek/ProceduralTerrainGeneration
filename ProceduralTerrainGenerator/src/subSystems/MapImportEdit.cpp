@@ -455,6 +455,9 @@ void MapImportSys::RiversImGui()
 	}
 	changed |= ImGui::IsItemDeactivatedAfterEdit();
 	ImGui::SetItemTooltip("A filled depression deeper than this is a lake");
+	ImGui::SliderFloat("Min lake area", &r.minLakeArea, 0.0f, 1.0e6f, "%.3g px^2", ImGuiSliderFlags_AlwaysClamp | ImGuiSliderFlags_Logarithmic);
+	changed |= ImGui::IsItemDeactivatedAfterEdit();
+	ImGui::SetItemTooltip("Smaller lakes are dropped (their place is land); 0 = keep every lake");
 	if (changed) {
 		dirty = true;
 		OnMapChanged();

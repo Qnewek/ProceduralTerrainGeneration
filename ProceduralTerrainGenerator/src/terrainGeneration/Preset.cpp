@@ -295,6 +295,7 @@ namespace preset {
 			j["smoothing"] = r.smoothing;
 			j["surfaceDrop"] = ReadableFloat(r.surfaceDrop);
 			j["minLakeDepth"] = ReadableFloat(r.minLakeDepth);
+			j["minLakeArea"] = ReadableFloat(r.minLakeArea);
 			j["borderFade"] = ReadableFloat(r.borderFade);
 			j["noiseScale"] = ReadableFloat(r.noiseScale);
 			j["noiseHalfWidth"] = ReadableFloat(r.noiseHalfWidth);
@@ -629,6 +630,7 @@ namespace preset {
 			r.Read("smoothing", c.smoothing);
 			r.Read("surfaceDrop", c.surfaceDrop);
 			r.Read("minLakeDepth", c.minLakeDepth);
+			r.Read("minLakeArea", c.minLakeArea);
 			r.Read("borderFade", c.borderFade);
 			r.Read("noiseScale", c.noiseScale);
 			r.Read("noiseHalfWidth", c.noiseHalfWidth);
@@ -926,8 +928,8 @@ namespace preset {
 			if (!notNegative(r.meander) || r.smoothing < 0 || r.smoothing > maxRiverSmoothing) {
 				throw std::runtime_error("Rivers: meander must not be negative and smoothing between 0 and " + std::to_string(maxRiverSmoothing));
 			}
-			if (!notNegative(r.surfaceDrop) || !notNegative(r.minLakeDepth) || !positive(r.borderFade)) {
-				throw std::runtime_error("Rivers: surfaceDrop and minLakeDepth must not be negative, borderFade must be greater than 0");
+			if (!notNegative(r.surfaceDrop) || !notNegative(r.minLakeDepth) || !notNegative(r.minLakeArea) || !positive(r.borderFade)) {
+				throw std::runtime_error("Rivers: surfaceDrop, minLakeDepth and minLakeArea must not be negative, borderFade must be greater than 0");
 			}
 			if (!positive(r.noiseScale) || !positive(r.noiseHalfWidth) || !positive(r.maxElevation) || !notNegative(r.noiseWarp)) {
 				throw std::runtime_error("Rivers: noiseScale, noiseHalfWidth and maxElevation must be greater than 0, noiseWarp must not be negative");

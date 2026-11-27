@@ -502,7 +502,8 @@ Wartości szumów są w [-1, 1]. Konwencja indeksowania: `map[y * width + x]`.
   `GenerateBiomes` też dostaje `RiverInput` (wilgotność, dno), żeby zgadzał się z `GenerateWorld`. Woda rzek i jezior (REGION): `hydrology::BuildWaterMesh` (w zadaniu w tle) → siatka
   w `RiverMap`, rysowana przez `WaterSurface` po morzu tą samą kopią sceny (`water_mesh_vertex.shader` + wspólny FS, `meshWater`: głębokość z kopii głębi, fale niesione przepływem);
   brzeg przycina test głębi z terenem, na skończonej mapie `clipRect`. Poziom wody zostaje tylko w jeziorach i korytach (dno wyżłobione); suche narożniki
-  i brzegi rzek schodzą pod grunt próbki (`Network::ground`), inaczej tafla wisiała nad niższym terenem (odpływ jeziora, zbocze obok rzeki). Nowy parametr rzek = `RiverConfig` + presety
+  i brzegi rzek schodzą pod grunt próbki (`Network::ground`), inaczej tafla wisiała nad niższym terenem (odpływ jeziora, zbocze obok rzeki). Jeziora mniejsze od `minLakeArea` (grupa 4-spójnych komórek) są lądem — testy na małych mapach
+  z jeziorem ustawiają `minLakeArea = 0`. Nowy parametr rzek = `RiverConfig` + presety
   (`RiversToJson`/`ReadRivers`/`CheckRivers`) + `PresetTests` + UI; zmiana shadera → `--gpu-check` (sekcja `rivers:`).
 - **Generacja jest tylko w GLSL** (`ComputeShaders/`, `common/noise.glsl`, `common/simplex.glsl`, `common/surface.glsl`). Nowe pole configu szumu trzeba
   dopisać do `NoiseParams` (`noise_params.glsl`), `GpuNoiseParams`/`SetNoise` (`GpuHeightGenerator.cpp`), presetów i UI, a potem uruchomić `--gpu-check`.
