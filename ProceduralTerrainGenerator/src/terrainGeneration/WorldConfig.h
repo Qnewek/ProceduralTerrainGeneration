@@ -316,6 +316,12 @@ namespace rivers {
 		float maxElevation = 0.1f;
 		float noiseWarp = 0.6f;
 		int noiseSeed = 4321;
+
+		//REGION: a run of segments steeper than fallSlope (height per texel; gaps of up to 2 gentler segments joined) becomes one waterfall at its
+		//upstream end, the water below it lies at the level of the bottom of the run (the carving cuts a step and a gorge). 0.0012 = drawn slope
+		//0.3 in TerrainGen (height 1 = 1024 units, 4 units per texel)
+		bool waterfalls = false;
+		float fallSlope = 0.0012f;
 	};
 }
 

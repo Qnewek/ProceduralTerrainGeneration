@@ -19,11 +19,11 @@ void RiverMap::Upload(const hydrology::Network& network, const std::vector<hydro
 	}
 	if (!rivers || rivers->GetWidth() != width || rivers->GetHeight() != height) {
 		rivers = std::make_unique<TextureClass>(width, height, GL_RGBA32F);
-		levels = std::make_unique<TextureClass>(width, height, GL_RG32F);
+		levels = std::make_unique<TextureClass>(width, height, GL_RGBA32F);
 	}
-	static_assert(sizeof(hydrology::RiverTexel) == 4 * sizeof(float) && sizeof(hydrology::LevelTexel) == 2 * sizeof(float));
+	static_assert(sizeof(hydrology::RiverTexel) == 4 * sizeof(float) && sizeof(hydrology::LevelTexel) == 4 * sizeof(float));
 	rivers->Upload(network.rivers.Data(), GL_RGBA, GL_FLOAT);
-	levels->Upload(network.levels.Data(), GL_RG, GL_FLOAT);
+	levels->Upload(network.levels.Data(), GL_RGBA, GL_FLOAT);
 	origin = network.origin;
 	cellSize = network.cellSize;
 

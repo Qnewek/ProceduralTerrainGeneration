@@ -26,11 +26,23 @@ namespace hydrology {
 		float distance = farDistance;
 		float halfWidth = 0.0f;
 	};
-	//Water surface of the nearest river, and of the lake the cell lies in (noLake if none)
+	//Water surface of the nearest river, and of the lake the cell lies in (noLake if none). A waterfall (RiverConfig::waterfalls) near the course
+	//adds its drop upstream of its fall line: river level = river + fallDrop * FallStep(fallAlong / fallDrop) (RiverLevel), where river is
+	//continuous across the fall and fallAlong = fallDrop * distance along the course from the fall line (texels, + upstream). Sampled bilinearly
+	//next to cells without a fall (both 0), the ratio still gives the distance exactly
 	struct LevelTexel {
 		float river = 0.0f;
 		float lake = noLake;
+		float fallDrop = 0.0f;
+		float fallAlong = 0.0f;
 	};
+	//Half width (texels) of the step of a fall along the course
+	constexpr float fallEdge = 0.75f;
+	//0 downstream of a fall line, 1 upstream of it (smoothstep over +-fallEdge texels, as in common/rivers.glsl)
+	float FallStep(float along);
+	//Water surface of a river from the (bilinearly sampled) fields of LevelTexel
+	float RiverLevel(float river, float fallDrop, float fallAlong);
+
 
 	//How water flows over a height map
 	struct Drainage {
@@ -59,6 +71,13 @@ namespace hydrology {
 	//Texels over which the foam below a fall fades to 1/e
 	constexpr float foamLength = 12.0f;
 
+	//A waterfall: the head of a run of steep segments, where the river drops to the level of the bottom of the run
+	struct Fall {
+		glm::vec2 position = glm::vec2(0.0f);
+		glm::vec2 direction = glm::vec2(0.0f, 1.0f);
+		float drop = 0.0f;
+	};
+
 	struct Network {
 		//Cell (x, y) covers map position origin + (x, y) * cellSize (its center)
 		glm::vec2 origin = glm::vec2(0.0f);
@@ -68,6 +87,8 @@ namespace hydrology {
 		Grid<FlowTexel> flow;
 		//The terrain the network was computed from (heights at the cell centers, without rivers)
 		HeightField ground;
+		//Head of every waterfall: map position, downstream direction (unit), drop (height)
+		std::vector<Fall> falls;
 		//Statistics for the UI
 		int riverCells = 0, lakeCells = 0, lakes = 0;
 	};

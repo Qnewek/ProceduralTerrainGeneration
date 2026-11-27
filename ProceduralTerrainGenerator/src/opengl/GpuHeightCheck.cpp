@@ -901,6 +901,13 @@ namespace {
 
 	//Rivers carved into the terrain: values in [0, 1], never above the terrain without them, something carved; one pass (GenerateWorld)
 	//equal to GenerateTerrain, and chunks equal to the whole map bit for bit, for both methods
+	//Waterfalls change only the levels of the rivers: the courses (offsets, distances, widths) stay
+	bool SameCourses(const hydrology::Network& plain, const hydrology::Network& falls)
+	{
+		return plain.rivers.Size() == falls.rivers.Size()
+			&& std::memcmp(plain.rivers.Data(), falls.rivers.Data(), plain.rivers.Size() * sizeof(hydrology::RiverTexel)) == 0;
+	}
+
 	bool CheckRivers(GpuHeightGenerator& gpu)
 	{
 		std::cout << "\nrivers: carved terrain of the default world (with biome modifiers), network of a region\n";
@@ -938,17 +945,53 @@ namespace {
 
 		rivers::RiverConfig noise;
 		noise.method = rivers::Method::NOISE;
-		const std::pair<std::string, const rivers::RiverConfig*> cases[] = { { "region", &region }, { "noise", &noise } };
-		for (const auto& [name, config] : cases) {
-			const RiverInput input{ *config, &map };
+
+		//Waterfalls: a lower fall slope than the default (drawn 0.15), so this lowland region surely has some; the map is placed at the largest
+		rivers::RiverConfig falls = region;
+		falls.waterfalls = true;
+		falls.fallSlope = 0.0006f;
+		const hydrology::Network fallNetwork = hydrology::Compute(sample, center - glm::vec2(cells * cellSize * 0.5f), cellSize, terrain.WaterHeight(), falls);
+		RiverMap fallMap;
+		fallMap.Upload(fallNetwork, hydrology::BuildWaterMesh(fallNetwork, terrain.WaterHeight(), 256.0f));
+		hydrology::Fall largest;
+		for (const hydrology::Fall& f : fallNetwork.falls) {
+			largest = f.drop > largest.drop ? f : largest;
+		}
+		rivers::RiverConfig defaultFalls = region;
+		defaultFalls.waterfalls = true;
+		const hydrology::Network defaultNetwork = hydrology::Compute(sample, center - glm::vec2(cells * cellSize * 0.5f), cellSize, terrain.WaterHeight(), defaultFalls);
+		float defaultLargest = 0.0f;
+		for (const hydrology::Fall& f : defaultNetwork.falls) {
+			defaultLargest = std::max(defaultLargest, f.drop);
+		}
+		std::cout << "[LOG] waterfalls at the default fall slope: " << defaultNetwork.falls.size() << ", largest drop " << defaultLargest << std::endl;
+		std::ostringstream fallDetails;
+		fallDetails << fallNetwork.falls.size() << " falls, courses " << (SameCourses(network, fallNetwork) ? "kept" : "MOVED") << ", largest drop " << std::fixed << std::setprecision(4) << largest.drop;
+		const bool fallsOk = !fallNetwork.falls.empty() && SameCourses(network, fallNetwork);
+		Report("rivers: waterfalls in the network", fallDetails.str(), fallsOk);
+		allOk = allOk && fallsOk;
+		const MapArea fallArea{ glm::floor(largest.position) - glm::vec2(mapWidth / 2, mapHeight / 2), 1.0f, island };
+
+		struct Case {
+			std::string name;
+			const rivers::RiverConfig* config;
+			const RiverMap* map;
+			MapArea area;
+		};
+		const Case cases[] = { { "region", &region, &map, area }, { "noise", &noise, &map, area }, { "waterfalls", &falls, &fallMap, fallArea } };
+		for (const Case& testCase : cases) {
+			const std::string& name = testCase.name;
+			const rivers::RiverConfig* config = testCase.config;
+			const MapArea& caseArea = testCase.area;
+			const RiverInput input{ *config, testCase.map };
 			//Without their humidity: it changes the biomes and so the biome modifiers, which may raise the terrain
 			rivers::RiverConfig dryConfig = *config;
 			dryConfig.humidity = 0.0f;
-			const RiverInput dry{ dryConfig, &map };
+			const RiverInput dry{ dryConfig, testCase.map };
 			TextureClass plain(mapWidth, mapHeight, GL_R32F), carved(mapWidth, mapHeight, GL_R32F), wet(mapWidth, mapHeight, GL_R32F);
-			gpu.GenerateTerrain(terrain, area, plain, &biomes);
-			gpu.GenerateTerrain(terrain, area, carved, &biomes, &dry);
-			gpu.GenerateTerrain(terrain, area, wet, &biomes, &input);
+			gpu.GenerateTerrain(terrain, caseArea, plain, &biomes);
+			gpu.GenerateTerrain(terrain, caseArea, carved, &biomes, &dry);
+			gpu.GenerateTerrain(terrain, caseArea, wet, &biomes, &input);
 			const HeightField before = ReadHeight(plain), dryAfter = ReadHeight(carved), after = ReadHeight(wet);
 			int lowered = 0, wrong = 0, sea = 0;
 			float deepest = 0.0f;
@@ -971,15 +1014,34 @@ namespace {
 			bool ok = wrong == 0 && lowered > 0 && (!noiseRivers || sea > 0);
 			Report("rivers: " + name + " carves" + (noiseRivers ? ", sea " + std::to_string(sea) + " kept" : ""), details.str(), ok);
 			allOk = allOk && ok;
+			//A waterfall is a step in the carved terrain: neighbouring texels apart by most of its drop, steeper than anything before the carving
+			if (config->waterfalls) {
+				const auto steepest = [](const HeightField& h) {
+					float most = 0.0f;
+					for (int y = 0; y + 1 < h.GetHeight(); y++) {
+						for (int x = 0; x + 1 < h.GetWidth(); x++) {
+							most = std::max({ most, std::abs(h.At(x + 1, y) - h.At(x, y)), std::abs(h.At(x, y + 1) - h.At(x, y)) });
+						}
+					}
+					return most;
+				};
+				const float carvedStep = steepest(dryAfter), naturalStep = steepest(before);
+				std::ostringstream stepDetails;
+				stepDetails << "largest step " << std::fixed << std::setprecision(4) << carvedStep << " (terrain " << naturalStep << ", drop " << largest.drop << ")";
+				//The step spreads over +-fallEdge texels: between neighbours 35-85 % of the drop, depending on where the line crosses them
+				ok = carvedStep > 0.3f * largest.drop && carvedStep > 2.0f * naturalStep;
+				Report("rivers: waterfalls step in the terrain", stepDetails.str(), ok);
+				allOk = allOk && ok;
+			}
 
 			//One pass equals the terrain and the biomes generated apart (the humidity of rivers changes the biomes and their modifiers,
 			//the bed material the splat map), and the bed shows in the splat map
 			TextureClass height(mapWidth, mapHeight, GL_R32F), colors(mapWidth, mapHeight, GL_RGBA32F), ids(mapWidth, mapHeight, GL_R32I);
 			TextureClass splat(mapWidth, mapHeight, GL_RGBA8, GpuHeightGenerator::splatLayers);
-			gpu.GenerateWorld(terrain, biomes, area, height, colors, ids, &splat, &input);
+			gpu.GenerateWorld(terrain, biomes, caseArea, height, colors, ids, &splat, &input);
 			TextureClass colors2(mapWidth, mapHeight, GL_RGBA32F), ids2(mapWidth, mapHeight, GL_R32I);
 			TextureClass splat2(mapWidth, mapHeight, GL_RGBA8, GpuHeightGenerator::splatLayers);
-			gpu.GenerateBiomes(biomes, terrain, area, colors2, ids2, &splat2, &input);
+			gpu.GenerateBiomes(biomes, terrain, caseArea, colors2, ids2, &splat2, &input);
 			const HeightField single = ReadHeight(height);
 			int different = 0;
 			for (size_t i = 0; i < single.Size(); i++) {
@@ -993,7 +1055,7 @@ namespace {
 			//Material m is byte (m / 4) layer, m % 4 channel; layers follow each other
 			TextureClass colors3(mapWidth, mapHeight, GL_RGBA32F), ids3(mapWidth, mapHeight, GL_R32I);
 			TextureClass splat3(mapWidth, mapHeight, GL_RGBA8, GpuHeightGenerator::splatLayers);
-			gpu.GenerateBiomes(biomes, terrain, area, colors3, ids3, &splat3);
+			gpu.GenerateBiomes(biomes, terrain, caseArea, colors3, ids3, &splat3);
 			const std::vector<unsigned char> noRiverBytes = ReadBytes(splat3, GL_RGBA, GL_UNSIGNED_BYTE, 4);
 			const size_t layerBytes = static_cast<size_t>(mapWidth) * mapHeight * 4;
 			int bedTexels = 0;
@@ -1001,7 +1063,8 @@ namespace {
 				const size_t b = (config->bedMaterial / 4) * layerBytes + t * 4 + config->bedMaterial % 4;
 				bedTexels += splatBytes[b] > 200 && noRiverBytes[b] < 100 ? 1 : 0;
 			}
-			ok = different == 0 && biomesSame && splatSame && bedTexels > 0;
+			//The largest waterfall lies in mountains whose biomes use the bed material anyway
+			ok = different == 0 && biomesSame && splatSame && (bedTexels > 0 || config->waterfalls);
 			Report("rivers: " + name + ", one pass", std::to_string(different) + " heights differ, biomes " + (biomesSame && splatSame ? "same" : "DIFFER")
 				+ ", bed " + std::to_string(bedTexels), ok);
 			allOk = allOk && ok;
@@ -1010,7 +1073,7 @@ namespace {
 			const glm::ivec2 corner(300, 30);
 			for (int step : { 1, 2, 4 }) {
 				TextureClass part(partWidth, partHeight, GL_R32F);
-				gpu.GenerateTerrain(terrain, MapArea{ area.origin + glm::vec2(corner), static_cast<float>(step), island }, part, &biomes, &input);
+				gpu.GenerateTerrain(terrain, MapArea{ caseArea.origin + glm::vec2(corner), static_cast<float>(step), island }, part, &biomes, &input);
 				const HeightField p = ReadHeight(part);
 				different = 0;
 				for (int y = 0; y < partHeight; y++) {
