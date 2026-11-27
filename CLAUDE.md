@@ -25,7 +25,9 @@ Plan napraw i rozwoju: `docs/ROADMAP.md` (ID zadań `B*`, `A*`, `F*` są tam zde
 - Shadery/tekstury czytane z `res/...` względem katalogu roboczego; jeśli go tam nie ma, `main` przechodzi do
   `PTG_RESOURCE_DIR` (= `ProceduralTerrainGenerator/` w źródłach, wpisany przez CMake). Hot-reload działa na źródłach.
 - CI: `.github/workflows/build.yml` — Windows (`windows-2022` = VS 2022, jak lokalnie), oba presety, vcpkg na commicie z baseline
-  (cache binarek w `actions/cache`), testy jednostkowe. Generacji CI nie sprawdza: działa tylko na GPU, a runnery GPU nie mają.
+  (cache binarek w `actions/cache`), testy jednostkowe, a w Release `--gpu-check --no-timings` na Mesa llvmpipe (programowy GL 4.5: `opengl32.dll` +
+  `libgallium_wgl.dll` z mesa-dist-win obok kopii exe, wersja i SHA256 archiwum w `MESA_VERSION` / `MESA_SHA256` w workflow, cache w `actions/cache`).
+  Nie kładź tych DLL w `out/build` — aplikacja ruszy wtedy na CPU. Lokalnie llvmpipe: to samo w katalogu poza buildem, `GALLIUM_DRIVER=llvmpipe`.
 - Testy: `ctest --preset x64-release` (doctest, target `ptg_tests`, kod w `ProceduralTerrainGenerator/tests/`, `ptg_core` + nagłówki z `utility/`).
   Szczegóły doctesta: `out\build\x64-release\ptg_tests.exe`. Mapy testowe są niekwadratowe. Znany błąd = test z `doctest::should_fail()`
   i ID z ROADMAP; po naprawie błędu test zacznie zgłaszać niepowodzenie, wtedy usuń oznaczenie.

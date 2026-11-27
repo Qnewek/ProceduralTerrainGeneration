@@ -287,6 +287,8 @@ Biomy (Faza 3, pkt 3–4) opierają się na wysokości i znaczeniu szumów C/M/W
    Zostały configi, tablica permutacji (`makePermutation`) i `tk::spline` do tablicy splajnu dla GPU, tabela biomów i jej testy. Pkt 7 Fazy 2 (CPU fallback) odpada.
    `--gpu-check` sprawdza teraz same wyniki GPU: zakresy i skończoność dla każdej opcji, determinizm, biomy, chunki/LOD bit w bit, pochodne na mapach analitycznych.
    Strata: CI nie sprawdza generacji (brak GPU na runnerach); ewentualnie później Mesa llvmpipe (programowy GL 4.5 z compute shaderami).
+   ✅ 2026-11-27 CI sprawdza generację: krok „Generation check (llvmpipe)” w Release uruchamia `--gpu-check --no-timings` na Mesa llvmpipe 26.3.1
+   (mesa-dist-win, przypięta wersja + SHA256, cache). Wszystkie sprawdzenia przechodzą na llvmpipe bez zmian w nich (lokalnie, łącznie z porównaniami bit w bit).
 1. ✅ 2026-11-08 **Operacje na szumie** (nowe pola `NoiseConfigParameters`, domyślnie wyłączone): domain warping (`warpStrength`, `warpScale`; przesunięcie
    współrzędnych 4-oktawowym szumem z tej samej tablicy permutacji), fBm tłumiony gradientem (`slopeErosion`; analityczne pochodne `simplex2Grad`, oktawa dzielona
    przez 1 + k·|∇ niższych oktaw|²), tarasy (`terraceSteps`, `terraceSharpness`; na końcu, po redystrybucji). Przy wyłączonych warpie i tłumieniu działa stara pętla,

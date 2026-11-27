@@ -1846,7 +1846,7 @@ namespace {
 	}
 }
 
-int RunGpuHeightCheck()
+int RunGpuHeightCheck(bool timings)
 {
 	if (!glfwInit()) {
 		std::cout << "[ERROR] Failed to initialize GLFW" << std::endl;
@@ -1895,8 +1895,10 @@ int RunGpuHeightCheck()
 			ok = CheckErosion(gpu, erosion) && ok;
 			ok = CheckSculpt(sculptor) && ok;
 			ok = CheckMapBiomes(gpu) && ok;
-			RunTimings(gpu, surfacePass);
-			RunErosionTimings(gpu, erosion);
+			if (timings) {
+				RunTimings(gpu, surfacePass);
+				RunErosionTimings(gpu, erosion);
+			}
 			std::cout << "\n" << (ok ? "All checks passed" : "[ERROR] Some checks failed") << std::endl;
 			result = ok ? 0 : 1;
 		}
