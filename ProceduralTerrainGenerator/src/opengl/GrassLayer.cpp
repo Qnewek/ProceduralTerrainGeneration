@@ -69,6 +69,16 @@ bool GrassLayer::ReloadShader()
 	return ok;
 }
 
+float GrassLayer::DrawnRange(const TerrainRenderSettings& settings) const
+{
+	return !enabled || settings.map2d || failed ? 0.0f : range * vegetation::unitsPerMetre;
+}
+
+float GrassLayer::GroundShade() const
+{
+	return std::clamp(density / 8.0f, 0.0f, 1.0f) * std::clamp(bladeHeight / 0.3f, 0.0f, 1.0f);
+}
+
 void GrassLayer::Draw(const ChunkWorld& chunks, Camera& camera, const LightSource& light, const TerrainRenderSettings& settings,
 	const TerrainMaterials& materials)
 {

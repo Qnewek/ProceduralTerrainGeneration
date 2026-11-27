@@ -175,6 +175,8 @@ void TerrainView::SetFrameUniforms(Shader& shader, FrameUniforms& frame, const F
 	shader.SetUniform1f("bandWidth", settings.topoBandWidth);
 	shader.SetUniform1f("heightScale", settings.heightScale);
 	shader.SetUniform1f("heightBound", settings.heightBound);
+	shader.SetUniform1f("grassRange", settings.map2d ? 0.0f : settings.grassRange);
+	shader.SetUniform1f("grassShade", settings.grassShade);
 	shader.SetUniform2f("texelWorldSize", worldUnitsPerTexel, worldUnitsPerTexel);
 	shader.SetUniform1f("meshScale", 1.0f);
 	shader.SetUniform1f("skirtDepth", 0.0f);

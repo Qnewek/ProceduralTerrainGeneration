@@ -61,7 +61,7 @@ public:
 private:
 	//Mirrors the std140 block TerrainMaterialBlock in materials.glsl
 	struct Block {
-		glm::vec4 params[maxMaterials];		//x = 1 / tileSize, y = cliff material
+		glm::vec4 params[maxMaterials];		//x = 1 / tileSize, y = cliff material, z = grass (share of the grass density)
 		int materialCount;
 		int previewMaterial;
 		float textureScale;
