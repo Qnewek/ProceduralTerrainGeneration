@@ -42,6 +42,7 @@ bool ShadowMap::CreateTexture()
 	if (texture) {
 		glDeleteTextures(1, &texture);
 	}
+	drawnLast.valid = false;
 	if (!framebuffer) {
 		glCreateFramebuffers(1, &framebuffer);
 		glNamedFramebufferDrawBuffer(framebuffer, GL_NONE);
@@ -107,9 +108,11 @@ ShadowMap::Cascade ShadowMap::Fit(const glm::mat4& cameraWorld, glm::vec2 tanHal
 bool ShadowMap::Prepare(Camera& camera, const LightSource& light, const TerrainRenderSettings& settings)
 {
 	active = false;
+	lastReused = false;
 	//The directional light: the sun, or the moon at night
 	const glm::vec3 sun = light.GetLightDirection();
 	if (!enabled || settings.map2d || !light.IsLightOn() || sun.y < minSunHeight || !CreateTexture()) {
+		drawnLast.valid = false;
 		return false;
 	}
 	const glm::mat4 projection = *camera.GetProjectionMatrix();
@@ -133,6 +136,23 @@ bool ShadowMap::Prepare(Camera& camera, const LightSource& light, const TerrainR
 		cascades[c] = Fit(cameraWorld, tanHalf, start, end, sun, extra);
 		start = end;
 	}
+
+	//The last cascade every other frame: the map drawn a frame ago with its own sun view (receivers project with that one), the split
+	//from this frame. Drawn anew when the light turns (switch to the moon, time of day dragged; a low sun moves long shadows far per degree)
+	//or the cascades change. The texel stands for the size of the slice: its radius is rounded, so moving or turning the camera keeps it,
+	//while the shadow distance, the split, the field of view or the window size change it
+	const int last = cascadeCount - 1;
+	const bool same = drawnLast.valid && drawnLast.cascadeCount == cascadeCount && drawnLast.resolution == resolution
+		&& drawnLast.modelScale == settings.modelScale && drawnLast.heightScale == settings.heightScale
+		&& drawnLast.cascade.texel == cascades[last].texel
+		&& glm::dot(drawnLast.light, sun) > std::cos(glm::radians(0.25f));
+	if (farEveryOther && cascadeCount > 1 && same && skipNext) {
+		const float split = cascades[last].farDepth;
+		cascades[last] = drawnLast.cascade;
+		cascades[last].farDepth = split;
+		lastReused = true;
+	}
+	skipNext = farEveryOther && !lastReused;
 	active = true;
 	return true;
 }
@@ -223,6 +243,8 @@ void ShadowMap::ImGuiDraw()
 	if (ImGui::Combo("Shadow resolution", &current, resolutionNames, 3)) {
 		resolution = resolutions[current];
 	}
+	ImGui::Checkbox("Farthest cascade every other frame", &farEveryOther);
+	ImGui::SetItemTooltip("The last cascade is drawn every other frame and reused in between (with 2 or more cascades): cheaper, its shadows may lag a frame");
 	ImGui::SliderFloat("Shadow strength", &strength, 0.0f, 1.0f, "%.2f");
 	ImGui::SetItemTooltip("Share of the sunlight a shadow takes away (the sky light stays)");
 	ImGui::SliderFloat("Cascade split", &splitLambda, 0.0f, 1.0f, "%.2f");
@@ -236,6 +258,12 @@ bool ShadowMap::Render(Renderer& renderer, Camera& camera, const LightSource& li
 		return false;
 	}
 	for (int c = 0; c < cascadeCount; c++) {
+		if (c == cascadeCount - 1) {
+			if (lastReused) {
+				break;
+			}
+			drawnLast = { true, cascades[c], light.GetLightDirection(), cascadeCount, resolution, settings.modelScale, settings.heightScale };
+		}
 		BeginCascade(c);
 		const FrameUniforms::Block block = CascadeBlock(c, camera, light);
 		chunks.DrawShadow(renderer, block, cascades[c].viewProjection, settings);
