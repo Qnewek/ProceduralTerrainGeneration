@@ -26,11 +26,11 @@ namespace places {
 			return static_cast<float>(field.get<double>());
 		}
 
-		const json& Field(const json& object, const char* key, const std::string& path)
+		const json& Field(const json& object, const char* key, const char* path)
 		{
 			auto it = object.find(key);
 			if (it == object.end()) {
-				throw std::runtime_error(path + "." + key + " is missing");
+				throw std::runtime_error(std::string(path) + "." + key + " is missing");
 			}
 			return *it;
 		}
@@ -41,26 +41,26 @@ namespace places {
 				throw std::runtime_error(path + " must be an object");
 			}
 			Place place;
-			const json& name = Field(entry, "name", path);
+			const json& name = Field(entry, "name", path.c_str());
 			if (!name.is_string() || name.get_ref<const std::string&>().empty() || name.get_ref<const std::string&>().size() > maxNameLength) {
 				throw std::runtime_error(path + ".name must be a text of 1 to " + std::to_string(maxNameLength) + " bytes");
 			}
 			place.name = name.get<std::string>();
 
-			const json& camera = Field(entry, "camera", path);
+			const json& camera = Field(entry, "camera", path.c_str());
 			if (!camera.is_array() || camera.size() != 3) {
 				throw std::runtime_error(path + ".camera must be an array of 3 numbers");
 			}
 			for (int i = 0; i < 3; i++) {
 				place.camera[i] = ReadFloat(camera[i], path + ".camera");
 			}
-			place.yaw = ReadFloat(Field(entry, "yaw", path), path + ".yaw");
-			place.pitch = ReadFloat(Field(entry, "pitch", path), path + ".pitch");
+			place.yaw = ReadFloat(Field(entry, "yaw", path.c_str()), path + ".yaw");
+			place.pitch = ReadFloat(Field(entry, "pitch", path.c_str()), path + ".pitch");
 			if (std::abs(place.pitch) > 90.0f) {
 				throw std::runtime_error(path + ".pitch must be between -90 and 90 degrees");
 			}
 
-			const json& offset = Field(entry, "mapOffset", path);
+			const json& offset = Field(entry, "mapOffset", path.c_str());
 			const auto validCoordinate = [](const json& element) {
 				return element.is_number_integer() && std::abs(element.get<double>()) <= preset::maxMapOffset;
 			};
