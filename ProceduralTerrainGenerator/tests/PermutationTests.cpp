@@ -2,14 +2,14 @@
 
 #include <cstdint>
 
-#include "Simplex/SimplexNoise.h"
+#include "Permutation.h"
 
 //The permutation tables are built on the CPU and sent to the compute shaders (GpuHeightGenerator::SetNoise)
 
-TEST_CASE("makePermutation shuffles every byte value exactly once")
+TEST_CASE("MakePermutation shuffles every byte value exactly once")
 {
 	uint8_t perm[256];
-	SimplexNoise::makePermutation(623, perm);
+	noise::MakePermutation(623, perm);
 
 	int counts[256] = {};
 	for (uint8_t value : perm)
@@ -25,7 +25,7 @@ TEST_CASE("makePermutation shuffles every byte value exactly once")
 
 //The tables must not depend on the compiler or standard library. Expected values come from a separate implementation
 //of mt19937 and Fisher-Yates, not from this code, so changing the table or the shuffle changes every generated world
-TEST_CASE("makePermutation gives a fixed table for a seed")
+TEST_CASE("MakePermutation gives a fixed table for a seed")
 {
 	struct Expected { int seed; uint8_t first[4]; uint8_t last[4]; };
 	const Expected cases[] = {
@@ -37,7 +37,7 @@ TEST_CASE("makePermutation gives a fixed table for a seed")
 	for (const Expected& expected : cases) {
 		CAPTURE(expected.seed);
 		uint8_t perm[256];
-		SimplexNoise::makePermutation(expected.seed, perm);
+		noise::MakePermutation(expected.seed, perm);
 		for (int i = 0; i < 4; i++) {
 			CHECK(perm[i] == expected.first[i]);
 			CHECK(perm[252 + i] == expected.last[i]);

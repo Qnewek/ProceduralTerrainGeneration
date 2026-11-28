@@ -11,7 +11,7 @@
 #include "WorldConfig.h"
 
 //Hydraulic erosion of a height map in compute shaders, by the method chosen in ErosionConfig. Only for the thread owning the GL context.
-//Droplets: the algorithm of the former CPU version (legacy/cpuErosion), erosion_droplet_compute.shader.
+//Droplets: particle hydraulic erosion, erosion_droplet_compute.shader.
 //Pipes: water on a grid (virtual pipes) + thermal erosion, erosion_pipe_compute.shader; deterministic.
 class GpuErosion
 {

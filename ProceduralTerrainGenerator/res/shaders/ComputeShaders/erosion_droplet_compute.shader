@@ -1,6 +1,6 @@
 #version 450 core
 
-// Droplet (particle) hydraulic erosion, the GPU version of the CPU algorithm in legacy/cpuErosion (H. T. Beyer, "Implementation of a method
+// Droplet (particle) hydraulic erosion on the GPU (H. T. Beyer, "Implementation of a method
 // for hydraulic erosion"). The same order of work: every droplet makes step i before any makes step i + 1 - one dispatch of STAGE_STEP per step.
 // Droplets of one step run in parallel and change the shared map at once, so the map is a fixed point buffer changed only by atomicAdd
 // (no float atomics in OpenGL 4.5). The order of those changes is not fixed, so two runs with the same seed may differ slightly.

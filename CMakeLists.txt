@@ -51,12 +51,11 @@ function(ptg_set_sanitizers target)
 	endif()
 endfunction()
 
-# Code kept in the repository (Simplex noise with per-instance permutations, stb_image implementation)
+# Third-party code kept in the repository (stb_image implementation)
 add_library(ptg_vendor STATIC
-	${PTG_SRC}/vendor/Simplex/SimplexNoise.cpp
 	${PTG_SRC}/vendor/stb_image/stb_image.cpp
 )
-target_include_directories(ptg_vendor SYSTEM PUBLIC ${PTG_SRC}/vendor ${Stb_INCLUDE_DIR})
+target_include_directories(ptg_vendor SYSTEM PUBLIC ${Stb_INCLUDE_DIR})
 ptg_set_sanitizers(ptg_vendor)
 
 # World parameters, presets, erosion and map files, without OpenGL/ImGui - used by the app and tests.
@@ -95,8 +94,8 @@ add_library(ptg_core STATIC
 )
 target_include_directories(ptg_core PUBLIC ${PTG_SRC}/terrainGeneration)
 target_include_directories(ptg_core SYSTEM PRIVATE ${CGLTF_INCLUDE_DIRS})
-target_link_libraries(ptg_core PUBLIC ptg_vendor glm::glm)
-target_link_libraries(ptg_core PRIVATE nlohmann_json::nlohmann_json lodepng meshoptimizer::meshoptimizer TIFF::TIFF ZLIB::ZLIB)
+target_link_libraries(ptg_core PUBLIC glm::glm)
+target_link_libraries(ptg_core PRIVATE ptg_vendor nlohmann_json::nlohmann_json lodepng meshoptimizer::meshoptimizer TIFF::TIFF ZLIB::ZLIB)
 if(NOT MSVC)
 	find_package(TBB REQUIRED)
 	target_link_libraries(ptg_core PRIVATE TBB::tbb)
@@ -169,6 +168,7 @@ if(PTG_BUILD_APP)
 	)
 	target_link_libraries(ProceduralTerrainGenerator PRIVATE
 		ptg_core
+		ptg_vendor
 		OpenGL::GL
 		GLEW::GLEW
 		glfw
