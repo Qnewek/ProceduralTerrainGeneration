@@ -22,6 +22,7 @@ func _initialize() -> void:
 		return
 	var target := "res://ptg/%s/" % pack.name
 	if args[1] == "copy":
+		_check_path_security(pack)
 		var result: Error = pack.copy_to(target)
 		_expect(result == OK, "copy into %s: %s" % [target, error_string(result)])
 	else:
@@ -34,6 +35,17 @@ func _expect(condition: bool, what: String) -> void:
 	if not condition:
 		failures += 1
 		printerr("  FAILED: " + what)
+
+
+func _check_path_security(pack) -> void:
+	_expect(not PtgPack.is_valid_pack_name("../evil"), "rejects parent traversal pack name")
+	_expect(not PtgPack.is_valid_pack_name("a/b"), "rejects slash in pack name")
+	_expect(not PtgPack.is_valid_pack_name(""), "rejects empty pack name")
+	_expect(pack.safe_pack_path("../secret.txt").is_empty(), "rejects parent traversal pack file path")
+	_expect(pack.safe_pack_path("/etc/passwd").is_empty(), "rejects rooted unix pack file path")
+	_expect(pack.safe_pack_path("C:/Windows/win.ini").is_empty(), "rejects drive pack file path")
+	_expect(not pack.safe_pack_path("vegetation/tree.glb").is_empty(), "accepts valid relative pack path")
+	_expect(PtgPack.safe_target_path("res://ptg/full/", "../escape.glb").is_empty(), "rejects parent traversal target path")
 
 
 func _near(a: float, b: float, tolerance: float) -> bool:

@@ -46,9 +46,8 @@ func _import_pack(manifest_path: String) -> void:
 	# The glTF files have to be imported before the builder loads them
 	var file_system := EditorInterface.get_resource_filesystem()
 	file_system.scan()
-	await get_tree().process_frame
 	while file_system.is_scanning():
-		await get_tree().process_frame
+		await file_system.filesystem_changed
 	await get_tree().process_frame
 
 	var root: Node3D = PtgBuilder.build(pack, target)

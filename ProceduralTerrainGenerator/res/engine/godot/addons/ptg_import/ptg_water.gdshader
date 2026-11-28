@@ -13,7 +13,7 @@ void vertex() {
 }
 
 void fragment() {
-	vec2 p = world_position.xz / ripple_size;
+	vec2 p = world_position.xz / max(ripple_size, 0.001);
 	float t = TIME * ripple_speed;
 	vec2 slope = vec2(cos(p.x * 1.7 + t) + 0.5 * cos(p.y * 2.3 - 1.3 * t), cos(p.y * 1.9 + 0.8 * t) + 0.5 * cos((p.x + p.y) * 1.1 - t));
 	NORMAL_MAP = normalize(vec3(slope * 0.06, 1.0)) * 0.5 + 0.5;
