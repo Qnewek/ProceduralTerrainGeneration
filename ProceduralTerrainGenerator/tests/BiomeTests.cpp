@@ -449,3 +449,24 @@ TEST_CASE("Masked color mixes only allowed biomes")
 	CHECK(biome::MixColor(table, Values(0.0f, 0.0f, 0.0f, -0.5f, 0.0f), 0.0f, uint64_t(1) << 1) == glm::vec3(1.0f, 0.0f, 0.0f));
 	CHECK(biome::MixColor(table, Values(0.0f, 0.0f, 0.0f, -0.5f, 0.0f), 0.0f, biome::allBiomes) == glm::vec3(0.0f, 0.0f, 1.0f));
 }
+
+TEST_CASE("Biome helpers handle empty table, out-of-range materials and zero coastRange safely")
+{
+	const std::vector<biome::Biome> empty;
+	const biome::ParameterValues p = Values(0.0f, 0.0f, 0.0f, 0.0f, 0.0f);
+	CHECK(biome::MixColor(empty, p, 0.1f) == glm::vec3(0.0f));
+	CHECK(biome::ModifyHeight(empty, p, 0.4f, 0.2f, 0.1f, {}) == doctest::Approx(0.4f));
+	const biome::MaterialWeights emptyWeights = biome::MixMaterials(empty, p, 0.1f, 0.0f, 1.0f, {});
+	CHECK(Sum(emptyWeights) == 0.0f);
+
+	std::vector<biome::Biome> bad = TwoMaterialBiomes();
+	bad[0].materials[0].material = 99;
+	bad[0].materials[0].weight = 1.0f;
+	const biome::MaterialWeights safeWeights = biome::MixMaterials(bad, Values(0.0f, 0.0f, 0.0f, -0.8f, 0.0f), 0.0f, 0.0f, 1.0f, {});
+	CHECK(Sum(safeWeights) == 0.0f);
+
+	biome::Climate zeroCoast;
+	zeroCoast.coastRange = 0.0f;
+	const biome::ParameterValues clim = biome::ApplyClimate(p, 0.5f, 0.2f, zeroCoast);
+	CHECK(std::isfinite(clim[biome::HUMIDITY]));
+}

@@ -14,6 +14,7 @@
 #define CGLTF_IMPLEMENTATION
 #include <cgltf.h>
 #include <meshoptimizer.h>
+#include "stb_image.h"
 
 namespace vegetation
 {
@@ -253,9 +254,11 @@ namespace vegetation
 				cgltf_node_transform_world(&node, world);
 				glm::mat4 transform;
 				std::memcpy(&transform[0][0], world, sizeof(world));
-				const glm::mat3 normalMatrix = glm::transpose(glm::inverse(glm::mat3(transform)));
+				const glm::mat3 linear(transform);
+				const float det = glm::determinant(linear);
+				const glm::mat3 normalMatrix = std::abs(det) > 1e-12f ? glm::transpose(glm::inverse(linear)) : glm::mat3(1.0f);
 				//A mirroring transform turns the triangles inside out
-				const bool flip = glm::determinant(glm::mat3(transform)) < 0.0f;
+				const bool flip = det < 0.0f;
 
 				for (cgltf_size p = 0; p < node.mesh->primitives_count; p++) {
 					const cgltf_primitive& primitive = node.mesh->primitives[p];
@@ -317,16 +320,24 @@ namespace vegetation
 					}
 					const size_t indexStart = part.indices.size();
 					if (primitive.indices) {
-						for (cgltf_size i = 0; i < primitive.indices->count; i++) {
-							part.indices.push_back(first + static_cast<uint32_t>(cgltf_accessor_read_index(primitive.indices, i)));
+						for (cgltf_size i = 0; i + 2 < primitive.indices->count; i += 3) {
+							const cgltf_size a = cgltf_accessor_read_index(primitive.indices, i);
+							const cgltf_size b = cgltf_accessor_read_index(primitive.indices, i + 1);
+							const cgltf_size c = cgltf_accessor_read_index(primitive.indices, i + 2);
+							if (a < count && b < count && c < count) {
+								part.indices.push_back(first + static_cast<uint32_t>(a));
+								part.indices.push_back(first + static_cast<uint32_t>(b));
+								part.indices.push_back(first + static_cast<uint32_t>(c));
+							}
 						}
 					}
 					else {
-						for (size_t i = 0; i < count; i++) {
+						for (size_t i = 0; i + 2 < count; i += 3) {
 							part.indices.push_back(first + static_cast<uint32_t>(i));
+							part.indices.push_back(first + static_cast<uint32_t>(i + 1));
+							part.indices.push_back(first + static_cast<uint32_t>(i + 2));
 						}
 					}
-					part.indices.resize(indexStart + (part.indices.size() - indexStart) / 3 * 3);
 					if (flip) {
 						for (size_t i = indexStart; i + 2 < part.indices.size(); i += 3) {
 							std::swap(part.indices[i + 1], part.indices[i + 2]);
@@ -547,8 +558,14 @@ namespace vegetation
 					material.alpha = alpha;
 				}
 			}
-			if (material.alpha.empty()) {
-				material.alphaTest = false;
+			if (material.alpha.empty() && material.alphaTest) {
+				int w = 0, h = 0, ch = 0;
+				const bool hasBaseAlpha = !material.albedo.empty()
+					&& stbi_info((folder / material.albedo).string().c_str(), &w, &h, &ch) != 0
+					&& (ch == 2 || ch == 4);
+				if (!hasBaseAlpha) {
+					material.alphaTest = false;
+				}
 			}
 			material.foliage = material.alphaTest || IsFoliageName(material.name);
 			materials.push_back(material);
@@ -972,11 +989,18 @@ namespace vegetation
 				}
 			}
 			if (!out) {
+				out.close();
+				std::filesystem::remove(temporary, ignored);
 				return false;
 			}
 		}
 		std::filesystem::rename(temporary, file, ignored);
-		return !ignored;
+		if (ignored) {
+			std::error_code removeErr;
+			std::filesystem::remove(temporary, removeErr);
+			return false;
+		}
+		return true;
 	}
 
 	bool LoadCache(const std::filesystem::path& file, ModelMesh& mesh, uint64_t key)

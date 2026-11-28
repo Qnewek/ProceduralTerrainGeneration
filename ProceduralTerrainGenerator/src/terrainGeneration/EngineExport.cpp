@@ -1,5 +1,6 @@
 #include "EngineExport.h"
 
+#include <optional>
 #include <set>
 #include <system_error>
 

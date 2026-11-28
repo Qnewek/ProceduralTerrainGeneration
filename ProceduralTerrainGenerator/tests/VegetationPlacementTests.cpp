@@ -610,3 +610,14 @@ TEST_CASE("SortByBlock: instances grouped by block in Morton order, starts cover
 		CHECK(Morton(static_cast<uint32_t>(i.variant % 4), static_cast<uint32_t>(i.variant / 4)) == m);
 	}
 }
+
+TEST_CASE("SortByBlock handles non-power-of-two blocksPerSide and zero inputs safely")
+{
+	std::vector<Instance> instances(3);
+	instances[0].position = glm::vec3(10.0f, 0.0f, 10.0f);
+	instances[1].position = glm::vec3(120.0f, 0.0f, 200.0f);
+	instances[2].position = glm::vec3(240.0f, 0.0f, 240.0f);
+	const std::vector<uint32_t> npot = SortByBlock(instances, glm::vec2(0.0f), 1.0f, glm::ivec2(0), 32, 3);
+	CHECK(npot.back() == 3);
+	CHECK(SortByBlock(instances, glm::vec2(0.0f), 1.0f, glm::ivec2(0), 32, 0).size() == 1);
+}

@@ -11,7 +11,7 @@
 namespace engineexport {
 	//Where the textures of one material are and how they are laid on the terrain; one per material id
 	struct MaterialTextures {
-		std::filesystem::path folder;	//res/textures/terrain/<asset>; may not exist (textures not downloaded)
+		std::filesystem::path folder{};	//res/textures/terrain/<asset>; may not exist (textures not downloaded)
 		float tileMetres = 0.0f;		//metres covered by one repeat of the texture
 		float fallbackColor[3] = { 0.5f, 0.5f, 0.5f };	//drawn by the app when the textures are missing
 	};

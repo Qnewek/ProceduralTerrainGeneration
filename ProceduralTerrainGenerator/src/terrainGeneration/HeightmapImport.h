@@ -20,13 +20,13 @@ namespace heightmap {
 		bool convertedFromColor = false;	//a color PNG was turned into greyscale (mean of R, G and B)
 		bool floatingPoint = false;		//samples are floating point
 		bool metres = false;			//a map of the real world (DEM): values are metres and the value range is not used
-		std::optional<glm::dvec2> pixelSize;	//from the file: metres, or degrees when geographic; none = not stored
+		std::optional<glm::dvec2> pixelSize{};	//from the file: metres, or degrees when geographic; none = not stored
 		bool geographic = false;		//pixels in degrees of longitude and latitude
 		double latitude = 0.0;			//of the middle of the file, geographic only
 		int noDataFilled = 0;			//missing samples filled from their neighbours (dem::FillNoData)
 		//Where the pixels lie (GeoTIFF tags, .hgt name, .asc header + .prj); after the crop and the downsample of the import,
 		//of the whole file from Inspect. epsg = 0: coordinates of a system the file does not name
-		std::optional<geo::GeoReference> georeference;
+		std::optional<geo::GeoReference> georeference{};
 		bool rotated = false;			//a GeoTIFF rotated or sheared by its ModelTransformation: georeference ignored
 	};
 
@@ -39,16 +39,16 @@ namespace heightmap {
 		//What the lowest and the highest sample mean, for files without units (PNG, R16); not used by maps of the real world
 		ValueRange range = terrainRange;
 		//Part of the file to keep; none = all of it
-		std::optional<PixelRect> crop;
+		std::optional<PixelRect> crop{};
 		//The kept part is reduced by this factor (dem::Downsample)
 		int downsample = 1;
 		//Coordinate system of a file whose coordinates name none (georeference epsg 0); does not replace a system the file names
-		std::optional<int> epsg;
+		std::optional<int> epsg{};
 	};
 
 	struct FileHeader {
 		int width = 0, height = 0;
-		ImportInfo info;		//noDataFilled is not known before reading
+		ImportInfo info{};		//noDataFilled is not known before reading
 	};
 
 	//Reads only what the file says about itself (size, precision, pixel size), to choose the options before importing

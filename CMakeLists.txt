@@ -4,15 +4,23 @@ project(ProceduralTerrainGenerator LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
-# Static CRT, matches the x64-windows-static vcpkg triplet used by the presets
-set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 
-find_package(OpenGL REQUIRED)
-find_package(GLEW REQUIRED)
-find_package(glfw3 CONFIG REQUIRED)
+option(PTG_BUILD_APP "Build the OpenGL desktop application" ${WIN32})
+option(PTG_ENABLE_SANITIZERS "Enable AddressSanitizer and UndefinedBehaviorSanitizer on GCC/Clang" OFF)
+
+# Static CRT, matches the x64-windows-static vcpkg triplet used by the presets
+if(MSVC AND NOT DEFINED CMAKE_MSVC_RUNTIME_LIBRARY)
+	set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+endif()
+
+if(PTG_BUILD_APP)
+	find_package(OpenGL REQUIRED)
+	find_package(GLEW REQUIRED)
+	find_package(glfw3 CONFIG REQUIRED)
+	find_package(imgui CONFIG REQUIRED)
+	find_package(implot CONFIG REQUIRED)
+endif()
 find_package(glm CONFIG REQUIRED)
-find_package(imgui CONFIG REQUIRED)
-find_package(implot CONFIG REQUIRED)
 find_package(nlohmann_json CONFIG REQUIRED)
 find_package(lodepng CONFIG REQUIRED)
 find_package(Stb REQUIRED)
@@ -36,12 +44,20 @@ function(ptg_set_warnings target)
 	endif()
 endfunction()
 
+function(ptg_set_sanitizers target)
+	if(PTG_ENABLE_SANITIZERS AND NOT MSVC)
+		target_compile_options(${target} PRIVATE -fsanitize=address,undefined -fno-omit-frame-pointer)
+		target_link_options(${target} PRIVATE -fsanitize=address,undefined)
+	endif()
+endfunction()
+
 # Code kept in the repository (Simplex noise with per-instance permutations, stb_image implementation)
 add_library(ptg_vendor STATIC
 	${PTG_SRC}/vendor/Simplex/SimplexNoise.cpp
 	${PTG_SRC}/vendor/stb_image/stb_image.cpp
 )
 target_include_directories(ptg_vendor SYSTEM PUBLIC ${PTG_SRC}/vendor ${Stb_INCLUDE_DIR})
+ptg_set_sanitizers(ptg_vendor)
 
 # World parameters, presets, erosion and map files, without OpenGL/ImGui - used by the app and tests.
 # Generation itself runs only in compute shaders (res/shaders/ComputeShaders)
@@ -81,84 +97,94 @@ target_include_directories(ptg_core PUBLIC ${PTG_SRC}/terrainGeneration)
 target_include_directories(ptg_core SYSTEM PRIVATE ${CGLTF_INCLUDE_DIRS})
 target_link_libraries(ptg_core PUBLIC ptg_vendor glm::glm)
 target_link_libraries(ptg_core PRIVATE nlohmann_json::nlohmann_json lodepng meshoptimizer::meshoptimizer TIFF::TIFF ZLIB::ZLIB)
+if(NOT MSVC)
+	find_package(TBB REQUIRED)
+	target_link_libraries(ptg_core PRIVATE TBB::tbb)
+endif()
 ptg_set_warnings(ptg_core)
+ptg_set_sanitizers(ptg_core)
 
-add_executable(ProceduralTerrainGenerator
-	${PTG_SRC}/Application.cpp
-	${PTG_SRC}/opengl/ChunkWorld.cpp
-	${PTG_SRC}/opengl/GpuErosion.cpp
-	${PTG_SRC}/opengl/GpuHeightCheck.cpp
-	${PTG_SRC}/opengl/AsyncRead.cpp
-	${PTG_SRC}/opengl/GpuHeightGenerator.cpp
-	${PTG_SRC}/opengl/GpuQuery.cpp
-	${PTG_SRC}/opengl/GpuSculpt.cpp
-	${PTG_SRC}/opengl/GpuSurfacePass.cpp
-	${PTG_SRC}/opengl/IndexBuffer.cpp
-	${PTG_SRC}/opengl/NoisePreview.cpp
-	${PTG_SRC}/opengl/Renderer.cpp
-	${PTG_SRC}/opengl/RiverMap.cpp
-	${PTG_SRC}/opengl/Shader.cpp
-	${PTG_SRC}/opengl/TerrainMaterials.cpp
-	${PTG_SRC}/opengl/FrameUniforms.cpp
-	${PTG_SRC}/opengl/GrassLayer.cpp
-	${PTG_SRC}/opengl/TerrainView.cpp
-	${PTG_SRC}/opengl/ShadowMap.cpp
-	${PTG_SRC}/opengl/WaterSurface.cpp
-	${PTG_SRC}/opengl/Clouds.cpp
-	${PTG_SRC}/opengl/TextureClass.cpp
-	${PTG_SRC}/opengl/VegetationBench.cpp
-	${PTG_SRC}/opengl/VegetationCheck.cpp
-	${PTG_SRC}/opengl/VegetationModels.cpp
-	${PTG_SRC}/opengl/VegetationLayer.cpp
-	${PTG_SRC}/opengl/VertexArray.cpp
-	${PTG_SRC}/opengl/VertexBuffer.cpp
-	${PTG_SRC}/subSystems/MapImportBiomes.cpp
-	${PTG_SRC}/subSystems/MapImportVegetation.cpp
-	${PTG_SRC}/subSystems/MapImportEdit.cpp
-	${PTG_SRC}/subSystems/MapImportSculpt.cpp
-	${PTG_SRC}/subSystems/MapImportSys.cpp
-	${PTG_SRC}/subSystems/NoiseBasedGenerationSys.cpp
-	${PTG_SRC}/subSystems/TerrainGenApp.cpp
-	${PTG_SRC}/subSystems/TerrainGenerationSys.cpp
-	${PTG_SRC}/utility/Camera.cpp
-	${PTG_SRC}/utility/EditorCamera.cpp
-	${PTG_SRC}/utility/ExportPanel.cpp
-	${PTG_SRC}/utility/BiomeEditor.cpp
-	${PTG_SRC}/utility/BiomeSettingsPanel.cpp
-	${PTG_SRC}/utility/FileDialog.cpp
-	${PTG_SRC}/utility/ErosionPanel.cpp
-	${PTG_SRC}/utility/FrameMetrics.cpp
-	${PTG_SRC}/utility/LightSource.cpp
-	${PTG_SRC}/utility/MapLabels.cpp
-	${PTG_SRC}/utility/PackPicker.cpp
-	${PTG_SRC}/utility/PlacesPanel.cpp
-	${PTG_SRC}/utility/PresetPanel.cpp
-	${PTG_SRC}/utility/SendToImported.cpp
-	${PTG_SRC}/utility/Sky.cpp
-	${PTG_SRC}/utility/utilities.cpp
-	${PTG_SRC}/utility/NestedSplineEditor.cpp
-	${PTG_SRC}/utility/PanelTabs.cpp
-)
-target_include_directories(ProceduralTerrainGenerator PRIVATE
-	${PTG_SRC}
-	${PTG_SRC}/opengl
-	${PTG_SRC}/subSystems
-	${PTG_SRC}/utility
-)
-target_link_libraries(ProceduralTerrainGenerator PRIVATE
-	ptg_core
-	OpenGL::GL
-	GLEW::GLEW
-	glfw
-	imgui::imgui
-	implot::implot
-	nlohmann_json::nlohmann_json
-	lodepng
-	comdlg32
-)
-# Fallback working directory with res/, used when the exe is started from elsewhere (build dir, IDE)
-target_compile_definitions(ProceduralTerrainGenerator PRIVATE PTG_RESOURCE_DIR="${PTG_DIR}")
-ptg_set_warnings(ProceduralTerrainGenerator)
+if(PTG_BUILD_APP)
+	add_executable(ProceduralTerrainGenerator
+		${PTG_SRC}/Application.cpp
+		${PTG_SRC}/opengl/ChunkWorld.cpp
+		${PTG_SRC}/opengl/GpuErosion.cpp
+		${PTG_SRC}/opengl/GpuHeightCheck.cpp
+		${PTG_SRC}/opengl/AsyncRead.cpp
+		${PTG_SRC}/opengl/GpuHeightGenerator.cpp
+		${PTG_SRC}/opengl/GpuQuery.cpp
+		${PTG_SRC}/opengl/GpuSculpt.cpp
+		${PTG_SRC}/opengl/GpuSurfacePass.cpp
+		${PTG_SRC}/opengl/IndexBuffer.cpp
+		${PTG_SRC}/opengl/NoisePreview.cpp
+		${PTG_SRC}/opengl/Renderer.cpp
+		${PTG_SRC}/opengl/RiverMap.cpp
+		${PTG_SRC}/opengl/Shader.cpp
+		${PTG_SRC}/opengl/TerrainMaterials.cpp
+		${PTG_SRC}/opengl/FrameUniforms.cpp
+		${PTG_SRC}/opengl/GrassLayer.cpp
+		${PTG_SRC}/opengl/TerrainView.cpp
+		${PTG_SRC}/opengl/ShadowMap.cpp
+		${PTG_SRC}/opengl/WaterSurface.cpp
+		${PTG_SRC}/opengl/Clouds.cpp
+		${PTG_SRC}/opengl/TextureClass.cpp
+		${PTG_SRC}/opengl/VegetationBench.cpp
+		${PTG_SRC}/opengl/VegetationCheck.cpp
+		${PTG_SRC}/opengl/VegetationModels.cpp
+		${PTG_SRC}/opengl/VegetationLayer.cpp
+		${PTG_SRC}/opengl/VertexArray.cpp
+		${PTG_SRC}/opengl/VertexBuffer.cpp
+		${PTG_SRC}/subSystems/MapImportBiomes.cpp
+		${PTG_SRC}/subSystems/MapImportVegetation.cpp
+		${PTG_SRC}/subSystems/MapImportEdit.cpp
+		${PTG_SRC}/subSystems/MapImportSculpt.cpp
+		${PTG_SRC}/subSystems/MapImportSys.cpp
+		${PTG_SRC}/subSystems/NoiseBasedGenerationSys.cpp
+		${PTG_SRC}/subSystems/TerrainGenApp.cpp
+		${PTG_SRC}/subSystems/TerrainGenerationSys.cpp
+		${PTG_SRC}/utility/Camera.cpp
+		${PTG_SRC}/utility/EditorCamera.cpp
+		${PTG_SRC}/utility/ExportPanel.cpp
+		${PTG_SRC}/utility/BiomeEditor.cpp
+		${PTG_SRC}/utility/BiomeSettingsPanel.cpp
+		${PTG_SRC}/utility/FileDialog.cpp
+		${PTG_SRC}/utility/ErosionPanel.cpp
+		${PTG_SRC}/utility/FrameMetrics.cpp
+		${PTG_SRC}/utility/LightSource.cpp
+		${PTG_SRC}/utility/MapLabels.cpp
+		${PTG_SRC}/utility/PackPicker.cpp
+		${PTG_SRC}/utility/PlacesPanel.cpp
+		${PTG_SRC}/utility/PresetPanel.cpp
+		${PTG_SRC}/utility/SendToImported.cpp
+		${PTG_SRC}/utility/Sky.cpp
+		${PTG_SRC}/utility/utilities.cpp
+		${PTG_SRC}/utility/NestedSplineEditor.cpp
+		${PTG_SRC}/utility/PanelTabs.cpp
+	)
+	target_include_directories(ProceduralTerrainGenerator PRIVATE
+		${PTG_SRC}
+		${PTG_SRC}/opengl
+		${PTG_SRC}/subSystems
+		${PTG_SRC}/utility
+	)
+	target_link_libraries(ProceduralTerrainGenerator PRIVATE
+		ptg_core
+		OpenGL::GL
+		GLEW::GLEW
+		glfw
+		imgui::imgui
+		implot::implot
+		nlohmann_json::nlohmann_json
+		lodepng
+	)
+	if(WIN32)
+		target_link_libraries(ProceduralTerrainGenerator PRIVATE comdlg32)
+	endif()
+	# Fallback working directory with res/, used when the exe is started from elsewhere (build dir, IDE)
+	target_compile_definitions(ProceduralTerrainGenerator PRIVATE PTG_RESOURCE_DIR="${PTG_DIR}")
+	ptg_set_warnings(ProceduralTerrainGenerator)
+	ptg_set_sanitizers(ProceduralTerrainGenerator)
+endif()
 
 # Unit tests of ptg_core, run with: ctest --preset x64-release
 enable_testing()
@@ -206,4 +232,6 @@ target_include_directories(ptg_tests PRIVATE ${PTG_SRC}/utility)
 target_include_directories(ptg_tests SYSTEM PRIVATE ${CGLTF_INCLUDE_DIRS})
 target_link_libraries(ptg_tests PRIVATE ptg_core doctest::doctest lodepng nlohmann_json::nlohmann_json TIFF::TIFF)
 ptg_set_warnings(ptg_tests)
-add_test(NAME ptg_tests COMMAND ptg_tests)
+ptg_set_sanitizers(ptg_tests)
+include(doctest)
+doctest_discover_tests(ptg_tests)

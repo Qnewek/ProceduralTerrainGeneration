@@ -19,7 +19,7 @@ namespace heightmap {
 	};
 
 	struct ValueRange {
-		float min, max;
+		float min = 0.0f, max = 0.0f;
 	};
 
 	inline constexpr ValueRange terrainRange{ 0.0f, 1.0f };

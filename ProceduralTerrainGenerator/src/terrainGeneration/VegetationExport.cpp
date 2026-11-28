@@ -8,6 +8,7 @@
 #include <cstdint>
 #include <exception>
 #include <mutex>
+#include <optional>
 #include <system_error>
 #include <thread>
 
@@ -423,8 +424,11 @@ namespace vegexport {
 		}
 
 		const std::string path = "vegetation/" + model.asset + ".glb";
-		const std::vector<unsigned char> glb = meshfile::EncodeGlb(nodes, out, generator);
-		if (!WriteFileAtomic(folder / path, glb.data(), glb.size(), file.error)) {
+		const std::vector<unsigned char> glb = meshfile::EncodeGlb(nodes, out, generator, &file.error);
+		if (glb.empty() || !WriteFileAtomic(folder / path, glb.data(), glb.size(), file.error)) {
+			if (file.error.empty()) {
+				file.error = "Failed to encode GLB";
+			}
 			file.nodes.clear();
 			return file;
 		}

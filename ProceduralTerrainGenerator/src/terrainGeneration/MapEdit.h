@@ -27,11 +27,11 @@ namespace mapedit {
 
 	//State before an operation
 	struct Step {
-		std::string label;
-		std::optional<HeightField> map;		//none = the operation did not change the map
-		std::optional<float> seaLevel;		//metres; none = no sea
-		std::optional<biomepaint::Layer> paint;	//none = the operation did not change the painted biomes
-		std::optional<placedplants::Layer> plants;	//none = the operation did not change the plants placed by hand
+		std::string label{};
+		std::optional<HeightField> map{};		//none = the operation did not change the map
+		std::optional<float> seaLevel{};		//metres; none = no sea
+		std::optional<biomepaint::Layer> paint{};	//none = the operation did not change the painted biomes
+		std::optional<placedplants::Layer> plants{};	//none = the operation did not change the plants placed by hand
 	};
 
 	//What Undo / Redo changed

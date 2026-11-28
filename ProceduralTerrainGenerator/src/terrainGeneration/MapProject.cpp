@@ -6,6 +6,7 @@
 #include <cstring>
 #include <fstream>
 #include <iterator>
+#include <limits>
 
 #include <nlohmann/json.hpp>
 #include <zlib.h>
@@ -27,14 +28,24 @@ namespace mapproject {
 		constexpr const char* plantsDamaged = "The placed plants of the project are damaged";
 		//zlib packs at most about 1032 to 1: a block too small for what it should hold is damage, found before allocating for it
 		constexpr size_t zlibMaxRatio = 1032;
+		constexpr size_t maxPlacedPlants = 10'000'000;
+		const size_t maxZlibBytes = std::min<size_t>(static_cast<size_t>(std::numeric_limits<uLong>::max()) / 2, size_t(1) << 30);
 
 		bool CanHold(size_t blockBytes, size_t unpackedBytes)
 		{
-			return unpackedBytes <= blockBytes * zlibMaxRatio + 64;
+			if (unpackedBytes <= 64) {
+				return true;
+			}
+			const size_t minBlock = (unpackedBytes - 64 + zlibMaxRatio - 1) / zlibMaxRatio;
+			return blockBytes >= minBlock;
 		}
 
 		bool CompressBytes(const std::vector<uint8_t>& bytes, std::vector<uint8_t>& out, std::string& error)
 		{
+			if (bytes.size() > maxZlibBytes) {
+				error = "Data is too large to compress";
+				return false;
+			}
 			uLongf size = compressBound(static_cast<uLong>(bytes.size()));
 			out.resize(size);
 			if (compress2(out.data(), &size, bytes.data(), static_cast<uLong>(bytes.size()), compressionLevel) != Z_OK) {
@@ -48,11 +59,16 @@ namespace mapproject {
 		//Plants of placedplants::Pack; layer.palette and the plant count come from the header
 		bool DecompressPlants(const uint8_t* data, size_t size, size_t count, placedplants::Layer& layer, std::string& error)
 		{
-			if (!CanHold(size, count * placedplants::plantBytes)) {
+			if (count > maxPlacedPlants || size > maxZlibBytes) {
 				error = plantsDamaged;
 				return false;
 			}
-			std::vector<uint8_t> bytes(count * placedplants::plantBytes);
+			const size_t expected = count * placedplants::plantBytes;
+			if (expected > maxZlibBytes || !CanHold(size, expected)) {
+				error = plantsDamaged;
+				return false;
+			}
+			std::vector<uint8_t> bytes(expected);
 			uLongf unpacked = static_cast<uLongf>(bytes.size());
 			if (uncompress(bytes.data(), &unpacked, data, static_cast<uLong>(size)) != Z_OK || unpacked != bytes.size()) {
 				error = plantsDamaged;
@@ -98,6 +114,10 @@ namespace mapproject {
 
 		bool Compress(const HeightField& map, std::vector<uint8_t>& out, std::string& error)
 		{
+			if (map.Size() > maxZlibBytes / sizeof(float)) {
+				error = "The map is too large to compress";
+				return false;
+			}
 			const std::vector<uint8_t> planes = SplitPlanes(map);
 			uLongf size = compressBound(static_cast<uLong>(planes.size()));
 			out.resize(size);
@@ -111,6 +131,10 @@ namespace mapproject {
 
 		bool Decompress(const uint8_t* data, size_t size, HeightField& map, std::string& error)
 		{
+			if (size > maxZlibBytes || map.Size() > maxZlibBytes / sizeof(float)) {
+				error = "The map data is damaged";
+				return false;
+			}
 			std::vector<uint8_t> planes(map.Size() * sizeof(float));
 			uLongf unpacked = static_cast<uLongf>(planes.size());
 			if (uncompress(planes.data(), &unpacked, data, static_cast<uLong>(size)) != Z_OK || unpacked != planes.size()) {
@@ -128,6 +152,10 @@ namespace mapproject {
 		//Texels of painted biomes as little-endian bytes
 		bool CompressPaint(const biomepaint::Layer& paint, std::vector<uint8_t>& out, std::string& error)
 		{
+			if (paint.texels.size() > maxZlibBytes / 2) {
+				error = "The biome paint data is too large to compress";
+				return false;
+			}
 			std::vector<uint8_t> bytes(paint.texels.size() * 2);
 			for (size_t i = 0; i < paint.texels.size(); i++) {
 				bytes[2 * i] = static_cast<uint8_t>(paint.texels[i] & 0xFF);
@@ -145,6 +173,10 @@ namespace mapproject {
 
 		bool DecompressPaint(const uint8_t* data, size_t size, biomepaint::Layer& paint, std::string& error)
 		{
+			if (size > maxZlibBytes || paint.texels.size() > maxZlibBytes / 2) {
+				error = "The biome paint data is damaged";
+				return false;
+			}
 			std::vector<uint8_t> bytes(paint.texels.size() * 2);
 			uLongf unpacked = static_cast<uLongf>(bytes.size());
 			if (uncompress(bytes.data(), &unpacked, data, static_cast<uLong>(size)) != Z_OK || unpacked != bytes.size()) {
@@ -205,9 +237,9 @@ namespace mapproject {
 
 		const placedplants::Layer& plants = project.placedPlants;
 		const bool hasPlants = !plants.plants.empty();
-		if (hasPlants && (static_cast<int>(plants.palette.size()) > placedplants::maxPalette
+		if (hasPlants && (plants.plants.size() > maxPlacedPlants || static_cast<int>(plants.palette.size()) > placedplants::maxPalette
 			|| std::any_of(plants.plants.begin(), plants.plants.end(), [&](const placedplants::Plant& p) { return p.model >= plants.palette.size(); }))) {
-			error = "A placed plant names a model the project does not list";
+			error = plants.plants.size() > maxPlacedPlants ? "Too many placed plants in the project" : "A placed plant names a model the project does not list";
 			return false;
 		}
 
@@ -257,6 +289,10 @@ namespace mapproject {
 		}
 		//Text that is not valid UTF-8 (a file name in the system code page) is kept with replaced characters
 		const std::string text = header.dump(-1, ' ', false, json::error_handler_t::replace);
+		if (text.size() > std::numeric_limits<uint32_t>::max()) {
+			error = "The project header is too large";
+			return false;
+		}
 
 		out.clear();
 		out.reserve(sizeof(signature) + lengthBytes + text.size() + workingData.size() + originalData.size() + paintData.size() + plantsData.size());
@@ -374,7 +410,7 @@ namespace mapproject {
 				const json& p = header.at("placedPlants");
 				project.placedPlants.palette = p.at("palette").get<std::vector<std::string>>();
 				plantCount = p.at("count").get<size_t>();
-				if (static_cast<int>(project.placedPlants.palette.size()) > placedplants::maxPalette || plantCount > (size_t(1) << 28)) {
+				if (static_cast<int>(project.placedPlants.palette.size()) > placedplants::maxPalette || plantCount > maxPlacedPlants) {
 					error = plantsDamaged;
 					return false;
 				}
@@ -391,7 +427,9 @@ namespace mapproject {
 					return false;
 				}
 				blockTotal += bytes;
-				const size_t needed = name == paintBlock ? texels * 2 : name == workingBlock || name == originalBlock ? texels * sizeof(float) : 0;
+				const size_t needed = name == paintBlock ? texels * 2
+					: name == plantsBlock ? plantCount * placedplants::plantBytes
+					: (name == workingBlock || name == originalBlock ? texels * sizeof(float) : 0);
 				if (!CanHold(bytes, needed)) {
 					error = "The project block \"" + name + "\" is too small for a " + std::to_string(width) + " x " + std::to_string(height) + " map";
 					return false;

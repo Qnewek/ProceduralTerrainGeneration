@@ -56,11 +56,11 @@ namespace biome {
 	//A kind of vegetation or rock growing in a biome (vegetation::PlaceChunk). The model decides its layer (tree, shrub, rock: the kind
 	//in vegetation_models.json), and every layer has its own grid of cells, each holding at most one model
 	struct Plant {
-		std::string model;				//name in vegetation_models.json; an unknown model is never placed
+		std::string model{};				//name in vegetation_models.json; an unknown model is never placed
 		float density = 0.1f;			//chance that a cell of its layer holds it, where it can grow; in [0, 1]
 		float minScale = 1.0f, maxScale = 1.0f;	//size relative to the model; 0 < min <= max
 		float maxSlope = 35.0f;			//degrees, in [0, 90]
-		Range elevation;				//where it grows, as the ELEVATION parameter (0 = the water surface)
+		Range elevation{};				//where it grows, as the ELEVATION parameter (0 = the water surface)
 		float clustering = 1.0f;		//0 = spread evenly, 1 = forests and clearings (vegetation::ClusterFactor); in [0, 1]
 
 		bool operator==(const Plant& other) const
@@ -72,14 +72,14 @@ namespace biome {
 	};
 
 	struct Biome {
-		std::string name;
+		std::string name{};
 		glm::vec3 color = glm::vec3(0.0f);
-		std::array<Range, PARAMETER_COUNT> ranges;
-		TerrainModifier terrain;
+		std::array<Range, PARAMETER_COUNT> ranges{};
+		TerrainModifier terrain{};
 		//Surface materials of the biome; at least one layer has weight > 0
 		std::array<MaterialLayer, materialLayers> materials = { MaterialLayer{ 0, 1.0f } };
 		//Vegetation and rocks, at most maxPlants; within a layer the plants share the cells, earlier ones first
-		std::vector<Plant> plants;
+		std::vector<Plant> plants{};
 
 		//Distance in the parameter space from the ranges of the biome: 0 inside all of them, otherwise
 		//the Euclidean length of how far each value lies outside its range

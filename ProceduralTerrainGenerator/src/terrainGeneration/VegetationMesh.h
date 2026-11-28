@@ -20,8 +20,8 @@ namespace vegetation
 
 	//Material of a model; texture paths are relative to the folder of the model file, empty = none
 	struct Material {
-		std::string name;
-		std::string albedo, normal, arm, alpha;	//arm = ambient occlusion, roughness, metalness in R, G, B (glTF)
+		std::string name{};
+		std::string albedo{}, normal{}, arm{}, alpha{};	//arm = ambient occlusion, roughness, metalness in R, G, B (glTF)
 		bool alphaTest = false;		//cut out where the alpha map is below one half
 		bool foliage = false;		//simplified by dropping cards instead of collapsing edges
 	};
@@ -29,12 +29,12 @@ namespace vegetation
 	//Geometry of one material, before levels of detail
 	struct SourcePart {
 		int material = 0;
-		std::vector<Vertex> vertices;
-		std::vector<uint32_t> indices;
+		std::vector<Vertex> vertices{};
+		std::vector<uint32_t> indices{};
 	};
 	//One variant of a model; parts index the material list of the file
 	struct SourceModel {
-		std::vector<SourcePart> parts;	//at most one per material
+		std::vector<SourcePart> parts{};	//at most one per material
 		size_t TriangleCount() const;
 	};
 
@@ -45,21 +45,21 @@ namespace vegetation
 		uint32_t indexCount = 0;
 	};
 	struct Lod {
-		std::vector<Part> parts;
+		std::vector<Part> parts{};
 		uint32_t triangles = 0;
 	};
 	struct Variant {
-		std::vector<Lod> lods;			//nearest first
+		std::vector<Lod> lods{};			//nearest first
 		glm::vec3 boundsMin = glm::vec3(0.0f), boundsMax = glm::vec3(0.0f);
 		size_t sourceTriangles = 0;		//triangles of the variant as loaded
 		float sinkPerSlope = 0.0f;		//SinkPerSlope of the source variant, metres
 	};
 	//All levels of detail of all variants of a model in one vertex and index array (indices are absolute)
 	struct ModelMesh {
-		std::vector<Vertex> vertices;
-		std::vector<uint32_t> indices;
-		std::vector<Material> materials;
-		std::vector<Variant> variants;
+		std::vector<Vertex> vertices{};
+		std::vector<uint32_t> indices{};
+		std::vector<Material> materials{};
+		std::vector<Variant> variants{};
 	};
 
 	//Material names treated as foliage when the material is not alpha-tested: leaf, leaves, twig, needle (any case)

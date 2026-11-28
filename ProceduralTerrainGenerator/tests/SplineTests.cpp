@@ -1,6 +1,7 @@
 #include "doctest/doctest.h"
 
 #include <algorithm>
+#include <cmath>
 
 #include "SplineSampling.h"
 
@@ -58,5 +59,23 @@ TEST_CASE("A cubic spline never leaves the range of the two points around it")
 			outside += samples[i] < low - 1e-6 || samples[i] > high + 1e-6 ? 1 : 0;
 		}
 		CHECK(outside == 0);
+	}
+}
+
+TEST_CASE("SplineSampling handles degenerate point counts and duplicate x safely")
+{
+	CHECK(SampleSpline(SplinePoints{ { -1.0, 1.0 }, { 0.2, 0.8 }, true }, 0).empty());
+	const std::vector<float> singleSample = SampleSpline(SplinePoints{ { -1.0, 1.0 }, { 0.2, 0.8 }, true }, 1);
+	REQUIRE(singleSample.size() == 1);
+	CHECK(singleSample[0] == doctest::Approx(0.5f));
+
+	const SplinePoints one{ { 0.0 }, { 0.4 }, true };
+	CHECK(EvaluateSpline(one, 0.5) == doctest::Approx(0.4));
+
+	const SplinePoints dup{ { -1.0, 0.0, 0.0, 1.0 }, { 0.0, 0.5, 0.7, 1.0 }, true };
+	const std::vector<float> dupSamples = SampleSpline(dup, 11);
+	REQUIRE(dupSamples.size() == 11);
+	for (float s : dupSamples) {
+		CHECK(std::isfinite(s));
 	}
 }

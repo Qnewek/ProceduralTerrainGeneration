@@ -8,6 +8,7 @@
 #include <cstring>
 #include <filesystem>
 #include <fstream>
+#include <memory>
 #include <set>
 #include <tuple>
 
@@ -58,6 +59,7 @@ namespace {
 		return infos;
 	}
 
+#ifdef _MSC_VER
 	//FNV-1a 64 over every field of every plant (floats by their bits)
 	uint64_t HashOf(const std::vector<vegexport::Placed>& placed)
 	{
@@ -81,6 +83,7 @@ namespace {
 		}
 		return h;
 	}
+#endif
 
 	//The same over what the export file keeps: positions in centimetres, turn and size to 1e-4
 	uint64_t HashOfWritten(const std::vector<vegexport::Placed>& placed)
@@ -192,7 +195,10 @@ TEST_CASE("PlaceMap: pinned output of a map of 1 m pixels")
 	const std::vector<vegexport::Placed> placed = vegexport::PlaceMap(world.height, world.surface, world.ids, world.input);
 	REQUIRE(!placed.empty());
 	CHECK(placed.size() == 1336);
+#ifdef _MSC_VER
+	//Raw float bits depend on libm sinf/cosf rounding of the test heightmap (1 ULP between MSVC ucrt and glibc libm)
 	CHECK(HashOf(placed) == 10705518421995842840ULL);
+#endif
 	//What the export file keeps of them, so that a change of the float rounding alone cannot change a written pack
 	CHECK(HashOfWritten(placed) == 5360461575058882599ULL);
 }

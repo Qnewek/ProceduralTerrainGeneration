@@ -47,15 +47,15 @@ namespace hydrology {
 	//How water flows over a height map
 	struct Drainage {
 		//Depressions filled and rising slightly towards the outlets, so water drains from every cell
-		HeightField filled;
+		HeightField filled{};
 		//Depressions filled flat: the surface of a lake where it lies above the terrain
-		HeightField lakeLevel;
+		HeightField lakeLevel{};
 		//Cell the water flows to (steepest descent on filled, 8 neighbours), -1 at outlets: the border and cells under water
-		std::vector<int> receiver;
+		std::vector<int> receiver{};
 		//All cells, each after its receiver
-		std::vector<int> order;
+		std::vector<int> order{};
 		//Cells draining through a cell, itself included
-		std::vector<float> area;
+		std::vector<float> area{};
 	};
 
 	//@param waterHeight - cells below it are sea (outlets)
@@ -82,13 +82,13 @@ namespace hydrology {
 		//Cell (x, y) covers map position origin + (x, y) * cellSize (its center)
 		glm::vec2 origin = glm::vec2(0.0f);
 		float cellSize = 1.0f;
-		Grid<RiverTexel> rivers;
-		Grid<LevelTexel> levels;
-		Grid<FlowTexel> flow;
+		Grid<RiverTexel> rivers{};
+		Grid<LevelTexel> levels{};
+		Grid<FlowTexel> flow{};
 		//The terrain the network was computed from (heights at the cell centers, without rivers)
-		HeightField ground;
+		HeightField ground{};
 		//Head of every waterfall: map position, downstream direction (unit), drop (height)
-		std::vector<Fall> falls;
+		std::vector<Fall> falls{};
 		//Statistics for the UI
 		int riverCells = 0, lakeCells = 0, lakes = 0;
 	};
@@ -130,9 +130,9 @@ namespace hydrology {
 	//positions map texels (texel (0, 0) at position (0, 0))
 	inline constexpr float mapMetresPerHeight = 256.0f;
 	struct MapRivers {
-		Network network;
-		std::vector<WaterVertex> water;
-		std::string error;	//why there is no network; empty when it was computed
+		Network network{};
+		std::vector<WaterVertex> water{};
+		std::string error{};	//why there is no network; empty when it was computed
 	};
 	//@param pixelMetres - size of a map pixel, for the flow speed
 	//@param seaMetres - sea level; none = water leaves only over the map border

@@ -1,8 +1,10 @@
 #include "doctest/doctest.h"
 
+#include <cmath>
 #include <cstring>
 #include <filesystem>
 #include <fstream>
+#include <limits>
 #include <random>
 #include <string>
 
@@ -826,4 +828,30 @@ TEST_CASE("Rivers JSON round trip")
 	CHECK_FALSE(preset::RiversFromJson(R"({"fallSlope": 0})", untouched, error));
 	CHECK_FALSE(error.empty());
 	CheckSameRivers(untouched, rivers::RiverConfig{});
+}
+
+TEST_CASE("Preset Save rejects NaN in noise, spline and erosion configs")
+{
+	const std::filesystem::path folder = std::filesystem::temp_directory_path() / "ptg_preset_nan_tests";
+	std::filesystem::remove_all(folder);
+	const float nan = std::numeric_limits<float>::quiet_NaN();
+	std::string error;
+
+	WorldConfig badNoise = DistinctWorld();
+	badNoise.terrain.continentalness.scale = nan;
+	CHECK_FALSE(preset::Save(folder / "bad_noise.json", badNoise, error));
+
+	WorldConfig badSpline = DistinctWorld();
+	badSpline.terrain.continentalnessSpline.y[1] = nan;
+	CHECK_FALSE(preset::Save(folder / "bad_spline.json", badSpline, error));
+
+	WorldConfig badErosion = DistinctWorld();
+	badErosion.erosion.pipes.talusAngle = nan;
+	CHECK_FALSE(preset::Save(folder / "bad_erosion.json", badErosion, error));
+
+	WorldConfig badDroplets = DistinctWorld();
+	badDroplets.erosion.gravity = nan;
+	CHECK_FALSE(preset::Save(folder / "bad_droplets.json", badDroplets, error));
+
+	std::filesystem::remove_all(folder);
 }

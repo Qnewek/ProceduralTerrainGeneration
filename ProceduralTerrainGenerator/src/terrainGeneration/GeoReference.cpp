@@ -1,5 +1,6 @@
 #include "GeoReference.h"
 
+#include <algorithm>
 #include <array>
 #include <cmath>
 #include <numbers>
@@ -131,7 +132,8 @@ namespace geo {
 	{
 		const Series& s = Krueger();
 		const double lambda = (lonLat.x - projection.lon0Degrees) / degrees;
-		const double tau = std::tan(lonLat.y / degrees);
+		const double lat = std::clamp(lonLat.y, -89.999999, 89.999999);
+		const double tau = std::tan(lat / degrees);
 		const double tauPrime = ConformalTan(tau, s.e);
 		const double xiPrime = std::atan2(tauPrime, std::cos(lambda));
 		const double etaPrime = std::asinh(std::sin(lambda) / std::sqrt(tauPrime * tauPrime + std::cos(lambda) * std::cos(lambda)));
@@ -153,7 +155,8 @@ namespace geo {
 			xiPrime -= s.beta[j - 1] * std::sin(2.0 * j * xi) * std::cosh(2.0 * j * eta);
 			etaPrime -= s.beta[j - 1] * std::cos(2.0 * j * xi) * std::sinh(2.0 * j * eta);
 		}
-		const double tauPrime = std::sin(xiPrime) / std::sqrt(std::sinh(etaPrime) * std::sinh(etaPrime) + std::cos(xiPrime) * std::cos(xiPrime));
+		const double denom = std::sqrt(std::sinh(etaPrime) * std::sinh(etaPrime) + std::cos(xiPrime) * std::cos(xiPrime));
+		const double tauPrime = denom > 0.0 ? std::sin(xiPrime) / denom : 0.0;
 		const double lambda = std::atan2(std::sinh(etaPrime), std::cos(xiPrime));
 		//The latitude whose conformal latitude is tauPrime, by Newton's method (converges in a few steps)
 		const double e2 = s.e * s.e;

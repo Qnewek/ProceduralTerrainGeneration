@@ -30,16 +30,16 @@ namespace nested {
 
 	//The tree for the GPU (WorldInput in common/world_input.glsl, std430): curves[0] = root, the knots of a curve in a row
 	struct GpuCurve {
-		int32_t firstKnot, count, cubic, pad;
+		int32_t firstKnot = 0, count = 0, cubic = 0, pad = 0;
 	};
 	struct GpuKnot {
-		float x, value;
-		int32_t child;	//index of the curve of this point, -1 = the constant value
-		int32_t pad;
+		float x = 0.0f, value = 0.0f;
+		int32_t child = -1;	//index of the curve of this point, -1 = the constant value
+		int32_t pad = 0;
 	};
 	struct Flat {
-		std::vector<GpuCurve> curves;
-		std::vector<GpuKnot> knots;
+		std::vector<GpuCurve> curves{};
+		std::vector<GpuKnot> knots{};
 	};
 	Flat Flatten(const NestedCurve& root);
 

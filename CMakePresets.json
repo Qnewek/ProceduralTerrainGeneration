@@ -11,7 +11,8 @@
       "architecture": { "value": "x64", "strategy": "external" },
       "cacheVariables": {
         "CMAKE_CXX_COMPILER": "cl",
-        "VCPKG_TARGET_TRIPLET": "x64-windows-static"
+        "VCPKG_TARGET_TRIPLET": "x64-windows-static",
+        "VCPKG_MANIFEST_FEATURES": "app"
       },
       "condition": { "type": "equals", "lhs": "${hostSystemName}", "rhs": "Windows" }
     },
@@ -26,14 +27,48 @@
       "displayName": "x64 Release",
       "inherits": "windows-base",
       "cacheVariables": { "CMAKE_BUILD_TYPE": "Release" }
+    },
+    {
+      "name": "linux-base",
+      "hidden": true,
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/out/build/${presetName}",
+      "toolchainFile": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
+      "cacheVariables": {
+        "PTG_BUILD_APP": "OFF",
+        "VCPKG_TARGET_TRIPLET": "x64-linux"
+      },
+      "condition": { "type": "equals", "lhs": "${hostSystemName}", "rhs": "Linux" }
+    },
+    {
+      "name": "linux-debug-asan",
+      "displayName": "Linux Debug (ASan + UBSan)",
+      "inherits": "linux-base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "PTG_ENABLE_SANITIZERS": "ON"
+      }
+    },
+    {
+      "name": "linux-release",
+      "displayName": "Linux Release",
+      "inherits": "linux-base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "PTG_ENABLE_SANITIZERS": "OFF"
+      }
     }
   ],
   "buildPresets": [
     { "name": "x64-debug", "configurePreset": "x64-debug" },
-    { "name": "x64-release", "configurePreset": "x64-release" }
+    { "name": "x64-release", "configurePreset": "x64-release" },
+    { "name": "linux-debug-asan", "configurePreset": "linux-debug-asan" },
+    { "name": "linux-release", "configurePreset": "linux-release" }
   ],
   "testPresets": [
     { "name": "x64-debug", "configurePreset": "x64-debug", "output": { "outputOnFailure": true } },
-    { "name": "x64-release", "configurePreset": "x64-release", "output": { "outputOnFailure": true } }
+    { "name": "x64-release", "configurePreset": "x64-release", "output": { "outputOnFailure": true } },
+    { "name": "linux-debug-asan", "configurePreset": "linux-debug-asan", "output": { "outputOnFailure": true } },
+    { "name": "linux-release", "configurePreset": "linux-release", "output": { "outputOnFailure": true } }
   ]
 }

@@ -11,6 +11,9 @@ namespace nested {
 		//Same as smoothstep in GLSL
 		double Smoothstep(double edge0, double edge1, double x)
 		{
+			if (!(edge1 > edge0)) {
+				return x >= edge1 ? 1.0 : 0.0;
+			}
 			const double t = std::clamp((x - edge0) / (edge1 - edge0), 0.0, 1.0);
 			return t * t * (3.0 - 2.0 * t);
 		}
@@ -122,9 +125,15 @@ namespace nested {
 			v[k - lo] = knotValue(k);
 		}
 		const auto value = [&](size_t k) { return v[k - lo]; };
-		const auto secant = [&](size_t i) { return (value(i + 1) - value(i)) / (p[i + 1].x - p[i].x); };
+		const auto secant = [&](size_t i) {
+			const double dx = p[i + 1].x - p[i].x;
+			return dx > 0.0 ? (value(i + 1) - value(i)) / dx : 0.0;
+		};
 
 		const double h = p[segment + 1].x - p[segment].x;
+		if (!(h > 0.0)) {
+			return value(segment);
+		}
 		const double t = (at - p[segment].x) / h;
 		const double y0 = value(segment), y1 = value(segment + 1);
 		if (!cubic) {
@@ -132,6 +141,9 @@ namespace nested {
 		}
 		//Slopes of MonotoneSlopes (SplineSampling.cpp) at the two knots of the segment
 		const auto endSlope = [](double h0, double h1, double d0, double d1) {
+			if (!(h0 + h1 > 0.0)) {
+				return 0.0;
+			}
 			double s = ((2.0 * h0 + h1) * d0 - h0 * d1) / (h0 + h1);
 			if (s * d0 <= 0.0) {
 				return 0.0;

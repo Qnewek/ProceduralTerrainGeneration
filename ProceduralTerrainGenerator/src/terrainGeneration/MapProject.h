@@ -27,19 +27,19 @@ namespace mapproject {
 	inline constexpr float maxVegetationDensity = 3.0f;
 
 	struct Project {
-		HeightField working;			//metres
-		HeightField original;			//metres; empty = the same as working
+		HeightField working{};			//metres
+		HeightField original{};			//metres; empty = the same as working
 		glm::dvec2 pixelMetres{ 1.0 };	//size of one map pixel
-		std::optional<float> seaLevel;	//metres; none = no sea
-		std::string source;				//where the map came from: a file name or the generation mode and the map position
-		std::string generation;			//generation parameters as preset JSON; empty = none
+		std::optional<float> seaLevel{};	//metres; none = no sea
+		std::string source{};				//where the map came from: a file name or the generation mode and the map position
+		std::string generation{};			//generation parameters as preset JSON; empty = none
 		float verticalExaggeration = 1.0f;	//of the view, against the true proportions
-		std::string rivers;				//river settings as JSON (preset::RiversJson); empty = defaults, no rivers
-		std::string biomes;				//biome settings as JSON (mapbiomes::ToJson); empty = defaults, no biomes
-		biomepaint::Layer paint;		//biomes painted over the automatic ones, the size of working; Empty() = none (not saved)
-		std::optional<geo::GeoReference> georeference;	//where the pixels of working lie; none = not known
-		VegetationSettings vegetation;
-		placedplants::Layer placedPlants;		//plants put by hand; empty = none
+		std::string rivers{};				//river settings as JSON (preset::RiversJson); empty = defaults, no rivers
+		std::string biomes{};				//biome settings as JSON (mapbiomes::ToJson); empty = defaults, no biomes
+		biomepaint::Layer paint{};		//biomes painted over the automatic ones, the size of working; Empty() = none (not saved)
+		std::optional<geo::GeoReference> georeference{};	//where the pixels of working lie; none = not known
+		VegetationSettings vegetation{};
+		placedplants::Layer placedPlants{};		//plants put by hand; empty = none
 	};
 
 	//2 (2026-11-21): rivers; 3 (2026-11-22): biomes; 4 (2026-11-22): painted biomes (header "biomePaint": palette, block "biomePaint":

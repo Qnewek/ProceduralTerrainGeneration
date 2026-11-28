@@ -62,13 +62,19 @@ namespace landcover {
 			//Copies row y, columns [x0, x1), to out; @return false on a read error
 			bool Row(uint32_t y, uint32_t x0, uint32_t x1, uint8_t* out)
 			{
-				if (tileWidth == 0 || tileHeight == 0) {
+				if (tileWidth == 0 || tileHeight == 0 || x0 >= x1 || x1 > width || y >= height) {
 					return false;
 				}
 				if (byRow) {
 					//Compressed strips have no random access: rows are decoded in order from the start of the strip (or from the last row read)
 					if (line.empty() || y < nextRow || y / tileHeight != (nextRow - 1) / tileHeight) {
-						line.assign(static_cast<size_t>(std::max<tmsize_t>(TIFFScanlineSize(tif), width)), 0);
+						const tmsize_t rawScan = TIFFScanlineSize(tif);
+						const uint64_t scanSize = std::max<uint64_t>(rawScan > 0 ? static_cast<uint64_t>(TIFFScanlineSize64(tif)) : 0, width);
+						if (scanSize == 0 || scanSize > maxTileBytes) {
+							line.clear();
+							return false;
+						}
+						line.assign(static_cast<size_t>(scanSize), 0);
 						nextRow = y / tileHeight * tileHeight;
 					}
 					while (nextRow <= y) {
@@ -81,8 +87,13 @@ namespace landcover {
 					std::copy(line.begin() + x0, line.begin() + x1, out);
 					return true;
 				}
+				if (tiled && (tileWidth > maxTileSide || tileHeight > maxTileSide)) {
+					return false;
+				}
 				const uint32_t band = y / tileHeight;
-				if (band != cachedBand || buffers.empty()) {
+				const uint32_t reqFirst = x0 / tileWidth;
+				const uint32_t reqLast = (x1 - 1) / tileWidth;
+				if (band != cachedBand || reqFirst != firstColumn || reqLast != lastColumn || buffers.empty()) {
 					if (!DecodeBand(band, x0, x1)) {
 						return false;
 					}
@@ -102,17 +113,25 @@ namespace landcover {
 		private:
 			bool DecodeBand(uint32_t band, uint32_t x0, uint32_t x1)
 			{
+				const uint64_t expected = static_cast<uint64_t>(tileWidth) * tileHeight;
+				const tmsize_t rawEncoded = tiled ? TIFFTileSize(tif) : TIFFStripSize(tif);
+				const uint64_t encodedSize = rawEncoded > 0 ? static_cast<uint64_t>(tiled ? TIFFTileSize64(tif) : TIFFStripSize64(tif)) : 0;
+				if (expected == 0 || expected > maxTileBytes || encodedSize > maxTileBytes) {
+					buffers.clear();
+					return false;
+				}
 				firstColumn = x0 / tileWidth;
-				const uint32_t lastColumn = (x1 - 1) / tileWidth;
+				lastColumn = (x1 - 1) / tileWidth;
 				buffers.resize(lastColumn - firstColumn + 1);
 				for (uint32_t column = firstColumn; column <= lastColumn; column++) {
 					std::vector<uint8_t>& buffer = buffers[column - firstColumn];
 					//A full tile even at the edges: libtiff pads the last tiles and strips
-					buffer.assign(static_cast<size_t>(tileWidth) * tileHeight, 0);
+					buffer.assign(static_cast<size_t>(std::max(expected, encodedSize)), 0);
 					const tmsize_t read = tiled
 						? TIFFReadEncodedTile(tif, TIFFComputeTile(tif, column * tileWidth, band * tileHeight, 0, 0), buffer.data(), static_cast<tmsize_t>(buffer.size()))
 						: TIFFReadEncodedStrip(tif, band, buffer.data(), static_cast<tmsize_t>(buffer.size()));
 					if (read < 0) {
+						buffers.clear();
 						return false;
 					}
 				}
@@ -122,6 +141,8 @@ namespace landcover {
 
 			//Bytes of a strip above which it is read by rows
 			static constexpr uint64_t largestStrip = 16u << 20;
+			static constexpr uint32_t maxTileSide = 16384;
+			static constexpr uint64_t maxTileBytes = uint64_t(64) << 20;
 
 			TIFF* tif;
 			uint32_t width, height;
@@ -129,7 +150,7 @@ namespace landcover {
 			uint32_t nextRow = 0;			//by rows: the row after the one in line
 			std::vector<uint8_t> line;
 			uint32_t tileWidth = 0, tileHeight = 0;
-			uint32_t cachedBand = 0, firstColumn = 0;
+			uint32_t cachedBand = 0, firstColumn = 0, lastColumn = 0;
 			std::vector<std::vector<uint8_t>> buffers;
 		};
 

@@ -32,6 +32,9 @@ namespace biomepaint {
 
 	Layer Make(int width, int height)
 	{
+		if (width <= 0 || height <= 0) {
+			return {};
+		}
 		Layer layer;
 		layer.width = width;
 		layer.height = height;
@@ -109,7 +112,9 @@ namespace biomepaint {
 	{
 		biome::MaterialWeights layers{};
 		for (const biome::MaterialLayer& layer : painted.materials) {
-			layers[layer.material] += layer.weight;
+			if (layer.material >= 0 && layer.material < biome::maxMaterials && layer.weight > 0.0f) {
+				layers[layer.material] += layer.weight;
+			}
 		}
 		float automaticSum = 0.0f, layerSum = 0.0f;
 		for (int m = 0; m < biome::maxMaterials; m++) {

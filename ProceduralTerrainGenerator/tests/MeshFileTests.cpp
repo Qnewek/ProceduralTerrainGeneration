@@ -145,3 +145,12 @@ TEST_CASE("OBJ has an object per node with 1-based indices running over the file
 	//uv (0, 0) is the top of the image: OBJ v = 1
 	CHECK(uvs[0] == "vt 0 1");
 }
+
+TEST_CASE("EncodeGlb leaves error empty on valid input")
+{
+	const terrainmesh::Mesh mesh = SmallGrid();
+	std::string error = "previous";
+	const std::vector<unsigned char> glb = meshfile::EncodeGlb({ { "terrain", { { &mesh, -1 } } } }, {}, "test", &error);
+	CHECK_FALSE(glb.empty());
+	CHECK(error == "previous");
+}

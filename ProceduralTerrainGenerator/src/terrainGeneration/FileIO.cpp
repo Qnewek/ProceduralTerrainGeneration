@@ -1,7 +1,11 @@
 #include "FileIO.h"
 
+#include <atomic>
+#include <cstdint>
 #include <fstream>
+#include <functional>
 #include <system_error>
+#include <thread>
 
 bool WriteFileAtomic(const std::filesystem::path& path, const void* data, size_t size, std::string& error)
 {
@@ -14,8 +18,11 @@ bool WriteFileAtomic(const std::filesystem::path& path, const void* data, size_t
 		}
 	}
 
+	static std::atomic<uint64_t> counter{ 0 };
+	const uint64_t id = counter.fetch_add(1, std::memory_order_relaxed);
+	const size_t tid = std::hash<std::thread::id>{}(std::this_thread::get_id());
 	std::filesystem::path temporary = path;
-	temporary += ".tmp";
+	temporary += ".tmp." + std::to_string(tid) + "." + std::to_string(id);
 	bool written = false;
 	{
 		std::ofstream file(temporary, std::ios::binary | std::ios::trunc);

@@ -819,3 +819,26 @@ TEST_CASE("PNG has no georeference")
 	REQUIRE_MESSAGE(heightmap::Import(path, heightmap::ImportOptions{}, map, info, error), error);
 	CHECK_FALSE(info.georeference.has_value());
 }
+
+TEST_CASE("ASC rejects non-finite or overflowing header values and parses leading plus")
+{
+	const std::filesystem::path bad = TiffFolder() / "bad_header.asc";
+	WriteText(bad, "ncols 1e30\nnrows 2\nxllcorner 0\nyllcorner 0\ncellsize 1\n1 2 3 4\n");
+	HeightField map;
+	heightmap::ImportInfo info;
+	std::string error;
+	CHECK_FALSE(heightmap::Import(bad, heightmap::ImportOptions{}, map, info, error));
+	CHECK_FALSE(error.empty());
+
+	WriteText(bad, "ncols 2\nnrows 2\nxllcorner 0\nyllcorner 0\ncellsize nan\n1 2 3 4\n");
+	error.clear();
+	CHECK_FALSE(heightmap::Import(bad, heightmap::ImportOptions{}, map, info, error));
+	CHECK_FALSE(error.empty());
+
+	const std::filesystem::path plus = TiffFolder() / "plus.asc";
+	WriteText(plus, "ncols 2\nnrows 2\nxllcorner +1.5\nyllcorner +2.5\ncellsize +10\n+1.25 -2.5\n+3.75 4\n");
+	REQUIRE_MESSAGE(heightmap::Import(plus, heightmap::ImportOptions{}, map, info, error), error);
+	CHECK(map.At(0, 0) == doctest::Approx(1.25f));
+	CHECK(map.At(1, 0) == doctest::Approx(-2.5f));
+	CHECK(map.At(0, 1) == doctest::Approx(3.75f));
+}

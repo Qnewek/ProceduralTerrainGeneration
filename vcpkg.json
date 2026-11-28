@@ -5,14 +5,7 @@
   "dependencies": [
     "cgltf",
     "doctest",
-    "glew",
-    "glfw3",
     "glm",
-    {
-      "name": "imgui",
-      "features": [ "glfw-binding", "opengl3-binding" ]
-    },
-    "implot",
     "lodepng",
     "meshoptimizer",
     "nlohmann-json",
@@ -23,5 +16,19 @@
       "features": [ "zip" ]
     },
     "zlib"
-  ]
+  ],
+  "features": {
+    "app": {
+      "description": "OpenGL desktop application",
+      "dependencies": [
+        "glew",
+        "glfw3",
+        {
+          "name": "imgui",
+          "features": [ "glfw-binding", "opengl3-binding" ]
+        },
+        "implot"
+      ]
+    }
+  }
 }

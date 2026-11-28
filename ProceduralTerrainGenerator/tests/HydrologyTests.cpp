@@ -4,6 +4,7 @@
 #include <cmath>
 #include <cstring>
 #include <functional>
+#include <limits>
 #include <optional>
 
 #include "Hydrology.h"
@@ -373,9 +374,11 @@ namespace {
 	bool SameNetwork(const hydrology::Network& a, const hydrology::Network& b)
 	{
 		return a.rivers.Size() == b.rivers.Size()
-			&& std::memcmp(a.rivers.Data(), b.rivers.Data(), a.rivers.Size() * sizeof(hydrology::RiverTexel)) == 0
-			&& std::memcmp(a.levels.Data(), b.levels.Data(), a.levels.Size() * sizeof(hydrology::LevelTexel)) == 0
-			&& std::memcmp(a.flow.Data(), b.flow.Data(), a.flow.Size() * sizeof(hydrology::FlowTexel)) == 0;
+			&& a.levels.Size() == b.levels.Size()
+			&& a.flow.Size() == b.flow.Size()
+			&& (a.rivers.Empty() || std::memcmp(a.rivers.Data(), b.rivers.Data(), a.rivers.Size() * sizeof(hydrology::RiverTexel)) == 0)
+			&& (a.levels.Empty() || std::memcmp(a.levels.Data(), b.levels.Data(), a.levels.Size() * sizeof(hydrology::LevelTexel)) == 0)
+			&& (a.flow.Empty() || std::memcmp(a.flow.Data(), b.flow.Data(), a.flow.Size() * sizeof(hydrology::FlowTexel)) == 0);
 	}
 }
 
@@ -598,4 +601,13 @@ TEST_CASE("Map smaller than a river cell")
 	CHECK_FALSE(result.error.empty());
 	CHECK(result.network.riverCells == 0);
 	CHECK(result.water.empty());
+}
+
+TEST_CASE("Hydrology handles NaN terrain and invalid cellSize or sourceArea safely")
+{
+	HeightField map = MakeMap([](int x, int y) { return static_cast<float>(x + y); });
+	map.At(10, 10) = std::numeric_limits<float>::quiet_NaN();
+	const hydrology::Network net = hydrology::Compute(map, glm::vec2(0.0f), 1.0f, 0.0f, rivers::RiverConfig{});
+	CHECK(net.rivers.GetWidth() == width);
+	CHECK(hydrology::Compute(map, glm::vec2(0.0f), 0.0f, 0.0f, rivers::RiverConfig{}).riverCells == 0);
 }

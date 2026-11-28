@@ -1,5 +1,6 @@
 #pragma once
 
+#include <algorithm>
 #include <cstdint>
 #include <cstring>
 #include <filesystem>
@@ -20,7 +21,7 @@ namespace testtiff {
 		double topY = 0.0;			//Y (latitude for degrees) of the top edge
 		int epsg = 0;				//4326 = degrees with GeographicTypeGeoKey, other = ProjectedCSTypeGeoKey; 0 = no system code
 		bool pixelIsPoint = false;	//GTRasterTypeGeoKey = PixelIsPoint (leftX, topY = centre of the first pixel); only with epsg
-		std::string noData;			//GDAL_NODATA, empty = none
+		std::string noData{};			//GDAL_NODATA, empty = none
 		double rotation = 0.0;		//≠ 0: ModelTransformationTag with this term of X per row (a rotated raster) instead of scale + tiepoint
 	};
 
@@ -32,7 +33,7 @@ namespace testtiff {
 		uint32_t tile = 0;			//0 = strips
 		uint32_t rowsPerStrip = 2;	//with strips; the height = the whole file in one strip
 		uint16_t samplesPerPixel = 1;
-		Geo geo;
+		Geo geo{};
 	};
 
 	//Spec of a land cover file: one unsigned 8-bit sample
@@ -64,7 +65,11 @@ namespace testtiff {
 
 	inline void WriteTiff(const std::filesystem::path& path, const TiffSpec& spec, const std::vector<double>& values)
 	{
+#ifdef _WIN32
 		TIFF* tif = TIFFOpenW(path.wstring().c_str(), "w");
+#else
+		TIFF* tif = TIFFOpen(path.c_str(), "w");
+#endif
 		REQUIRE(tif);
 		static const TIFFFieldInfo geoFields[] = {
 			{ 33550, TIFF_VARIABLE, TIFF_VARIABLE, TIFF_DOUBLE, FIELD_CUSTOM, 1, 1, const_cast<char*>("ModelPixelScaleTag") },

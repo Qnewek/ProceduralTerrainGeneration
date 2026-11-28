@@ -31,10 +31,10 @@ namespace vegetation
 
 	//A model known to the placement: its name, layer and number of variants (0 = not loaded, never placed)
 	struct ModelInfo {
-		std::string name;
+		std::string name{};
 		int variants = 0;
 		Layer layer = Layer::TREES;
-		std::vector<float> sinkPerSlope;	//per variant (vegetation::Variant::sinkPerSlope, metres); missing = 0
+		std::vector<float> sinkPerSlope{};	//per variant (vegetation::Variant::sinkPerSlope, metres); missing = 0
 	};
 
 	struct Instance {

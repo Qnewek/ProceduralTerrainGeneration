@@ -24,8 +24,8 @@ namespace placedplants {
 	};
 
 	struct Layer {
-		std::vector<std::string> palette;		//model names; a name no longer in the model list is kept and not drawn
-		std::vector<Plant> plants;
+		std::vector<std::string> palette{};		//model names; a name no longer in the model list is kept and not drawn
+		std::vector<Plant> plants{};
 
 		size_t Bytes() const;
 		bool operator==(const Layer&) const = default;
@@ -41,8 +41,8 @@ namespace placedplants {
 		int count = 1;						//1 = one plant exactly at the centre; more = candidates spread over the disc
 		float spacing = 2.0f;				//metres; no plant closer than this to another of the layer
 		float scaleMin = 0.8f, scaleMax = 1.2f;
-		std::vector<std::string> models;	//chosen uniformly for each plant
-		std::vector<int> variants;			//variants of each model (at least 1)
+		std::vector<std::string> models{};	//chosen uniformly for each plant
+		std::vector<int> variants{};			//variants of each model (at least 1)
 		uint32_t seed = 0;					//the same layer, brush and seed give the same plants
 	};
 

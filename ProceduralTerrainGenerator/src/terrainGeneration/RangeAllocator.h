@@ -39,24 +39,21 @@ public:
 	//Gives back a range returned by Allocate
 	void Free(uint32_t offset, uint32_t count)
 	{
-		if (count == 0) {
+		if (count == 0 || offset > capacity || count > capacity - offset) {
 			return;
 		}
-		used -= count;
-		auto it = free.emplace(offset, count).first;
-		//Merge with the next and the previous free range
-		auto next = std::next(it);
-		if (next != free.end() && it->first + it->second == next->first) {
-			it->second += next->second;
-			free.erase(next);
+		auto it = free.lower_bound(offset);
+		if (it != free.end() && static_cast<uint64_t>(offset) + count > it->first) {
+			return;
 		}
 		if (it != free.begin()) {
 			auto previous = std::prev(it);
-			if (previous->first + previous->second == it->first) {
-				previous->second += it->second;
-				free.erase(it);
+			if (static_cast<uint64_t>(previous->first) + previous->second > offset) {
+				return;
 			}
 		}
+		used = count <= used ? used - count : 0;
+		InsertFree(offset, count);
 	}
 
 	//Adds elements at the end; ranges handed out stay valid
@@ -68,11 +65,28 @@ public:
 		const uint32_t added = newCapacity - capacity;
 		const uint32_t start = capacity;
 		capacity = newCapacity;
-		Free(start, added);
-		used += added;	//Free counted the new elements as given back
+		InsertFree(start, added);
 	}
 
 private:
+	void InsertFree(uint32_t offset, uint32_t count)
+	{
+		auto it = free.emplace(offset, count).first;
+		//Merge with the next and the previous free range
+		auto next = std::next(it);
+		if (next != free.end() && static_cast<uint64_t>(it->first) + it->second == next->first) {
+			it->second += next->second;
+			free.erase(next);
+		}
+		if (it != free.begin()) {
+			auto previous = std::prev(it);
+			if (static_cast<uint64_t>(previous->first) + previous->second == it->first) {
+				previous->second += it->second;
+				free.erase(it);
+			}
+		}
+	}
+
 	std::map<uint32_t, uint32_t> free;	//first element -> length
 	uint32_t capacity = 0;
 	uint32_t used = 0;

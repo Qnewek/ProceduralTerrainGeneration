@@ -12,11 +12,11 @@
 namespace meshfile {
 	//Images are paths relative to the mesh file (external files); empty = none
 	struct Material {
-		std::string name;
+		std::string name{};
 		glm::vec4 color = glm::vec4(1.0f);	//base color (linear) and alpha
-		std::string texture;				//base color image (alpha in A)
-		std::string normalTexture;			//tangent-space normal map (OpenGL convention, as glTF)
-		std::string ormTexture;				//occlusion, roughness, metalness in R, G, B (one image for both glTF slots)
+		std::string texture{};				//base color image (alpha in A)
+		std::string normalTexture{};			//tangent-space normal map (OpenGL convention, as glTF)
+		std::string ormTexture{};				//occlusion, roughness, metalness in R, G, B (one image for both glTF slots)
 		bool blend = false;					//alpha blending (water)
 		bool mask = false;					//alpha test at 0.5 (leaves); ignored with blend
 		bool doubleSided = false;
@@ -32,13 +32,14 @@ namespace meshfile {
 
 	//A named mesh in the scene with one primitive per material; nodes are not nested
 	struct Node {
-		std::string name;
-		std::vector<Primitive> primitives;
+		std::string name{};
+		std::vector<Primitive> primitives{};
 	};
 
 	//Binary glTF: the JSON chunk and a binary chunk with every vertex and index of the nodes. Primitives without triangles are left out,
 	//and nodes left with none
-	std::vector<unsigned char> EncodeGlb(const std::vector<Node>& nodes, const std::vector<Material>& materials, const std::string& generator);
+	std::vector<unsigned char> EncodeGlb(const std::vector<Node>& nodes, const std::vector<Material>& materials, const std::string& generator,
+		std::string* error = nullptr);
 
 	//OBJ text with one object ("o") per node holding all its primitives; texture coordinates have v flipped (OBJ counts v from the bottom
 	//of the image). Materials are not written
