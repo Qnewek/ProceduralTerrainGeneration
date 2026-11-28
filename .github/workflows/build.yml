@@ -149,3 +149,8 @@ jobs:
 
       - name: Unit tests (ASan + UBSan)
         run: ctest --preset linux-debug-asan --output-on-failure
+
+      - name: Check Python tools
+        run: |
+          python3 -m py_compile tools/*.py
+          python3 -m unittest discover -s tools -p "test_*.py" -v

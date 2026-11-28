@@ -9,17 +9,19 @@ Usage: python tools/fetch_textures.py [--resolution 1k|2k|4k] [--force]
 """
 
 import argparse
-import io
 import json
 import pathlib
 import sys
-import urllib.request
 import zipfile
+
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+import fetch_common  # noqa: E402
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent / "ProceduralTerrainGenerator" / "res" / "textures"
 MANIFEST = ROOT / "terrain_materials.json"
 OUTPUT = ROOT / "terrain"
 USER_AGENT = "terrain-texture-fetch/1.0"
+MAX_ZIP_MEMBER_BYTES = 256 * 1024 * 1024
 
 # Output name -> map name in the Poly Haven files API
 POLYHAVEN_MAPS = {
@@ -39,34 +41,43 @@ AMBIENTCG_MAPS = {
 }
 
 
-def download(url):
-    request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
-    with urllib.request.urlopen(request, timeout=120) as response:
-        return response.read()
+def download(url, expected_md5=None):
+    return fetch_common.download_bytes(url, USER_AGENT, timeout=120, expected_md5=expected_md5)
 
 
 def fetch_polyhaven(asset, resolution, folder):
+    asset = fetch_common.validate_asset_name(asset)
+    folder = pathlib.Path(folder)
     files = json.loads(download(f"https://api.polyhaven.com/files/{asset}"))
     for name, key in POLYHAVEN_MAPS.items():
         entry = files.get(key, {}).get(resolution, {}).get("jpg")
         if entry is None:
             print(f"  {name}: none")
             continue
-        (folder / f"{name}.jpg").write_bytes(download(entry["url"]))
+        target = fetch_common.safe_target_path(folder, f"{name}.jpg")
+        fetch_common.write_atomic(target, download(entry["url"], expected_md5=entry.get("md5")))
         print(f"  {name}: ok")
+    fetch_common.mark_complete(folder, resolution)
 
 
 def fetch_ambientcg(asset, resolution, folder):
-    data = download(f"https://ambientcg.com/get?file={asset}_{resolution.upper()}-JPG.zip")
-    with zipfile.ZipFile(io.BytesIO(data)) as archive:
-        members = archive.namelist()
-        for name, suffix in AMBIENTCG_MAPS.items():
-            member = next((m for m in members if m.endswith(suffix + ".jpg")), None)
-            if member is None:
-                print(f"  {name}: none")
-                continue
-            (folder / f"{name}.jpg").write_bytes(archive.read(member))
-            print(f"  {name}: ok")
+    asset = fetch_common.validate_asset_name(asset)
+    folder = pathlib.Path(folder)
+    url = f"https://ambientcg.com/get?file={asset}_{resolution.upper()}-JPG.zip"
+    with fetch_common.download_to_spooled_file(url, USER_AGENT, timeout=120) as spool:
+        with zipfile.ZipFile(spool) as archive:
+            infos = archive.infolist()
+            for name, suffix in AMBIENTCG_MAPS.items():
+                info = next((m for m in infos if m.filename.endswith(suffix + ".jpg")), None)
+                if info is None:
+                    print(f"  {name}: none")
+                    continue
+                if info.file_size > MAX_ZIP_MEMBER_BYTES:
+                    raise RuntimeError(f"ZIP entry {info.filename} exceeds size limit ({info.file_size} bytes)")
+                target = fetch_common.safe_target_path(folder, f"{name}.jpg")
+                fetch_common.write_atomic(target, archive.read(info))
+                print(f"  {name}: ok")
+    fetch_common.mark_complete(folder, resolution)
 
 
 FETCHERS = {"polyhaven": fetch_polyhaven, "ambientcg": fetch_ambientcg}
@@ -81,14 +92,21 @@ def main():
     materials = json.loads(MANIFEST.read_text(encoding="utf-8"))["materials"]
     failed = []
     for material in materials:
-        asset, source = material["asset"], material["source"]
-        folder = OUTPUT / asset
-        if (folder / "albedo.jpg").exists() and not args.force:
+        asset = fetch_common.validate_asset_name(material["asset"])
+        source = material["source"]
+        if source not in FETCHERS:
+            print(f"{material['name']} ({source}/{asset}): unknown source")
+            failed.append(asset)
+            continue
+        folder = fetch_common.safe_target_path(OUTPUT, asset)
+        if fetch_common.is_complete(folder, "albedo.jpg") and not args.force:
             print(f"{material['name']} ({asset}): already there")
             continue
         print(f"{material['name']} ({source}/{asset}):")
         folder.mkdir(parents=True, exist_ok=True)
         try:
+            if args.force:
+                fetch_common.clear_complete(folder)
             FETCHERS[source](asset, args.resolution, folder)
         except Exception as error:  # keep going, report at the end
             print(f"  failed: {error}")

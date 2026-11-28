@@ -7,6 +7,7 @@ extends RefCounted
 ##   Vegetation - MultiMeshInstance3D per model, variant, LOD and square of the map, with the app's LOD distances
 ## The pack axes are Godot's: x = map column, z = map row (metres), texel (0, 0) at the origin.
 
+const PtgPack = preload("ptg_pack.gd")
 const TERRAIN_SHADER = preload("ptg_terrain.gdshader")
 const WATER_SHADER = preload("ptg_water.gdshader")
 ## A terrain LOD shows from the distance at which its height error is ~1.5 px at 1080p and a 75° field of view
@@ -24,7 +25,7 @@ static func build(pack, target: String) -> Node3D:
 	last_error = ""
 	last_warnings = PackedStringArray()
 	var levels: Array = pack.manifest.get("meshes", {}).get("levels", [])
-	if levels.is_empty() or not str(levels[0]["file"]).ends_with(".glb"):
+	if levels.is_empty() or typeof(levels[0]) != TYPE_DICTIONARY or not str(levels[0].get("file", "")).ends_with(".glb"):
 		last_error = "%s: Godot import needs the glTF terrain mesh — export the pack with Terrain mesh = glTF binary" % pack.name
 		return null
 	var root := Node3D.new()
@@ -76,6 +77,8 @@ static func _scene_transform(node: Node) -> Transform3D:
 ## Every MeshInstance3D of an imported glTF scene by node name
 static func _meshes_of(path: String) -> Dictionary:
 	var meshes := {}
+	if path.is_empty():
+		return meshes
 	var scene := ResourceLoader.load(path) as PackedScene
 	if scene == null:
 		return meshes
@@ -97,7 +100,7 @@ static func _build_terrain(pack, target: String, levels: Array) -> Node3D:
 	for n in levels.size():
 		begins.append(0.0 if n == 0 else maxf(float(levels[n]["errorMetres"]) * ERROR_TO_DISTANCE, begins[n - 1] + 1.0))
 	for n in levels.size():
-		var path: String = target + str(levels[n]["file"])
+		var path := PtgPack.safe_target_path(target, str(levels[n].get("file", "")))
 		var meshes := _meshes_of(path)
 		if meshes.is_empty():
 			last_error = "%s: cannot load %s (was the pack copied and imported?)" % [pack.name, path]
@@ -121,20 +124,26 @@ static func _build_terrain(pack, target: String, levels: Array) -> Node3D:
 
 
 ## A 2D texture array of one image per material (MATERIAL_LAYER_SIZE², mipmapped); a missing image = a flat fill
-static func _material_array(pack, key: String, fill: Callable) -> Texture2DArray:
+static func _material_array(pack, key: String, fill: Callable, format: Image.Format = Image.FORMAT_RGBA8,
+		compress_source: Image.CompressSource = Image.COMPRESS_SOURCE_GENERIC) -> Texture2DArray:
+	var can_compress := format == Image.FORMAT_RGBA8 and DisplayServer.get_name() != "headless"
 	var images: Array[Image] = []
 	for material in pack.manifest["materials"]["list"]:
 		var image: Image = null
 		var textures = material.get("textures")
 		# A texture file deleted from the pack: the fallback fill, without an engine error per file
-		if typeof(textures) == TYPE_DICTIONARY and textures.get(key) != null and FileAccess.file_exists(pack.folder.path_join(str(textures[key]))):
-			image = Image.load_from_file(pack.folder.path_join(str(textures[key])))
+		if typeof(textures) == TYPE_DICTIONARY and textures.get(key) != null:
+			var img_path: String = pack.safe_pack_path(str(textures[key]))
+			if not img_path.is_empty() and FileAccess.file_exists(img_path):
+				image = Image.load_from_file(img_path)
 		if image == null or image.is_empty():
-			image = Image.create_empty(4, 4, false, Image.FORMAT_RGBA8)
+			image = Image.create_empty(4, 4, false, format)
 			image.fill(fill.call(material))
-		image.convert(Image.FORMAT_RGBA8)
+		image.convert(format)
 		image.resize(MATERIAL_LAYER_SIZE, MATERIAL_LAYER_SIZE, Image.INTERPOLATE_LANCZOS)
 		image.generate_mipmaps()
+		if can_compress:
+			image.compress(Image.COMPRESS_BPTC, compress_source)
 		images.append(image)
 		if images.size() == MAX_MATERIALS:
 			break
@@ -144,9 +153,17 @@ static func _material_array(pack, key: String, fill: Callable) -> Texture2DArray
 
 
 static func _save_resource(resource: Resource, path: String) -> Resource:
-	if ResourceSaver.save(resource, path) == OK:
+	if not path.is_empty() and ResourceSaver.save(resource, path) == OK:
 		resource.take_over_path(path)
 	return resource
+
+
+static func _channel_value(c: Color, channel: int) -> float:
+	match channel:
+		0: return c.r
+		1: return c.g
+		2: return c.b
+		_: return c.a
 
 
 static func _terrain_material(pack, target: String) -> ShaderMaterial:
@@ -156,37 +173,108 @@ static func _terrain_material(pack, target: String) -> ShaderMaterial:
 	if list.is_empty():
 		var colors: Dictionary = pack.file_entry("biome_colors")
 		if not colors.is_empty():
-			var image := Image.load_from_file(pack.folder.path_join(colors["path"]))
-			if image != null and not image.is_empty():
-				material.set_shader_parameter("base_color_map", _save_resource(ImageTexture.create_from_image(image), target + "biome_colors.res"))
+			var colors_path: String = pack.safe_pack_path(str(colors.get("path", "")))
+			if not colors_path.is_empty():
+				var image := Image.load_from_file(colors_path)
+				if image != null and not image.is_empty():
+					material.set_shader_parameter("base_color_map", _save_resource(ImageTexture.create_from_image(image), target + "biome_colors.res"))
 		return material
 	material.set_shader_parameter("use_materials", true)
-	material.set_shader_parameter("material_count", mini(list.size(), MAX_MATERIALS))
-	# Splat files in material order: materials 4k..4k+3 are in the RGBA file of material 4k
-	for k in range(0, mini(list.size(), MAX_MATERIALS), 4):
-		var splat_file := str(list[k]["splat"]["file"])
-		var image: Image = null
-		if FileAccess.file_exists(pack.folder.path_join(splat_file)):
-			image = Image.load_from_file(pack.folder.path_join(splat_file))
-		if image != null and not image.is_empty():
-			material.set_shader_parameter("splat_%d" % (k / 4), _save_resource(ImageTexture.create_from_image(image), target + "splat_%d.res" % (k / 4)))
-		else:
-			material.set_shader_parameter("splat_missing", true)
+	var mat_count := mini(list.size(), MAX_MATERIALS)
+	material.set_shader_parameter("material_count", mat_count)
+
+	# Cache loaded splat images by file path and respect each material's splat.file + splat.channel
+	var splat_cache := {}
+	var load_splat := func(splat_file: String) -> Image:
+		if splat_file.is_empty():
+			return null
+		if splat_cache.has(splat_file):
+			return splat_cache[splat_file]
+		var full_path: String = pack.safe_pack_path(splat_file)
+		var img: Image = null
+		if not full_path.is_empty() and FileAccess.file_exists(full_path):
+			img = Image.load_from_file(full_path)
+			if img != null and not img.is_empty() and img.get_format() != Image.FORMAT_RGBA8:
+				img.convert(Image.FORMAT_RGBA8)
+		splat_cache[splat_file] = img
+		if img == null or img.is_empty():
 			last_warnings.append("%s: %s could not be read, its materials are mixed evenly" % [pack.name, splat_file])
+		return img
+
+	for k in range(0, mat_count, 4):
+		var group_end := mini(k + 4, mat_count)
+		var first_file := ""
+		var first_splat = list[k].get("splat")
+		if typeof(first_splat) == TYPE_DICTIONARY:
+			first_file = str(first_splat.get("file", ""))
+		var fast_path := not first_file.is_empty()
+		for m in range(k, group_end):
+			var sp = list[m].get("splat")
+			var f := str(sp.get("file", "")) if typeof(sp) == TYPE_DICTIONARY else ""
+			var ch := str(sp.get("channel", "")) if typeof(sp) == TYPE_DICTIONARY else ""
+			if f != first_file or ch != "RGBA"[m - k]:
+				fast_path = false
+				break
+
+		var group_img: Image = null
+		if fast_path:
+			group_img = load_splat.call(first_file)
+			if group_img == null or group_img.is_empty():
+				material.set_shader_parameter("splat_missing", true)
+		else:
+			var src_imgs: Array[Image] = [null, null, null, null]
+			var src_chs: PackedInt32Array = PackedInt32Array([0, 0, 0, 0])
+			var w := 0
+			var h := 0
+			var missing_in_group := false
+			for m in range(k, group_end):
+				var sp = list[m].get("splat")
+				var f := str(sp.get("file", "")) if typeof(sp) == TYPE_DICTIONARY else ""
+				var ch_str := str(sp.get("channel", "R")) if typeof(sp) == TYPE_DICTIONARY else "R"
+				var ch_idx := maxi(0, "RGBA".find(ch_str.substr(0, 1)))
+				var img: Image = load_splat.call(f)
+				if img == null or img.is_empty():
+					if not f.is_empty():
+						missing_in_group = true
+				else:
+					src_imgs[m - k] = img
+					src_chs[m - k] = ch_idx
+					if w == 0:
+						w = img.get_width()
+						h = img.get_height()
+			if missing_in_group or w == 0 or h == 0:
+				material.set_shader_parameter("splat_missing", true)
+			if w > 0 and h > 0:
+				group_img = Image.create_empty(w, h, false, Image.FORMAT_RGBA8)
+				for y in h:
+					for x in w:
+						var vals := [0.0, 0.0, 0.0, 0.0]
+						for s in range(group_end - k):
+							var si: Image = src_imgs[s]
+							if si != null and x < si.get_width() and y < si.get_height():
+								vals[s] = _channel_value(si.get_pixel(x, y), src_chs[s])
+						group_img.set_pixel(x, y, Color(vals[0], vals[1], vals[2], vals[3]))
+
+		if group_img != null and not group_img.is_empty():
+			material.set_shader_parameter("splat_%d" % (k / 4), _save_resource(ImageTexture.create_from_image(group_img), target + "splat_%d.res" % (k / 4)))
+
 	var tiles := PackedFloat32Array()
 	tiles.resize(MAX_MATERIALS)
-	for m in mini(list.size(), MAX_MATERIALS):
+	for m in mat_count:
 		var textures = list[m].get("textures")
-		tiles[m] = float(textures["tileMetres"]) if typeof(textures) == TYPE_DICTIONARY else 4.0 * pack.metres_per_texel()
+		tiles[m] = float(textures["tileMetres"]) if typeof(textures) == TYPE_DICTIONARY and float(textures.get("tileMetres", 0.0)) > 0.0 else 4.0 * pack.metres_per_texel()
 	material.set_shader_parameter("tile_metres", tiles)
 	var fallback := func(m: Dictionary) -> Color:
 		var c: Array = m.get("fallbackColor", [0.5, 0.5, 0.5])
-		return Color(float(c[0]), float(c[1]), float(c[2]))
-	material.set_shader_parameter("albedo_array", _save_resource(_material_array(pack, "albedo", fallback), target + "terrain_albedo.res"))
+		if c.size() < 3:
+			return Color(0.5, 0.5, 0.5).linear_to_srgb()
+		return Color(float(c[0]), float(c[1]), float(c[2])).linear_to_srgb()
+	material.set_shader_parameter("albedo_array",
+		_save_resource(_material_array(pack, "albedo", fallback, Image.FORMAT_RGBA8, Image.COMPRESS_SOURCE_SRGB), target + "terrain_albedo.res"))
 	material.set_shader_parameter("normal_array",
-		_save_resource(_material_array(pack, "normal", func(_m): return Color(0.5, 0.5, 1.0)), target + "terrain_normal.res"))
+		_save_resource(_material_array(pack, "normal", func(_m): return Color(0.5, 0.5, 1.0), Image.FORMAT_RGBA8, Image.COMPRESS_SOURCE_NORMAL), target + "terrain_normal.res"))
 	material.set_shader_parameter("roughness_array",
-		_save_resource(_material_array(pack, "roughness", func(_m): return Color(0.9, 0.9, 0.9)), target + "terrain_roughness.res"))
+		_save_resource(_material_array(pack, "roughness", func(_m): return Color(0.9, 0.9, 0.9), Image.FORMAT_R8, Image.COMPRESS_SOURCE_GENERIC), target + "terrain_roughness.res"))
 	return material
 
 
@@ -226,7 +314,8 @@ static func _build_water(pack, target: String) -> Node3D:
 	var water := Node3D.new()
 	water.name = "Water"
 	if not water_mesh.is_empty():
-		var meshes := _meshes_of(target + str(water_mesh["file"]))
+		var water_path := PtgPack.safe_target_path(target, str(water_mesh.get("file", "")))
+		var meshes := _meshes_of(water_path)
 		for node_name in meshes:
 			var surface := MeshInstance3D.new()
 			surface.name = node_name
@@ -247,59 +336,100 @@ static func _build_water(pack, target: String) -> Node3D:
 	return water
 
 
+static func _lod_distance_bounds(lod: int, lod_count: int, mr: Array) -> Vector2:
+	var lod1: float = mr[0]
+	var lod2: float = mr[1]
+	var max_d: float = mr[2]
+	var edge := func(k: int) -> float:
+		if k <= 0:
+			return 0.0
+		if k >= lod_count:
+			return max_d
+		if k == 1:
+			return lod1
+		if k == 2:
+			return lod2
+		return lerpf(lod2, max_d, float(k - 2) / float(maxi(lod_count - 2, 1)))
+	return Vector2(edge.call(lod), edge.call(lod + 1))
+
+
 static func _build_vegetation(pack, target: String) -> Node3D:
 	var info: Dictionary = pack.manifest.get("vegetation", {})
 	if info.is_empty():
 		return null
-	var parsed = JSON.parse_string(FileAccess.get_file_as_string(pack.folder.path_join(str(info["file"]))))
-	if typeof(parsed) != TYPE_DICTIONARY:
+	var veg_path: String = pack.safe_pack_path(str(info.get("file", "")))
+	if veg_path.is_empty():
+		last_warnings.append("%s: invalid vegetation path %s, no vegetation" % [pack.name, info.get("file", "")])
+		return null
+	var parsed = JSON.parse_string(FileAccess.get_file_as_string(veg_path))
+	if typeof(parsed) != TYPE_DICTIONARY or typeof(parsed.get("models")) != TYPE_ARRAY or typeof(parsed.get("instances")) != TYPE_ARRAY:
 		last_warnings.append("%s: cannot read %s, no vegetation" % [pack.name, info["file"]])
 		return null
 	var models: Array = parsed["models"]
-	var ranges: Dictionary = parsed.get("lodRanges", {})
+	var ranges: Dictionary = parsed.get("lodRanges", {}) if typeof(parsed.get("lodRanges")) == TYPE_DICTIONARY else {}
 	# Meshes per model: [variant][lod]; models without a file are skipped
 	var model_meshes := []
+	var max_lods := 0
 	var missing := 0
 	for model in models:
 		var per_variant := []
-		if model.has("file") and int(model["count"]) > 0:
-			var meshes := _meshes_of(target + str(model["file"]))
-			for nodes in model["variantNodes"]:
+		if typeof(model) == TYPE_DICTIONARY and model.has("file") and int(model.get("count", 0)) > 0:
+			var model_path := PtgPack.safe_target_path(target, str(model.get("file", "")))
+			var meshes := _meshes_of(model_path)
+			for nodes in model.get("variantNodes", []):
 				var per_lod := []
 				for node_name in nodes:
 					per_lod.append(meshes.get(str(node_name), {}).get("mesh"))
+				max_lods = maxi(max_lods, per_lod.size())
 				per_variant.append(per_lod)
-		elif int(model["count"]) > 0:
+		elif typeof(model) == TYPE_DICTIONARY and int(model.get("count", 0)) > 0:
 			missing += 1
 		model_meshes.append(per_variant)
-	if missing > 0 and missing == models.filter(func(m): return int(m["count"]) > 0).size():
+	if missing > 0 and missing == models.filter(func(m): return typeof(m) == TYPE_DICTIONARY and int(m.get("count", 0)) > 0).size():
 		last_warnings.append("%s: vegetation models were not exported (Vegetation models off), no vegetation" % pack.name)
 		return null
 	if missing > 0:
 		last_warnings.append("%s: %d vegetation models were not exported and are left out" % [pack.name, missing])
+	if max_lods == 0:
+		return null
+
+	# Precompute LOD distance bounds once per model instead of inside the per-instance loop
+	var model_ranges := []
+	for model in models:
+		var layer_name := str(model.get("layer", "Trees")) if typeof(model) == TYPE_DICTIONARY else "Trees"
+		var rng = ranges.get(layer_name, {})
+		if typeof(rng) != TYPE_DICTIONARY:
+			rng = {}
+		model_ranges.append([float(rng.get("lod1", 40.0)), float(rng.get("lod2", 100.0)), float(rng.get("max", 1000.0))])
 
 	# Every plant once as the 12 floats of its transform (MultiMesh.buffer layout: basis rows with the origin), turned by yaw around +Y
 	# (x' = x cos + z sin, z' = z cos - x sin) and scaled
 	var rows: Array = parsed["instances"]
 	parsed = null
-	var count := rows.size()
+	var raw_count := rows.size()
 	var model_of := PackedInt32Array()
-	model_of.resize(count)
+	model_of.resize(raw_count)
 	var variant_of := PackedInt32Array()
-	variant_of.resize(count)
+	variant_of.resize(raw_count)
 	var data := PackedFloat32Array()
-	data.resize(count * 12)
-	for i in count:
+	data.resize(raw_count * 12)
+	var count := 0
+	for i in raw_count:
+		if typeof(rows[i]) != TYPE_ARRAY:
+			continue
 		var row: Array = rows[i]
-		model_of[i] = int(row[5])
-		variant_of[i] = int(row[6])
+		if row.size() < 7:
+			continue
+		model_of[count] = int(row[5])
+		variant_of[count] = int(row[6])
 		var s := float(row[4])
 		var c := cos(float(row[3])) * s
 		var n := sin(float(row[3])) * s
-		var o := i * 12
+		var o := count * 12
 		data[o] = c; data[o + 1] = 0.0; data[o + 2] = n; data[o + 3] = float(row[0])
 		data[o + 4] = 0.0; data[o + 5] = s; data[o + 6] = 0.0; data[o + 7] = float(row[1])
 		data[o + 8] = -n; data[o + 9] = 0.0; data[o + 10] = c; data[o + 11] = float(row[2])
+		count += 1
 	rows = []
 
 	# Godot measures a visibility range to the node, not to each plant, so every LOD has its own grid of squares about half as wide as
@@ -308,7 +438,7 @@ static func _build_vegetation(pack, target: String) -> Node3D:
 	var smallest_square := maxf(size.x, size.y) / 64.0
 	var vegetation := Node3D.new()
 	vegetation.name = "Vegetation"
-	for lod in 3:
+	for lod in max_lods:
 		var group_of := PackedInt32Array()
 		group_of.resize(count)
 		var index_of := {}
@@ -319,14 +449,10 @@ static func _build_vegetation(pack, target: String) -> Node3D:
 			var m := model_of[i]
 			var v := variant_of[i]
 			group_of[i] = -1
-			if m >= model_meshes.size() or v >= model_meshes[m].size() or lod >= model_meshes[m][v].size() or model_meshes[m][v][lod] == null:
+			if m < 0 or v < 0 or m >= model_meshes.size() or v >= model_meshes[m].size() or lod >= model_meshes[m][v].size() or model_meshes[m][v][lod] == null:
 				continue
-			var lods: Array = model_meshes[m][v]
-			var range: Dictionary = ranges.get(str(models[m].get("layer", "Trees")), { "lod1": 40.0, "lod2": 100.0, "max": 1000.0 })
-			var bounds := [0.0, float(range["lod1"]), float(range["lod2"]), float(range["max"])]
-			var begin: float = bounds[mini(lod, 3)]
-			var end: float = bounds[3] if lod == lods.size() - 1 else bounds[mini(lod + 1, 3)]
-			var square := clampf(end * 0.5, maxf(4.0, smallest_square), maxf(512.0, smallest_square))
+			var bounds: Vector2 = _lod_distance_bounds(lod, model_meshes[m][v].size(), model_ranges[m])
+			var square := clampf(bounds.y * 0.5, maxf(4.0, smallest_square), maxf(512.0, smallest_square))
 			var key := Vector4i(m * 4096 + v, 0, int(floorf(data[i * 12 + 3] / square)), int(floorf(data[i * 12 + 11] / square)))
 			var g: int = index_of.get(key, -1)
 			if g == -1:
@@ -334,7 +460,7 @@ static func _build_vegetation(pack, target: String) -> Node3D:
 				index_of[key] = g
 				keys.append(key)
 				squares.append(square)
-				ends.append(Vector2(begin, end))
+				ends.append(bounds)
 			group_of[i] = g
 		if keys.is_empty():
 			continue

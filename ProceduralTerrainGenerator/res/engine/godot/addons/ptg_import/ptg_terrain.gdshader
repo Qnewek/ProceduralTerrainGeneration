@@ -26,38 +26,69 @@ void vertex() {
 void fragment() {
 	if (use_materials) {
 		vec4 shares[4] = vec4[4](texture(splat_0, UV), texture(splat_1, UV), texture(splat_2, UV), texture(splat_3, UV));
+		// Derivatives computed once in uniform control flow so skipped layers still sample exact mip levels via textureGrad
+		vec2 dpos_dx = dFdx(world_position.xz);
+		vec2 dpos_dy = dFdy(world_position.xz);
 		vec3 albedo = vec3(0.0);
 		vec3 normal_map = vec3(0.0);
 		float roughness = 0.0;
 		float total = 0.0;
-		vec3 even_albedo = vec3(0.0);
-		vec3 even_normal = vec3(0.0);
-		float even_roughness = 0.0;
-		// Every material sampled (no branch), so the texture derivatives stay valid
-		for (int m = 0; m < material_count; m++) {
-			float w = shares[m / 4][m % 4];
-			vec3 uv = vec3(world_position.xz / max(tile_metres[m], 0.001), float(m));
-			vec3 a = texture(albedo_array, uv).rgb;
-			vec3 n = texture(normal_array, uv).rgb;
-			float r = texture(roughness_array, uv).r;
-			albedo += w * a;
-			normal_map += w * n;
-			roughness += w * r;
-			even_albedo += a;
-			even_normal += n;
-			even_roughness += r;
-			total += w;
+		if (!splat_missing) {
+			for (int m = 0; m < material_count; m++) {
+				float w = shares[m / 4][m % 4];
+				if (w <= 1e-4) {
+					continue;
+				}
+				float inv_tile = 1.0 / max(tile_metres[m], 0.001);
+				vec3 uv = vec3(world_position.xz * inv_tile, float(m));
+				vec2 dx = dpos_dx * inv_tile;
+				vec2 dy = dpos_dy * inv_tile;
+				albedo += w * textureGrad(albedo_array, uv, dx, dy).rgb;
+				normal_map += w * textureGrad(normal_array, uv, dx, dy).rgb;
+				roughness += w * textureGrad(roughness_array, uv, dx, dy).r;
+				total += w;
+			}
+			if (total <= 1e-4 && material_count > 0) {
+				float inv_tile = 1.0 / max(tile_metres[0], 0.001);
+				vec3 uv = vec3(world_position.xz * inv_tile, 0.0);
+				vec2 dx = dpos_dx * inv_tile;
+				vec2 dy = dpos_dy * inv_tile;
+				albedo = textureGrad(albedo_array, uv, dx, dy).rgb;
+				normal_map = textureGrad(normal_array, uv, dx, dy).rgb;
+				roughness = textureGrad(roughness_array, uv, dx, dy).r;
+				total = 1.0;
+			}
+		} else {
+			vec3 even_albedo = vec3(0.0);
+			vec3 even_normal = vec3(0.0);
+			float even_roughness = 0.0;
+			for (int m = 0; m < material_count; m++) {
+				float w = shares[m / 4][m % 4];
+				float inv_tile = 1.0 / max(tile_metres[m], 0.001);
+				vec3 uv = vec3(world_position.xz * inv_tile, float(m));
+				vec2 dx = dpos_dx * inv_tile;
+				vec2 dy = dpos_dy * inv_tile;
+				vec3 a = textureGrad(albedo_array, uv, dx, dy).rgb;
+				vec3 n = textureGrad(normal_array, uv, dx, dy).rgb;
+				float r = textureGrad(roughness_array, uv, dx, dy).r;
+				albedo += w * a;
+				normal_map += w * n;
+				roughness += w * r;
+				even_albedo += a;
+				even_normal += n;
+				even_roughness += r;
+				total += w;
+			}
+			float rest = max(1.0 - total, 0.0);
+			float count = max(float(material_count), 1.0);
+			albedo += rest * even_albedo / count;
+			normal_map += rest * even_normal / count;
+			roughness += rest * even_roughness / count;
+			total = max(total + rest, 1e-4);
 		}
-		// Shares missing (an unreadable splat file, or none at all): an even mix instead of black
-		float rest = splat_missing ? max(1.0 - total, 0.0) : (total < 1e-3 ? 1.0 : 0.0);
-		float count = max(float(material_count), 1.0);
-		albedo += rest * even_albedo / count;
-		normal_map += rest * even_normal / count;
-		roughness += rest * even_roughness / count;
-		total = max(total + rest, 1e-4);
-		ALBEDO = albedo / total;
-		NORMAL_MAP = normal_map / total;
-		ROUGHNESS = roughness / total;
+		ALBEDO = albedo / max(total, 1e-4);
+		NORMAL_MAP = normal_map / max(total, 1e-4);
+		ROUGHNESS = roughness / max(total, 1e-4);
 	} else {
 		ALBEDO = texture(base_color_map, UV).rgb;
 		ROUGHNESS = 0.9;

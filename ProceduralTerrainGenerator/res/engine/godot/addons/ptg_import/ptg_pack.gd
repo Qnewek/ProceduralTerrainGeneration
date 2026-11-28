@@ -9,6 +9,42 @@ var name: String = ""
 var error: String = ""          ## why open() failed
 
 
+static func is_valid_pack_name(pack_name: String) -> bool:
+	if pack_name.is_empty():
+		return false
+	var re := RegEx.new()
+	re.compile("^[A-Za-z0-9_-]+$")
+	return re.search(pack_name) != null
+
+
+func safe_pack_path(relative: String) -> String:
+	if folder.is_empty() or relative.is_empty() or relative.begins_with("/") or relative.begins_with("\\") or relative.contains(":"):
+		return ""
+	for seg in relative.replace("\\", "/").split("/"):
+		if seg == "..":
+			return ""
+	var root := folder.replace("\\", "/").simplify_path().trim_suffix("/")
+	var joined := folder.path_join(relative).replace("\\", "/").simplify_path()
+	if not joined.begins_with(root + "/"):
+		return ""
+	return joined
+
+
+static func safe_target_path(target: String, relative: String) -> String:
+	if target.is_empty() or relative.is_empty() or relative.begins_with("/") or relative.begins_with("\\") or relative.contains(":"):
+		return ""
+	for seg in relative.replace("\\", "/").split("/"):
+		if seg == "..":
+			return ""
+	var base := target.replace("\\", "/").trim_suffix("/")
+	var prefix := "res://" if base.begins_with("res://") else ""
+	var base_tail := (base.substr(6) if not prefix.is_empty() else base).simplify_path().trim_suffix("/")
+	var combined_tail := (base_tail + "/" + relative.replace("\\", "/")).simplify_path()
+	if not combined_tail.begins_with(base_tail + "/"):
+		return ""
+	return prefix + combined_tail
+
+
 ## Reads <name>.json; check error when it returns false
 func open(manifest_path: String) -> bool:
 	var text := FileAccess.get_file_as_string(manifest_path)
@@ -19,8 +55,16 @@ func open(manifest_path: String) -> bool:
 	if typeof(parsed) != TYPE_DICTIONARY or parsed.get("generator", "") != "Procedural Terrain Generator":
 		error = "%s is not a manifest of a Procedural Terrain Generator pack" % manifest_path
 		return false
+	var grid = parsed.get("grid")
+	if typeof(grid) != TYPE_DICTIONARY or int(grid.get("width", 0)) < 2 or int(grid.get("height", 0)) < 2 or float(grid.get("metresPerTexel", 0.0)) <= 0.0:
+		error = "%s has an invalid terrain grid" % manifest_path
+		return false
+	var pack_name := str(parsed.get("name", manifest_path.get_file().get_basename()))
+	if not is_valid_pack_name(pack_name):
+		error = "Invalid pack name '%s' (allowed: letters, digits, '_' and '-')" % pack_name
+		return false
 	manifest = parsed
-	name = str(manifest.get("name", manifest_path.get_file().get_basename()))
+	name = pack_name
 	folder = manifest_path.get_base_dir()
 	return true
 
@@ -43,7 +87,7 @@ func size_metres() -> Vector2:
 
 
 func has_sea() -> bool:
-	return manifest.has("seaLevel")
+	return manifest.has("seaLevel") and typeof(manifest.get("seaLevel")) == TYPE_DICTIONARY
 
 
 func sea_metres() -> float:
@@ -53,7 +97,7 @@ func sea_metres() -> float:
 ## Entry of the file list with this content (and format, if given); empty if none
 func file_entry(content: String, format: String = "") -> Dictionary:
 	for f in manifest.get("files", []):
-		if f.get("content", "") == content and (format.is_empty() or f.get("format", "") == format):
+		if typeof(f) == TYPE_DICTIONARY and f.get("content", "") == content and (format.is_empty() or f.get("format", "") == format):
 			return f
 	return {}
 
@@ -63,9 +107,12 @@ func read_heights_metres() -> PackedFloat32Array:
 	var entry := file_entry("height", "r16")
 	if entry.is_empty():
 		return PackedFloat32Array()
-	var bytes := FileAccess.get_file_as_bytes(folder.path_join(entry["path"]))
+	var path := safe_pack_path(str(entry.get("path", "")))
+	if path.is_empty():
+		return PackedFloat32Array()
+	var bytes := FileAccess.get_file_as_bytes(path)
 	var count := width() * height()
-	if bytes.size() < count * 2:
+	if count <= 0 or bytes.size() < count * 2:
 		return PackedFloat32Array()
 	var encoding: Dictionary = entry["encoding"]
 	var low := float(encoding["metresMin"])
@@ -81,16 +128,45 @@ func read_heights_metres() -> PackedFloat32Array:
 ## (vegetation/, biome colors) and the manifest. Height, splat and material files are read from the pack folder by the builder,
 ## so they are not imported (Godot would compress them)
 func copy_to(target: String) -> Error:
-	var absolute := ProjectSettings.globalize_path(target)
+	if not target.begins_with("res://ptg/") or target.contains(".."):
+		return ERR_INVALID_PARAMETER
+	var ptg_root := ProjectSettings.globalize_path("res://ptg/").replace("\\", "/").simplify_path().trim_suffix("/")
+	var absolute := ProjectSettings.globalize_path(target).replace("\\", "/").simplify_path().trim_suffix("/")
+	if not absolute.begins_with(ptg_root + "/"):
+		return ERR_INVALID_PARAMETER
+	if DirAccess.dir_exists_absolute(absolute):
+		var clean_err := _clear_dir(absolute)
+		if clean_err != OK:
+			return clean_err
 	var result := DirAccess.make_dir_recursive_absolute(absolute)
 	if result != OK:
 		return result
 	var skipped := {}
 	for f in manifest.get("files", []):
+		if typeof(f) != TYPE_DICTIONARY:
+			continue
 		if f.get("content", "") in ["height", "splat", "weight", "biome_ids", "engine_script"] or str(f.get("content", "")).begins_with("material_") \
 				or str(f.get("content", "")).begins_with("height_"):
-			skipped[str(f["path"])] = true
+			skipped[str(f.get("path", ""))] = true
 	return _copy_folder(folder, absolute, "", skipped)
+
+
+static func _clear_dir(path: String) -> Error:
+	var dir := DirAccess.open(path)
+	if dir == null:
+		return DirAccess.get_open_error()
+	for sub in dir.get_directories():
+		var err := _clear_dir(path.path_join(sub))
+		if err != OK:
+			return err
+		err = DirAccess.remove_absolute(path.path_join(sub))
+		if err != OK:
+			return err
+	for file in dir.get_files():
+		var err := DirAccess.remove_absolute(path.path_join(file))
+		if err != OK:
+			return err
+	return OK
 
 
 func _copy_folder(from: String, to: String, relative: String, skipped: Dictionary) -> Error:
@@ -101,13 +177,22 @@ func _copy_folder(from: String, to: String, relative: String, skipped: Dictionar
 	for sub in dir.get_directories():
 		if relative.is_empty() and (sub == "engine" or sub == "materials"):
 			continue
-		var result := _copy_folder(from.path_join(sub), to.path_join(sub), relative + sub + "/", skipped)
+		if dir.is_link(sub) if dir.has_method("is_link") else false:
+			continue
+		var sub_rel := relative + sub
+		if safe_pack_path(sub_rel).is_empty():
+			return ERR_INVALID_DATA
+		var result := _copy_folder(from.path_join(sub), to.path_join(sub), sub_rel + "/", skipped)
 		if result != OK:
 			return result
 	for file in dir.get_files():
-		if skipped.has(relative + file):
+		var file_rel := relative + file
+		if skipped.has(file_rel):
 			continue
-		var result := DirAccess.copy_absolute(from.path_join(file), to.path_join(file))
+		var src := safe_pack_path(file_rel)
+		if src.is_empty():
+			return ERR_INVALID_DATA
+		var result := DirAccess.copy_absolute(src, to.path_join(file))
 		if result != OK:
 			return result
 	return OK
