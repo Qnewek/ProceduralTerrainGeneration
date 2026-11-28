@@ -1,4 +1,4 @@
-// 2D and 4D simplex noise, ported from src/vendor/Simplex/SimplexNoise.cpp (of which the app now uses only makePermutation).
+// 2D and 4D simplex noise; permutation tables come from terrainGeneration/Permutation.h (noise::MakePermutation).
 // The file including this one provides: int permAt(int table, int i), returning entry i & 255 of a permutation table.
 
 float grad2(int hash, float x, float y)

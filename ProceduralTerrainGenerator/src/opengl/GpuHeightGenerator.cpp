@@ -10,7 +10,7 @@
 #include <string>
 
 #include "NestedSpline.h"
-#include "Simplex/SimplexNoise.h"
+#include "Permutation.h"
 #include "SplineSampling.h"
 
 namespace {
@@ -60,7 +60,7 @@ namespace {
 	void SetPermutation(uint32_t* permutations, int index, int seed)
 	{
 		std::array<uint8_t, 256> perm;
-		SimplexNoise::makePermutation(seed, perm.data());
+		noise::MakePermutation(seed, perm.data());
 		std::copy(perm.begin(), perm.end(), permutations + index * 256);
 	}
 

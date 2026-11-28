@@ -1,8 +1,6 @@
 # Procedural Terrain Generator — analiza i plan rozwoju
 
-Diagnoza na 2026-10-27 (branch `lodChunked` = `master`, commit `fbd32ab`); postęp odhaczany na bieżąco, ostatnia aktualizacja 2026-11-13
-(Fazy 0–3 i Teren 2.0 zamknięte: fundament i porządki, generacja wyłącznie na GPU, chunki z LOD, biomy ciągłe z edytorem, klimatem, modyfikatorami terenu
-i teksturowaniem, kontynenty, tabela 18 biomów i rzeźba terenu; następna Faza 4 — roślinność).
+Diagnoza początkowa z 2026-10-27 (branch `lodChunked` = `master`, commit `fbd32ab`); dokument stanowi archiwalny dziennik rozwoju projektu — **Fazy 0–6 zostały zrealizowane** (fundament i porządki, generacja wyłącznie na GPU, chunki z LOD, biomy ciągłe z edytorem, klimatem, modyfikatorami terenu i teksturowaniem, roślinność i trawa na GPU, erozja GPU, rzeki i woda, paczki eksportu z importerami Unity/Godot oraz tryb Imported map z DEM, rzeźbieniem, malowaniem biomów, pokryciem terenu i pędzlem roślin).
 Cel projektu: **generowanie terenu z edycją parametrów w czasie rzeczywistym, maksymalna wydajność,
 biomy, roślinność i kolejne feature'y.**
 
@@ -657,7 +655,7 @@ Kroki:
   (bez cache 13 s), krzewy ~0,3 s (kodowanie PNG z alfą). Mapa pochodnych skończonej mapy różni się od chunków tylko na samej krawędzi mapy (nachylenie
   z obciętej różnicy), więc tam pojedyncze rośliny mogą się różnić.
   🟡 2026-11-25 krok 5 (decyzja właściciela: „założenie narzędzia, które pozwoli na opracowanie terenu i wykorzystanie go w zewnętrznym silniku,
-  ma być spełnione”; plan docs/superpowers/plans/2026-11-25-engine-import-scripts.md): paczka dostaje to, czego potrzebują silniki — „Material
+  ma być spełnione”): paczka dostaje to, czego potrzebują silniki — „Material
   textures” (`EngineExport.*`: albedo, normal w konwencji OpenGL, roughness materiałów obecnych na mapie → `materials/<asset>/`; w manifeście
   `materials.list[].textures` z `tileMetres` = tileSize · Texture scale / 4 · piksel i zawsze `fallbackColor`), w `_vegetation.json` `lodRanges`
   warstw (odległości LOD aplikacji ze „Detail distance”), „Engine import scripts” (kopia `res/engine/` do `engine/` + zawsze plik R16 mapy głównej,
@@ -833,7 +831,7 @@ oryginał tylko w pamięci i w projekcie („Wróć do oryginału”), plus Cofn
   do cm (jak w pliku) bez zmian; rośliny TerrainGen bit w bit bez zmian.
   Do sprawdzenia: przeciągnięcie pędzla roślin przez prawy panel; zmiana zakresu wartości PNG przy roślinach z pędzla i pustej historii; kropki w 2D
   (przesuwanie, zoom, Undo); zamknięcie okna w trakcie sadzenia na 8192²; płynność klatki, gdy kończy się sadzenie na 8192².
-  Odłożone drobne usterki, paczka A (2026-11-25, branch `fix/deferred-minors`, plan docs/superpowers/plans/2026-11-25-deferred-minors-a.md):
+  Odłożone drobne usterki, paczka A (2026-11-25, branch `fix/deferred-minors`):
   projekt `.ptgmap` — blok za mały na mapę / malowane biomy i suma bloków większa niż plik odrzucane przed alokacją, brak pamięci = komunikat,
   niesprawdzony `seaLevel` (inf) odrzucany; edycja, która nie powiedzie się w połowie (brak pamięci), nie zostawia pustego kroku Cofnij
   (`mapedit::History::DropLast`), wygładzanie / skala / „Revert to original” bez pamięci już nie zamykają aplikacji; eksport z Imported map czeka na aktualną
@@ -847,7 +845,7 @@ oryginał tylko w pamięci i w projekcie („Wróć do oryginału”), plus Cofn
   „Water”, potem woda w paczce); zmiana zakresu PNG przy przewyższeniu ≠ 1; suwak Density przy pokazanej kopii po erozji; zamknięcie z paska zadań
   zminimalizowanego okna z niezapisanym projektem; zamknięcie w trakcie wczytywania modeli.
 
-  Odłożone drobne usterki, paczka B — duże mapy (2026-11-25, branch `fix/big-map-perf`, plan docs/superpowers/plans/2026-11-25-big-map-perf-b.md):
+  Odłożone drobne usterki, paczka B — duże mapy (2026-11-25, branch `fix/big-map-perf`):
   rośliny kopii po erozji biorą nachylenie z wysokości zamiast odczytu mapy pochodnych (16 B/teksel = 1 GB przy 8192²); odczyty z GPU bez czekania
   (`AsyncRead`: bufor pikseli + fence) — próbka terenu rzek REGION przy skoku regionu (2048²: 12,1 ms w klatce → 1,8 ms na samo wysłanie) i głębia
   pod kursorem pędzli Imported map (wcześniej co klatkę `glReadPixels` czekał na narysowanie klatki; teraz teksel z odczytu sprzed 1–2 klatek);
@@ -877,15 +875,12 @@ oryginał tylko w pamięci i w projekcie („Wróć do oryginału”), plus Cofn
 
 ---
 
-## 5. Kolejność i priorytety
+## 5. Kolejność i status historyczny
 
-| Priorytet | Zadania | Dlaczego |
-|-----------|---------|----------|
-| P0 | Faza 0 (B13, B3, B2, B1, B11) | Bez tego każda dalsza praca jest na niepewnym gruncie |
-| P1 | Faza 1: ~~B8 (szum)~~ ✅, ~~A2/B5 (RAII + width/height)~~ ✅, ~~A3/A4 (rozdzielenie warstw)~~ ✅, ~~B6 (shadery)~~ ✅, ~~B15 (tekstury)~~ ✅, ~~wielowątkowość (7a)~~ ✅, ~~generacja asynchroniczna (7b)~~ ✅, ~~pomiary~~ ✅ | Fundament — bez rozdzielenia warstw nie da się przenieść generacji na GPU |
-| P1 | Faza 2.1–2.3 (compute height + chunki) | Największy zysk dla „real-time” |
-| P2 | ~~Faza 2.4–2.7~~ ✅ (2.6, 2.7 niepotrzebne), ~~Faza 3~~ ✅ | Jakość i skalowanie |
-| P3 | Faza 4, Faza 5, Faza 6 | Feature'y budowane na stabilnym fundamencie |
-
-Sugerowany pierwszy krok po Fazie 0: **zmierzyć** (Tracy) czas `TerrainGenerator::GenerateTerrain` dla 512²,
-naprawić B8 i zmierzyć ponownie — da to konkretny obraz, ile zostało do zyskania na CPU zanim przejdziemy na GPU.
+| Priorytet | Zadania | Status |
+|-----------|---------|--------|
+| P0 | Faza 0 (B13, B3, B2, B1, B11) | ✅ Zrealizowane |
+| P1 | Faza 1: B8, A2/B5, A3/A4, B6, B15, wielowątkowość (7a), generacja asynchroniczna (7b), pomiary | ✅ Zrealizowane |
+| P1 | Faza 2.1–2.3 (compute height + chunki) | ✅ Zrealizowane |
+| P2 | Faza 2.4–2.5 (LOD, culling), Faza 3 (biomy 2.0) | ✅ Zrealizowane |
+| P3 | Faza 4 (roślinność), Faza 5 (erozja GPU, rzeki, woda, eksport, importery), Faza 6 (Imported map / DEM) | ✅ Zrealizowane |

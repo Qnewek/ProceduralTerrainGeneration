@@ -19,14 +19,15 @@ Plan napraw i rozwoju: `docs/ROADMAP.md` (ID zadań `B*`, `A*`, `F*` są tam zde
   cmake --build --preset x64-release
   ```
   W VS: *Open Folder* na katalogu repo — VS czyta presety sam.
-- Targety: `ptg_vendor` (Simplex, stb_image impl., bez ostrzeżeń), `ptg_core` (`terrainGeneration/`: configi, presety,
-  pliki map, bez GL/ImGui — pod testy), `ProceduralTerrainGenerator` (exe). `/W4 /WX /permissive-` dla `ptg_core` i exe;
+- Targety: `ptg_vendor` (`stb_image` impl., bez ostrzeżeń), `ptg_core` (`terrainGeneration/`: configi, presety,
+  pliki map, bez GL/ImGui — pod testy), `ProceduralTerrainGenerator` (exe). `/W4 /WX /permissive-` dla `ptg_core` i exe (GCC/Clang `-Wall -Wextra -Werror`);
   nagłówki zależności są `SYSTEM` (`/external:W0`), więc ich ostrzeżenia nie przerywają buildu.
 - Shadery/tekstury czytane z `res/...` względem katalogu roboczego; jeśli go tam nie ma, `main` przechodzi do
   `PTG_RESOURCE_DIR` (= `ProceduralTerrainGenerator/` w źródłach, wpisany przez CMake). Hot-reload działa na źródłach.
 - CI: `.github/workflows/build.yml` — Windows (`windows-2022` = VS 2022, jak lokalnie), oba presety, vcpkg na commicie z baseline
   (cache binarek w `actions/cache`), testy jednostkowe, a w Release `--gpu-check --no-timings` na Mesa llvmpipe (programowy GL 4.5: `opengl32.dll` +
-  `libgallium_wgl.dll` z mesa-dist-win obok kopii exe, wersja i SHA256 archiwum w `MESA_VERSION` / `MESA_SHA256` w workflow, cache w `actions/cache`).
+  `libgallium_wgl.dll` z mesa-dist-win obok kopii exe, wersja i SHA256 archiwum w `MESA_VERSION` / `MESA_SHA256` w workflow, cache w `actions/cache`),
+  plus job `linux-core-tests` na `ubuntu-latest` (GCC `-Wall -Wextra -Werror` + ASan/UBSan dla `ptg_core`/`ptg_tests` oraz testy skryptów Pythona w `tools/`).
   Nie kładź tych DLL w `out/build` — aplikacja ruszy wtedy na CPU. Lokalnie llvmpipe: to samo w katalogu poza buildem, `GALLIUM_DRIVER=llvmpipe`.
 - Testy: `ctest --preset x64-release` (doctest, target `ptg_tests`, kod w `ProceduralTerrainGenerator/tests/`, `ptg_core` + nagłówki z `utility/`).
   Szczegóły doctesta: `out\build\x64-release\ptg_tests.exe`. Mapy testowe są niekwadratowe. Znany błąd = test z `doctest::should_fail()`
@@ -143,9 +144,8 @@ ProceduralTerrainGenerator/
       FileDialog.*               systemowe okna otwierania i zapisu pliku (tylko Windows, comdlg32); przy porcie na Linuksa do zastąpienia
       SendToImported.*           przyciski „Send map” / „Send eroded copy” w Saving TerrainGen i Noise: mapa z `ExportPanel::Pack` w metrach → `mapproject::Project`
       utilities.*                helpery ImGui (NoiseImGui, DisplayModeImGui...), siatka patchy, kolory biomów
-    vendor/                      SimplexNoise (z niego tylko makePermutation: tablice permutacji dla GPU), stb_image
+    vendor/                      stb_image (jednostka translacji implementacji)
   tests/                         testy jednostkowe ptg_core (doctest)
-  legacy/cpuErosion/             LEGACY, niekompilowane: erozja kroplowa na CPU z pracy dyplomowej + jej testy, tylko poglądowo
   res/shaders/
     TerrainShaders/              VS → TCS → TES → FS, jedyny zestaw dla terenu (oba tryby)
     ComputeShaders/              height_compute.shader (szum, teren), biome_compute.shader, map_biome_compute.shader (biomy Imported map), surface_compute.shader, erosion_droplet/pipe_compute.shader; wspólne: common/noise.glsl, noise_params.glsl, simplex.glsl, surface.glsl,
@@ -205,15 +205,14 @@ Wartości szumów są w [-1, 1]. Konwencja indeksowania: `map[y * width + x]`.
   UI (immediate-mode w subsystemach: `ImGuiDisplay/Presets/Saving`, `ImGuiRightPanel`, `ImGuiOutput`) edytuje config i zgłasza żądanie (`Request*`),
   subsystem generuje w tle i przekazuje wynik do `TerrainView`. Stan edytorów (wybrany szum, wciśnięte przyciski) to nie config.
 - Includy własne po nazwie pliku (`#include "Noise.h"` — katalogi `src/*` są w include path targetów).
-  Zależności z vcpkg bez podkatalogu (`"imgui.h"`, `"implot.h"`, `"stb_image.h"`, `<GL/glew.h>`, `"glm/glm.hpp"`),
-  kod z `src/vendor` z podkatalogiem (`"Simplex/SimplexNoise.h"`).
+  Zależności z vcpkg bez podkatalogu (`"imgui.h"`, `"implot.h"`, `"stb_image.h"`, `<GL/glew.h>`, `"glm/glm.hpp"`).
 - Komentarze po angielsku, w stylu `//@param`.
 
 ## Pułapki — przeczytaj zanim zaczniesz zmieniać
 
 - **Rozmiary zawsze jako `(width, height)`** (ujednolicone w B5) — nowe API też tak. Mapy niekwadratowe
   powinny działać; zmieniając generację sprawdź też taki przypadek.
-- Tablica permutacji szumu zależy tylko od seeda (`SimplexNoise::makePermutation`, test z ustalonymi wartościami w `PermutationTests.cpp`);
+- Tablica permutacji szumu zależy tylko od seeda (`noise::MakePermutation` w `terrainGeneration/Permutation.h`, test z ustalonymi wartościami w `PermutationTests.cpp`);
   zmiana tablicy lub tasowania zmienia każdy wygenerowany świat.
 - Erozja (`GpuErosion`, tryb Noise heightmap, tylko skończona mapa): każda metoda ma własną mapę wynikową — krople w warstwie OVERLAY `view`, rury w warstwie TERRAIN
   drugiego widoku `pipesView` (TerrainView ma tylko jedną wolną warstwę wysokości; jednostki tekstur 0–2 są zajęte). Kolejne „Erode map” kumulują się na mapie metody
@@ -536,7 +535,5 @@ Wartości szumów są w [-1, 1]. Konwencja indeksowania: `map[y * width + x]`.
 
 ## Kierunek rozwoju (skrót z ROADMAP)
 
-Cel: edycja parametrów w czasie rzeczywistym + maksymalna wydajność + biomy i roślinność.
-Kolejność: naprawy krytyczne (Faza 0) → porządki/architektura (Faza 1) → generacja na GPU (compute shaders)
-i system chunków z LOD (Faza 2) → biomy ciągłe z blendingiem i teksturowaniem (Faza 3, domknięta 2026-11-13 kontynentami, tabelą 18 biomów i rzeźbą terenu) — wszystko to zamknięte →
-roślinność instancjonowana (Faza 4, następna) → erozja GPU, woda, eksport (Faza 5).
+Cel: edycja parametrów w czasie rzeczywistym + maksymalna wydajność + biomy, roślinność, woda, eksport do silników i edycja rzeczywistych map DEM.
+Fazy 0–6 zostały zrealizowane (szczegółowa historia i punkty kontrolne w `docs/ROADMAP.md`), a dalsze prace koncentrują się na bezpieczeństwie, wydajności GPU/CPU, zgodności z OpenGL 4.5 oraz utrzymywalności architektury.

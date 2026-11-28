@@ -1,124 +1,104 @@
 # Procedural Terrain Generator
 
-Desktop tool (C++20, OpenGL 4.5) for interactive **procedural terrain generation**: every parameter of the
-algorithms can be changed in the UI (**Dear ImGui** + **ImPlot**) and the terrain is regenerated on the GPU right away.
+Desktop application (C++20, OpenGL 4.5) for interactive **procedural terrain generation** and **real-world DEM editing** with real-time GPU compute generation, erosion, hydrology, biomes, vegetation, and engine export packs. UI built with **Dear ImGui** + **ImPlot**.
 
 ## Features
 
-- **Noise heightmap mode**
-  Fractal [Simplex noise](https://thebookofshaders.com/11) (fBm) shown as a 3D terrain. Every parameter is editable:
-  seed, octaves, scale, contrast, redistribution, lacunarity, persistence, handling of negative values,
-  ridged noise and island masks (cone, diagonal, squircle, ...).
+- **GPU compute generation**
+  - **Noise heightmap mode**: Fractal [Simplex noise](https://thebookofshaders.com/11) (fBm, ridged, island masks, domain warping, slope-damped octaves, terraces).
+  - **TerrainGen mode**: Multi-noise terrain (`continentalness`, `mountainousness`, `weirdness`) combined via **Linear**, **Spline**, **Layered**, or **Nested spline** (`C -> M -> W`) curves edited live in ImPlot.
+  - **Chunked infinite world & partial maps**: Distance-sorted quadtree chunks (`128x128`) with LOD skirts and frustum culling (CPU + TCS), plus a movable partial finite map linked to the infinite world (`worldOrigin`).
 
-- **Imported map mode**
-  Shows a height map read from a file, chosen with a file dialog or from a folder list: PNG (up to 16-bit; color is
-  converted to greyscale) or headerless 16-bit R16/RAW. Non-square R16 files need their size in the name, e.g. `map_1024x512.r16`.
+- **Biomes, Hydrology & Environment**
+  - **Continuous 6D biomes**: 18 default biomes over `(continentalness, mountainousness, weirdness, temperature, humidity, elevation)` with live parameter-space editor, Whittaker diagram, elevation/coastal climate, terrain modifiers, and up to 4 PBR surface materials per biome (triplanar sampling, height blending, anti-tiling).
+  - **Rivers & lakes (`REGION` and `NOISE`)**: Priority-flood hydrology (`Hydrology`), D8 flow accumulation, meanders, waterfalls/foam, screen-space reflection water (`WaterSurface`), volumetric 3D clouds with temporal smoothing (`Clouds`), Rayleigh/Mie/ozone atmospheric sky LUT (`Sky`), and 4-cascade sun shadows (`ShadowMap`).
+  - **Instanced vegetation & grass**: Deterministic metre-grid placement (`TREES`, `SHRUBS`, `ROCKS`) with GPU frustum/LOD indirect culling (`meshoptimizer` LODs + hemi-octahedral impostors) and per-blade grass compute pass.
 
-- **Hydraulic erosion**
-  Droplet-based erosion of the generated map, shown next to the original. Repeated runs accumulate.
-  Based on [this work](http://www.firespark.de/resources/downloads/implementation%20of%20a%20methode%20for%20hydraulic%20erosion.pdf).
+- **GPU Hydraulic Erosion**
+  - Two GPU compute solvers: **Droplet** particle erosion and **Virtual pipes + thermal erosion**, available in both procedural and imported-map workflows.
 
-- **TerrainGen mode (multi-noise terrain)**
-  Terrain built from three noises, similar to Minecraft 1.18+:
-  - **Continentalness** - how far inland a point is,
-  - **Mountainousness** - how much elevation there is,
-  - **Weirdness** - sharper shapes such as ridges and valleys.
+- **Imported map mode & Projects (`.ptgmap`)**
+  - Import real-world heightmaps and DEMs: **16-bit PNG**, headerless **R16/RAW**, **GeoTIFF** (with UTM / ETRS89 / PUWG 1992 / PUWG 2000 / WGS84 georeferencing), **SRTM `.hgt`**, and **ESRI `.asc` + `.prj`**.
+  - Interactive GPU sculpting brushes (`Raise`, `Lower`, `Smooth`, `Flatten`, `Noise`), biome painting brush, GeoTIFF land-cover classification (e.g. ESA WorldCover), automatic & hand-placed vegetation brushes, river overlay, undo/redo history, and compressed zlib `.ptgmap` project files.
 
-  The noises are combined either linearly or through spline functions edited in the UI (draggable control points).
+- **Export Packs & Engine Importers**
+  - Export packs to `exports/<name>/`: **PNG16**, **R16**, **32-bit float EXR** heightmaps, **RGBA8 splat** and per-material weight maps, biome ID/color maps, tiled multi-LOD **GLB/OBJ** meshes + water meshes, `<name>_vegetation.json` + GLB LOD models, and `<name>.json` manifests.
+  - Bundled importers in [ProceduralTerrainGenerator/res/engine/](ProceduralTerrainGenerator/res/engine/README.md): **Unity Editor** (`Tools > PTG > Import pack...`) and **Godot 4.3+ EditorPlugin** (`Project > Tools > Import PTG pack...`).
 
-- **Biomes**
-  Biome assignment from temperature, humidity and the three terrain noises. Each parameter is split into levels
-  whose bounds can be dragged in the UI; the terrain is painted with the biome colors.
+## Optional Assets (CC0)
 
-- **Rendering**
-  GPU tessellation (distance-based level of detail), world-space lighting, display modes: greyscale,
-  topographical with isolines, monocolor, biomes; wireframe and a top-down 2D map view.
+Downloaded textures and 3D plant/rock models are excluded from git and stored locally under `res/textures/terrain/` and `res/vegetation/models/`:
 
-- **Partial map as a part of the world**
-  The partial (finite) map is a window onto the infinite world: leaving infinite generation centres it on the camera,
-  and it can be moved by hand or follow the camera. In TerrainGen it shows the same vegetation, grass, water and sun
-  shadows as the infinite world. Exports record where the map lies in the world (`worldOrigin`).
-
-- **Presets**
-  Generation parameters of each mode can be saved to and loaded from JSON files in `presets/`, which can also be
-  edited by hand. Render settings and biome definitions are not included.
-
-- **Export**
-  The finite map is exported as a pack in `exports/<name>/`: the heightmap as 16-bit PNG, headerless 16-bit RAW (R16,
-  little-endian) or 32-bit float EXR in metres, plus `<name>.json` with the map size and heights in metres, the value
-  encoding of every file, the sea level, import hints for Unreal and Unity, and the generation parameters. With biomes,
-  the pack also gets material maps (8-bit RGBA splat maps with 4 materials each for Unity, one greyscale weight map per
-  material for Unreal or Godot, shares summing to 255) and biome maps (ids with names in the JSON, colors). The terrain
-  can also be exported as a mesh (glTF binary or OBJ, metres, Y up): one file per level of detail, simplified with
-  meshoptimizer where the terrain is flat, split into tiles, with the largest height error of every level in the JSON,
-  plus a water file with the sea, rivers and lakes. Meshes are built in the background. The vegetation goes to
-  `<name>_vegetation.json`: every tree, shrub and rock the app places on the map (position in metres, yaw, scale, model,
-  variant), optionally with the models as glTF files (one node per variant and level of detail, PBR materials, textures
-  copied next to them). 16-bit values
-  are mapped from a fixed range: [0, 1] in TerrainGen, [-1, 1] in Noise heightmap. Each eroded map that is shown goes to
-  its own `_eroded_*` file.
-
-- **Performance**
-  Maps are generated in compute shaders, so parameters can be edited live (1024x1024 terrain in ~1.2 ms on an
-  RTX 2060, against ~170 ms on 6 CPU threads). Erosion still runs on the CPU, on a background thread.
-
-## Screenshots
-
-*Coming soon.*
+```bash
+python tools/fetch_textures.py   # Terrain PBR textures (Poly Haven / ambientCG)
+python tools/fetch_models.py     # Vegetation & rock glTF models + alpha maps (Poly Haven)
+```
 
 ## Building
 
-Requirements: Windows x64, Visual Studio 2022 with the *Desktop development with C++* workload (it includes
-CMake, Ninja and vcpkg). Dependencies (GLFW, GLEW, glm, ImGui, ImPlot, stb) are installed by vcpkg from
-`vcpkg.json` on the first configure.
+All third-party dependencies are managed via `vcpkg.json` (`cgltf`, `doctest`, `glm`, `lodepng`, `meshoptimizer`, `nlohmann-json`, `stb`, `tiff`, `zlib`; desktop app feature `app`: `glew`, `glfw3`, `imgui`, `implot`).
 
-1. Clone the repository:
-   ```bash
-   git clone https://github.com/Qnewek/ProceduralTerrainGeneration.git
-   ```
-2. In Visual Studio: *File → Open → Folder...*, pick the repository and choose the `x64 Debug` or `x64 Release`
-   configuration (from `CMakePresets.json`). From a *Developer PowerShell for VS 2022*:
-   ```
-   cmake --preset x64-release
-   cmake --build --preset x64-release
-   ```
-   The executable is written to `out/build/<preset>/`. Outside the Visual Studio prompt set `VCPKG_ROOT` to a
-   vcpkg checkout first.
-3. Run `ProceduralTerrainGenerator.exe`. Shaders and textures are loaded from `ProceduralTerrainGenerator/res/`;
-   if the working directory has no `res/` folder, the app switches to the source directory it was built from.
+### Windows x64 (Full Desktop App + Tests)
+
+Requirements: Windows x64, Visual Studio 2022 (*Desktop development with C++*, CMake, Ninja, vcpkg).
+
+From a **Developer PowerShell for VS 2022**:
+
+```powershell
+cmake --preset x64-release
+cmake --build --preset x64-release
+```
+
+Build outputs are placed in `out/build/<preset>/` (presets: `x64-debug`, `x64-release`). Run `ProceduralTerrainGenerator.exe` directly — if `res/` is not in the working directory, it locates `ProceduralTerrainGenerator/` automatically.
+
+### Linux (`ptg_core` + Unit Tests with ASan/UBSan)
+
+Requirements: GCC/Clang (C++20), Ninja, `libtbb-dev`, `pkg-config`, `VCPKG_ROOT` set to a bootstrapped vcpkg checkout:
+
+```bash
+cmake --preset linux-debug-asan
+cmake --build --preset linux-debug-asan
+ctest --preset linux-debug-asan --output-on-failure
+```
+
+Also available: `linux-release`.
 
 ## Controls
 
-| Key | Action |
-|-----|--------|
-| `W` `A` `S` `D` | move the camera |
-| `Space` / `Left Ctrl` | move up / down |
-| `M` | mouse look |
-| `Esc` | release the mouse |
-| `F5` | reload shaders |
+| Input | Action |
+|-------|--------|
+| `W` `A` `S` `D` | Move camera horizontally (FPS flight or while holding right mouse button) |
+| `Space` / `Left Shift` | Move up / down |
+| `M` | Toggle FPS mouse look |
+| `Esc` | Release mouse look / cancel active brush stroke |
+| Right drag / `Alt` + Left drag / Middle drag | Editor camera look / orbit / pan |
+| Mouse wheel | Move forward/back (or zoom to cursor in 2D map view) |
+| `F` | Fit 2D map view |
+| `Shift` + Mouse wheel | Adjust sculpt / paint / plant brush radius |
+| `Ctrl + S` / `Ctrl + Z` / `Ctrl + Y` | Save project / Undo / Redo (`Imported map` mode) |
+| `F5` | Hot-reload GLSL shaders |
 
-The mode (Noise heightmap / TerrainGen / Imported map) is selected in the top panel; generation parameters are in the right
-panel, display settings in the left one.
+## Testing & CLI Tools
 
-## Benchmark
+- **Core unit tests (`doctest`, 390 test cases)**:
+  ```powershell
+  ctest --preset x64-release --output-on-failure
+  ```
+- **GPU compute parity & generation checks** (requires OpenGL 4.5, or Mesa `llvmpipe` as run in CI):
+  ```powershell
+  out\build\x64-release\ProceduralTerrainGenerator.exe --gpu-check --no-timings
+  ```
+- **Vegetation LOD preview & benchmark**:
+  ```powershell
+  out\build\x64-release\ProceduralTerrainGenerator.exe --vegetation-preview vegetation_preview
+  out\build\x64-release\ProceduralTerrainGenerator.exe --vegetation-bench
+  ```
+- **Python asset-fetcher unit tests**:
+  ```bash
+  python -m unittest discover -s tools -p "test_*.py" -v
+  ```
+- **CI (`.github/workflows/build.yml`)**: builds Windows `x64-debug` & `x64-release`, runs all unit tests + `--gpu-check` on Mesa llvmpipe, builds `linux-debug-asan` with GCC (`-Wall -Wextra -Werror`, ASan + UBSan) + runs `ctest`, and runs Python syntax & unit checks.
 
-```
-out\build\x64-release\ProceduralTerrainGenerator.exe --benchmark
-```
+## Roadmap & Notes
 
-Runs CPU generation without a window for 256², 512² and 1024² maps and prints median times together with
-checksums of the generated maps (used to verify that refactors do not change the output). CI builds both
-presets on every push and pull request and fails if the checksums change.
-
-```
-out\build\x64-release\ProceduralTerrainGenerator.exe --gpu-check
-```
-
-Compares the compute shader generator used by the app with the CPU one on many configurations and prints the times
-of both. The CPU generators remain only for this and for the benchmark. It needs a GPU with OpenGL 4.5, so CI does not run it.
-
-## Roadmap
-
-Planned work - GPU generation with compute shaders, chunked infinite world with LOD, continuous biomes with
-blending and texturing, instanced vegetation, GPU erosion, water and export - is described in
-[docs/ROADMAP.md](docs/ROADMAP.md) (in Polish).
+Detailed development history and architecture notes are documented in [docs/ROADMAP.md](docs/ROADMAP.md) (in Polish).
