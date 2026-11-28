@@ -319,3 +319,12 @@ TEST_CASE("WaterHeight and HasSea follow the terrain method")
 	t.method = EvaluationMethod::LINEAR_COMBINE;
 	CHECK(!t.HasSea());
 }
+
+TEST_CASE("FromLayered handles zero coastWidth without NaN")
+{
+	TerrainConfig t = TerrainConfig::Default();
+	t.coastWidth = 0.0f;
+	const NestedTerrain tree = nested::FromLayered(t);
+	const double h = nested::Evaluate(tree.root, 0.15, 0.2, 0.0);
+	CHECK(std::isfinite(h));
+}

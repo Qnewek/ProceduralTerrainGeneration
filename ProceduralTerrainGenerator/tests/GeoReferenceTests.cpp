@@ -183,3 +183,15 @@ TEST_CASE("GeoTIFF tags")
 	CHECK(geo::RotatedTransformation(transformation));
 	CHECK_FALSE(geo::FromGeoTiffTags(none, tiepoint, none, keys).has_value());
 }
+
+TEST_CASE("ToMetres stays finite at exact poles")
+{
+	const std::optional<geo::Projection> utm = geo::TransverseMercatorOf(32634);
+	REQUIRE(utm.has_value());
+	const glm::dvec2 north = geo::ToMetres(*utm, glm::dvec2(21.0, 90.0));
+	const glm::dvec2 south = geo::ToMetres(*utm, glm::dvec2(21.0, -90.0));
+	CHECK(std::isfinite(north.x));
+	CHECK(std::isfinite(north.y));
+	CHECK(std::isfinite(south.x));
+	CHECK(std::isfinite(south.y));
+}

@@ -52,6 +52,9 @@ namespace biome {
 	{
 		mask = Effective(table, mask);
 		const int id = Nearest(table, values, mask);
+		if (id < 0) {
+			return glm::vec3(0.0f);
+		}
 		if (blendWidth <= 0.0f) {
 			return table[id].color;
 		}
@@ -66,7 +69,7 @@ namespace biome {
 			}
 		}
 		//total >= 1: the nearest biome has weight 1
-		return sum / total;
+		return total > 0.0f ? sum / total : table[id].color;
 	}
 
 	float BlendWeight(float distance, float nearestDistance, float blendWidth)
@@ -82,7 +85,7 @@ namespace biome {
 	ParameterValues ApplyClimate(ParameterValues values, float height, float waterHeight, const Climate& climate)
 	{
 		const float above = std::max(height - waterHeight, 0.0f);
-		const float t = std::clamp(above / climate.coastRange, 0.0f, 1.0f);
+		const float t = climate.coastRange > 0.0f ? std::clamp(above / climate.coastRange, 0.0f, 1.0f) : 1.0f;
 		const float coast = 1.0f - t * t * (3.0f - 2.0f * t);
 		values[TEMPERATURE] = std::clamp(values[TEMPERATURE] - climate.lapseRate * above, -1.0f, 1.0f);
 		values[HUMIDITY] = std::clamp(values[HUMIDITY] + climate.coastHumidity * coast, -1.0f, 1.0f);
@@ -100,7 +103,11 @@ namespace biome {
 	float ModifyHeight(const std::vector<Biome>& table, const ParameterValues& values, float height, float waterHeight, float blendWidth,
 		const std::vector<float>& detail)
 	{
-		const float nearest = table[Nearest(table, values)].Distance(values);
+		const int id = Nearest(table, values);
+		if (id < 0) {
+			return std::clamp(height, 0.0f, 1.0f);
+		}
+		const float nearest = table[id].Distance(values);
 		float total = 0.0f, amplitude = 0.0f, offset = 0.0f, details = 0.0f;
 		for (size_t b = 0; b < table.size(); b++) {
 			const float weight = BlendWeight(table[b].Distance(values), nearest, blendWidth);
@@ -108,7 +115,10 @@ namespace biome {
 			total += weight;
 			amplitude += weight * m.amplitude;
 			offset += weight * m.offset;
-			details += weight * m.detailAmplitude * detail[b];
+			details += weight * m.detailAmplitude * (b < detail.size() ? detail[b] : 0.0f);
+		}
+		if (!(total > 0.0f)) {
+			return std::clamp(height, 0.0f, 1.0f);
 		}
 		//total >= 1: the nearest biome has weight 1
 		const float modified = waterHeight + (height - waterHeight) * amplitude / total + (offset + details) / total;
@@ -119,7 +129,11 @@ namespace biome {
 		float contrast, const MaterialWeights& patch, uint64_t mask)
 	{
 		mask = Effective(table, mask);
-		const float nearest = table[Nearest(table, values, mask)].Distance(values);
+		const int id = Nearest(table, values, mask);
+		if (id < 0) {
+			return {};
+		}
+		const float nearest = table[id].Distance(values);
 		MaterialWeights mixed{};
 		for (size_t i = 0; i < table.size(); i++) {
 			if (!Allowed(mask, i)) {
@@ -129,13 +143,17 @@ namespace biome {
 			const float weight = BlendWeight(b.Distance(values), nearest, blendWidth);
 			float layerSum = 0.0f;
 			for (const MaterialLayer& layer : b.materials) {
-				layerSum += layer.weight;
+				if (layer.material >= 0 && layer.material < maxMaterials && layer.weight > 0.0f) {
+					layerSum += layer.weight;
+				}
 			}
 			if (weight <= 0.0f || layerSum <= 0.0f) {
 				continue;
 			}
 			for (const MaterialLayer& layer : b.materials) {
-				mixed[layer.material] += weight * layer.weight / layerSum;
+				if (layer.material >= 0 && layer.material < maxMaterials && layer.weight > 0.0f) {
+					mixed[layer.material] += weight * layer.weight / layerSum;
+				}
 			}
 		}
 		//Softmax in the log space: the largest score is subtracted, so exp cannot overflow
@@ -157,9 +175,10 @@ namespace biome {
 				sum += result[m];
 			}
 		}
-		//sum >= 1: the best material has exp(0)
-		for (float& w : result) {
-			w /= sum;
+		if (sum > 0.0f) {
+			for (float& w : result) {
+				w /= sum;
+			}
 		}
 		return result;
 	}

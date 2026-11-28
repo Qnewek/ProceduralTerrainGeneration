@@ -38,7 +38,8 @@ namespace meshfile {
 
 	//Binary glTF: the JSON chunk and a binary chunk with every vertex and index of the nodes. Primitives without triangles are left out,
 	//and nodes left with none
-	std::vector<unsigned char> EncodeGlb(const std::vector<Node>& nodes, const std::vector<Material>& materials, const std::string& generator);
+	std::vector<unsigned char> EncodeGlb(const std::vector<Node>& nodes, const std::vector<Material>& materials, const std::string& generator,
+		std::string* error = nullptr);
 
 	//OBJ text with one object ("o") per node holding all its primitives; texture coordinates have v flipped (OBJ counts v from the bottom
 	//of the image). Materials are not written

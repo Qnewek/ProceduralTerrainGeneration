@@ -7,6 +7,8 @@
 #include <string>
 #include <vector>
 
+#include <lodepng.h>
+
 #include "VegetationMesh.h"
 
 using namespace vegetation;
@@ -475,4 +477,59 @@ TEST_CASE("LoadGltf: roots apart are variants, children belong to their root")
 	CHECK(variants[0].TriangleCount() == 2);
 	CHECK(variants[1].TriangleCount() == 1);
 	CHECK(variants[1].parts[0].vertices[0].position.x == doctest::Approx(5.0f));
+}
+
+TEST_CASE("LoadGltf drops out-of-range indices, handles singular transforms and keeps RGBA alphaTest")
+{
+	const float positions[] = { 0, 0, 0, 1, 0, 0, 0, 0, 1 };
+	const uint16_t indices[] = { 0, 1, 2, 0, 1, 99 };
+	const std::filesystem::path folder = std::filesystem::temp_directory_path() / "ptg_vegetation_edge";
+	std::filesystem::remove_all(folder);
+	std::filesystem::create_directories(folder);
+
+	std::vector<unsigned char> rgbaPng;
+	REQUIRE(lodepng::encode(rgbaPng, std::vector<unsigned char>{ 255, 0, 0, 128 }, 1, 1, LCT_RGBA, 8) == 0);
+	{
+		std::ofstream img(folder / "leaf.png", std::ios::binary);
+		img.write(reinterpret_cast<const char*>(rgbaPng.data()), static_cast<std::streamsize>(rgbaPng.size()));
+	}
+	const std::filesystem::path gltf = folder / "edge.gltf";
+	{
+		std::ofstream out(gltf);
+		out << R"({
+			"asset": { "version": "2.0" },
+			"buffers": [
+				{ "byteLength": 36, "uri": "data:application/octet-stream;base64,)" << Base64(positions, sizeof(positions)) << R"(" },
+				{ "byteLength": 12, "uri": "data:application/octet-stream;base64,)" << Base64(indices, sizeof(indices)) << R"(" }
+			],
+			"bufferViews": [
+				{ "buffer": 0, "byteLength": 36 },
+				{ "buffer": 1, "byteLength": 12 }
+			],
+			"accessors": [
+				{ "bufferView": 0, "componentType": 5126, "count": 3, "type": "VEC3" },
+				{ "bufferView": 1, "componentType": 5123, "count": 6, "type": "SCALAR" }
+			],
+			"images": [ { "uri": "leaf.png" } ],
+			"textures": [ { "source": 0 } ],
+			"materials": [ { "name": "leaf", "alphaMode": "MASK", "pbrMetallicRoughness": { "baseColorTexture": { "index": 0 } } } ],
+			"meshes": [ { "primitives": [ { "attributes": { "POSITION": 0 }, "indices": 1, "material": 0 } ] } ],
+			"nodes": [ { "mesh": 0, "scale": [0, 1, 1] } ],
+			"scenes": [ { "nodes": [0] } ]
+		})";
+	}
+	std::vector<Material> materials;
+	std::vector<SourceModel> variants;
+	std::string error;
+	REQUIRE_MESSAGE(LoadGltf(gltf, materials, variants, error), error);
+	REQUIRE(materials.size() >= 1);
+	CHECK(materials[0].alphaTest);
+	REQUIRE(variants.size() == 1);
+	CHECK(variants[0].TriangleCount() == 1);
+	for (const Vertex& v : variants[0].parts[0].vertices) {
+		CHECK(std::isfinite(v.normal.x));
+		CHECK(std::isfinite(v.normal.y));
+		CHECK(std::isfinite(v.normal.z));
+	}
+	std::filesystem::remove_all(folder);
 }

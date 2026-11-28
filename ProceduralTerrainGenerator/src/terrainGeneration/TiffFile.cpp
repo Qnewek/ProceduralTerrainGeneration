@@ -25,7 +25,11 @@ namespace tifffile {
 		}();
 		(void)handlers;
 		tiffError.clear();
+#ifdef _WIN32
 		Handle tif(TIFFOpenW(path.wstring().c_str(), "r"));
+#else
+		Handle tif(TIFFOpen(path.c_str(), "r"));
+#endif
 		if (!tif) {
 			error = "Not a valid TIFF" + LastErrorSuffix();
 		}

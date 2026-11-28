@@ -36,16 +36,23 @@ namespace meshfile {
 		}
 	}
 
-	std::vector<unsigned char> EncodeGlb(const std::vector<Node>& nodes, const std::vector<Material>& materials, const std::string& generator)
+	std::vector<unsigned char> EncodeGlb(const std::vector<Node>& nodes, const std::vector<Material>& materials, const std::string& generator,
+		std::string* error)
 	{
 		static_assert(sizeof(glm::vec3) == 12 && sizeof(glm::vec2) == 8, "tightly packed vectors");
+		constexpr size_t maxGlbBytes = std::numeric_limits<uint32_t>::max();
 		Json j;
 		j["asset"] = { { "version", "2.0" }, { "generator", generator } };
 		Json jsonNodes = Json::array(), meshes = Json::array(), accessors = Json::array(), views = Json::array();
 		std::vector<unsigned char> bin;
+		bool overflow = false;
 
 		//Adds a buffer view over data appended to the binary chunk (4-byte aligned) and an accessor over it
 		auto addAccessor = [&](const void* data, size_t bytes, size_t count, int componentType, const char* type, int target) {
+			if (overflow || bytes > maxGlbBytes || bin.size() > maxGlbBytes - 4 || bytes > maxGlbBytes - 4 - bin.size()) {
+				overflow = true;
+				return -1;
+			}
 			Pad4(bin, 0);
 			views.push_back({ { "buffer", 0 }, { "byteOffset", bin.size() }, { "byteLength", bytes }, { "target", target } });
 			Append(bin, data, bytes);
@@ -178,8 +185,16 @@ namespace meshfile {
 		while (text.size() % 4 != 0) {
 			text += ' ';
 		}
+		const size_t binChunkBytes = bin.empty() ? 0 : 8 + bin.size();
+		if (overflow || text.size() > maxGlbBytes - 20 || bin.size() > maxGlbBytes
+			|| (!bin.empty() && (bin.size() > maxGlbBytes - 8 || binChunkBytes > maxGlbBytes - 20 - text.size()))) {
+			if (error) {
+				*error = "GLB file exceeds the 4 GiB limit";
+			}
+			return {};
+		}
 		std::vector<unsigned char> out;
-		const size_t total = 12 + 8 + text.size() + (bin.empty() ? 0 : 8 + bin.size());
+		const size_t total = 12 + 8 + text.size() + binChunkBytes;
 		out.reserve(total);
 		PutU32(out, 0x46546C67u);	//"glTF"
 		PutU32(out, 2);

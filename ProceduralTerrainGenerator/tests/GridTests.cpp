@@ -33,4 +33,11 @@ TEST_CASE("An empty Grid is false and has no data pointer")
 	grid.Resize(1, 1);
 	CHECK(static_cast<bool>(grid));
 	CHECK(grid.Data() != nullptr);
+
+	Grid<int> negative(-3, 4);
+	CHECK(negative.Empty());
+	CHECK(negative.GetWidth() == 0);
+	CHECK(negative.GetHeight() == 0);
+	grid.Resize(2, -1);
+	CHECK(grid.Empty());
 }

@@ -35,6 +35,12 @@ namespace vegetation
 		//Bilinear sample of the height map at a texel position of the maps (texel centers on integers)
 		float SampleHeight(const ChunkMaps& maps, glm::vec2 p)
 		{
+			if (maps.size <= 0 || !maps.height) {
+				return 0.0f;
+			}
+			if (maps.size == 1) {
+				return maps.height[0];
+			}
 			const glm::vec2 clamped = glm::clamp(p, glm::vec2(0.0f), glm::vec2(static_cast<float>(maps.size - 1)));
 			const glm::ivec2 a = glm::min(glm::ivec2(glm::floor(clamped)), glm::ivec2(maps.size - 2));
 			const glm::vec2 f = clamped - glm::vec2(a);
@@ -59,16 +65,21 @@ namespace vegetation
 	std::vector<uint32_t> SortByBlock(std::vector<Instance>& instances, glm::vec2 mapOrigin, float worldUnitsPerTexel, glm::ivec2 chunkTexel,
 		int blockTexels, int blocksPerSide)
 	{
+		if (blocksPerSide <= 0 || blockTexels <= 0 || !(worldUnitsPerTexel > 0.0f)) {
+			return { 0 };
+		}
 		const size_t blocks = static_cast<size_t>(blocksPerSide) * blocksPerSide;
+		const size_t maxCode = Morton(static_cast<uint32_t>(blocksPerSide - 1), static_cast<uint32_t>(blocksPerSide - 1));
+		const size_t bucketCount = std::max(blocks, maxCode + 1);
 		std::vector<uint32_t> codes(instances.size());
-		std::vector<uint32_t> starts(blocks + 1, 0);
+		std::vector<uint32_t> starts(bucketCount + 1, 0);
 		for (size_t i = 0; i < instances.size(); i++) {
 			const glm::vec2 texel = (glm::vec2(instances[i].position.x, instances[i].position.z) - mapOrigin) / worldUnitsPerTexel - glm::vec2(chunkTexel);
 			const glm::ivec2 block = glm::clamp(glm::ivec2(glm::floor(texel / static_cast<float>(blockTexels))), glm::ivec2(0), glm::ivec2(blocksPerSide - 1));
 			codes[i] = Morton(static_cast<uint32_t>(block.x), static_cast<uint32_t>(block.y));
 			starts[codes[i] + 1]++;
 		}
-		for (size_t b = 0; b < blocks; b++) {
+		for (size_t b = 0; b < bucketCount; b++) {
 			starts[b + 1] += starts[b];
 		}
 		//Counting sort, stable

@@ -9,6 +9,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <fstream>
+#include <limits>
 #include <memory>
 #include <system_error>
 
@@ -24,6 +25,8 @@ namespace heightmap {
 		constexpr int maxSize = dem::maxMapSize;
 		//Files larger than a map are read whole before cropping and downsampling, up to these limits (2^28 floats = 1 GB)
 		constexpr unsigned long long maxSourceSide = 32768, maxSourceSamples = 1ull << 28;
+		constexpr uintmax_t maxImportFileBytes = uintmax_t(2) << 30;
+		constexpr uint64_t maxTiffBufferBytes = uint64_t(256) << 20;
 		//No height on Earth is this far from 0: such samples are NoData markers (often ±FLT_MAX, written without a NoData tag)
 		constexpr double hugeSample = 1e30;
 
@@ -47,12 +50,44 @@ namespace heightmap {
 				error = "Cannot open the file";
 				return false;
 			}
-			bytes.resize(static_cast<size_t>(size));
-			file.read(reinterpret_cast<char*>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
-			if (!file) {
-				error = "Cannot read the file";
+			if (size > maxImportFileBytes || size > static_cast<uintmax_t>(std::numeric_limits<std::streamsize>::max())) {
+				error = "The file is too large to read";
 				return false;
 			}
+			bytes.resize(static_cast<size_t>(size));
+			if (size > 0) {
+				file.read(reinterpret_cast<char*>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
+				if (!file) {
+					error = "Cannot read the file";
+					return false;
+				}
+			}
+			return true;
+		}
+
+		const char* SkipSpace(const char* p, const char* end)
+		{
+			while (p < end && (*p == ' ' || *p == '\t' || *p == '\r' || *p == '\n')) {
+				p++;
+			}
+			return p;
+		}
+
+		bool ParseDouble(const char*& p, const char* end, double& value)
+		{
+			p = SkipSpace(p, end);
+			if (p >= end) {
+				return false;
+			}
+			const char* start = *p == '+' ? p + 1 : p;
+			if (*p == '+' && (start >= end || *start == '+' || *start == '-')) {
+				return false;
+			}
+			const std::from_chars_result r = std::from_chars(start, end, value);
+			if (r.ec != std::errc() || r.ptr == start) {
+				return false;
+			}
+			p = r.ptr;
 			return true;
 		}
 
@@ -247,9 +282,9 @@ namespace heightmap {
 			if (!found || !text) {
 				return std::nullopt;
 			}
-			char* end = nullptr;
-			const double value = std::strtod(text, &end);
-			return end != text ? std::optional<double>(value) : std::nullopt;
+			const char* p = text;
+			double value = 0.0;
+			return ParseDouble(p, text + std::strlen(text), value) && std::isfinite(value) ? std::optional<double>(value) : std::nullopt;
 		}
 
 		struct TiffLayout {
@@ -352,7 +387,18 @@ namespace heightmap {
 				uint32_t tileWidth = 0, tileHeight = 0;
 				TIFFGetField(tif.get(), TIFFTAG_TILEWIDTH, &tileWidth);
 				TIFFGetField(tif.get(), TIFFTAG_TILELENGTH, &tileHeight);
-				std::vector<unsigned char> tile(static_cast<size_t>(TIFFTileSize64(tif.get())));
+				if (tileWidth == 0 || tileHeight == 0 || tileWidth > maxSourceSide || tileHeight > maxSourceSide) {
+					error = "Invalid TIFF tile size";
+					return false;
+				}
+				const uint64_t expected = static_cast<uint64_t>(tileWidth) * tileHeight * static_cast<uint64_t>(bytes);
+				const tmsize_t rawTileSize = TIFFTileSize(tif.get());
+				const uint64_t tileSize = rawTileSize > 0 ? static_cast<uint64_t>(TIFFTileSize64(tif.get())) : 0;
+				if (tileSize == 0 || tileSize < expected || tileSize > maxTiffBufferBytes) {
+					error = "Invalid TIFF tile buffer size";
+					return false;
+				}
+				std::vector<unsigned char> tile(static_cast<size_t>(tileSize));
 				for (uint32_t ty = 0; ty < layout.height; ty += tileHeight) {
 					for (uint32_t tx = 0; tx < layout.width; tx += tileWidth) {
 						if (TIFFReadTile(tif.get(), tile.data(), tx, ty, 0, 0) < 0) {
@@ -368,7 +414,14 @@ namespace heightmap {
 				}
 			}
 			else {
-				std::vector<unsigned char> row(static_cast<size_t>(TIFFScanlineSize64(tif.get())));
+				const uint64_t expected = static_cast<uint64_t>(layout.width) * static_cast<uint64_t>(bytes);
+				const tmsize_t rawRowSize = TIFFScanlineSize(tif.get());
+				const uint64_t rowSize = rawRowSize > 0 ? static_cast<uint64_t>(TIFFScanlineSize64(tif.get())) : 0;
+				if (rowSize == 0 || rowSize < expected || rowSize > maxTiffBufferBytes) {
+					error = "Invalid TIFF scanline buffer size";
+					return false;
+				}
+				std::vector<unsigned char> row(static_cast<size_t>(rowSize));
 				for (uint32_t y = 0; y < layout.height; y++) {
 					if (TIFFReadScanline(tif.get(), row.data(), y, 0) < 0) {
 						error = "Cannot read a row of the TIFF" + tifffile::LastErrorSuffix();
@@ -460,14 +513,6 @@ namespace heightmap {
 			std::optional<double> noData;
 		};
 
-		const char* SkipSpace(const char* p, const char* end)
-		{
-			while (p < end && (*p == ' ' || *p == '\t' || *p == '\r' || *p == '\n')) {
-				p++;
-			}
-			return p;
-		}
-
 		//@return the first character of the values, nullptr on an invalid header
 		const char* ParseAscHeader(const char* p, const char* end, AscHeader& h, std::string& error)
 		{
@@ -482,22 +527,25 @@ namespace heightmap {
 					key += static_cast<char>(*p >= 'A' && *p <= 'Z' ? *p - 'A' + 'a' : *p);
 					p++;
 				}
-				p = SkipSpace(p, end);
-				char* next = nullptr;
-				const double value = std::strtod(p, &next);
-				if (next == p) {
+				double value = 0.0;
+				if (!ParseDouble(p, end, value) || !std::isfinite(value)) {
 					error = "Invalid ASCII grid header at \"" + key + "\"";
 					return nullptr;
 				}
-				p = next;
-				if (key == "ncols") { h.cols = static_cast<long long>(value); cols = true; }
-				else if (key == "nrows") { h.rows = static_cast<long long>(value); rows = true; }
+				if (key == "ncols" || key == "nrows") {
+					if (value < -1e15 || value > 1e15 || std::floor(value) != value) {
+						error = "Invalid ASCII grid header at \"" + key + "\"";
+						return nullptr;
+					}
+					if (key == "ncols") { h.cols = static_cast<long long>(value); cols = true; }
+					else { h.rows = static_cast<long long>(value); rows = true; }
+				}
 				else if (key == "xllcorner" || key == "xllcenter") { h.x = value; x = true; h.center = h.center || key == "xllcenter"; }
 				else if (key == "yllcorner" || key == "yllcenter") { h.y = value; y = true; h.center = h.center || key == "yllcenter"; }
 				else if (key == "cellsize") { h.cell = value; cell = true; }
 				else if (key == "nodata_value") { h.noData = value; }
 			}
-			if (!cols || !rows || !x || !y || !cell || h.cell <= 0.0) {
+			if (!cols || !rows || !x || !y || !cell || !std::isfinite(h.x) || !std::isfinite(h.y) || !std::isfinite(h.cell) || h.cell <= 0.0) {
 				error = "The ASCII grid header needs ncols, nrows, xllcorner (or xllcenter), yllcorner (or yllcenter) and a positive cellsize";
 				return nullptr;
 			}
@@ -545,12 +593,10 @@ namespace heightmap {
 			info.georeference->epsg = SystemFromPrj(text);
 		}
 
-		//@param file - gets a terminating zero, so strtod stops at its end (parsed in place, a copy of a large grid would double the memory)
-		bool ReadAsc(std::vector<unsigned char>& file, HeightField& out, std::vector<uint8_t>& missing, ImportInfo& info, std::string& error)
+		bool ReadAsc(const std::vector<unsigned char>& file, HeightField& out, std::vector<uint8_t>& missing, ImportInfo& info, std::string& error)
 		{
-			file.push_back('\0');
 			const char* p = reinterpret_cast<const char*>(file.data());
-			const char* end = p + file.size() - 1;
+			const char* end = p + file.size();
 			AscHeader h;
 			p = ParseAscHeader(p, end, h, error);
 			FileHeader header;
@@ -561,13 +607,11 @@ namespace heightmap {
 			missing.assign(map.Size(), 0);
 			const char* v = p;
 			for (size_t i = 0; i < map.Size(); i++) {
-				char* next = nullptr;
-				const double value = std::strtod(v, &next);
-				if (next == v) {
+				double value = 0.0;
+				if (!ParseDouble(v, end, value)) {
 					error = "The ASCII grid has " + std::to_string(i) + " values, expected " + std::to_string(map.Size());
 					return false;
 				}
-				v = next;
 				missing[i] = (h.noData && value == *h.noData) || !std::isfinite(value) || std::abs(value) >= hugeSample;
 				map[i] = missing[i] ? 0.0f : static_cast<float>(value);
 			}

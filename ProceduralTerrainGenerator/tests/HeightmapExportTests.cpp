@@ -264,3 +264,16 @@ TEST_CASE("Exported files")
 
 	std::filesystem::remove_all(folder);
 }
+
+TEST_CASE("Quantize handles a flat range without division by zero or NaN")
+{
+	HeightField flat(3, 2);
+	flat.At(1, 1) = 5.0f;
+	size_t clipped = 99;
+	const std::vector<uint16_t> out = heightmap::Quantize(flat, { 5.0f, 5.0f }, clipped);
+	REQUIRE(out.size() == 6);
+	for (uint16_t v : out) {
+		CHECK(v == 0);
+	}
+	CHECK(clipped == 5);
+}

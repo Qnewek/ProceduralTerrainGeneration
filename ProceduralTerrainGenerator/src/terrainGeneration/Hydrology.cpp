@@ -149,6 +149,10 @@ namespace hydrology {
 		d.receiver.assign(count, -1);
 		d.order.reserve(count);
 		d.area.assign(count, 1.0f);
+		if (count == 0) {
+			return d;
+		}
+		auto finiteHeight = [&](size_t i) { return std::isfinite(terrain[i]) ? terrain[i] : 0.0f; };
 
 		//Ordered by height, then by index, so the result does not depend on the queue implementation
 		using Entry = std::pair<float, int>;
@@ -157,9 +161,10 @@ namespace hydrology {
 		const auto seed = [&](int i) {
 			if (!closed[i]) {
 				closed[i] = 1;
-				d.filled[i] = terrain[i];
-				d.lakeLevel[i] = terrain[i];
-				open.push({ terrain[i], i });
+				const float h = finiteHeight(static_cast<size_t>(i));
+				d.filled[i] = h;
+				d.lakeLevel[i] = h;
+				open.push({ h, i });
 			}
 		};
 		for (int x = 0; x < width; x++) {
@@ -171,7 +176,7 @@ namespace hydrology {
 			seed(y * width + width - 1);
 		}
 		for (size_t i = 0; i < count; i++) {
-			if (terrain[i] < waterHeight) {
+			if (finiteHeight(i) < waterHeight) {
 				seed(static_cast<int>(i));
 			}
 		}
@@ -193,8 +198,9 @@ namespace hydrology {
 					continue;
 				}
 				closed[n] = 1;
-				d.filled[n] = std::max(terrain[n], std::nextafter(d.filled[c], std::numeric_limits<float>::infinity()));
-				d.lakeLevel[n] = std::max(terrain[n], d.lakeLevel[c]);
+				const float h = finiteHeight(static_cast<size_t>(n));
+				d.filled[n] = std::max(h, std::nextafter(d.filled[c], std::numeric_limits<float>::infinity()));
+				d.lakeLevel[n] = std::max(h, d.lakeLevel[c]);
 				open.push({ d.filled[n], n });
 			}
 		}
@@ -204,7 +210,7 @@ namespace hydrology {
 			for (int x = 0; x < width; x++) {
 				const int c = y * width + x;
 				const bool border = x == 0 || y == 0 || x == width - 1 || y == height - 1;
-				if (border || terrain[c] < waterHeight) {
+				if (border || finiteHeight(static_cast<size_t>(c)) < waterHeight) {
 					continue;
 				}
 				float steepest = 0.0f;
@@ -239,21 +245,23 @@ namespace hydrology {
 		net.levels.Resize(width, height);
 		net.flow.Resize(width, height);
 		net.ground = terrain;
-		if (count == 0) {
+		if (count == 0 || !(cellSize > 0.0f) || !std::isfinite(cellSize) || !std::isfinite(waterHeight)
+			|| !(config.sourceArea > 0.0f) || !std::isfinite(config.sourceArea)) {
 			return net;
 		}
 		const Drainage d = Drain(terrain, waterHeight);
 
 		std::vector<char> lake(count, 0), river(count, 0);
 		const float cellArea = cellSize * cellSize;
+		auto finiteHeight = [&](size_t i) { return std::isfinite(terrain[i]) ? terrain[i] : 0.0f; };
 		for (size_t c = 0; c < count; c++) {
-			lake[c] = d.lakeLevel[c] >= waterHeight && d.lakeLevel[c] - terrain[c] > config.minLakeDepth;
+			lake[c] = d.lakeLevel[c] >= waterHeight && d.lakeLevel[c] - finiteHeight(c) > config.minLakeDepth;
 		}
 		//Small lakes are land: a river may cross them (its surface at the spill level, as it never rises downstream)
 		const double minCells = std::ceil(static_cast<double>(config.minLakeArea) / static_cast<double>(cellArea));
 		net.lakes = RemoveSmallLakes(lake, width, height, static_cast<int>(std::min(minCells, static_cast<double>(count) + 1.0)));
 		for (size_t c = 0; c < count; c++) {
-			river[c] = d.receiver[c] >= 0 && !lake[c] && terrain[c] >= waterHeight && d.area[c] * cellArea >= config.sourceArea;
+			river[c] = d.receiver[c] >= 0 && !lake[c] && finiteHeight(c) >= waterHeight && d.area[c] * cellArea >= config.sourceArea;
 			if (lake[c]) {
 				net.levels[c].lake = d.lakeLevel[c];
 				net.lakeCells++;

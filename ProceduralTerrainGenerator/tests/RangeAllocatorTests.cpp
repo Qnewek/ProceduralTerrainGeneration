@@ -50,3 +50,21 @@ TEST_CASE("RangeAllocator: a free range at the end merges with grown space")
 	CHECK(*big == 5);
 	CHECK(a.Allocate(0) == 0u);
 }
+
+TEST_CASE("RangeAllocator ignores double-free, overlapping free and out-of-bounds free")
+{
+	RangeAllocator a(20);
+	const auto r = a.Allocate(10);
+	REQUIRE(r);
+	CHECK(a.Used() == 10);
+	a.Free(*r, 10);
+	CHECK(a.Used() == 0);
+	//Double-free and overlapping/out-of-bounds frees are ignored
+	a.Free(*r, 10);
+	a.Free(5, 10);
+	a.Free(15, 10);
+	CHECK(a.Used() == 0);
+	const auto full = a.Allocate(20);
+	REQUIRE(full);
+	CHECK(*full == 0);
+}

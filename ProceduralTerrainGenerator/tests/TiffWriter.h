@@ -64,7 +64,11 @@ namespace testtiff {
 
 	inline void WriteTiff(const std::filesystem::path& path, const TiffSpec& spec, const std::vector<double>& values)
 	{
+#ifdef _WIN32
 		TIFF* tif = TIFFOpenW(path.wstring().c_str(), "w");
+#else
+		TIFF* tif = TIFFOpen(path.c_str(), "w");
+#endif
 		REQUIRE(tif);
 		static const TIFFFieldInfo geoFields[] = {
 			{ 33550, TIFF_VARIABLE, TIFF_VARIABLE, TIFF_DOUBLE, FIELD_CUSTOM, 1, 1, const_cast<char*>("ModelPixelScaleTag") },

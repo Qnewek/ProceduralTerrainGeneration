@@ -790,7 +790,14 @@ namespace preset {
 			if (n.resolution <= 0) {
 				throw std::runtime_error(name + ": resolution must be greater than 0");
 			}
-			if (n.slopeErosion < 0.0f) {
+			if (!std::isfinite(n.xoffset) || !std::isfinite(n.yoffset) || !std::isfinite(n.scale) || !std::isfinite(n.constrast)
+				|| !std::isfinite(n.redistribution) || !std::isfinite(n.lacunarity) || !std::isfinite(n.persistance)
+				|| !std::isfinite(n.revertGain) || !std::isfinite(n.RidgeGain) || !std::isfinite(n.RidgeOffset)
+				|| !std::isfinite(n.mixPower) || !std::isfinite(n.warpStrength) || !std::isfinite(n.warpScale)
+				|| !std::isfinite(n.slopeErosion) || !std::isfinite(n.terraceSharpness)) {
+				throw std::runtime_error(name + ": noise parameters must be finite numbers");
+			}
+			if (!(n.slopeErosion >= 0.0f)) {
 				throw std::runtime_error(name + ": slopeErosion must not be negative");
 			}
 			if (n.terraceSteps < 0 || n.terraceSteps > maxTerraceSteps) {
@@ -804,10 +811,10 @@ namespace preset {
 				throw std::runtime_error(name + " spline: x and y must have the same size, at least 3 points");
 			}
 			for (size_t i = 0; i < s.x.size(); i++) {
-				if (s.x[i] < -1.0 || s.x[i] > 1.0 || s.y[i] < 0.0 || s.y[i] > 1.0) {
+				if (!(s.x[i] >= -1.0 && s.x[i] <= 1.0) || !(s.y[i] >= 0.0 && s.y[i] <= 1.0)) {
 					throw std::runtime_error(name + " spline: x must be in [-1, 1] and y in [0, 1]");
 				}
-				if (i > 0 && s.x[i] <= s.x[i - 1]) {
+				if (i > 0 && !(s.x[i] > s.x[i - 1])) {
 					throw std::runtime_error(name + " spline: x must be strictly ascending");
 				}
 			}
@@ -948,15 +955,23 @@ namespace preset {
 			if (e.dropletCount < 0 || e.dropletLifetime < 0 || e.erosionRadius < 0) {
 				throw std::runtime_error("Erosion: droplet count, droplet lifetime and radius cannot be negative");
 			}
+			if (!std::isfinite(e.erosionRate) || !std::isfinite(e.depositionRate) || !std::isfinite(e.evaporationRate)
+				|| !std::isfinite(e.gravity) || !std::isfinite(e.inertia) || !std::isfinite(e.minSlope)
+				|| !std::isfinite(e.blur) || !std::isfinite(e.initialWater) || !std::isfinite(e.initialVelocity)
+				|| !std::isfinite(e.initialCapacity)) {
+				throw std::runtime_error("Erosion: droplet parameters must be finite numbers");
+			}
 			const erosion::PipeConfig& p = e.pipes;
-			if (p.iterations < 0 || p.timeStep <= 0.0f || p.heightScale <= 0.0f) {
+			if (p.iterations < 0 || !(p.timeStep > 0.0f && std::isfinite(p.timeStep)) || !(p.heightScale > 0.0f && std::isfinite(p.heightScale))) {
 				throw std::runtime_error("Erosion pipes: iterations cannot be negative, time step and height scale must be positive");
 			}
-			if (p.rainRate < 0.0f || p.evaporationRate < 0.0f || p.sedimentCapacity < 0.0f || p.minTilt < 0.0f
-				|| p.dissolvingRate < 0.0f || p.depositionRate < 0.0f || p.thermalRate < 0.0f) {
+			if (!(p.rainRate >= 0.0f && std::isfinite(p.rainRate)) || !(p.evaporationRate >= 0.0f && std::isfinite(p.evaporationRate))
+				|| !(p.sedimentCapacity >= 0.0f && std::isfinite(p.sedimentCapacity)) || !(p.minTilt >= 0.0f && std::isfinite(p.minTilt))
+				|| !(p.dissolvingRate >= 0.0f && std::isfinite(p.dissolvingRate)) || !(p.depositionRate >= 0.0f && std::isfinite(p.depositionRate))
+				|| !(p.thermalRate >= 0.0f && std::isfinite(p.thermalRate))) {
 				throw std::runtime_error("Erosion pipes: rates, capacity and minimum tilt cannot be negative");
 			}
-			if (p.talusAngle <= 0.0f || p.talusAngle >= 90.0f) {
+			if (!(p.talusAngle > 0.0f && p.talusAngle < 90.0f)) {
 				throw std::runtime_error("Erosion pipes: talus angle must be between 0 and 90 degrees");
 			}
 		}

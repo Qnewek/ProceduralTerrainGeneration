@@ -4,6 +4,7 @@
 #include <cmath>
 #include <cstring>
 #include <functional>
+#include <limits>
 #include <optional>
 
 #include "Hydrology.h"
@@ -598,4 +599,13 @@ TEST_CASE("Map smaller than a river cell")
 	CHECK_FALSE(result.error.empty());
 	CHECK(result.network.riverCells == 0);
 	CHECK(result.water.empty());
+}
+
+TEST_CASE("Hydrology handles NaN terrain and invalid cellSize or sourceArea safely")
+{
+	HeightField map = MakeMap([](int x, int y) { return static_cast<float>(x + y); });
+	map.At(10, 10) = std::numeric_limits<float>::quiet_NaN();
+	const hydrology::Network net = hydrology::Compute(map, glm::vec2(0.0f), 1.0f, 0.0f, rivers::RiverConfig{});
+	CHECK(net.rivers.GetWidth() == width);
+	CHECK(hydrology::Compute(map, glm::vec2(0.0f), 0.0f, 0.0f, rivers::RiverConfig{}).riverCells == 0);
 }

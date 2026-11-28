@@ -600,3 +600,23 @@ TEST_CASE("Project: a sea level that is not finite is damage")
 	CHECK_MESSAGE(error.find("sea level") != std::string::npos, error);
 	CHECK(IsMarker(read));
 }
+
+TEST_CASE("Project: oversized placedPlants count and decompression bombs are rejected before allocation")
+{
+	const std::vector<uint8_t> oversized = WithHeader(Bytes(FullProject()), [](nlohmann::json& h) {
+		h["placedPlants"] = { { "palette", { "Fir" } }, { "count", size_t(20'000'000) } };
+		h["blocks"].push_back({ { "name", "placedPlants" }, { "bytes", 0 } });
+	});
+	mapproject::Project read = Marker();
+	std::string error;
+	CHECK_FALSE(mapproject::Deserialize(oversized.data(), oversized.size(), read, error));
+	CHECK(IsMarker(read));
+
+	const std::vector<uint8_t> bomb = WithHeader(Bytes(FullProject()), [](nlohmann::json& h) {
+		h["placedPlants"] = { { "palette", { "Fir" } }, { "count", size_t(1'000'000) } };
+		h["blocks"].push_back({ { "name", "placedPlants" }, { "bytes", 0 } });
+	});
+	error.clear();
+	CHECK_FALSE(mapproject::Deserialize(bomb.data(), bomb.size(), read, error));
+	CHECK(IsMarker(read));
+}

@@ -15,7 +15,13 @@ namespace meshexport {
 			const std::vector<meshfile::Material>& materials, std::string& error)
 		{
 			if (format == Format::GLB) {
-				const std::vector<unsigned char> glb = meshfile::EncodeGlb(nodes, materials, generator);
+				const std::vector<unsigned char> glb = meshfile::EncodeGlb(nodes, materials, generator, &error);
+				if (glb.empty()) {
+					if (error.empty()) {
+						error = "Failed to encode GLB";
+					}
+					return false;
+				}
 				return WriteFileAtomic(path, glb.data(), glb.size(), error);
 			}
 			const std::string obj = meshfile::EncodeObj(nodes, generator);

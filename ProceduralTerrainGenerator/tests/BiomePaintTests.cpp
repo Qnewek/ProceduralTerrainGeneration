@@ -173,3 +173,16 @@ TEST_CASE("Painted biome without materials keeps the automatic mix")
 	CHECK(full[0] == doctest::Approx(0.25f));
 	CHECK(full[3] == doctest::Approx(0.75f));
 }
+
+TEST_CASE("BiomePaint Make rejects non-positive sizes and ignores invalid materials")
+{
+	const biomepaint::Layer empty = biomepaint::Make(-4, 10);
+	CHECK(empty.texels.empty());
+
+	biome::MaterialWeights automatic{};
+	automatic[1] = 1.0f;
+	biome::Biome painted;
+	painted.materials = { biome::MaterialLayer{ 99, 1.0f } };
+	const biome::MaterialWeights mixed = biomepaint::PaintedMaterials(automatic, painted, 1.0f);
+	CHECK(mixed[1] == doctest::Approx(1.0f));
+}

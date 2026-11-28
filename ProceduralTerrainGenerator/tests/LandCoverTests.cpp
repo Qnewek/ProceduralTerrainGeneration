@@ -269,7 +269,11 @@ TEST_CASE("Land cover timing" * doctest::skip())
 {
 	constexpr int side = 16384, tileSide = 512;
 	const std::filesystem::path path = Folder() / "timing.tif";
+#ifdef _WIN32
 	TIFF* tif = TIFFOpenW(path.wstring().c_str(), "w");
+#else
+	TIFF* tif = TIFFOpen(path.c_str(), "w");
+#endif
 	REQUIRE(tif);
 	TIFFSetField(tif, TIFFTAG_IMAGEWIDTH, static_cast<uint32_t>(side));
 	TIFFSetField(tif, TIFFTAG_IMAGELENGTH, static_cast<uint32_t>(side));
@@ -300,4 +304,17 @@ TEST_CASE("Land cover timing" * doctest::skip())
 	MESSAGE("Land cover 8192^2 over 16384^2: " << ms << " ms");
 	CHECK(result.files[0].coverage > 0.99f);
 	std::filesystem::remove(path);
+}
+
+TEST_CASE("Land cover handles zero target dimensions safely")
+{
+	const std::filesystem::path path = Folder() / "zero_dim.tif";
+	WriteTiff(path, ClassSpec(4, 4, Degrees(19.0, 51.0, 0.001)), std::vector<double>(16, 10.0));
+	const landcover::ClassMap empty = landcover::Compute({ path }, 0, 0, std::nullopt);
+	CHECK(empty.width == 0);
+	CHECK(empty.height == 0);
+	CHECK(empty.classes.empty());
+
+	const landcover::ClassMap zeroWidth = landcover::Compute({ path }, 0, 4, std::nullopt);
+	CHECK(zeroWidth.classes.empty());
 }

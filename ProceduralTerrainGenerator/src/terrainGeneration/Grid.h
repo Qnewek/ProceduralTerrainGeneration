@@ -17,6 +17,12 @@ public:
 	//@param _height - number of rows (y)
 	void Resize(int _width, int _height)
 	{
+		if (_width <= 0 || _height <= 0) {
+			width = 0;
+			height = 0;
+			data.clear();
+			return;
+		}
 		width = _width;
 		height = _height;
 		data.assign(static_cast<size_t>(width) * height, T{});

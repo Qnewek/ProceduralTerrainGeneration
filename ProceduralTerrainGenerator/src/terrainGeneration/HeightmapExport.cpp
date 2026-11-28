@@ -146,7 +146,8 @@ namespace heightmap {
 	{
 		clippedCells = 0;
 		std::vector<uint16_t> values(map.Size());
-		const double scale = 65535.0 / (static_cast<double>(range.max) - range.min);
+		const double span = static_cast<double>(range.max) - range.min;
+		const double scale = (std::isfinite(span) && span > 0.0) ? 65535.0 / span : 0.0;
 		for (size_t i = 0; i < map.Size(); i++) {
 			float value = map[i];
 			//Written so that NaN, for which every comparison is false, also ends up at min
@@ -158,7 +159,8 @@ namespace heightmap {
 				value = range.max;
 				clippedCells++;
 			}
-			values[i] = static_cast<uint16_t>((static_cast<double>(value) - range.min) * scale + 0.5);
+			const double scaled = std::clamp((static_cast<double>(value) - range.min) * scale + 0.5, 0.0, 65535.0);
+			values[i] = static_cast<uint16_t>(scaled);
 		}
 		return values;
 	}
