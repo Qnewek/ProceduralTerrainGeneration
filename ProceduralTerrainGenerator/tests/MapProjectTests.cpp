@@ -1,7 +1,9 @@
 #include "doctest/doctest.h"
 
+#include <algorithm>
 #include <chrono>
 #include <cmath>
+#include <cstdint>
 #include <cstring>
 #include <filesystem>
 #include <fstream>

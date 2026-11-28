@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <chrono>
+#include <cstdint>
 
 #include "FileIO.h"
 #include "MeshFile.h"

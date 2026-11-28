@@ -1,5 +1,7 @@
 #include "doctest/doctest.h"
 
+#include <array>
+#include <cstdint>
 #include <string>
 
 #include "BiomePaint.h"

@@ -12,10 +12,10 @@
 //texel (0, 0) at the origin. No OpenGL here.
 namespace terrainmesh {
 	struct Mesh {
-		std::vector<glm::vec3> positions;
-		std::vector<glm::vec3> normals;
-		std::vector<glm::vec2> uvs;			//u = column / (width - 1), v = row / (height - 1): the maps of the pack as textures, row 0 at v = 0
-		std::vector<uint32_t> indices;		//triangles, counter-clockwise seen from above (+Y)
+		std::vector<glm::vec3> positions{};
+		std::vector<glm::vec3> normals{};
+		std::vector<glm::vec2> uvs{};			//u = column / (width - 1), v = row / (height - 1): the maps of the pack as textures, row 0 at v = 0
+		std::vector<uint32_t> indices{};		//triangles, counter-clockwise seen from above (+Y)
 
 		size_t Triangles() const { return indices.size() / 3; }
 	};
@@ -40,7 +40,7 @@ namespace terrainmesh {
 	//Part of a mesh in one square of the XZ plane
 	struct Tile {
 		int x = 0, z = 0;	//index of the square
-		Mesh mesh;
+		Mesh mesh{};
 	};
 	//Splits triangles into squares of tileMetres by the centre of each triangle, so no triangle is cut and the tiles meet without cracks.
 	//Each tile keeps only its vertices. Empty squares are left out

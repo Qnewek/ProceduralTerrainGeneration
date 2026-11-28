@@ -19,8 +19,8 @@ namespace biomepaint {
 
 	struct Layer {
 		int width = 0, height = 0;
-		std::vector<std::string> palette;	//palette[i] = biome name of slot i + 1
-		std::vector<uint16_t> texels;		//slot (low byte) | strength 0-255 (high byte): GL_RG8UI as uploaded, R = slot, G = strength
+		std::vector<std::string> palette{};	//palette[i] = biome name of slot i + 1
+		std::vector<uint16_t> texels{};		//slot (low byte) | strength 0-255 (high byte): GL_RG8UI as uploaded, R = slot, G = strength
 		//true when no texel has a strength above 0
 		bool Empty() const;
 		size_t Bytes() const { return texels.size() * sizeof(uint16_t); }

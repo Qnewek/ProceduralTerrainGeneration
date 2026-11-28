@@ -29,7 +29,7 @@ enum class EvaluationMethod {
 
 //Control points of a spline mapping a noise value [-1, 1] to a factor [0, 1]
 struct SplinePoints {
-	std::vector<double> x, y;
+	std::vector<double> x{}, y{};
 	bool cubic = false;		//cubic spline if true, linear interpolation otherwise
 };
 
@@ -37,22 +37,22 @@ struct NestedCurve;
 //A point of a nested curve: the value y, or (sub holds one curve) the value of a curve over the next noise
 struct NestedPoint {
 	double x = 0.0, y = 0.0;
-	std::vector<NestedCurve> sub;	//empty = the constant y, otherwise exactly 1 curve one level down
+	std::vector<NestedCurve> sub{};	//empty = the constant y, otherwise exactly 1 curve one level down
 };
 //A curve of the NESTED method: over continentalness (root), mountainousness (its children) or weirdness (theirs, numbers only).
 //Points with strictly ascending x from -1 to 1, values in [0, 1]; rules and limits in NestedSpline.h
 struct NestedCurve {
-	std::vector<NestedPoint> points;
+	std::vector<NestedPoint> points{};
 	bool cubic = false;		//monotone cubic (PCHIP, as SampleSpline) if true, straight segments otherwise
 };
 struct NestedTerrain {
-	NestedCurve root;		//over continentalness; empty = not made yet (filled from the LAYERED curves on use)
+	NestedCurve root{};		//over continentalness; empty = not made yet (filled from the LAYERED curves on use)
 	float seaLevel = 0.06f;	//height of the water surface, in [0, 1]
 };
 
 struct TerrainConfig {
-	noise::NoiseConfigParameters continentalness, mountainousness, weirdness;
-	SplinePoints continentalnessSpline, mountainousnessSpline, weirdnessSpline;
+	noise::NoiseConfigParameters continentalness{}, mountainousness{}, weirdness{};
+	SplinePoints continentalnessSpline{}, mountainousnessSpline{}, weirdnessSpline{};
 	EvaluationMethod method = EvaluationMethod::LAYERED;
 
 	//LAYERED: h = base * (1 - mountainShare) + land * amplitude * peaks * mountainShare, in [0, 1], where
@@ -68,7 +68,7 @@ struct TerrainConfig {
 	SplinePoints peaksSpline{ {-1.0, -0.5, 0.0, 0.5, 1.0}, {0.15, 0.3, 0.5, 0.8, 1.0} };
 
 	//NESTED: the tree of curves and its own sea level
-	NestedTerrain nested;
+	NestedTerrain nested{};
 
 	//Height of the water surface the climate of biomes is measured from: seaLevel * (1 - mountainShare) for LAYERED,
 	//nested.seaLevel for NESTED; the other methods have no sea, so heights are measured from 0
@@ -183,7 +183,7 @@ namespace erosion {
 
 	struct ErosionConfig {
 		Method method = Method::DROPLETS;
-		PipeConfig pipes;
+		PipeConfig pipes{};
 
 		//Erosion parameters
 		float erosionRate = 0.6f;
@@ -216,14 +216,14 @@ enum class BiomeParameter {
 };
 
 struct BiomeConfig {
-	noise::NoiseConfigParameters temperature, humidity;
+	noise::NoiseConfigParameters temperature{}, humidity{};
 
 	//Biomes as ranges of the five noise values (see Biome.h); never empty. A biome id is its index here
 	std::vector<biome::Biome> table = biome::DefaultBiomes();
 	//Distance in the parameter space over which a biome fades into the nearest one; 0 = sharp borders
 	float blendWidth = 0.08f;
 	//Temperature and humidity changed by the terrain height before choosing biomes (see biome::ApplyClimate)
-	biome::Climate climate;
+	biome::Climate climate{};
 	//Biomes change the terrain by their modifiers (see biome::ModifyHeight); only while biomes are generated
 	bool modifyTerrain = true;
 	//Distance in the parameter space over which the modifiers of biomes mix; must be > 0, or the terrain would jump at borders
@@ -330,7 +330,7 @@ struct WorldConfig {
 	int width = 0, height = 0;
 	TerrainConfig terrain = TerrainConfig::Default();
 	BiomeConfig biomes = BiomeConfig::Default();
-	rivers::RiverConfig rivers;
+	rivers::RiverConfig rivers{};
 	//Erosion of the partial map (not of the infinite world); the pipes height scale matches TerrainGen: height 1 = 1024 world units = 256 texels
 	erosion::ErosionConfig erosion = DefaultWorldErosion();
 
@@ -345,6 +345,6 @@ struct WorldConfig {
 //Everything the "Noise heightmap" mode generates from
 struct NoiseMapConfig {
 	int width = 0, height = 0;
-	noise::NoiseConfigParameters noise;
-	erosion::ErosionConfig erosion;
+	noise::NoiseConfigParameters noise{};
+	erosion::ErosionConfig erosion{};
 };

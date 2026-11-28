@@ -1,8 +1,10 @@
 #include "doctest/doctest.h"
 
 #include <cmath>
+#include <cstdint>
 #include <filesystem>
 #include <fstream>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -25,12 +27,12 @@ namespace {
 	const std::filesystem::path sourceRoot = std::filesystem::path(__FILE__).parent_path().parent_path();
 
 	struct Sample {
-		std::string name, mode;
+		std::string name{}, mode{};
 		int width = 0, height = 0;
 		float metresPerTexel = 1.0f;
 		float metresPerUnit = 64.0f;
 		heightmap::ValueRange range = heightmap::terrainRange;
-		std::optional<float> seaLevel;
+		std::optional<float> seaLevel{};
 		bool materials = false, textures = false, meshes = false, vegetation = false, models = false;
 	};
 

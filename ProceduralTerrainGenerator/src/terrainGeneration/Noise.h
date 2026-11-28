@@ -59,9 +59,9 @@ namespace noise
 			float persistance = 0.5f, float /*scaleDown*/ = 1.0f, Options option = Options::REVERT_NEGATIVES, float revertGain = 0.5f, bool Ridge = false,
 			float RidgeGain = 1.0f, float RidgeOffset = 1.0f, bool island = false, float mixPower = 0.5f,
 			IslandType islandType = IslandType::CONE, bool symmetrical = false):
-			seed(seed), resolution(res), xoffset(xoffset), yoffset(yoffset), scale(scale), octaves(octaves), constrast(constrast),
-			redistribution(redistribution), lacunarity(lacunarity), persistance(persistance), option(option), revertGain(revertGain),
-			Ridge(Ridge), RidgeGain(RidgeGain), RidgeOffset(RidgeOffset), island(island), islandType(islandType), mixPower(mixPower), 
+			xoffset(xoffset), yoffset(yoffset), resolution(res), seed(seed), octaves(octaves), scale(scale), constrast(constrast),
+			redistribution(redistribution), lacunarity(lacunarity), persistance(persistance), revertGain(revertGain), option(option),
+			Ridge(Ridge), RidgeGain(RidgeGain), RidgeOffset(RidgeOffset), island(island), mixPower(mixPower), islandType(islandType),
 			symmetrical(symmetrical){}
 	};
 }

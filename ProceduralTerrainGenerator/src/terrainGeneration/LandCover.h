@@ -15,19 +15,19 @@
 namespace landcover {
 	//What happened to one file
 	struct FileStatus {
-		std::string path;
-		std::string system;		//its coordinate system for the UI, empty when it could not be read
+		std::string path{};
+		std::string system{};		//its coordinate system for the UI, empty when it could not be read
 		float coverage = 0.0f;	//share of the map pixels that got their class from this file, 0 to 1
 		bool stretched = false;	//laid over the whole map (the map or the file has no usable georeference)
-		std::string skipped;	//why it was not used; empty = used
-		std::string error;		//why it could not be read; empty = read
+		std::string skipped{};	//why it was not used; empty = used
+		std::string error{};		//why it could not be read; empty = read
 	};
 
 	struct ClassMap {
 		int width = 0, height = 0;
-		std::vector<uint8_t> classes;			//map[y * width + x], 0 = no class
+		std::vector<uint8_t> classes{};			//map[y * width + x], 0 = no class
 		std::array<uint64_t, 256> counts{};		//map pixels of each class
-		std::vector<FileStatus> files;			//in the order of the files given
+		std::vector<FileStatus> files{};			//in the order of the files given
 	};
 
 	//The class map of a map width x height. With a georeference in a supported system: every file with a georeference in a supported

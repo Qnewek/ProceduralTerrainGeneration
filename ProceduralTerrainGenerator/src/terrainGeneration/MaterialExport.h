@@ -15,7 +15,7 @@ namespace splatmap {
 	struct Shares {
 		int width = 0, height = 0;
 		int channels = 0;
-		std::vector<uint8_t> data;
+		std::vector<uint8_t> data{};
 
 		uint8_t At(int x, int y, int material) const { return data[(static_cast<size_t>(y) * width + x) * channels + material]; }
 	};

@@ -1,6 +1,7 @@
 #include "MeshFile.h"
 
 #include <charconv>
+#include <cstdint>
 #include <cstring>
 #include <limits>
 

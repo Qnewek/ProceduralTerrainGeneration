@@ -374,9 +374,11 @@ namespace {
 	bool SameNetwork(const hydrology::Network& a, const hydrology::Network& b)
 	{
 		return a.rivers.Size() == b.rivers.Size()
-			&& std::memcmp(a.rivers.Data(), b.rivers.Data(), a.rivers.Size() * sizeof(hydrology::RiverTexel)) == 0
-			&& std::memcmp(a.levels.Data(), b.levels.Data(), a.levels.Size() * sizeof(hydrology::LevelTexel)) == 0
-			&& std::memcmp(a.flow.Data(), b.flow.Data(), a.flow.Size() * sizeof(hydrology::FlowTexel)) == 0;
+			&& a.levels.Size() == b.levels.Size()
+			&& a.flow.Size() == b.flow.Size()
+			&& (a.rivers.Empty() || std::memcmp(a.rivers.Data(), b.rivers.Data(), a.rivers.Size() * sizeof(hydrology::RiverTexel)) == 0)
+			&& (a.levels.Empty() || std::memcmp(a.levels.Data(), b.levels.Data(), a.levels.Size() * sizeof(hydrology::LevelTexel)) == 0)
+			&& (a.flow.Empty() || std::memcmp(a.flow.Data(), b.flow.Data(), a.flow.Size() * sizeof(hydrology::FlowTexel)) == 0);
 	}
 }
 

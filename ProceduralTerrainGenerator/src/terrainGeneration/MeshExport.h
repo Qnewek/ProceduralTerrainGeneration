@@ -16,25 +16,25 @@ namespace meshexport {
 	enum class Format { GLB, OBJ };
 
 	struct Settings {
-		std::string name;				//pack name, the start of every file name
+		std::string name{};				//pack name, the start of every file name
 		Format format = Format::GLB;
 		int lodLevels = 3;				//LOD 0 = the full grid, each next level aims at a quarter of the triangles of the previous one
 		float tileMetres = 256.0f;		//<= 0 = one tile per level
 		float metresPerUnit = 1.0f;		//metres of height value 1
 		float metresPerTexel = 1.0f;	//metres between neighbouring map samples
-		std::string terrainTexture;		//base color image of the terrain (a file of the pack, glTF only); empty = plain grey
+		std::string terrainTexture{};		//base color image of the terrain (a file of the pack, glTF only); empty = plain grey
 		bool water = false;				//write the water file (if it has anything)
-		std::optional<float> seaLevel;	//height value of the sea surface, a quad over the map; none = no sea
-		std::vector<glm::vec3> riverWater;	//triangles (3 vertices each, metres) of the rivers and lakes; may be empty
+		std::optional<float> seaLevel{};	//height value of the sea surface, a quad over the map; none = no sea
+		std::vector<glm::vec3> riverWater{};	//triangles (3 vertices each, metres) of the rivers and lakes; may be empty
 	};
 
 	struct Result {
 		bool ok = false;
-		std::string error;
-		std::vector<exportpack::File> files;
-		std::vector<exportpack::MeshLevel> levels;
-		std::string waterFile;			//empty = none written
-		std::vector<std::string> waterNodes;
+		std::string error{};
+		std::vector<exportpack::File> files{};
+		std::vector<exportpack::MeshLevel> levels{};
+		std::string waterFile{};			//empty = none written
+		std::vector<std::string> waterNodes{};
 		double ms = 0.0;
 	};
 

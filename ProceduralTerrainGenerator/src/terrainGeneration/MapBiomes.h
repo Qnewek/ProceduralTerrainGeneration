@@ -21,9 +21,9 @@ namespace mapbiomes {
 	//A class of the land cover files: its code, how it is shown and the biomes it allows (names of the biome table; none = all)
 	struct LandCoverClass {
 		int code = 0;				//1 to 255
-		std::string name;
+		std::string name{};
 		glm::vec3 color{ 0.5f };	//LAND COVER display mode
-		std::vector<std::string> biomes;
+		std::vector<std::string> biomes{};
 		bool operator==(const LandCoverClass&) const = default;
 	};
 
@@ -43,7 +43,7 @@ namespace mapbiomes {
 		//Table, climate, temperature and humidity noises, blending and materials; the terrain modifiers are not used
 		BiomeConfig config = BiomeConfig::Default();
 		Source source = Source::CLIMATE;
-		std::vector<std::string> landCoverFiles;		//UTF-8 paths, absolute
+		std::vector<std::string> landCoverFiles{};		//UTF-8 paths, absolute
 		std::vector<LandCoverClass> classes = WorldCoverClasses();	//sorted by code, codes unique
 	};
 
@@ -74,7 +74,7 @@ namespace mapbiomes {
 	//Continentalness and mountainousness of every texel, as GL_RG16F data (rows from y = 0)
 	struct ClimateMaps {
 		int width = 0, height = 0;
-		std::vector<uint32_t> packed;	//glm::packHalf2x16(vec2(continentalness, mountainousness))
+		std::vector<uint32_t> packed{};	//glm::packHalf2x16(vec2(continentalness, mountainousness))
 	};
 	//Continentalness = coast distance / coastMetres and mountainousness = 2 * relief / reliefMetres - 1, both clamped to [-1, 1];
 	//without a sea the continentalness is 1 everywhere. Runs on a background thread (no GL)
